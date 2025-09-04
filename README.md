@@ -1,2 +1,4 @@
 # mingle
-Mingle Standard Platform, including the Une DLS
+Mingle Standard Platform, including Une DLS and NAXE expressions evaluator
+
+
