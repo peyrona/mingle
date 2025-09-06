@@ -1,0 +1,29 @@
+
+package com.peyrona.mingle.lang.messages;
+
+/**
+ * The Virtual World requests to change an Actuator in Real (physical) World.
+ *
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ */
+public abstract class MsgAbstractTwo extends MsgAbstractOne
+{
+    public final Object value;
+
+    //------------------------------------------------------------------------//
+
+    /**
+     * Constructor.
+     *
+     * @param name Device's name.
+     * @param value  Any valid Une data value.
+     */
+    public MsgAbstractTwo( String name, Object value )
+    {
+        super( name );
+
+        this.value = value;
+    }
+}

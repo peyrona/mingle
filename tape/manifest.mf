@@ -1,0 +1,3 @@
+Manifest-Version: 1.0
+X-COMMENT: Main-Class will be added automatically by build
+Class-Path: lib/lang.jar lib/minimal-json-0.9.5.jar lib/candi.jar lib/updater.jar

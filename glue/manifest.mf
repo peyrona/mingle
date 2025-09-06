@@ -1,0 +1,4 @@
+Manifest-Version: 1.0
+X-COMMENT: Main-Class will be added automatically by build
+SplashScreen-Image: splash.png
+Class-Path: lib/lang.jar lib/candi.jar lib/minimal-json-0.9.5.jar lib/updater.jar lib/glue/jiconfont-1.0.0.jar lib/glue/jiconfont-font_awesome-4.7.0.1.jar lib/glue/jiconfont-swing-1.0.1.jar lib/glue/rsyntaxtextarea-3.3.3.jar

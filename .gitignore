@@ -1,0 +1,33 @@
+# NetBeans specific
+/nbproject/private/
+/build/
+/dist/
+/.nb-gradle/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# IDE files
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Otros ficheros y dirs
+*.zip
+/0.PhD/
+/balata/
+/todeploy/
+/website/

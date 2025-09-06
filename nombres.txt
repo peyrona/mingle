@@ -1,0 +1,62 @@
+Título de la Tesis:
+------------------
+
+Creating a Domain Specific Language (DSL) of type declarative and close to natural language in the domain of the Internet of Things (IoT), as well as a Transpiler
+that converts the DSL source code into an univoque symbolic representation and an Execution Environment capable to load and manage this symbolic representation.
+
+-----------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+Animal adoptado: Electrophorus electricus
+Wikipedia: https://es.wikipedia.org/wiki/Electrophorus_electricus   (Español)
+           https://en.wikipedia.org/wiki/Electrophorus_electricus   (Inglés)
+
+Logo:  https://www.google.com/url?sa=i&url=https%3A%2F%2Fsp.depositphotos.com%2Fstock-photos%2Fanguila-el%25C3%25A9ctrica.html&psig=AOvVaw3eRtMa7tgltG_ueAOGpFW9&ust=1629552316729000&source=images&cd=vfe&ved=0CAgQjRxqFwoTCMiIodzZv_ICFQAAAAAdAAAAABAE
+
+
+----------------------------------------------------------------------------------------
+CONVERSACION CON ALICIA LA PERSONA DE LA IMAGEN DE LA ANGUILA SOBRE LOS DERECHOS DE USO
+----------------------------------------------------------------------------------------
+
+Alicia 15:34
+Hello peyrona. How may I help you?
+peyrona 15:34
+Hi Alicia
+Might I start asking if you do speak Sapnish?
+Alicia 15:35
+Sí, muy buenas tardes
+¿Cómo le puedo ayudar?
+peyrona 15:36
+Hola.
+Alguien que os conoce me dijo que estabais en Málaga (yo soy de Marbella) y casualmente os he encontrado buscando una imagen
+Al grano:
+Estoy terminando mi tesis doctoral y tenéis una imagen que me interesa, quisiera usarla como "animal-asociado" al leguage de programación que he creado
+No sé si sabes que en Linux (y alrededores) es común asociar un animal a cada lengauge de progranmación
+Quisiera saber si la compro, qué derechos de uso tengo?
+Alicia 15:38
+Podría comprar esa imagen bajo las condiciones del uso de nuestra Licencia Estándar
+Licencia Estándar le permite usar nuestros archivos para crear los productos de publicidad (folletos/flayers/vallas/eucoles/afiches/volantes), etiquetas/envoltorios/envases, tarjetas de visitas, libros/revistas/periódicos con la tirada hasta 500.000 ejemplares.
+Además Ud. puede usar nuestros archivos bajo la Licencia Estándar para el uso digital (publicidad, libros electrónicos, diseño de sitios web/redes sociales/blogs etc.)
+peyrona 15:38
+OK, ya veo
+muchas gracias
+el asunto es que esto va de una tesis doctoral, así que la cosa se complica
+¿Cuánto me costaría la propiedad (no en exclusiva)?
+Quiero usarla para mi "producto" (al ser gratuíto no es un producto propiamente dicho) y que todo el que utilice mi producto tb la pueda usar
+Alicia 15:41
+¿Su producto será para la venta/reventa?
+¿Está necesitando comprar solamente 1 imagen?
+peyrona 15:42
+No, se trata de una tesis doctoral que otros estudiantes utilizarán para estudiar y para hacer trabajos académicos
+No hay beneficio económico alguno
+Sí, sólo necesito 1 imagen
+Read
+Alicia 15:44
+Perfecto, con la Licencia Estándar será más que suficiente
+1 imagen suelta con la Licencia Estándar a su nombre propio le costaría 20€ o podría comprar el paquete de 3 descargas prepagadas a precio 35€. Es un plan muy cómodo para las descargas sueltas de vez en cuando con el plazo de vigencia de 1 año.
+peyrona 15:44
+Genial.
+Muchas gracias por su ayuda.
+Le agradezco que me ofrezca lo de las descargas por suscripción, pero honestamente, en 35 años programando ordenadores jamás he necesitado comprar una imagen y ahora que estoy para jubilarme no creo que eso vaya a sufrir una cambio drástico
+Volveré a por esa uimagen: ya he tomado nota del la URL
+Muchas gracias por su tiempo y su amabilidad
+Delivered

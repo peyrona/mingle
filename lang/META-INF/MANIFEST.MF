@@ -1,0 +1,10 @@
+Manifest-Version: 1.0
+Ant-Version: Apache Ant 1.10.8
+Created-By: 11.0.20.1+1-post-Ubuntu-0ubuntu122.04 (Ubuntu)
+Premain-Class: com.peyrona.mingle.lang.japi.JarLoader
+Agent-Class: com.peyrona.mingle.lang.japi.JarLoader
+Bundle-Name: Lang module
+Bundle-Date: 2023-11-15 17:59:09 CET
+Implementation-Title: Mingle
+Implementation-URL: https://mingle.peyrona.com
+

@@ -1,0 +1,3 @@
+URL  : ftp://mingle@ftp.peyrona.com/
+User : mingle
+Pwd  : MSP@pwd4FTP

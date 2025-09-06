@@ -1,0 +1,7 @@
+#Glue connection definition file
+#Tue Jan 30 11:52:49 CET 2024
+ssl=false
+port=55886
+url=192.168.7.9
+label=RPi en A1
+channel=Plain Socket
