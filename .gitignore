@@ -28,6 +28,7 @@ Thumbs.db
 # Otros ficheros y dirs
 FTP_and_GitHub.txt
 pack.sh
+.*
 *.graphml
 *.txt
 *.odt
