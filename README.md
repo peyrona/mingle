@@ -1,7 +1,3 @@
-  Mingle   body { font-family: Ubuntu, sans-serif; font-size: 105%; background-color: rgb(255, 251, 240); /\* background-color: rgb(32,32,32); color: rgb(200,200,200); \*/ /\* background-image: url('iotg-logo-faded.png'); background-position: center; background-repeat: no-repeat; \*/ margin-left: auto; margin-right: auto; width: 95vw; max-width: 800px; } a:link { background-color:none; color:#8B4513; text-decoration: none; font-weight: bold; } a:visited { background-color:none; color:#8B4513; text-decoration: none; font-weight: bold; } a:hover { background-color:rgb(161, 243, 197); color:#192b2b; text-decoration: none; font-weight: bold; } a:active { background-color:rgb(161, 243, 197); color:#192b2b; text-decoration: none; font-weight: bold; }
-
-|     |     |
-| --- | --- |
 | # What is Mingle?<br><br>*   A programming language (very close to natural language) named "_Une_"".<br>*   The tools associated with the _Une_ language. | [Download](downloads.html) |
 
 _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills at all to learn and to use _Une_. If you are familiar with MS-Excel (or any other spreadsheet), you already know a lot about _Une_.  
@@ -44,7 +40,7 @@ Here is how to say using _Une_ : “when the alarm is on and any window or door 
 > 6.  Modify the _Une_ source code and re-test
 > 7.  Go to #3
 
- **What about ISP?**  
+ **What about MSP?**  
 
 > The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize.  
 > You have a handbook (under "docs" folder) titled "The Mingle Standard Platform.pdf". It is highly recommended to read it carefuly in order to be familiar with the tools you will daily use.  
