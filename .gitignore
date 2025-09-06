@@ -33,6 +33,7 @@ pack.sh
 *.graphml
 *.txt
 *.odt
+*.odg
 *.zip
 /docs/images/
 todeploy/log/
