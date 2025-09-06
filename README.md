@@ -12,7 +12,8 @@ Everything is Open Source (available under the Apache License 2.0): the language
 
 # How looks it like?
 
-Here is how to say using _Une_ : “when the alarm is on and any window or door is opened, then send a message to my Telegram”.  
+Here is how to say using _Une_ : 
+“when the alarm is on and any window or door is opened, then send a message to my Telegram”.  
   
 ![Une language basic example](une-1st-example.png)  
 
