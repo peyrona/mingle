@@ -1,0 +1,599 @@
+<!-- Cell properties: the cell where the gadget is shown. (really it is a div, not a td) -->
+
+<div id="properties-style" style="display:none;">
+    <form onsubmit="return false;">
+        <div class = "container">
+
+            <div class="box" id="grid-fields">
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Card title</label>
+                            <div class="control">
+                                <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgChart.gehme.changed(this)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <label class="label">Title location</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="north" onchange="dlgChart.gehme.changed(this)" checked>
+                                North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="south" onchange="dlgChart.gehme.changed(this)">
+                                South
+                              </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Background from</label>
+                        <div class="control">
+                            <input class="input" type="color" name="color_from" onchange="dlgStyle.onBackgroundChanged()">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Background to</label>
+                        <div class="control">
+                            <input class="input" type="color" name="color_to" onchange="dlgStyle.onBackgroundChanged()">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Background degrees</label>
+                        <div class="control">
+                            <input class="input" type="number" name="color_degrees" min="0" max="359" value="0" onchange="dlgStyle.onBackgroundChanged()">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <label class="label" for="chk-no-color">&nbsp;Background color</label>
+                    <label class="checkbox">
+                        <input type="checkbox" id="chk-no-color" name="chk-no-color" onclick="dlgStyle.onBackgroundChanged()">&nbsp;&nbsp;Yes / No
+                    </label>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column is-two-thirds">
+                    <div class="field">
+                        <label class="label">Background image</label>
+                        <div class="field has-addons">
+                            <p class="control" title="Clear text" style="cursor:pointer;" onclick="$('#properties-style [name=\'back_image\']').val(''); dlgStyle.onBackgroundChanged();">
+                                <a class="button is-static"><i class="fa fa-times"></i></a>
+                            </p>
+                            <p class="control is-expanded">
+                                <input class="input" name="back_image" type="text" title="Select an image (optional)" placeholder="Select an image (can be empty)" onchange="dlgStyle.onBackgroundChanged()">
+                            </p>
+                            <p class="control" title="Select an image" style="cursor:pointer;" onclick="gt.selectImg4Text($('#properties-style [name=\'back_image\']'))">
+                                <a class="button is-static"><i class="fa fa-folder-open-o"></i></a>
+                            </p>
+                            <p class="control" title="Upload an image" style="cursor:pointer;" onclick="gt.uploadImage()">
+                                <a class="button is-static"><i class="fa fa-cloud-upload"></i></a>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-one-thirds">
+                    <div class="field">
+                        <label class="label">Strategy</label>
+                        <div class="control">
+                            <label class="radio">
+                                <input type="radio" name="image_mode" value="auto"          onchange="dlgStyle.onBackgroundChanged()">
+                                &nbsp;Auto
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="image_mode" value="cover" checked onchange="dlgStyle.onBackgroundChanged()">
+                                &nbsp;Cover
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="image_mode" value="contain"       onchange="dlgStyle.onBackgroundChanged()">
+                                &nbsp;Contain
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <label class="label">Border top</label>
+            <div class="columns">
+                <div class="column pl-5">
+                    <div class="field is-grouped">
+                        <div class="field is-horizontal">
+                            <div class="field-label is-normal">
+                                <label class="label">Style</label>
+                            </div>
+                            <div class="field-body">
+                                <div class="field is-narrow">
+                                    <div class="control">
+                                        <div class="select">    <!-- If place here: 'pr-5' the select is painted wrong -->
+                                            <select name="border_top_style" onchange="dlgStyle.setBorder('top')">
+                                                <option>None  </option>
+                                                <option>Solid </option>
+                                                <option>Dotted</option>
+                                                <option>Dashed</option>
+                                                <option>Double</option>
+                                                <option>Groove</option>
+                                                <option>Hidden</option>
+                                                <option>Inset </option>
+                                                <option>Outset</option>
+                                                <option>Ridge </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Thickness</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field has-addons has-addons-centered">
+                                <p class="control">
+                                    <input class="input" name="border_top_width" type="number" min="0" max="999" onchange="dlgStyle.setBorder('top')">
+                                </p>
+                                <p class="control">
+                                    <span class="select">
+                                        <select name="border_top_width_unit" onchange="dlgStyle.setBorder('top')">
+                                            <option>px</option>
+                                            <option>vw</option>
+                                            <option>vh</option>
+                                            <option>ch</option>
+                                            <option>%</option>
+                                            <option>em</option>
+                                            <option>rem</option>
+                                        </select>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Color</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field">
+                                <div class="control">
+                                    <input class="input" type="color" name="border_top_color" size="16" onchange="dlgStyle.setBorder('top')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <label class="label">Border left</label>
+            <div class="columns">
+                <div class="column pl-5">
+                    <div class="field is-grouped">
+                        <div class="field is-horizontal">
+                            <div class="field-label is-normal">
+                                <label class="label">Style</label>
+                            </div>
+                            <div class="field-body">
+                                <div class="field is-narrow">
+                                    <div class="control">
+                                        <div class="select">    <!-- If place here: 'pr-5' the select is painted wrong -->
+                                            <select name="border_left_style" onchange="dlgStyle.setBorder('left')">
+                                                <option>None  </option>
+                                                <option>Solid </option>
+                                                <option>Dotted</option>
+                                                <option>Dashed</option>
+                                                <option>Double</option>
+                                                <option>Groove</option>
+                                                <option>Hidden</option>
+                                                <option>Inset </option>
+                                                <option>Outset</option>
+                                                <option>Ridge </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Thickness</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field has-addons has-addons-centered">
+                                <p class="control">
+                                    <input class="input" name="border_left_width" type="number" min="0" max="999" onchange="dlgStyle.setBorder('left')">
+                                </p>
+                                <p class="control">
+                                    <span class="select">
+                                        <select name="border_left_width_unit" onchange="dlgStyle.setBorder('left')">
+                                            <option>px</option>
+                                            <option>vw</option>
+                                            <option>vh</option>
+                                            <option>ch</option>
+                                            <option>%</option>
+                                            <option>em</option>
+                                            <option>rem</option>
+                                        </select>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Color</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field">
+                                <div class="control">
+                                    <input class="input" type="color" name="border_left_color" size="16" onchange="dlgStyle.setBorder('left')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <label class="label">Border bottom</label>
+            <div class="columns">
+                <div class="column pl-5">
+                    <div class="field is-grouped">
+                        <div class="field is-horizontal">
+                            <div class="field-label is-normal">
+                                <label class="label">Style</label>
+                            </div>
+                            <div class="field-body">
+                                <div class="field is-narrow">
+                                    <div class="control">
+                                        <div class="select">    <!-- If place here: 'pr-5' the select is painted wrong -->
+                                            <select name="border_bottom_style" onchange="dlgStyle.setBorder('bottom')">
+                                                <option>None  </option>
+                                                <option>Solid </option>
+                                                <option>Dotted</option>
+                                                <option>Dashed</option>
+                                                <option>Double</option>
+                                                <option>Groove</option>
+                                                <option>Hidden</option>
+                                                <option>Inset </option>
+                                                <option>Outset</option>
+                                                <option>Ridge </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Thickness</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field has-addons has-addons-centered">
+                                <p class="control">
+                                    <input class="input" name="border_bottom_width" type="number" min="0" max="999" onchange="dlgStyle.setBorder('bottom')">
+                                </p>
+                                <p class="control">
+                                    <span class="select">
+                                        <select name="border_bottom_width_unit" onchange="dlgStyle.setBorder('bottom')">
+                                            <option>px</option>
+                                            <option>vw</option>
+                                            <option>vh</option>
+                                            <option>ch</option>
+                                            <option>%</option>
+                                            <option>em</option>
+                                            <option>rem</option>
+                                        </select>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Color</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field">
+                                <div class="control">
+                                    <input class="input" type="color" name="border_bottom_color" size="16" onchange="dlgStyle.setBorder('bottom')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <label class="label">Border right</label>
+            <div class="columns">
+                <div class="column pl-5">
+                    <div class="field is-grouped">
+                        <div class="field is-horizontal">
+                            <div class="field-label is-normal">
+                                <label class="label">Style</label>
+                            </div>
+                            <div class="field-body">
+                                <div class="field is-narrow">
+                                    <div class="control">
+                                        <div class="select">    <!-- If place here: 'pr-5' the select is painted wrong -->
+                                            <select name="border_right_style" onchange="dlgStyle.setBorder('right')">
+                                                <option>None  </option>
+                                                <option>Solid </option>
+                                                <option>Dotted</option>
+                                                <option>Dashed</option>
+                                                <option>Double</option>
+                                                <option>Groove</option>
+                                                <option>Hidden</option>
+                                                <option>Inset </option>
+                                                <option>Outset</option>
+                                                <option>Ridge </option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Thickness</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field has-addons has-addons-centered">
+                                <p class="control">
+                                    <input class="input" name="border_right_width" type="number" min="0" max="999" onchange="dlgStyle.setBorder('right')">
+                                </p>
+                                <p class="control">
+                                    <span class="select">
+                                        <select name="border_right_width_unit" onchange="dlgStyle.setBorder('right')">
+                                            <option>px</option>
+                                            <option>vw</option>
+                                            <option>vh</option>
+                                            <option>ch</option>
+                                            <option>%</option>
+                                            <option>em</option>
+                                            <option>rem</option>
+                                        </select>
+                                    </span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field is-horizontal">
+                        <div class="field-label is-normal">
+                            <label class="label">Color</label>
+                        </div>
+                        <div class="field-body">
+                            <div class="field">
+                                <div class="control">
+                                    <input class="input" type="color" name="border_right_color" size="16" onchange="dlgStyle.setBorder('right')">
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <label class="label">Padding (spacing)</label>
+            <div class="field is-grouped">
+                <div class="field has-addons has-addons-centered">
+                    <p class="control">
+                        <a class="button">Top</a>
+                    </p>
+                    <p class="control">
+                        <input class="input" type="number" name="pad_top" min="0" max="9999" value="0" onchange="dlgStyle.setPadding('top')">
+                    </p>
+                    <p class="control">
+                        <span class="select">
+                            <select name="pad_top_unit" onchange="dlgStyle.setPadding('top')">
+                                <option>px</option>
+                                <option>vw</option>
+                                <option>vh</option>
+                                <option>ch</option>
+                                <option>%</option>
+                                <option>em</option>
+                                <option>rem</option>
+                            </select>
+                        </span>
+                    </p>
+                </div>
+
+                <div class="field has-addons has-addons-centered pl-4">
+                    <p class="control">
+                        <a class="button">Left</a>
+                    </p>
+                    <p class="control">
+                        <input class="input" type="number" name="pad_left" min="0" max="9999" value="0" onchange="dlgStyle.setPadding('left')">
+                    </p>
+                    <p class="control">
+                        <span class="select">
+                            <select name="pad_left_unit" onchange="dlgStyle.setPadding('left')">
+                                <option>px</option>
+                                <option>vw</option>
+                                <option>vh</option>
+                                <option>ch</option>
+                                <option>%</option>
+                                <option>em</option>
+                                <option>rem</option>
+                            </select>
+                        </span>
+                    </p>
+                </div>
+
+                <div class="field has-addons has-addons-centered pl-4">
+                    <p class="control">
+                        <a class="button">Bottom</a>
+                    </p>
+                    <p class="control">
+                        <input class="input" type="number" name="pad_bottom" min="0" max="9999" value="0" onchange="dlgStyle.setPadding('bottom')">
+                    </p>
+                    <p class="control">
+                        <span class="select">
+                            <select name="pad_bottom_unit" onchange="dlgStyle.setPadding('bottom')">
+                                <option>px</option>
+                                <option>vw</option>
+                                <option>vh</option>
+                                <option>ch</option>
+                                <option>%</option>
+                                <option>em</option>
+                                <option>rem</option>
+                            </select>
+                        </span>
+                    </p>
+                </div>
+
+                <div class="field has-addons has-addons-centered pl-4">
+                    <p class="control">
+                        <a class="button">Right</a>
+                    </p>
+                    <p class="control">
+                        <input class="input" type="number" name="pad_right" min="0" max="9999" value="0" onchange="dlgStyle.setPadding('right')">
+                    </p>
+                    <p class="control">
+                        <span class="select">
+                            <select name="pad_right_unit" onchange="dlgStyle.setPadding('right')">
+                                <option>px</option>
+                                <option>vw</option>
+                                <option>vh</option>
+                                <option>ch</option>
+                                <option>%</option>
+                                <option>em</option>
+                                <option>rem</option>
+                            </select>
+                        </span>
+                    </p>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+"use strict";
+
+if( typeof dlgStyle === "undefined" )
+{
+var dlgStyle =
+{
+    gadget : null,
+    style  : null,
+
+    setup : function( gadget )    // Invoked from GadgetEditorHelper::showDialog() (in gum_tools.js)
+    {
+        this.gadget = gadget;
+        this.style  = new GadgetStyle( gadget );
+
+        let oBg = this.style.getBackground();
+
+        // Init HTML controls -------------------------------------------
+
+        $('#properties-style [name="back_image"   ]').val( oBg.getImageURL() );
+        $('#properties-style [name="image_mode"][value=' + oBg.getImageMode() +']').prop('checked', true);
+        $('#properties-style [name="color_from"   ]').val( oBg.getColorFrom() );
+        $('#properties-style [name="color_to"     ]').val( oBg.getColorTo() );
+        $('#properties-style [name="color_degress"]').val( oBg.getColorDegrees() );
+
+        $('#properties-style [name="chk-no-color"'  ).prop( 'checked', false );
+
+        if( oBg.getColorFrom() || oBg.getColorTo() || oBg.getColorDegrees() )
+        {
+            $('#properties-style [name="chk-no-color"').trigger('click');    // This invokes ::onBackgroundChanged()
+        }
+        else
+        {
+            $('#properties-style [name="color_from"]'   ).prop( 'disabled', true );
+            $('#properties-style [name="color_to"]'     ).prop( 'disabled', true );
+            $('#properties-style [name="color_degrees"]').prop( 'disabled', true );
+        }
+
+        for( const sWhich of ['top','left','bottom','right'] )
+        {
+            $('#properties-style [name="border_'+ sWhich +'_style"     ]').val( this.style.getBorderStyle( sWhich ) );
+            $('#properties-style [name="border_'+ sWhich +'_color"     ]').val( this.style.getBorderColor( sWhich ) );
+            $('#properties-style [name="border_'+ sWhich +'_width"     ]').val( this.style.getBorderWidth( sWhich ).width );
+            $('#properties-style [name="border_'+ sWhich +'_width_unit"]').val( this.style.getBorderWidth( sWhich ).unit  );
+        }
+
+        for( const sWhich of ['top','left','bottom','right'] )
+        {
+            $('#properties-style [name="pad_'+ sWhich +'"]'     ).val( this.style.getPadding( sWhich ).width );
+            $('#properties-style [name="pad_'+ sWhich +'_unit"]').val( this.style.getPadding( sWhich ).unit  );
+        }
+    },
+
+    //--------------------------------------------------------------------//
+
+    onBackgroundChanged : function()    // Clarity over efficiency
+    {
+        let bBackColor = $('#properties-style [name="chk-no-color"]').is(':checked');
+
+        $('#properties-style [name="color_from"]'   ).prop( 'disabled', ! bBackColor );
+        $('#properties-style [name="color_to"]'     ).prop( 'disabled', ! bBackColor );
+        $('#properties-style [name="color_degrees"]').prop( 'disabled', ! bBackColor );
+
+        let url  = $('#properties-style [name="back_image"   ]').val().trim();
+        let mode = $('#properties-style [name="image_mode"   ]:checked').val();
+        let from = $('#properties-style [name="color_from"   ]').val().trim();
+        let to   = $('#properties-style [name="color_to"     ]').val().trim();
+        let flow = $('#properties-style [name="color_degrees"]').val();
+
+        if( ! bBackColor )
+            from = to = flow = null;
+
+        this.style.setBackground( url, mode, from, to, flow );
+    },
+
+    setBorder : function( sWhich )
+    {
+        let sStyle = $('#properties-style [name="border_'+ sWhich +'_style"]').val();
+        let sColor = $('#properties-style [name="border_'+ sWhich +'_color"]').val();
+        let sWidth = $('#properties-style [name="border_'+ sWhich +'_width"]').val();
+        let sUnits = $('#properties-style [name="border_'+ sWhich +'_width_unit"]').val();
+
+        if( p_base.isNotEmpty( sStyle ) )
+            this.style.setBorderStyle( sWhich, sStyle );
+
+        if( p_base.isNotEmpty( sColor ) )
+            this.style.setBorderColor( sWhich, sColor );
+
+        if( p_base.isNotEmpty( sWidth ) )
+            this.style.setBorderWidth( sWhich, sWidth, sUnits );
+    },
+
+    setPadding : function( sWhich )
+    {
+        let sWidth = $('#properties-style [name="pad_'+ sWhich +'"]').val();
+        let sUnits = $('#properties-style [name="pad_'+ sWhich +'_unit"]').val();
+
+        if( p_base.isNotEmpty( sWidth ) )
+            this.style.setPadding( sWhich, sWidth, sUnits );
+    }
+};
+}
+</script>

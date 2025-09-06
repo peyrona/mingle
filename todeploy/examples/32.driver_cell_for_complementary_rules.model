@@ -1,0 +1,17 @@
+{"transpiler":"MSP Transpiler ver.2024-09-04",
+"code-version":"1.0",
+"commands":[
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":1000},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"result","driver":"cellsetdriver","config":{"value":-2},"init":null},
+{"cmd":"rule","name":null,"when":"clock > 0","then":[{"after":-1,"target":"result","value":"( clock / 1000): mod( 2): floor()"}],"if":null},
+{"cmd":"rule","name":null,"when":"result == 0","then":[{"after":-1,"target":"console","value":"\"Clock value is an even number [\" + result + \"]\""}],"if":null},
+{"cmd":"rule","name":null,"when":"result == 1","then":[{"after":-1,"target":"console","value":"\"Clock value is an odd  number [\" + result + \"]\""}],"if":null},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"}
+]
+}

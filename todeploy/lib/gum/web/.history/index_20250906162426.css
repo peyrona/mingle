@@ -1,0 +1,57 @@
+/*
+    Created on : Sep 10, 2022, 9:42:48 AM
+    Author     : Francisco Morero Peyrona
+*/
+
+/* Font Awesome 4.7.0 */
+@import "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css";
+
+/* Tabler Icons */
+@import "https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@latest/tabler-icons.min.css";
+
+/* Bulma CSS */
+@import "https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css";
+
+/* Custom CSS */
+body
+{
+    padding: 1vh;
+    width: 100vw;
+
+}
+
+.gum.mini-btn
+{
+    padding     : .3rem;
+    margin-left : .1rem;
+    margin-right: .1rem;
+    border      : solid transparent 1px;
+    cursor      : pointer;
+}
+
+.gum.mini-btn:hover
+{
+    border: solid #b3e6ff 1px;
+    border-radius: 3px;
+}
+
+.pointer
+{
+    cursor: pointer;
+}
+
+ul /* This is needed to show the <ul></ul> bullets (I do not know why) */
+{
+    list-style-type: disc;
+    margin-left: 1em;
+    padding-left: 1em;
+}
+
+.image-container     /* App logo in login dialog */
+{
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    max-height: 300px;
+}

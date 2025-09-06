@@ -1,0 +1,48 @@
+#==================================================================================================================================
+# This script prints into the screen the value of CPU every second, the RAM every 10 seconds and the Hard Disk every 30 seconds
+# (all values are percentages).
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 1s
+
+
+DEVICE RAM                         # Knows the amount of RAM (memory) used by the ExEn
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk                        # Knows "how full" is the hard disk
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN CPU ABOVE -1                                               # CPU value will always be above -1
+THEN console SET "Used CPU  is " + CPU:format("##0.00") + "%"   # 'format(...)' function allows precisely this
+
+
+WHEN RAM ABOVE -1                                               # RAM value will always be above -1
+THEN console SET "Used RAM  is " + RAM:format("##0.00") + "%"
+
+
+WHEN Disk ABOVE -1                                              # Disk value will always be above -1
+THEN console SET "Used Disk is " + Disk:format("##0.00") + "%"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

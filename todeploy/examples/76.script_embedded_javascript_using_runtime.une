@@ -1,0 +1,87 @@
+#==================================================================================================================================
+# This example shows how to use other language to perform small tasks (scripts).
+# This is called "embedded" (AKA 'inline') code, and allows to mix Une code with other languages (JavScript, Python, Java, etc).
+#
+# This example shows how to deal with the ExEn Runtime object and the Expressions Evaluator.
+#
+# Although there is no limitation to the size of embedded source code, long pieces should not be mixed with Une source code: just
+# for clarity sake.
+#
+# Each SCRIPT is executed by ExEn in its own thread. Therefore execution order is not guaranteed.
+#
+# For more information, pleaser refer to the "Mingle Standard Platform" handbook.
+#
+# Note: intentionally, this example does not INCLUDE the normal "standard-replaces.une" (it is not needed)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. the Mingle project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 5s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+SCRIPT
+   LANGUAGE JavaScript
+   ONSTART
+   FROM {
+            var xprEval           = _exen_rt_.newXprEval();    // Creates an instance of the Expressions Evaluator
+            var MsgChangeActuator = Java.type( "com.peyrona.mingle.lang.messages.MsgChangeActuator" );   // This is a class created in Java
+
+            fnExprEval_1();    // Shows how to work with the expressions evaluator and sends the result to a device.
+            fnExprEval_2();    // Shows how to use devices declared in Une script inside expressions.
+            fnExprEval_3();    // Creates a JS instace of a Java interface and passes it to Java.
+
+            function fnExprEval_1()
+            {
+                var result = xprEval.build( "2 + 2" ).eval();   // Simplest example
+
+                // Now we show the result of the evaluation "2 + 2" using the device named 'console' declared in Une script.
+                // It is done (like many other things in Mingle) by posting a message into the internal bus.
+
+                var msg = new MsgChangeActuator( "console", result );   // Create the message: name of device and its new value
+
+                _exen_rt_.bus().post( msg );    // Put the message into the internal bus
+            }
+
+            function fnExprEval_2()
+            {
+                var clock  = _exen_rt_.get( "clock" );               // To access the 'clock' device declared in Une
+                var result = xprEval.build( "mod( clock, 2 )" )      // The expression contains the name of a device
+                                    .set( "clock", clock.value() )   // Provide the current device's value
+                                    .eval();
+
+                var msg = new MsgChangeActuator( "console", "mod( clock, 2 ) = "+ result );
+
+                _exen_rt_.bus().post( msg );    // Put the message into the internal bus
+            }
+
+            function fnExprEval_3()
+            {
+                var BusListener = Java.type( "com.peyrona.mingle.lang.interfaces.exen.IEventBus.Listener" );
+
+                var myListener  = new BusListener()                       // Create a Bus Listener:
+                                      {                                   // every a new message is posted into the bus,
+                                            onMessage : function( msg )   // this method will be invoked
+                                            {
+                                                // msg.class is an instance of Java Class class, so we use the Java methods
+
+                                                if( msg.class.getSimpleName().endsWith( "MsgDeviceChanged" ) )
+                                                    print( "Clock value is: "+ msg.value );
+                                            }
+                                      };
+
+                _exen_rt_.bus().add( myListener );    // Adds the listener to the bus, which will invoke it for every message
+            }
+        }
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

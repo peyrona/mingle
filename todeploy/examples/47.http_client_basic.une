@@ -1,0 +1,37 @@
+#==================================================================================================================================
+# This example invokes a service to find out the external IP where the script is running.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE console
+    DRIVER OutputDriver
+
+#==================================================================================================================================
+
+DEVICE external_ip
+    DRIVER HttpClientDriver
+        CONFIG
+            uri SET "https://api.ipify.org?format=text"
+
+WHEN external_ip:len() > 0
+THEN console SET "External IP : " + external_ip
+
+#==================================================================================================================================
+
+DEVICE geo_info
+    DRIVER HttpClientDriver
+        CONFIG
+            uri SET "http://ip-api.com/json/8.8.8.8"
+
+WHEN geo_info:len() > 0
+THEN console SET "City        : " + geo:get( "city" )
+     console SET "Latitude    : " + geo:get( "lat"  )
+     console SET "Longitude   : " + geo:get( "lon"  )
+USE  geo AS pair():fromJSON( geo_info )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

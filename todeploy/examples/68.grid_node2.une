@@ -1,0 +1,30 @@
+#==================================================================================================================================
+# This Une code is part of the Grid example, which is composed by three source (.une) files.
+# The goal of this example is to show how MSP Grids work.
+# To know more about MSP Grids, please refer to the The_Mingle_Standard_Platform.pdf handbook.
+#
+# To compile you need to check the "Grid" checkbox in the Glue Sources Editor or to a add -grid=true when using the Tape tool.
+# To run the exmaple execute the bash file: {*home*}examples/grid_run.sh
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 3s
+
+
+WHEN CPU ABOVE -1
+THEN console SET "CPU: "+ CPU +"%  [Node 2]"    # Note that device 'console' is not defined in this script
+
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"      # This one provides common replacements that improve readability.
+        "file://{*home.inc*}basic-drivers.une"          # This one contains several commonly used DRIVERS.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

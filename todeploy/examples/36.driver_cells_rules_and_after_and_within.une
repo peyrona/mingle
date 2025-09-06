@@ -1,0 +1,83 @@
+#==================================================================================================================================
+# This example shows the use of AFTER and WITHIN modifiers in RULEs (CELL driver is used to store generated random values).
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 9s
+
+
+DEVICE CPU
+    INIT
+        groups SET "metric, metrics"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET 0
+
+
+DEVICE RAM
+     INIT
+         groups SET "metric, metrics"
+     DRIVER CellSetDriver
+         CONFIG
+             value SET 0
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric, metrics"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET 0
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN clock > 0
+    THEN CPU  SET rand( 60 , 100 )
+         RAM  SET rand( 60 , 100 )
+         Disk SET rand( 60 , 100 )
+
+
+WHEN ALL metrics ABOVE 80
+    THEN console SET "["+ time() +"] All are above 80%: CPU = "+ CPU +", RAM = "+ RAM +", Disk = "+ Disk
+
+
+WHEN ANY metric ABOVE 80
+    THEN console SET "["+ time() +"] At least one is above 80%: CPU = "+ CPU +", RAM = "+ RAM +", Disk = "+ Disk
+
+
+# Following RULE is activated when the value for all members of the 'metric' group (CPU, RAM and Disk) are above 80.
+# But to be triggered, the IF clause must be true; and this will happen if after 20 seconds at least one of the members of
+# the 'metric' group has a value of 80: it does not matter if one (or even all metrics) where below 80 during these 20 seconds
+# as far as after the 20 seconds there is one or more above 80.
+
+#WHEN ALL metrics ABOVE 80
+#     THEN console SET "["+ time() +"] All metrics were above 80% when rule was triggered and at least one metric was also after 20 seconds",
+#          console SET "CPU = "+ CPU +", RAM = "+ RAM +", Disk = "+ Disk
+#     IF ANY metric ABOVE 80 AFTER 20s
+
+
+# Notice that following RULE is activated everytime one or more 'metric' value is above 80, but only if at least one of the
+# 'metric' values was above 80% throughout the time of 20 seconds (all the time).
+
+WHEN ALL metric ABOVE 80
+     THEN console SET "["+ time() +"] One or more metrics were above 80% throughout the last 20 seconds"
+          console SET "CPU = "+ CPU +", RAM = "+ RAM +", Disk = "+ Disk
+     IF ANY metric ABOVE 80 WITHIN 20s
+
+
+# NOTE: By combining ANY and ALL plus WITHIN and AFTER, you can create powerfull RULEs. You can make RULEs even more powerfull by
+#       adding more expressions using AND, OR and NOT. But remember: it is better to have lots of simple RULEs than fewer RULEs
+#       but more complex.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

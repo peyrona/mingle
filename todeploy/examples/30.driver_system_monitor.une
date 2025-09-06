@@ -1,0 +1,140 @@
+#==================================================================================================================================
+# This script shows some details of the SystemMonitorDriver.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU_used
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "cpu"     # It is not needed to set '%' because it is always returned as percentage
+
+
+DEVICE CPU_free
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "cpu"
+            measure  SET "free"    # By default the "used" is reported, so "free" must be specified
+
+
+DEVICE RAM_used_percent            # Knows the amount of RAM (memory) used by the ExEn
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "jvmram"
+            measure  SET "used%"   # By default the "used" and percent is reported, so this is not really needed
+
+
+DEVICE RAM_used_bytes
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "jvmram"
+            measure  SET "used"    # Used RAM is reported as amount of bytes instead of a percentage
+
+
+DEVICE RAM_free_percent
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "jvmram"
+            measure  SET "free%"   # Free RAM is reported as a percentage
+
+
+DEVICE RAM_free_bytes
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "jvmram"
+            measure  SET "free"    # Free RAM is reported as amount of bytes instead of a percentage
+
+
+# Following we will do the same for the Hard Disk as we just did for the CPU and JVM RAM
+
+DEVICE Disk_used_percent           # Knows "how full" is the hard disk
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "disk"
+            measure  SET "used%"   # By default the "used" and percent is reported, so this is not really needed
+
+
+DEVICE Disk_used_bytes
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "disk"
+            measure  SET "used"    # Used HD is reported as amount of bytes instead of a percentage
+
+
+DEVICE Disk_free_percent
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "disk"
+            measure  SET "free%"   # Free HD is reported as amount of bytes instead of a percentage
+
+
+DEVICE Disk_free_bytes
+    DRIVER SystemMonitorDriver
+        CONFIG
+            interval SET 10s
+            metric   SET "disk"
+            measure  SET "free"   # Free HD is reported as a percentage
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# CPU ----------------
+
+WHEN CPU_used > -1                                             # This value will always be above -1
+     THEN console SET "Used CPU is: " + CPU_used:format( "##" ) + "%"
+
+WHEN CPU_free > -1
+     THEN console SET "Free CPU is: " + CPU_free:format( "###" ) + "%"
+
+
+# RAM ----------------
+
+WHEN RAM_used_percent > -1                                     # This value will always be above -1
+     THEN console SET "Used RAM is: " + RAM_used_percent:format( "##" ) + "%"
+
+
+WHEN RAM_used_bytes > -1                                       # This value will always be above -1
+     THEN console SET "Used RAM is: " + RAM_used_bytes + " bytes"
+
+
+WHEN RAM_free_percent > -1                                     # This value will always be above -1
+     THEN console SET "Free RAM is: " + RAM_free_percent:format( "##" ) + "%"
+
+
+WHEN RAM_free_bytes > -1                                       # This value will always be above -1
+     THEN console SET "Used RAM is: " + RAM_free_bytes + " bytes"
+
+
+# Disk (storage) ----------------
+
+WHEN Disk_used_percent > -1                                    # This value will always be above -1
+     THEN console SET "Used Disk is: " + Disk_used_percent:format( "##" ) + "%"
+
+
+WHEN Disk_used_bytes > -1                                      # This value will always be above -1
+     THEN console SET "Used Disk is: " + Disk_used_bytes + " bytes"
+
+
+WHEN Disk_free_percent > -1                                    # This value will always be above -1
+     THEN console SET "Free Disk is: " + Disk_free_percent:format( "##" ) + "%"
+
+
+WHEN Disk_free_bytes > -1                                      # This value will always be above -1
+     THEN console SET "Used Disk is: " + Disk_free_bytes + " bytes"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

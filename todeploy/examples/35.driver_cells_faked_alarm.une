@@ -1,0 +1,63 @@
+#==================================================================================================================================
+# In this example shows how to set an alarm that controls 2 windows.
+# To avoid creating physical sensors, we emulate them using CellSetDriver (see driver_cell examples).
+# We also use the random function to emulate alarm ON and OFF and windows OPEN and CLOSED states.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+WHEN clock > 0
+THEN window_1 SET rand( 0, 1 ) > 0.5    # 50% of times will be TRUE (CLOSED) and the other 50% will be FALSE (OPEN)
+     window_2 SET rand( 0, 1 ) > 0.5
+     alarm    SET rand( 0, 1 ) > 0.7    # 30% of times will be TRUE (ON) and the other 50% will be FALSE (OFF)
+
+
+WHEN alarm IS ON AND ANY window IS OPEN               # Here we use window (singular): ANY window IS
+THEN console SET "Alarm is ON and at least one window is open"
+
+
+WHEN alarm IS ON AND ALL windows ARE OPEN             # Here we use windows (plural): ALL windows ARE
+THEN console SET "Alarm is ON and all windows are open"
+
+
+WHEN alarm IS OFF AND ALL windows ARE OPEN
+THEN console SET "All windows are open, but is not serious because the alarm is OFF"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE clock                            # Used to generate random values at especific interval
+    DRIVER ClockDriver
+        CONFIG
+            Interval SET 5s
+
+
+DEVICE alarm
+    DRIVER CellSetDriver
+        CONFIG
+            value SET FALSE             # false means disarmed
+
+
+DEVICE window_1                         # To emulate a window contact sensor
+    INIT
+         groups = "window, windows"     # Singular and plural allows English correct grammar when declaring the rules
+    DRIVER CellSetDriver
+        CONFIG
+            value SET TRUE              # true means closed
+
+
+DEVICE window_2                         # To emulate a window contact sensor
+    INIT
+         groups = "window, windows"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET TRUE              # true means closed
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

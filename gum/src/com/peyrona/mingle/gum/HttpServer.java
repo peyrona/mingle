@@ -160,7 +160,7 @@ final class HttpServer
         ResourceHandler rhStatic = Handlers.resource( rmStatic ).setDirectoryListingEnabled( true );
 
         // Create the path handler for different endpoints
-        String sUserFilesCtx = UtilStr.removeLast( Util.appendUserFilesCtxTo("/gum/"), 1 );    // This ends with '/' and Undertow's PathHandler treats paths with and without trailing slashes as distinct paths by default
+        String sUserFilesCtx = UtilStr.removeLast( Util.appendUserFilesCtxTo("/gum/"), 1 );    // This ends with '/' because Undertow's PathHandler treats paths with and without trailing slashes as distinct paths by default
 
         PathHandler pathHandler = new PathHandler()
                                         .addPrefixPath( "/gum/bridge", Handlers.websocket( new CommBridge() ) )
@@ -205,9 +205,9 @@ final class HttpServer
         String sServer = "http://" + host +':'+ httpPort +"/gum/";
 
         String sMsg = "Gum (editor and player) : "+ sServer + "index.html    (also 'localhost')\n" +
-                      "Dashboard's folder      : "+ Util.getBoardsDir() +"/\n" +
-                      "Serving user files from : "+ Util.getServedFilesDir() +"/\n" +
-                      "    * at context        : "+ Util.appendUserFilesCtxTo( sServer ) +'\n' +
+                      "Dashboard's folder      : "+ Util.getBoardsDir().getCanonicalPath()      +"/\n" +
+                      "Serving user files from : "+ Util.getServedFilesDir().getCanonicalPath() +"/\n" +
+                      "    * at context        : "+ Util.appendUserFilesCtxTo( sServer )        +'\n' +
                       "    * UI manager        : "+ Util.appendFileMgrCtxTo(   sServer ) + "index.html\n";
 
         UtilSys.getLogger().say( sMsg );
@@ -486,7 +486,8 @@ final class HttpServer
     }
 
     /**
-     * User files are files of any type that exists in the server folder pointed by: File( UtilSys.getEtcFolder(), "gum_user_files" ).
+     * User files are files of any type that exists in the server folder pointed by:
+     * File( UtilSys.getEtcFolder(), "gum_user_files" ).
      *
      * @param formData
      * @param fileValue

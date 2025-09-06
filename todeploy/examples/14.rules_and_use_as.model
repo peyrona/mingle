@@ -1,0 +1,15 @@
+{"transpiler":"MSP Transpiler ver.2025-08-16",
+"code-version":"1.0",
+"uid":"a36dcae8-e916-4fc2-bb36-4c59a125cd09",
+"generated":"2025-08-16T13:36:57.381915",
+"commands":[
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":3000},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":"_rule_3_","when":"put( \"_RULE_3_-hour\" , time(): hour()) && put( \"_RULE_3_-dows\" , list( 1, 3, 5)) && put( \"_RULE_3_-day\" , date(): day()) && get( \"_RULE_3_-day\" ) >= 0 && get( \"_RULE_3_-day\" ) <= 31 && get( \"_RULE_3_-hour\" ) >= 0 && get( \"_RULE_3_-hour\" ) <= 23 && get( \"_RULE_3_-dows\" ): has( date(): weekday()) && clock > 0","then":[{"after":-1,"target":"console","value":"\"Today is Monday or Wednesday or Friday\""}],"if":null},
+{"cmd":"rule","name":"_rule_4_","when":"put( \"_RULE_4_-hour\" , time(): hour()) && put( \"_RULE_4_-dows\" , list( 2, 4, 6, 7)) && put( \"_RULE_4_-day\" , date(): day()) && get( \"_RULE_4_-day\" ) >= 0 && get( \"_RULE_4_-day\" ) <= 31 && get( \"_RULE_4_-hour\" ) >= 0 && get( \"_RULE_4_-hour\" ) <= 23 && get( \"_RULE_4_-dows\" ): has( date(): weekday()) && clock > 0","then":[{"after":-1,"target":"console","value":"\"Today is Tuesday, Thursday or weekend\""}],"if":null},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

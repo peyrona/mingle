@@ -1,0 +1,36 @@
+#==================================================================================================================================
+# This file contains voice (Text-To-Speech and Speech-To_text) DRIVERs and their SCRIPTs.
+#
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# DRIVERs use their associated SCRIPT to communicate with the real (physical) world.
+
+
+DRIVER SunFreeTTSDriver                               # This driver provides access to TTS (Text To Speech)
+    SCRIPT SunFreeTTSController
+    CONFIG
+        locale AS string                              # A Java locale (e.g.: en-US, en-GB, es-ES, de-DE, fr-FR, it-IT)
+#        pitch  AS
+
+
+#==================================================================================================================================
+# The rest of tis file contains common their SCRIPTs needed by the DRIVERs declared above.
+#
+# Unless you are an experienced developer, you should simply ignore the rest of this file.
+#==================================================================================================================================
+
+# A Controller is just a concept: a piece of software written in any acceptable Mingle language that deals with the physical world.
+# A Controller is a SCRIPT used by DRIVERS as intermediators with the physical world.
+
+SCRIPT SunFreeTTSController                          # A Text To Speech (TTS) controller
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+        "file://{*home.lib*}controllers/freetts-1.2/*.jar"
+   CALL "com.peyrona.mingle.controllers.SunFreeTTS"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,271 @@
+<label class="label">Dashboard name: <span name="span_name"></span></label>
+
+<div class="field">
+    <label class="label">Password to allow regular users to access it</label>
+    <p class="control is-expanded">
+        <input class="input" name="pwd_to_edit" type="text" placeholder="Can be empty" onchange="dlgCfg._onBoardPasswordChanged_(this)">
+    </p>
+    <p class="help">This password is needed to access this dashboard but not to edit it.</p>
+</div>
+
+<div class="field gum-is-grid">
+    <label class="label">Dashboard title</label>
+    <p class="control is-expanded">
+        <input class="input" name="board_title" type="text" placeholder="Can be empty, pure text or HTML5" onkeyup="grid.setTitle( this.value )">
+    </p>
+</div>
+
+<div class="field">
+    <label class="label">Background image</label>
+    <div class="field has-addons">
+        <p class="control" title="Clear text" style="cursor:pointer;" onclick="$('#div-dlg_options [name=\'back_image\']').val(''); dlgCfg._onBackgroundChanged_();">
+            <a class="button is-static"><i class="fa fa-times"></i></a>
+        </p>
+        <p class="control is-expanded">
+            <input class="input" name="back_image" type="text" readonly title="Select an image (optional)" placeholder="Choose one or leave empty" onchange="dlgCfg._onBackgroundChanged_()">
+        </p>
+        <p class="control" title="Select an image" style="cursor:pointer;" onclick="gt.selectImg4Text($('#div-dlg_options [name=\'back_image\']'))">
+            <a class="button is-static"><i class="fa fa-folder-open-o"></i></a>
+        </p>
+        <p class="control" title="Upload an image" style="cursor:pointer;" onclick="gt.uploadImage()">
+            <a class="button is-static"><i class="fa fa-cloud-upload"></i></a>
+        </p>
+    </div>
+</div>
+
+<div class="field is-horizontal">
+    <div class="field-label">
+        <label class="label">Strategy:</label>
+    </div>
+    <div class="field-body">
+        <div class="field is-narrow">
+            <div class="control">
+                <label class="radio">
+                    <input type="radio" name="image_mode" value="auto"          onchange="dlgCfg._onBackgroundChanged_()">
+                    &nbsp;Auto
+                </label>
+                <label class="radio">
+                    <input type="radio" name="image_mode" value="cover" checked onchange="dlgCfg._onBackgroundChanged_()">
+                    &nbsp;Cover
+                </label>
+                <label class="radio">
+                    <input type="radio" name="image_mode" value="contain"       onchange="dlgCfg._onBackgroundChanged_()">
+                    &nbsp;Contain
+                </label>
+            </div>
+        </div>
+    </div>
+</div>
+
+<br>
+
+<label class="label">Background color&nbsp;&nbsp;<span class="is-size-7">(From bottom to top of screen)</span></label>
+
+<div class="field is-horizontal">
+    <div class="field-body">
+        <label class="label">Start&nbsp;</label>
+        <div class="field">
+            <p class="control">
+                <input class="input" type="color" name="color_from" value="#F8FBFC">
+            </p>
+        </div>
+    </div>
+    <div class="field-body pl-4">
+        <label class="label">End&nbsp;</label>
+        <div class="field">
+            <p class="control">
+                <input class="input" type="color"  name="color_to" value="#F8FBFC">
+            </p>
+        </div>
+    </div>
+    <div class="field-body pl-4">
+        <label class="label">Degrees&nbsp;</label>
+        <div class="field">
+            <p class="control">
+                <input class="input" type="number" min="0" max="359" name="color_deg" value="0" onchange="dlgCfg._onBackgroundChanged_()">
+            </p>
+        </div>
+    </div>
+</div>
+
+<br>
+
+<div class="field">
+    <label class="label">Connect with following ExEn(s)</label>
+    <div class="field has-addons">
+        <p class="control is-expanded">
+            <input class="input" name="exen-cfg" type="text" value='{"host": "localhost", "port": 55886, "ssl": false}'>
+        </p>
+        <p class="control">
+            <a class="button is-primary" onclick="dlgCfg._onAddExEn_()">
+                <span class="icon"><i class="fa fa-plus"></i></span>
+            </a>
+        </p>
+        <p class="control">
+            <a class="button is-danger" onclick="dlgCfg._onDelExEn_()">
+                <span class="icon"><i class="fa fa-minus"></i></span>
+            </a>
+        </p>
+    </div>
+</div>
+
+<div class="field is-fullwidth">
+    <select name="lst-exen" size="8" style="width:100%;" onchange="dlgCfg._onSelectChanged_(this)">
+    </select>
+</div>
+
+
+<script>
+if( typeof dlgCfg === "undefined" )
+{
+var dlgCfg =
+{
+    beforeOpen : function()
+    {
+        $('#div-dlg_options [name="span_name"]')
+            .text( gum.getDashboardName() )
+            .css( 'color', 'blue' );
+
+        if( gum.isUsingFreeLayout() )
+            $('.gum-is-grid').hide();
+        else
+            $('#div-dlg_options [name="board_title"]').val( grid.getTitle() );
+
+        let oBg = new Background( gum.getBackground() );
+
+        if( oBg )
+        {
+            $('#div-dlg_options [name="back_image"]').val(   oBg.getImageURL()      );
+            $('#div-dlg_options [name="image_mode"][value='+ oBg.getImageMode() +']').prop('checked', true);
+            $('#div-dlg_options [name="color_from"]').val(   oBg.getColorFrom()     );
+            $('#div-dlg_options [name="color_to"  ]').val(   oBg.getColorTo()       );
+            $('#div-dlg_options [name="color_deg" ]').val(   oBg.getColorDegrees()  );
+        }
+
+        $('#div-dlg_options [name="board_name"]' ).val( gum.getDashboardName() );
+        $('#div-dlg_options [name="pwd_to_edit"]').val( gum.getDashboardPassword() );
+
+        let select = $('#div-dlg_options [name="lst-exen"]')[0];
+
+        gum.fillWithExEns( select );
+
+        if( select.length > 0 )
+            select.selectedIndex = 0;
+    },
+
+    getBackground : function()
+    {
+        let url  = $('#div-dlg_options [name="back_image"]').val().trim();
+        let mode = $('#div-dlg_options [name="image_mode"]:checked').val();
+        let from = $('#div-dlg_options [name="color_from"]').val().trim();
+        let to   = $('#div-dlg_options [name="color_to"  ]').val().trim();
+        let flow = $('#div-dlg_options [name="color_deg" ]').val();
+
+        return new Background()
+                  .setImageURL(     url )
+                  .setImageMode(    mode )
+                  .setColorFrom(    from )
+                  .setColorTo(      to )
+                  .setColorDegrees( flow )
+                  .encode();
+    },
+
+    /**
+     * Returns an array of strings being each item of the array a valid JSON object.
+     */
+    getExEns : function()
+    {
+        let asExEn = [];
+        let select = $('#div-dlg_options').find('[name="lst-exen"]')[0];
+
+        for( let n = 0; n < select.options.length; n++ )
+            asExEn.push( select.options[n].text );      // Better to use 'text' over using 'value' (when setting a JS object to value at least Chrome does not handle it properly)
+
+        return asExEn.sort();
+    },
+
+    //===========================================================================================//
+    // PRIVATE SCOPE
+
+    _onBoardPasswordChanged_ : function( text )
+    {
+        gum.setDashboardPassword( text.value );
+    },
+
+    _onBackgroundChanged_ : function()
+    {
+        gum.setBackground( this.getBackground() );
+    },
+
+    _onSelectChanged_ : function( select )
+    {
+        let $input = $('#div-dlg_options').find('[name="exen-cfg"]');
+
+        if( select.length < 0 )
+            $input.val( null );
+        else
+            $input.val( select.options[select.selectedIndex].text );    // Better to use 'text' over using 'value' (when setting a JS object to value at least Chrome does not handle it properly)
+    },
+
+    _onAddExEn_ : function()
+    {
+        let $input = $('#div-dlg_options').find('[name="exen-cfg"]' );
+        let sText  = $input.val().trim();
+
+        if( p_base.isEmpty( sText ) )
+            return;
+
+        if( ! this._isValidJSON_( sText ) )
+        {
+            p_app.alert( "Invalid JSON object" );
+            return;
+        }
+
+        sText = JSON.stringify( JSON.parse( sText ) );     // Formats properly
+
+        if( this._getExEn_( sText ) !== null )   // Duplicated
+            return;
+
+        let $select = $('#div-dlg_options').find('[name="lst-exen"]' );
+
+        $select.append( $("<option></option>").val( sText ).text( sText ) );
+        $select.find('option:last').prop('selected', true);
+    },
+
+    _onDelExEn_ : function()
+    {
+        let $select = $('#div-dlg_options').find('[name="lst-exen"]');
+        let $option = $select.find('option:selected');
+
+        if( $option )
+        {
+            $option.remove();
+
+            if( $select[0].length > 0 )
+                $select[0].selectedIndex = 0;
+        }
+    },
+
+    _getExEn_ : function( sText )
+    {
+        let $select = $('#div-dlg_options').find('[name="lst-exen"]' );
+        let $option = $select.find("option:contains('"+ sText +"')");       // Do not exchange quotes (" and ') (they must be like this)
+
+        return ($option.length > 0 ? $option : null);
+    },
+
+    _isValidJSON_( str )
+    {
+        try
+        {
+            JSON.parse( str );
+            return true;
+        }
+        catch( error )
+        {
+            return false;
+        }
+    }
+};
+}
+</script>

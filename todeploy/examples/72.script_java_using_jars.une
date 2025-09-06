@@ -1,0 +1,43 @@
+#==================================================================================================================================
+# This example shows how to use other languages (Java in this case) to perform small tasks (SCRIPT).
+#
+# Note 1: THIS EXAMPLE CAN NOT BE EXECUTED (because scripts.jar file does not exits): the intention is to show how could it work.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+SCRIPT CopyFiles                             # The script name
+   LANGUAGE java                             # The language used to write the script
+   CALL "com.peyrona.scripts.copy_files"     # This is the 'function' that starts (runs) the Java code
+   FROM "file://{*home.lib*}scripts.jar"     # Where is the Java application
+
+
+SCRIPT DeleteFiles
+   LANGUAGE java
+   CALL "com.peyrona.scripts.delete_files"
+   FROM "file://{*home.lib*}scripts.jar"
+
+
+# As previous SCRIPTs does not change any device's state, therefore the RULEs will
+# not be re-evaluated after the SCRIPTs invocation (there is no rule re-entrance).
+
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 59m                   # It is not needed to execute the RULE more tha once per hour: 59 minutes is good.
+
+
+WHEN clock > 0 AND time():hour() == 10
+THEN CopyFiles                               # 'CopyFiles' SCRIPT will be launched by this RULE (at any mininute at 07 hours).
+                                             # To be launched at 07:00 set clock to 1m instead of 59m
+
+WHEN clock > 0 AND time():hour() == 23
+THEN DeleteFiles                             # 'DeleteFiles' SCRIPT will be launched by this RULE (at any mininute at 23 hours).
+                                             # To be launched at 23:00 set clock to 1m instead of 59m
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

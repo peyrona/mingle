@@ -1,7 +1,9 @@
 
 package com.peyrona.mingle.gum;
 
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
@@ -14,7 +16,8 @@ import java.io.IOException;
  */
 final class Util
 {
-    private static final File fAppDir = new File( UtilSys.getLibDir(), "/gum/web" );    // Cached in a var because it is heavily used
+    private static final File fAppDir  = new File( UtilSys.getLibDir(), "/gum/web" );    // Cached in a var because it is heavily used
+    private static       File fUserDir = null;
 
     //------------------------------------------------------------------------//
 
@@ -40,7 +43,7 @@ final class Util
 
     /**
      * Returns the folder containing static files uploaded by the user.<br>
-     * An FTP like server using HTTP protocol.
+     * An FTP like server but using HTTP protocol.
      *
      * @return Folder containing static files uploaded by the user.
      * @throws IOException
@@ -75,7 +78,24 @@ final class Util
      */
     private static File getUserDir()
     {
-        return new File( UtilSys.getEtcDir(), "gum_user_files" );
+        if( fUserDir == null )
+        {
+            synchronized( Util.class )
+            {
+                if( fUserDir == null )
+                {
+                    String userDir = UtilSys.getConfig().get( "monitoring", "user_files_dir", "" );
+
+                    fUserDir = UtilStr.isEmpty( userDir ) ? new File( UtilSys.getEtcDir(), "gum_user_files" )
+                                                          : new File( userDir            , "gum_user_files" );
+
+                    if( ! UtilIO.mkdirs( fUserDir ) )
+                        throw new MingleException( "Can not create "+ fUserDir );
+                }
+            }
+        }
+
+        return fUserDir;
     }
 
     private static File mkDirs( File f ) throws IOException

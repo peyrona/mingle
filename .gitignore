@@ -26,8 +26,16 @@
 Thumbs.db
 
 # Otros ficheros y dirs
+FTP_and_GitHub.txt
+pack.sh
+*.graphml
+*.txt
+*.odt
 *.zip
-/0.PhD/
-/balata/
-/todeploy/
-/website/
+/docs/images/
+todeploy/log/
+todeploy/tmp/
+todeploy/etc/
+0.PhD/
+balata/
+website/

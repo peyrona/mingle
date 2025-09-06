@@ -1,0 +1,20 @@
+{"transpiler":"MSP Transpiler ver.2024-09-04",
+"code-version":"1.0",
+"commands":[
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":9000},"init":null},
+{"cmd":"device","name":"cpu","driver":"cellsetdriver","config":{"value":0},"init":{"groups":"metric, metrics"}},
+{"cmd":"device","name":"ram","driver":"cellsetdriver","config":{"value":0},"init":{"groups":"metric, metrics"}},
+{"cmd":"device","name":"disk","driver":"cellsetdriver","config":{"value":0},"init":{"groups":"metric, metrics"}},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"clock > 0","then":[{"after":-1,"target":"cpu","value":"rand( 60 , 100)"},{"after":-1,"target":"ram","value":"rand( 60 , 100)"},{"after":-1,"target":"disk","value":"rand( 60 , 100)"}],"if":null},
+{"cmd":"rule","name":null,"when":"ALL metrics > 80","then":[{"after":-1,"target":"console","value":"\"[\" + time() + \"] All are above 80%: CPU = \" + CPU + \", RAM = \" + RAM + \", Disk = \" + Disk"}],"if":null},
+{"cmd":"rule","name":null,"when":"ANY metric > 80","then":[{"after":-1,"target":"console","value":"\"[\" + time() + \"] At least one is above 80%: CPU = \" + CPU + \", RAM = \" + RAM + \", Disk = \" + Disk"}],"if":null},
+{"cmd":"rule","name":null,"when":"ALL metric > 80","then":[{"after":-1,"target":"console","value":"\"[\" + time() + \"] One or more metrics were above 80% throughout the last 20 seconds\""},{"after":-1,"target":"console","value":"\"CPU = \" + CPU + \", RAM = \" + RAM + \", Disk = \" + Disk"}],"if":"ANY metric > 80 WITHIN 20000"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

@@ -1,0 +1,52 @@
+#==================================================================================================================================
+# Triggering a SCRIPT from a RULE.
+# The "Mingle Standard Platform" allows to write scripts in: Java, JavaScript or Python.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 1s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+       CONFIG
+           metric   SET "jvmram"
+            interval SET 3s
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+SCRIPT I_am_a_script
+   LANGUAGE java
+   FROM {
+           System.out.println( "At least one metric is above 80% (using script invocation)" );
+        }
+
+
+WHEN ANY metric ABOVE 80   # Use a number of your choice
+THEN I_am_a_script         # This will trigger the script
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<
