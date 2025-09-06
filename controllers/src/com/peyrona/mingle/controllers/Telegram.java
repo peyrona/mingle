@@ -125,17 +125,4 @@ public final class   Telegram
                 conn.disconnect();
         }
     }
-
-    //------------------------------------------------------------------------//
-    // TESTING
-
-//    public static void main( String[] as ) throws IOException
-//    {
-//        String sBOT_TOKEN = "531072848:AAGJ2X7lIWwpD5HNvpEXeKSkmOH2TThOIFc";   // BalataBot
-//        String sCHAT_ID   = "-336373800";                                      // Balata chat ID
-//
-//        new Telegram()._sendIM_( sBOT_TOKEN, sCHAT_ID, "Mensaje uno" );
-//        new Telegram()._sendIM_( sBOT_TOKEN, sCHAT_ID, "Con carácteres raros: ? ¿ - & ; ." );
-//        new Telegram()._sendIM_( sBOT_TOKEN, sCHAT_ID, "Con carácteres raros y más:\n\t ? ¿ - & ; ." );
-//    }
 }
