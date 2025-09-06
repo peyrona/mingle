@@ -1,4 +1,4 @@
-| # What is Mingle?<br><br>*   A programming language (very close to natural language) named "_Une_"".<br>*   The tools associated with the _Une_ language. | [Download](downloads.html) |
+What is Mingle?<br><br>*   A programming language (very close to natural language) named "_Une_".<br>*   The tools associated with the _Une_ language.
 
 _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills at all to learn and to use _Une_. If you are familiar with MS-Excel (or any other spreadsheet), you already know a lot about _Une_.  
   
