@@ -29,6 +29,7 @@ Thumbs.db
 FTP_and_GitHub.txt
 pack.sh
 .*
+!/.gitignore
 *.graphml
 *.txt
 *.odt
