@@ -1,0 +1,103 @@
+# ----------------------------------------------------------------------------------------------------------------------------------
+# Initial note: Mingle Standard Platform (MSP) allows Une-style comments in JSON files.
+#
+# This file contains all the configuration needed by the MSP tools.
+# All values here can be also passed at command line using same names (keys).
+# All values can be set as OS Environment Variables using same names (keys).
+# Precedence order is:
+#   1. CLI vars
+#   2. OS vars
+#   3. Config file
+#
+# For detailed information, please refer to the MSP handbook.
+# ----------------------------------------------------------------------------------------------------------------------------------
+
+[
+    # Common configuration to all Mingle modules
+    {
+      "module"           : "common",
+      "log_level"        : "warning",
+      "log_expire"       : 2160,        # Log files older than this amount of hours will be automatically deleted (x <=0 to not delete)
+      "RPiNumberingModel": "WiringPi"   # Used by RPi Driver (by default "BCM")
+    },
+
+    # Excution Environment configuration
+    {
+      "module"                 : "exen",
+      "use_disk"               : true,
+      "faked_drivers"          : false,            # A hint for the drivers. By default: false
+      "downtimed_interval"     : 180,              # Seconds between invocations to find downtimed devices (0 to disable). By default 0
+      "downtimed_report_device": "downtimed_list", # The name of the device that will contain the list of downtimed devices
+      "model"                  : "a1_all.model",             # Local or remote (http) file (or array of files: first valid will be used) to be executed. Null when be passed as parameter. By default null
+      "languages"              : [ {"name": "Une"       , "class": "com.peyrona.mingle.candi.unescript.UneScriptRT", "uris": ["file://{*home.lib*}candi.jar"] },
+                                   {"name": "Java"      , "class": "com.peyrona.mingle.candi.javac.JavaRT"         , "uris": ["file://{*home.lib*}candi.jar"] },
+                                   {"name": "JavaScript", "class": "com.peyrona.mingle.candi.javascript.NashornRT" , "uris": ["file://{*home.lib*}candi.jar"] },
+                                   {"name": "Python"    , "class": "com.peyrona.mingle.candi.python.JythonRT"      , "uris": ["file://{*home.lib*}candi.jar","file://{*home.lib*}jython-standalone-2.7.2.jar"] } ]
+    },
+
+    # Monitoring (HTTP Server and ExEn Bridge) module
+    # See The_Mingle_Standard_Platform.pdf for more info
+    {
+      "module"        : "monitoring",
+      "host"          : null,                                                  # Host name (by default local IPV4)
+      "port"          : null,                                                  # Port to attend HTTP (by default 8080)
+      "timeout"       : 1800,                                                  # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
+      "max_sessions"  : 64,                                                    # Maxium amount of sessions
+      "allow"         : "intranet",                                            # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+      "user_files_dir": "../balata/",                                          # By default "[home]/etc/"
+      "client"        : "com.peyrona.mingle.network.plain.PlainSocketClient",  # Client used by the bridge to connect with ExEns (Intranet)
+      "uris"          : ["file://{*home.lib*}network.jar"]                     # Needed JARs
+     #"ssl"           : { "port": null,                                        # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
+     #                    "path": "{*home*}keystore.jks",                      # Path to "keystore.jks" file (can not be null)
+     #                    "pwd" : "adminadmin"  },                             # Password for the "keystore.jks" file (can not be null)
+    },
+
+    # Arithmetic and Logical Expression Evaluator to be used (loaded at run-time)
+    {
+      "module": "expreval",
+      "class" : "com.peyrona.mingle.lang.xpreval.NAXE",
+      "uris"  : ["file://{*home.lib*}lang.jar"]
+    },
+
+    # Plugable Commmands Library to be used (loaded at run-time)
+    {
+      "module": "cil",
+      "class" : "com.peyrona.mingle.cil.CilBuilder",
+      "uris"  : ["file://{*home.lib*}cil.jar"]
+    },
+
+    # Nework module is incharge of accepting remote connections and/or Grid Nodes to connect to (useed by Stick and Glue).
+    # Sockets, queues and transactions (among others) can be used.
+    # The "init" object allows any kind of configuration: it is passed as string to the "builder".
+    {
+        "module": "network",
+
+        # Servers: transport channels to receive requests sent by other ExEns and tools (e.g. Glue)
+
+        "servers": [
+                      {
+                          "name"   : "Plain Sockets Server using MSP",
+                          "init"   : { "port"  : 55886,                                     # By default, 55886 for plain sockets and 55888 for websockets
+                                       "allow" : "intranet" },                              # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                          "builder": "com.peyrona.mingle.network.plain.PlainSocketServer",  # How to create the server that accept connections
+                          "uris"   : ["file://{*home.lib*}network.jar"]
+                      }
+                  ],
+
+        # Transport channels to create clients that will send requests to servers (mainly used by Gum).
+        # Note: the Server IP is provided at run-time.
+
+        "clients": [
+                      {
+                          "name"   : "Plain Sockets Client using MSP",
+                          "init"   : { "port"    : 55886,                                   # By default, 55886 for plain sockets and 55888 for websockets
+                                       "timeout" : 30 },                                    # Seconds to wait to stablish the connection. By default 0 (wait forever)
+                          "builder": "com.peyrona.mingle.network.plain.PlainSocketClient",  # How to create the client
+                          "uris"   : ["file://{*home.lib*}network.jar"]
+                      }
+                  ],
+
+        # Network grid: to send changes and requests that happen in this ExEn to other ExEns in the grid.
+        "grid": { }
+    }
+]

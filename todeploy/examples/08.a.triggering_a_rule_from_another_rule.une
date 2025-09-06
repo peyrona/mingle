@@ -1,0 +1,53 @@
+#==================================================================================================================================
+# How to trigger a RULE from another RULE.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 1s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# When a RULE's action is another RULE's name, the other RULE will be evaluated and its actions triggered
+# if it is the case.
+
+RULE I_am_a_rule
+     WHEN CPU > 0
+     THEN console SET "At least one metric is above 80% (using indirect invocation)"
+
+
+WHEN ANY metric ABOVE 80
+THEN I_am_a_rule         # This evaluate the RULE "I_am_a_rule" and trigger its actions if it is the case
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

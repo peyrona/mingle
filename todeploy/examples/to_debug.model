@@ -1,0 +1,17 @@
+{"transpiler":"MSP Transpiler ver.2025-01-19",
+"code-version":"1.0",
+"commands":[
+{"cmd":"device","name":"cpu_sum","driver":"cellsetdriver","config":{"value":0},"init":null},
+{"cmd":"device","name":"cpu","driver":"systemmonitordriver","config":{"metric":"cpu","interval":5000},"init":null},
+{"cmd":"device","name":"disk","driver":"systemmonitordriver","config":{"metric":"disk","interval":60000},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"Disk >= 0","then":[{"after":-1,"target":"cpu_sum","value":0},{"after":-1,"target":"console","value":"\"sumar = \" + CPU_Sum"}],"if":null},
+{"cmd":"rule","name":null,"when":"CPU >= 0","then":[{"after":-1,"target":"cpu_sum","value":"CPU_Sum + CPU"}],"if":null},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

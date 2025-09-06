@@ -1,0 +1,55 @@
+#==================================================================================================================================
+# Two complementary rules, revisited.
+#
+# This example shows how to save CPU(*) by storing in a Cell the result of the formula: "(clock / 1000):mod( 2 ):floor()"
+# By doing this, we avoid repeating the formula 4 times ('result' appears 4 times in the script).
+#
+#
+# EXPLANATION
+# -----------
+# Every 3 seconds the 'clock' changes its internal value and all rules (having 'clock' in their WHEN clause) are re-evaluated.
+# There is only one rule that has 'clock' in its WHEN, and this always evalutes to TRUE. So the THEN clause is executed and the
+# result of the formula is stored in the Device named 'result'.
+# Because the internal value of this DEVICE has changed, all rules (having 'result' in their WHEN clause) are re-evaluated and
+# those which WHEN clause is evaluated to TRUE will trigger all their actions.
+#
+#
+# (*) In fact, this formula is so simple that it does not worth the effort shown in this example.
+#     FYI: NAXE (the advanced Expressions Evaluator used by default) when running on a so basic hardware as an Raspberry Pi
+#     can execute this formula over 2 million times per second: x > 2x10^6 / sec
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 1s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE result
+    DRIVER CellSetDriver
+        CONFIG
+            value = -2      # As it is mandatory to set a value, we set one that is not 0 neither 1
+
+
+WHEN clock > 0
+THEN result = (clock / 1000):mod( 2 ):floor()
+
+
+WHEN result == 0
+THEN console = "Clock value is an even number ["+ result +"]"
+
+
+WHEN result == 1
+THEN console = "Clock value is an odd  number ["+ result +"]"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

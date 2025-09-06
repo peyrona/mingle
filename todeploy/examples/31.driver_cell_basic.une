@@ -1,0 +1,44 @@
+#==================================================================================================================================
+# By using CellSetDriver you have access to something you can imagine as a spreadsheet set of cells. Instead of naming the cells as
+# it is done is an spreadsheet (E2, F23), here each cell has its own name (spreadsheets also allow it), which is provided when
+# declaring the device associated with the cell.
+#
+# After ELAPSED, the cell value is changed and therefore the rule will be triggered.
+#
+# CellSetDriver is similar to ExEn internal cache (explained previously) because both allow to store values. The difference: cache
+# is not a DEVICE and therefore changes maded in values (put(...)) will not trigger any RULE. But CellSetDriver is used with
+# DEVICEs and therefore, any change in its value, is propagated and can trigger RULEs.
+# On the other hand, internal cache updates are done instantly, meanwhile changes using CellSetDriver are enqueued to be processed
+# by affected entities.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+USE ELAPSED AS 3s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = ELAPSED
+
+
+DEVICE result
+    DRIVER CellSetDriver
+        CONFIG
+            value = false     # It is mandatory to set an initial value
+
+
+WHEN clock >= ELAPSED
+THEN result  = NOT result
+     console = "["+ clock +"] Cell value is ["+ result +"]"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

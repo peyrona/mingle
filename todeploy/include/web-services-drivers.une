@@ -1,0 +1,132 @@
+#==================================================================================================================================
+# This file contains web services related DRIVERs and their SCRIPTs.
+# Although this file can be used in an INCLUDE command, you should use this as as reference to do copy-and-paste, when you are
+# running in an environment with limited (low) RAM: copy only the DRIVERS you need.
+#
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+# --------------------------------------------------------------------------------------------------------------------------------
+# To send text messages to a Telegram Bot
+
+DRIVER TelegramDriver                         # This DRIVER sends values to a Telegram Boot
+    SCRIPT TelegramController
+    CONFIG
+        chat  AS string REQUIRED              # The target chat ID
+        token AS string REQUIRED              # Chat's token
+
+
+# --------------------------------------------------------------------------------------------------------------------------------
+# This driver invokes the Open-Meteo weather web service retrieveing weather information.
+# The service can be used to retrieve the weather at the moment of its invocation or can be used to retrieve a time-frame (a set
+# of hours) in the future.
+#
+# To take current weather every 3 hours (using metric system):
+#
+#     DEVICE weather_now
+#         DRIVER OpenMeteoDriver
+#             INIT
+#                 latitude  = 12.34
+#                 longitude = 12.34
+#                 interval  = 3
+#
+# Te retrive the forecast for 4 hours, starting 3 hours ahead of each invocation and invoking the service ever 2 hours and using
+# imperial system do as follows:
+#
+#     DEVICE weather_now
+#         DRIVER OpenMeteoDriver
+#             INIT
+#                 latitude  = 12.34
+#                 longitude = 12.34
+#                 interval  = 2
+#                 forecast  = 3        # Without this value and ...
+#                 frame     = 4        # this value, only current weather is retrieved
+#                 metric    = false    # Use imperial system instead of Metric
+#
+# ----------------------------------------------------------------
+# WMO Weather interpretation codes
+# Code        Description
+# ----------  ----------------------------------------------------
+# 0           Clear sky
+# 1, 2, 3     Mainly clear, partly cloudy, and overcast
+# 45, 48      Fog and depositing rime fog
+# 51, 53, 55  Drizzle: Light, moderate, and dense intensity
+# 56, 57      Freezing Drizzle: Light and dense intensity
+# 61, 63, 65  Rain: Slight, moderate and heavy intensity
+# 66, 67      Freezing Rain: Light and heavy intensity
+# 71, 73, 75  Snow fall: Slight, moderate, and heavy intensity
+# 77          Snow grains
+# 80, 81, 82  Rain showers: Slight, moderate, and violent
+# 85, 86      Snow showers slight and heavy
+# 95 *        Thunderstorm: Slight or moderate
+# 96, 99 *    Thunderstorm with slight and heavy hail
+#
+# (*) Thunderstorm forecast with hail is only available in Central Europe
+# --------------------------------------------------------------------------------------------------------------------------------
+
+DRIVER OpenMeteoDriver                   # To retrieve weather information using Open Meteo service (https://open-meteo.com)
+    SCRIPT OpenMeteoController
+    CONFIG
+        latitude  AS number REQUIRED     # Latitude  for the place to get weather information from
+        longitude AS number REQUIRED     # Longitude for the place to get weather information from
+        interval  AS number              # Time between 2 consecutives WebService invocations. Default: 1h. Minimum: 15 mins.
+        forecast  AS number              # Hours ahead from WebService is invoked to begin forecasting. Default 0 -> NO forecast.
+        frame     AS number              # Hours to retrive starting at 'forecast' (when forecast > 0). Default 0.
+        timezone  AS string              # A valid OpenMeteo timezone. By default "auto" (guessed by IP).
+        metric    AS boolean             # Use metric system? When false, Imperial will be used. By default, TRUE.
+                                         # Any thing different for FALSE (ignoring case), will be considered TRUE.
+
+# --------------------------------------------------------------------------------------------------------------------------------
+# Generic HTTP client
+
+DRIVER HttpClientDriver
+    SCRIPT HttpClientController
+    CONFIG
+        uri    AS string REQUIRED    # URI to connect to (e.g.: http://google.com)
+        method AS string             # One of (case is ignored): GET, PUT, POST, DELETE. By default GET
+
+# --------------------------------------------------------------------------------------------------------------------------------
+# CARE: This driver exists just for teaching purposes: it is not intended to be used in real scenarios.
+
+DRIVER BitcoinUSDPriceDriver             # Retrieves price of Bitcoin in USD (https://api.coindesk.com/v1/bpi/currentprice.json)
+    SCRIPT BitcoinUSDPriceController
+    CONFIG
+        interval AS number               # Time between 2 consecutives WebService invocations. Default: 30 secs. Minimum: 5 secs.
+
+#==================================================================================================================================
+# The rest of tis file contains the SCRIPTs needed by the DRIVERs declared above.
+#
+# Unless you are an experienced developer, you should simply ignore the rest of this file.
+#==================================================================================================================================
+
+# A Controller is just a concept: a piece of software written in any acceptable Mingle language that deals with the physical world.
+# A Controller is a SCRIPT used by DRIVERS as intermediators with the physical world.
+
+
+SCRIPT TelegramController                             # The controller for the TelegramDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.Telegram"
+
+
+SCRIPT OpenMeteoController                            # The controller for the OpenMeteoDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.WeatherOpenMeteo"
+
+
+SCRIPT HttpClientController                           # The controller for the HttpClientDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.HttpClient"
+
+
+SCRIPT BitcoinUSDPriceController
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.BitcoinUSDPrice"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

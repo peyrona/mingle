@@ -1,0 +1,14 @@
+{"transpiler":"MSP Transpiler ver.2024-09-04",
+"code-version":"1.0",
+"commands":[
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"external_ip","driver":"httpclientdriver","config":{"uri":"https://api.ipify.org?format=text"},"init":null},
+{"cmd":"rule","name":null,"when":"external_ip: len() > 0","then":[{"after":-1,"target":"console","value":"\"External IP : \" + external_ip"}],"if":null},
+{"cmd":"device","name":"geo_info","driver":"httpclientdriver","config":{"uri":"http://ip-api.com/json/8.8.8.8"},"init":null},
+{"cmd":"rule","name":null,"when":"_putt_( \"geo\" , pair(): fromJSON( geo_info)) && geo_info: len() > 0","then":[{"after":-1,"target":"console","value":"\"City        : \" + _gett_(\"geo\") : get( \"city\" )"},{"after":-1,"target":"console","value":"\"Latitude    : \" + _gett_(\"geo\") : get( \"lat\" )"},{"after":-1,"target":"console","value":"\"Longitude   : \" + _gett_(\"geo\") : get( \"lon\" )"}],"if":null},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"httpclientdriver","script":"httpclientcontroller"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"httpclientcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.HttpClient"}
+]
+}

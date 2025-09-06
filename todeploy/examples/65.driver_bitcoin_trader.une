@@ -1,0 +1,52 @@
+#==================================================================================================================================
+# This example proves that Une can be used for any RULE centric purpose: in this case instead of dealing with IoT devices, it is
+# shown how to deal with fluctuations in the Bitcoin price: we will simulate a simplistic trader.
+#
+# CARE: This driver exists just for teaching purposes: it is not intended to be used in real scenarios.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE bitcoin_usd
+    DRIVER BitcoinUSDPriceDriver
+        CONFIG
+            interval = 5s
+
+
+WHEN bitcoin_usd > 0
+THEN recent  = recent:add( bitcoin_usd )
+     console = time() +" -> "+ bitcoin_usd +" USD"
+
+# Observe this expression: 'recent = recent:add( bitcoin_usd )'
+# The part 'recent:add( bitcoin_usd )' changes the number of items in the list contained in DEVICE 'recent', but does not
+# change the DEVICE's value, Therefore (because there were no changes in the DEVICE), RULEs will not be re-evaluated.
+# As we need the RULEs to be re-evaluated, we can (there are more ways to achive the same) simply 'tell' the DEVICE that
+# it its value have changed: we assign the value returned by :add(...) (which is the list itself) to the DEVICE.
+
+
+WHEN recent:len() == 3 AND (recent:get(3) - recent:get(1) > 0.1)
+THEN console = "Bitcoin price is increasing ("+ (recent:get(3) - recent:get(1)) +") --> BUY!"
+
+
+WHEN recent:len() == 3 AND (recent:get(3) - recent:get(1) < -0.1)
+THEN console = "Bitcoin price is decreasing ("+ (recent:get(3) - recent:get(1)) +") --> SELL!"
+
+
+WHEN recent:len() > 3
+THEN recent:del(1):del(1)    # Now the list has 2 items. Observe: as it is not needed to reevaluate all RULEs,
+                             # we change the list contained in 'recent' but do not assign it to 'recent'
+
+DEVICE recent
+    DRIVER CellSetDriver
+        CONFIG
+            value = list()
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

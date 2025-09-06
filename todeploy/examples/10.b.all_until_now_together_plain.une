@@ -1,0 +1,82 @@
+#==================================================================================================================================
+# Exactly like previous example, but instead of using 'words', we use now the operators.
+# As it is said in the "The_Une_language.pdf" manual, in "{*home*}/include/standard-replaces.une" file, 'words' like AND,
+# OR, ABOVE, BELOW, etc are replaced by their 'native' Une counterpart.
+#
+# In this example we substituted the 'words' by their 'native' Une counterpart.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+USE LIMIT AS 80    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number 80
+
+
+DEVICE CPU
+    INIT
+        groups = "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "cpu"
+            interval = 1s
+
+
+DEVICE RAM
+    INIT
+        groups = "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "jvmram"
+            interval = 3s
+
+
+DEVICE Disk
+    INIT
+        groups = "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "disk"
+            interval = 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# One by one
+
+WHEN cpu > LIMIT || ram > LIMIT || disk > LIMIT
+THEN console = "At least one metric is above {*LIMIT*}%"    # When inside a string, use it as a macro
+
+
+WHEN cpu > LIMIT && ram > LIMIT && disk > LIMIT
+THEN console = "Danger! All metrics are above {*LIMIT*}%"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# Using the ANY and ALL modifiers (because all sensors belong to a group named "metrics")
+
+WHEN ANY metric > LIMIT
+THEN console = "At least one metric is above {*LIMIT*}% (using ANY)"
+
+
+WHEN ALL metric > LIMIT
+THEN console = "Danger! All metrics are above {*LIMIT*}% (using ALL)"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# A RULE triggering another RULE
+
+RULE I_am_a_rule
+     WHEN true   # This will never be triggered by itself (has no DEVICE associated) but will be always triggered from other RULEs
+     THEN console = "At least one metric is above {*LIMIT*}% (using indirect invocation)"
+
+
+WHEN ANY metric > LIMIT
+THEN I_am_a_rule           # This will trigger all actions in the RULE named "I_am_a_rule"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,25 @@
+#==================================================================================================================================
+# This script prints into the screen the CPU percetage every 3 seconds only if it is above 5% of utilisation.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU                           # Knows the percent of CPU used
+    DRIVER SystemMonitorDriver       # To know about this DRIVER, refer to: {*home.inc*}common-drivers.une
+        CONFIG
+            metric   SET "cpu"
+            interval SET 1s          # This sensor will publish a new message with the new value every 3 seconds
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN cpu ABOVE -1
+THEN console SET "CPU is at "+ cpu +"%"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

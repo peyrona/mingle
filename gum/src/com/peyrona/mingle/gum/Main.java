@@ -48,11 +48,11 @@ public class Main
 
         try
         {
-            String     host  = config.get( "monitoring", "host", "" );
-            int        port  = config.get( "monitoring", "port", 8080 );
-            int        maxSe = config.get( "monitoring", "max_sessions", 64 );
-            String     allow = config.get( "monitoring", "allow", "intranet" );
-            JsonObject joSSL = config.get( "monitoring", "ssl", Json.object() );
+            String     host    = config.get( "monitoring", "host", "" );
+            int        port    = config.get( "monitoring", "port", 8080 );
+            int        maxSess = config.get( "monitoring", "max_sessions", 64 );
+            String     allow   = config.get( "monitoring", "allow", "intranet" );
+            JsonObject joSSL   = config.get( "monitoring", "ssl", Json.object() );
 
             checkPreRequisites( joSSL );
 
@@ -74,7 +74,7 @@ public class Main
             UtilJson   juSSL   = (joSSL == null) ? null : new UtilJson( joSSL );
             HttpServer server  = new HttpServer( host,
                                                  port,
-                                                 maxSe,
+                                                 maxSess,
                                                  allow,
                                                  (juSSL == null) ?   -1 : juSSL.getInt(    "port",   -1 ),
                                                  (juSSL == null) ? null : juSSL.getString( "path", null ),

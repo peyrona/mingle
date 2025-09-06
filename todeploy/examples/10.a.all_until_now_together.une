@@ -1,0 +1,87 @@
+#==================================================================================================================================
+# All previous examples related with metrics together.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE CPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 1s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 3s
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# One by one
+
+WHEN cpu ABOVE 80 OR ram ABOVE 80 OR disk ABOVE 80
+THEN console SET "At least one metric is above 80%"
+
+
+WHEN cpu ABOVE 80 AND ram ABOVE 80 AND disk ABOVE 80
+THEN console SET "Danger! All metrics are above 80%"
+
+
+WHEN cpu BELOW 80 AND ram BELOW 80 AND disk BELOW 80
+THEN console SET "Safe: all metrics are below 80%"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# Using the ANY and ALL modifiers (because all sensors belong to a group named "metrics")
+
+WHEN ANY metric ABOVE 80
+THEN console SET "At least one metric is above 80% (using ANY)"
+
+
+WHEN ALL metric ABOVE 80
+THEN console SET "Danger! All metrics are above 80% (using ALL)"
+
+
+WHEN ALL metric BELOW 80
+THEN console SET "["+ date() +" "+ time() +"] Safe: all metrics are below 80% (using ALL)"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+# A RULE triggering another RULE
+
+RULE I_am_a_rule
+     WHEN ALL metric BELOW 0    # This will never be true, therefore the rule will never be triggered by itself
+     THEN console SET "At least one metric is above 80% (using indirect invocation)"
+
+WHEN ANY metric ABOVE 80
+THEN I_am_a_rule                # This will trigger all actions in the RULE named "I_am_a_rule"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"      # This one provides common replacements that improve readability.
+        "file://{*home.inc*}basic-drivers.une"          # This one contains several commonly used DRIVERS.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

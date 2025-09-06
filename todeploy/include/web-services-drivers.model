@@ -1,0 +1,17 @@
+{"transpiler":"MSP Transpiler ver.2024-09-04",
+"code-version":"1.0",
+"commands":[
+{"cmd":"driver","name":"telegramdriver","script":"telegramcontroller"},
+{"cmd":"driver","name":"openmeteodriver","script":"openmeteocontroller"},
+{"cmd":"driver","name":"httpclientdrivers","script":"httpclientcontroller"},
+{"cmd":"driver","name":"bitcoinusdpricedriver","script":"bitcoinusdpricecontroller"},
+{"cmd":"script","name":"telegramcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.Telegram"},
+{"cmd":"script","name":"openmeteocontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.WeatherOpenMeteo"},
+{"cmd":"script","name":"httpclientcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.HttpClient"},
+{"cmd":"script","name":"bitcoinusdpricecontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.BitcoinUSDPrice"},
+{"cmd":"script","name":"telegramcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.Telegram"},
+{"cmd":"script","name":"openmeteocontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.WeatherOpenMeteo"},
+{"cmd":"script","name":"httpclientcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.HttpClient"},
+{"cmd":"script","name":"bitcoinusdpricecontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.BitcoinUSDPrice"}
+]
+}

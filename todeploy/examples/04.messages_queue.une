@@ -1,0 +1,31 @@
+#==================================================================================================================================
+# This example is very similiar to the previous one, but now we are showing the amount of Messages Per Minute that are being
+# processed by the Execution Environment (ExEn) and how many pending messages are pending to be processed..
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE MessagesPerMinute
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "mpm"
+            interval SET 5s
+
+DEVICE MessagesPending
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "pending"
+            interval SET 5s
+
+DEVICE console
+    DRIVER OutputDriver
+
+WHEN MessagesPerMinute ABOVE 0    # This will be always true
+THEN console SET "MPM = " + MessagesPerMinute + ", Pending = " + MessagesPending
+
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

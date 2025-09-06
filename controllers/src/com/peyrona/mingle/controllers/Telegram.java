@@ -125,4 +125,8 @@ public final class   Telegram
                 conn.disconnect();
         }
     }
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 7e38e80 (Updated code)

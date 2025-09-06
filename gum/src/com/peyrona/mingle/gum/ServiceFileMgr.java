@@ -13,7 +13,8 @@ import java.io.IOException;
 /**
  * ServiceFileMgr class extends ServiceBase to provide file management operations
  * through HTTP requests. This class handles GET, POST, PUT, and DELETE requests
- * to manage files and directories, being the root file: 'mingle/etc/gum_user_files'.
+ * to manage files and directories, being the root file: in "config.json".
+ * By default, it is: '[home]/etc/gum_user_files'.
  *
  * <p>
  * HTTP methods and parameters:

@@ -1,0 +1,28 @@
+#==================================================================================================================================
+# This script says (in loud voice) the time every 30 seconds using the Sun Text To Speech implementation.
+# A sound card is needed and do not forget to power on the speaker.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+WHEN clock ABOVE 0
+THEN TTS SET "Time is " + time():hour()   + " hours, " \
+                        + time():minute() + " minutes and " \
+                        + time():second() + " seconds"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 30s
+
+
+DEVICE TTS
+    DRIVER SunFreeTTSDriver
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

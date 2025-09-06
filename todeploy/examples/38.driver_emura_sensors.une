@@ -1,0 +1,30 @@
+#==================================================================================================================================
+# This example shows how to retrieve information from the sensors in the Daikin Emura Air Conditioned machine.
+#
+# Please, for more information, refer to file: {*home*}/include/daikin-drivers.une
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://mingle.peyrona.com
+#==================================================================================================================================
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE sensors
+    DRIVER DaikinEmuraSensorsDriver
+           CONFIG
+               address  SET "192.168.7.246"
+               interval SET 1m                             # 1 minute is the minimum accepted interval
+
+
+WHEN sensors:len() > 0
+THEN console SET "Inside:   "+ sensors:get( "t_inside"  ) +"ºC"
+     console SET "Outside:  "+ sensors:get( "t_outside" ) +"ºC"
+     console SET "Humidity: "+ sensors:get( "h_inside"  )
+     console SET "["+ time() +"] sensors = " + sensors     # Just to show how the information arrives here from the Driver
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

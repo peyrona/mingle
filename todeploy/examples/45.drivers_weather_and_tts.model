@@ -1,0 +1,20 @@
+{"transpiler":"MSP Transpiler ver.2025-02-08",
+"code-version":"1.0",
+"commands":[
+{"cmd":"rule","name":null,"when":"weather: len() > 0","then":[{"after":-1,"target":"weather_info","value":"weather"}],"if":null},
+{"cmd":"rule","name":null,"when":"(( clock > 0) ||( weather_info: len() > 0)) && weather_info: type() == \"pair\"","then":[{"after":-1,"target":"tts","value":"\"Weather now is \" + weather_codes: get( weather_info: get( \"code\" )) + \".  \" + \"Current temperature is \" + weather_info: get( \"temperature\" ) + \" Celsius degrees.  \" + \"Currently the precipitation probability is \" + weather_info: get( \"precipitation\" ): format( \"##\" ) + \" percent\""}],"if":null},
+{"cmd":"device","name":"weather_codes","driver":"cellsetdriver","config":{"value":{"class":"pair","data":{"96.0":"thunderstorm with slight hail","0.0":"clear sky","1.0":"mainly clear","2.0":"partly cloudy","3.0":"overcast","48.0":"depositing rime fog","65.0":"heavy rain","66.0":"light freezing rain","67.0":"heavy freezing rain","99.0":"thunderstorm with heavy hail","51.0":"light drizzle","71.0":"slight snow","73.0":"moderate snow","53.0":"moderate drizzle","75.0":"heavy snow","77.0":"snow grains","55.0":"dense  drizzle","56.0":"light freezing drizzle","80.0":"slight rain showers","81.0":"moderate rain showers","57.0":"dense freezing drizzle","82.0":"violent rain showers","85.0":"slight snow showers","86.0":"heavy snow showers","45.0":"fog","61.0":"slight rain","63.0":"moderate rain","95.0":"thunderstorm"}}},"init":null},
+{"cmd":"device","name":"weather_info","driver":"cellsetdriver","config":{"value":""},"init":null},
+{"cmd":"device","name":"weather","driver":"openmeteodriver","config":{"latitude":36.5149,"longitude":-4.8838},"init":null},
+{"cmd":"device","name":"tts","driver":"sunfreettsdriver","config":null,"init":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":60000},"init":null},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"openmeteodriver","script":"openmeteocontroller"},
+{"cmd":"driver","name":"sunfreettsdriver","script":"sunfreettscontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"openmeteocontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.WeatherOpenMeteo"},
+{"cmd":"script","name":"sunfreettscontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar","file://{*home.lib*}controllers/freetts-1.2/*.jar"],"call":"com.peyrona.mingle.controllers.SunFreeTTS"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"}
+]
+}

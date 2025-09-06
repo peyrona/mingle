@@ -1,0 +1,148 @@
+#==================================================================================================================================
+# This file contains common used (most used) DRIVERs and their SCRIPTs.
+# Although this file can be used in an INCLUDE command, you should use this as as reference to do copy-and-paste, when you are
+# running in an environment with limited (low) RAM: copy only the DRIVERS you need.
+#
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# DRIVERs use their associated SCRIPT to communicate with the real (physical) world.
+
+DRIVER ClockDriver                     # This DRIVER informs about the elapsed time since ExEn started.
+    SCRIPT ClockController
+    CONFIG
+        interval AS number             # Time between reads (min: 1/100 secs). Optional, default: 1 second.
+
+#-----------------------------------------------------------------------------------------------------------------------------------
+# THIS DRIVER IS _ALMOST_ FINISHED, BUT NEEDS HEAVY TESTING - USE IT AT YOUR OWN RISK
+DRIVER CronDriver                      # To trigger events at certain moment in time (can be repetable). Similar to Linux Cron.
+    SCRIPT KronosController
+    CONFIG                             # None of the following fileds is REQUIRED, but consistent values have to be provided.
+        start AS string                # As Une "<date>,<time>". When only 'start' is defined, it occurs only once.
+        stop  AS string                # As Une "<date>,<time>". Moment of last repetition, or empty for repeating for ever.
+        every AS number                # Repetition interval. Use 0 or ommit it to not repeat. Defaults to 1 when 'mode' exists.
+        mode  AS string                # Repetition mode: "Daily, "Weekly", "Monthly" or "Yearly" (only the first letter is used).
+        time  AS string                # Time(s) of the day to execute: one or more comma separated Une times (hh[:mm[:ss]]).
+        dow   AS string                # DayOfweek: one or more comma separated of: 1 to 7 (Monday to Sunday; 0 is Sunday too).
+        dom   AS string                # DayOfMonth: one or more comma separated of: 1 to 31 (31 is used also as 'last-day').
+        month AS string                # Month: one or more comma separated of: 1 to 12 (can use Une REPLACEs for'dow' and 'dom').
+                                       # i.e.: time="12:10, 18", dow="2,5", every=2 mode="M": repeat every tuesday and friday on
+                                       # alternate months at 12:10:00 and 18:00:00 (minutes and seconds are optional).
+#-----------------------------------------------------------------------------------------------------------------------------------
+
+DRIVER OutputDriver                    # This DRIVER sends values to the output stream (normally the screen).
+    SCRIPT OutputStreamController      # Note: this driver does not have any configuration parameter.
+    CONFIG
+        autoFeed AS boolean            # When TRUE, writes values in a new line (alternatively use "{*nl*}"). By default TRUE.
+
+
+DRIVER FileDriver                      # Reads and/or writes to local file or reads only from remote file via HTTP or HTTPS
+    SCRIPT FileController              # Note: to write New-Line, use this macro: "{*nl*}".
+    CONFIG
+        file     AS string REQUIRED    # v.g.: file:///home/test.txt or https://www.my_server.com/test.txt
+        append   AS boolean            # When TRUE and file is writable, new values are appended at EoF. TRUE by default.
+        autoFeed AS boolean            # When TRUE, writes values in a new line (otherwise "{*nl*}" is needed). By default TRUE.
+        charset  AS string             # By default, default charset (platform def. for local files and UTF-8 for remote files).
+        interval AS number             # Time between reads. Optional, Default: only readed once, when ExEn starts.
+
+
+DRIVER SystemMonitorDriver             # This DRIVER reports CPU, JVM RAM and Disk usages (as percent).
+    SCRIPT SystemMonitorController
+    CONFIG
+        metric   AS string             # One of following: "speed", "pending", "cpu", "jvmram", "disk". Default: "cpu".
+        interval AS number             # Time between reads (min: 1/10 secs). Optional, default: 1 second
+        measure  AS string             # "used" or "free" or "used%" or "free%" (% for percet instead of absolute value)
+                                       # By default: "used%". Note: "cpu" is returned always as % and "mpm" and "pending" as value.
+
+DRIVER CellSetDriver                   # This DRIVER store values in somekind of spreadsheet cells
+    SCRIPT CellSetController           # Cell are identified by the name of its associated SENSOR or ACTUATOR,
+    CONFIG                             # and its value can be readed and written by RULEs.
+        value AS ANY REQUIRED          # Inital value.
+
+
+DRIVER DataBaseDriver                  # This DRIVER inits a DB and sends SQL commands to it.
+    SCRIPT DatabaseController
+    CONFIG
+        jars    AS string REQUIRED     # One or more JARs (comma separated) for the JDBC driver.
+        jdbc    AS string REQUIRED     # JDBC driver to use (e.g: "com.mysql.cj.jdbc.Driver").
+        url     AS string REQUIRED     # Data Source (e.g: ("jdbc:mysql://localhost:3306/example_db").
+        user    AS string              # User name (optional).
+        pwd     AS string              # Password (optional).
+        initial AS string              # Either a file name (SQL script) or one or more SQL commands to be
+                                       # executed when connection with DB is done (default: empty).
+
+DRIVER RPiGpioDriver                   # This driver provides control over Raspberry Pi GPIO pins.
+    SCRIPT RPiGpioController
+    CONFIG
+        pin      AS number REQUIRED    # A valid pin address (from 0 to 31 when using WiringPi numbering).
+        type     AS string             # Everything except "analog" will be "digital". By default: "digital".
+        mode     AS string             # Everything except "output" will be "input". By default: "input".
+        pull     AS string             # "up", "down" or "off". By default: "up" for "input" and "down" for "output".
+        debounce AS number             # Debounce as time-unit. Valid when type "digital" and mode "input" (default: 0).
+        invert   AS boolean            # Makes TRUE be FALSE and FALSE be TRUE. Only for type "digital". Default: false.
+        isButton AS boolean            # When true, driver will trigger: "pressed", "released", "clicked" and
+                                       # "doubleclicked" events (as strings (Une is case insensitive). Default: false
+
+#==================================================================================================================================
+# The rest of tis file contains the SCRIPTs needed by the DRIVERs declared above.
+#
+# Unless you are an experienced developer, you should simply ignore the rest of this file.
+#==================================================================================================================================
+
+# A Controller is just a concept: a piece of software written in any acceptable Mingle language that deals with the physical world.
+# A Controller is a SCRIPT used by DRIVERS as intermediators with the physical world.
+
+
+SCRIPT ClockController                                # A controller that informs about current time
+   LANGUAGE java                                      # Which language was used to write the controller
+   FROM "file://{*home.lib*}controllers.jar"          # Where (which file) is the controller in
+   CALL "com.peyrona.mingle.controllers.SystemClock"  # This is the 'function' that starts (runs) the controller
+
+
+SCRIPT KronosController                               # An controller for CronDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.Kronos"
+
+
+SCRIPT OutputStreamController                         # A controller that sends data to: screen and/or file
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.OutputStream"
+
+
+SCRIPT FileController                                 # A controller that read/writes from/to local file or write to remote file
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.File"
+
+
+SCRIPT SystemMonitorController                        # A controller that reports JVM CPU, JVM RAM and Disk usages (as percent)
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.sysmon.SystemMonitor"
+
+
+SCRIPT CellSetController                              # A controller that stores values in something similar to a spreadsheet
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.CellSet"
+
+
+SCRIPT DataBaseController                             # A controller to manage a DataBase and send SQL commands
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.DataBase"
+
+
+SCRIPT RPiGpioController                              # A controller to manage a local (not remote) Raspberry Pi GPIO
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+        "file://{*home.lib*}jna-5.9.0.jar"
+   CALL "com.peyrona.mingle.controllers.rpi.RPiGpioPin"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<
