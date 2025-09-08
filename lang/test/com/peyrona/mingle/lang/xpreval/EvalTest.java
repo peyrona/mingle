@@ -2,6 +2,7 @@
 package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.lexer.Lexer;
@@ -11,6 +12,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Timer;
+import java.util.TimerTask;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import org.junit.Test;
@@ -19,6 +22,31 @@ import org.junit.Test;
 
 public class EvalTest
 {
+    public static void main( String[] args )
+    {
+        doAfterForTrue();
+        doAfterForFalse();
+
+        doWithinForTrue();
+        doWithinForFalse();
+
+        doBothForTrue();
+        doBothForFalse();
+
+        try
+        {
+            Thread.sleep( 3500 );
+        }
+        catch( InterruptedException e )
+        {
+            Thread.currentThread().interrupt();
+        }
+        finally   // FIXME: no deberia ser necesario, con doAfterForTrue() no lo es pero con doAfterForFalse() sí lo es
+        {
+            System.exit( 0 );
+        }
+    }
+
     @Test
     public void testArithmetic()
     {
@@ -377,7 +405,12 @@ public class EvalTest
     @Test
     public void testFutures()
     {
-        
+        IXprEval xprAfterTrue = new NAXE().build( "var == 7 AFTER 3s",
+                                                  (value) -> assertEquals( value, 7.0f ),
+                                                  null );
+                 xprAfterTrue.set( "var", 7 );
+
+
     }
 
     //------------------------------------------------------------------------//
@@ -454,5 +487,53 @@ public class EvalTest
             fail();
             throw exc;
         }
+    }
+
+    //------------------------------------------------------------------------//
+    // METHODS FOR FUTURES
+
+    private static void doAfterForTrue()
+    {
+        IXprEval xprAfterTrue = new NAXE().build( "var == 7 AFTER 3000",
+                                          (value) -> assertEquals( value, Boolean.TRUE ),
+                                          null );
+
+        xprAfterTrue.eval( "var", 7.0f );
+    }
+
+    private static void doAfterForFalse()
+    {
+        IXprEval xprAfterFalse = new NAXE().build( "var == 7 AFTER 3000",
+                                                   (value) -> assertEquals( value, Boolean.FALSE ),
+                                                   null );
+
+        xprAfterFalse.eval( "var", 7.0f );   // Starts being TRUE
+
+        new Timer().schedule( new TimerTask()
+                                {   @Override
+                                    public void run() { xprAfterFalse.set( "var", 9.0f ); }    // Becomes FALSE
+                                }, 1000 );                                                     // after 1 second
+    }
+
+    // FIXME: hacerlos
+
+    private static void doWithinForTrue()
+    {
+
+    }
+
+    private static void doWithinForFalse()
+    {
+
+    }
+
+    private static void doBothForTrue()
+    {
+
+    }
+
+    private static void doBothForFalse()
+    {
+
     }
 }
