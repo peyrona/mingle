@@ -668,8 +668,14 @@ final class EvalByAST
             {
                 super.afterExecute( r, t );
 
-                if( t != null )        // Log the exception or handle it appropriately
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Task execution failed: " + t.getMessage() );
+                if( t != null )    // Log the exception or handle it appropriately
+                {
+                    String  msg    = "Task execution failed: " + t.getMessage();
+                    ILogger logger = UtilSys.getLogger();
+
+                    if(  logger == null )  System.out.println( msg );
+                    else                   logger.log( ILogger.Level.INFO, msg );
+                }
             }
             finally
             {
@@ -717,7 +723,13 @@ final class EvalByAST
                     shutdownNow();    // Force shutdown if tasks don't complete
 
                     if( ! awaitTermination( 5, TimeUnit.SECONDS ) )
-                        UtilSys.getLogger().log( ILogger.Level.INFO, "Executor did not terminate gracefully" );
+                    {
+                        String  msg    = "Executor did not terminate gracefully";
+                        ILogger logger = UtilSys.getLogger();
+
+                        if( logger == null )  System.out.println( msg );
+                        else                  logger.log( ILogger.Level.INFO, msg );
+                    }
                 }
             }
             catch( InterruptedException ie )
