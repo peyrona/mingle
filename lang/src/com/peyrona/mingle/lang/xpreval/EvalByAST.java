@@ -70,6 +70,7 @@ final class EvalByAST
     private final List<ICandi.IError> lstErrors = new ArrayList<>();  // Used to add items only, never removed
     private final Map<String,Object>  mapVars   = new HashMap<>();    // key == deviceName, value == deviceValue (not nneded to be sync)
     private       boolean             hasAllVars;
+    private final boolean             hasWithin;                      // hasAFTER is not really needed
 
     private final MyExecutor executor;    // Used for both AFTER and WITHIN.
     private final ASTNode    root;        // The fucking root node
@@ -89,11 +90,13 @@ final class EvalByAST
         onSolved = onSolv;
         root     = infix2AST( lstInfix );
 
-        MyExecutor exec = null;
+        MyExecutor exec    = null;
+        boolean    bWithin = false;
 
         if( validate( root ) )
         {
             int nFutures = 0;
+
 
             for( XprToken xt : lstInfix )
             {
@@ -106,7 +109,7 @@ final class EvalByAST
                 if( token.isType( XprToken.RESERVED_WORD ) )
                 {
                          if( token.isText( XprUtils.sAFTER  ) )  nFutures++;
-                    else if( token.isText( XprUtils.sWITHIN ) )  nFutures++;
+                    else if( token.isText( XprUtils.sWITHIN ) )  { nFutures++; bWithin = true; }
                     else throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
                 }
             }
@@ -124,18 +127,17 @@ final class EvalByAST
                     try
                     {
                         solveConstantNodes( root );     // Makes some optimizations
+                        exec = new MyExecutor( nFutures );
                     }
                     catch( RuntimeException me )
                     {
                         lstErrors.add( new CodeError( me.getMessage(), lstInfix.get(0).line(), -1 ) );
                     }
-
-                    exec = new MyExecutor( nFutures );
                 }
             }
         }
 
-        boolean bHas = false;
+        boolean bHasChgDevFn = false;
 
         if( lstErrors.isEmpty() )
         {
@@ -143,16 +145,17 @@ final class EvalByAST
             {
                 if( token.isType( XprToken.FUNCTION ) && token.isText( "getTriggeredBy" ) )
                 {
-                    bHas = true;
+                    bHasChgDevFn = true;
                     break;
                 }
             }
         }
 
         executor           = exec;
-        isBoolean          = isBool();
+        isBoolean          = _isBool_();
         hasAllVars         = mapVars.isEmpty();    // Some expressions does not have variables
-        hasChangedDeviceFn = bHas;
+        hasWithin          = bWithin;
+        hasChangedDeviceFn = bHasChgDevFn;
 
 //System.out.println( "Original: " + XprUtils.toString( lstInfix ) );
 //System.out.println( "AST:\n" + toString() );
@@ -208,19 +211,22 @@ final class EvalByAST
             }
         }
 
+        if( hasWithin )     // AFTERs are not needed to be evaluated everytime a variable changes its value, but if the expression has
+            eval();         // WITHINs they have to be evaluated in case the new value of the variable could resolve the expression.
+
         return true;
     }
 
     Object eval()
     {
-     // This is not needed because it is cheked by NAXE -->
+     // This is not needed because it is cheked by NAXE.java -->
      // if( root == null )
      //     throw new MingleException( "Can not eval() an expression with errors" );
 
         if( (! isBoolean) && (! hasAllVars) )
-            return null;    // result is null when some needed vars are not yet initialized, but only when the expression is not of type boolean,
-                            // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts.
-                            // Because "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated
+            return null;    // result is null when some needed vars are not yet initialized, but only if the expression is not of type boolean,
+                            // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts, because
+                            // lazy eval: "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated.
 
         Object result = null;
 
@@ -346,7 +352,7 @@ final class EvalByAST
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private boolean isBool()
+    private boolean _isBool_()
     {
         if( root == null )
             return false;
@@ -638,14 +644,14 @@ final class EvalByAST
                    0L,
                    TimeUnit.MILLISECONDS,
                    new LinkedBlockingQueue<>(),
-                   new ThreadFactory()                  // Used to give names to these threads
+                   new ThreadFactory()            // Used to give names to thes set of threads
                         {
                             private final AtomicInteger counter = new AtomicInteger( 1 );
 
                             @Override
                             public Thread newThread( Runnable r )
                             {
-                                Thread t = new Thread( r, "XprEval-" + counter.getAndIncrement() );
+                                Thread t = new Thread( r, "XprEval-MyExecutor-" + counter.getAndIncrement() );
                                 t.setDaemon( false );
                                 return t;
                             }
@@ -653,7 +659,7 @@ final class EvalByAST
         }
 
         @Override
-        protected void beforeExecute(Thread t, Runnable r)
+        protected void beforeExecute( Thread t, Runnable r )
         {
             super.beforeExecute( t, r );
 
@@ -662,7 +668,7 @@ final class EvalByAST
         }
 
         @Override
-        protected void afterExecute(Runnable r, Throwable t)
+        protected void afterExecute( Runnable r, Throwable t )
         {
             try
             {
@@ -673,7 +679,7 @@ final class EvalByAST
                     String  msg    = "Task execution failed: " + t.getMessage();
                     ILogger logger = UtilSys.getLogger();
 
-                    if(  logger == null )  System.out.println( msg );
+                    if(  logger == null )  System.err.println( UtilStr.toString( t ) );
                     else                   logger.log( ILogger.Level.INFO, msg );
                 }
             }
@@ -716,18 +722,19 @@ final class EvalByAST
             shutdown();    // Initiate orderly shutdown
 
             // Optional: Wait for termination with timeout
+
             try
             {
-                if( !awaitTermination( 5, TimeUnit.SECONDS ) )
+                if( ! awaitTermination( 2, TimeUnit.SECONDS ) )
                 {
                     shutdownNow();    // Force shutdown if tasks don't complete
 
-                    if( ! awaitTermination( 5, TimeUnit.SECONDS ) )
+                    if( ! awaitTermination( 3, TimeUnit.SECONDS ) )
                     {
                         String  msg    = "Executor did not terminate gracefully";
                         ILogger logger = UtilSys.getLogger();
 
-                        if( logger == null )  System.out.println( msg );
+                        if( logger == null )  System.err.println( msg );
                         else                  logger.log( ILogger.Level.INFO, msg );
                     }
                 }
@@ -753,8 +760,6 @@ final class EvalByAST
 
         RunFuture(final ASTNode node )
         {
-            assert node != null;
-
             this.node = node;
         }
 
@@ -767,19 +772,21 @@ final class EvalByAST
             }
             catch( InterruptedException ie )
             {
-                Thread.currentThread().interrupt();    // Thread was interrupted, restore interrupt status and exit gracefully
+                Thread.currentThread().interrupt();    // Thread was interrupted, so, restore interrupt status and exit gracefully
             }
             catch( Exception e )
             {
-                System.err.println( "Unexpected error in task execution: " + e.getMessage() );
-                e.printStackTrace( System.err );
+                ILogger logger = UtilSys.getLogger();
+
+                if(  logger == null )  System.err.println( UtilStr.toString( e ) );
+                else                   logger.log( ILogger.Level.INFO, e );
             }
         }
 
         private void executeTask() throws InterruptedException
         {
             if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( "Task was interrupted before execution" );
+                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted before execution" );
 
             long delayMs = node.delay();
 
@@ -787,12 +794,12 @@ final class EvalByAST
                 Thread.sleep( delayMs );
 
             if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( "Task was interrupted during sleep" );
+                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted during sleep" );
 
-            node.end();
+            node.expired( operators, functions, mapVars, hasAllVars );
 
             if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( "Task was interrupted before resolution" );
+                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted before resolution" );
 
             EvalByAST.this.resolve();     // Resolve in the outer class context
         }

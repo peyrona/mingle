@@ -14,8 +14,8 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This class instances are the nodes used to construct an AST tree that represents an
@@ -33,17 +33,19 @@ final class ASTNode
     private volatile ASTNode       left         = null;   // Left child
     private volatile ASTNode       right        = null;   // Right child
     private volatile ASTNode       parent       = null;   // ReadOnly property
-    private          XprToken      token        = null;   // Parent node
+    private          XprToken      token        = null;   // Literal, operator, variable or func_name
     private          List<ASTNode> lstFnArgs    = null;   // Function arguments (AKA parameters)
-    private          AtomicBoolean bAfterEnded  = null;   // Flag indicating that AFTER operation is already ended
-    private          AtomicBoolean bWithinEnded = null;   // Flag indicating that WITHIN operation is already ended
-    private          AtomicInteger bWitIniVal   = null;   // WITHIN initial Value (null when this node is not of type 'future' (0 false, 1 true, -1 not inited yet)
-    private          AtomicInteger bFutureEnded = null;   // Updated when Timer ends for AFTER and when a var changed or timer ended for WITHIN.
+    private          short         nFutureType  =    0;   // -1 == AFTER , 1 == WITHIN, 0 == this node is not a future
+    private          AtomicReference<Object> oWithInitVal = null;   // WITHIN initial Value (null when this node is not of type 'future' (0 false, 1 true, -1 not inited yet)
+    private          AtomicInteger nFutureValue = null;   // Updated when Timer ends for AFTER and when a var changed or timer ended for WITHIN.
                                                           // After ended, it has the furure result (futures are always booleans: 1 for true and 0 for false).
-                                                          // If null, this Node is not a node of type 'future'. If -1 it is a 'future' but it is not resolved yet.
+                                                          // If -1 it is a 'future' but it is not resolved yet. If null, this Node is not a node of type 'future'
 
     private static final String sOP_LOGIC_AND = "&&";
     private static final String sOP_LOGIC_OR  = "||";
+
+    private static final short nTYPE_AFTER  = -1;
+    private static final short nTYPE_WITHIN =  1;
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE
@@ -142,17 +144,11 @@ final class ASTNode
 
         if( token.isType( XprToken.RESERVED_WORD ) )
         {
-            bAfterEnded  = token.isText( XprUtils.sAFTER  ) ? new AtomicBoolean( false ) : null;
-            bWithinEnded = token.isText( XprUtils.sWITHIN ) ? new AtomicBoolean( false ) : null;
-            bWitIniVal   = token.isText( XprUtils.sWITHIN ) ? new AtomicInteger( -1    ) : null;
-            bFutureEnded = new AtomicInteger( -1 );
-        }
-        else
-        {
-            bAfterEnded  = null;
-            bWithinEnded = null;
-            bWitIniVal   = null;
-            bFutureEnded = null;
+            nFutureType  = (short) (token.isText( XprUtils.sAFTER ) ? nTYPE_AFTER : nTYPE_WITHIN);
+            nFutureValue = new AtomicInteger( -1 );
+
+            if( token.isText( XprUtils.sWITHIN ) )
+                oWithInitVal = new AtomicReference<>( null );
         }
 
         return this;
@@ -182,18 +178,44 @@ final class ASTNode
 
     boolean isAfter()
     {
-        return bAfterEnded != null;
+        return nFutureType == nTYPE_AFTER;
     }
 
     boolean isWithin()
     {
-        return bWithinEnded != null;
+        return nFutureType == nTYPE_WITHIN;
     }
 
-    void end()
+    /**
+     * Node (future AFTER or WITHIN) timeout has elapsed.
+     *
+     * @param ops
+     * @param fns
+     * @param vars
+     * @param hasAllVars
+     */
+    void expired( StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )
     {
-        if( isAfter()  )  bAfterEnded.set(  true );
-        else              bWithinEnded.set( true );
+        assert nFutureType != 0;
+
+        if( isAfter() )
+        {
+            Object result = left.eval( ops, fns, vars, hasAllVars );
+
+            if( result == null )  nFutureValue.set( 0 );   // When the xpr can not be resolved (e.g. variable's value never arrived), NAXE set AFTER result to false
+            else                  nFutureValue.set( (((Boolean) result) ? 1 : 0) );
+        }
+        else    // Must be a WITHIN
+        {
+            if( oWithInitVal.get() == null )
+            {
+                nFutureValue.set( 0 );            // When the variable's value never arrived, NAXE set WITHIN result to false
+            }
+            else if( nFutureValue.get() == -1 )   // If the result value of this future is not initialized yet, it is because it never changed its value (see ::eval(...)),
+            {
+                nFutureValue.set( 1 );            // therefore, the WITHIN is true (1)
+            }
+        }
     }
 
     boolean isLeaf()
@@ -234,10 +256,8 @@ final class ASTNode
         // 'hasAllVars' is needed because this evaluator is a lazy one: under certain
         // circumstances it can operate even when not all variables varlues are known.
 
-        assert vars != null;
-
-        if( bFutureEnded != null && bFutureEnded.get() != -1 )    // This branch (starting at this node) was a future and the future was already resolved.
-            return bFutureEnded.get() == 1;                       // The future was resolved to true or false (futures always resolve to a boolean value).
+        if( nFutureValue != null && nFutureValue.get() != -1 )    // This branch (starting at this node) was a future and the future was already resolved.
+            return nFutureValue.get() == 1;                       // The future was resolved to true or false (futures always resolve to a boolean value).
 
         switch( token.type() )
         {
@@ -256,9 +276,6 @@ final class ASTNode
                     {
                         Object[] aoArgs = prepend( left.eval( ops, fns, vars, hasAllVars ),
                                                    right.params2Array( ops, fns, vars, hasAllVars ) );
-
-//                        Object   target = left.eval( ops, fns, vars, hasAllVars );
-//                        Object[] aoArgs = right.params2Array( ops, fns, vars, hasAllVars );
 
                         return fns.invoke( right.token.text(), aoArgs );
                     }
@@ -321,9 +338,11 @@ final class ASTNode
                 }
                 else   // Any other operator (if one or more vars are not initialized, ops.eval(...) returns 'null')
                 {
-                    return ops.eval( token.text(),
-                                     left.eval(  ops, fns, vars, hasAllVars ),
-                                     right.eval( ops, fns, vars, hasAllVars ) );
+                    Object value = ops.eval( token.text(),
+                                             left.eval(  ops, fns, vars, hasAllVars ),
+                                             right.eval( ops, fns, vars, hasAllVars ) );
+
+                    return value;
                 }
 
                 break;
@@ -344,53 +363,34 @@ final class ASTNode
 
                 break;
 
-            case XprToken.RESERVED_WORD:
+            case XprToken.RESERVED_WORD:    // AFTER or WITHIN
+                assert nFutureType != 0;
+
                 if( ! hasAllVars )
                     break;
 
-                if( isAfter() && bAfterEnded.get() )
+                if( isAfter() )
                 {
-                    Object result = left.eval( ops, fns, vars, hasAllVars );
-
-                    boolean bResult = ((result == null) ? false : (Boolean) result);
-
-                    bFutureEnded.set( (bResult ? 1 : 0) );
-
-                    return result;
-                }
-                else if( isWithin() )    // Needed to be checked (take a look to previous if)
-                {
-                    Object result = left.eval( ops, fns, vars, hasAllVars );
-
-                    if( bWithinEnded.get() )     // WITHIN is finished
-                    {
-                        boolean bResult = (bWitIniVal.get() == -1) ? false     // If bWitIniVal == -1 --> we never knew the initial value
-                                                                   : Objects.equals( result, (bWitIniVal.get() == 1) );
-                        bFutureEnded.set( (bResult ? 1 : 0) );
-
-                        return result;
-                    }
-                    else
-                    {
-                        if( bWitIniVal.get() == -1 )    // Not initialized yet
-                        {
-                            bWitIniVal.set( ((Boolean) result ? 1 : 0) );
-                        }
-                        else
-                        {
-                            if( ! Objects.equals( result, bWitIniVal ) )    // Has changed
-                            {
-                                bFutureEnded.set( 0 );   // 0 == false
-                                return false;
-                            }
-
-                            return null;    // null beause it is still working
-                        }
-                    }
+                    return left.eval( ops, fns, vars, hasAllVars );
                 }
                 else
                 {
-                    throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
+                    Object result = left.eval( ops, fns, vars, hasAllVars );
+
+                    if( oWithInitVal.get() == null )    // Not initialized yet
+                    {
+                        oWithInitVal.set( ((Boolean) result) ? 1 : 0 );
+                    }
+                    else
+                    {
+                        if( ! Objects.equals( result, oWithInitVal ) )    // Has changed
+                        {
+                            nFutureValue.set( 0 );   // 0 == false
+                            return Boolean.FALSE;
+                        }
+
+                        // return null;    // null beause it is still working
+                    }
                 }
 
                 break;
@@ -412,19 +412,17 @@ final class ASTNode
 
         if( token.isType( XprToken.RESERVED_WORD ) )
         {
-            if( bAfterEnded  != null )  bAfterEnded.set(  false );    // Is null when node is of type WITHIN
-            if( bWithinEnded != null )  bWithinEnded.set( false );    // Is null when node is of type AFTER
-            if( bWitIniVal   != null )  bWitIniVal.set( -1 );         // Is null when node is of type AFTER
-            bFutureEnded.set( -1 );                                   // Will always exist when AFTER or WITHIN
+            nFutureValue.set( -1 );        // Will always exist when AFTER or WITHIN
+
+            if( oWithInitVal != null )
+                oWithInitVal.set( null );
         }
         else
         {
             synchronized( this )
             {
-                bAfterEnded  = null;
-                bWithinEnded = null;
-                bWitIniVal   = null;
-                bFutureEnded = null;
+                oWithInitVal = null;
+                nFutureValue = null;
             }
         }
 
