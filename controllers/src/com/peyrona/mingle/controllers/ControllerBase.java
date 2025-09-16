@@ -198,7 +198,7 @@ public abstract class      ControllerBase
             msg = "Error: listener not set. Can not report:\n"+ msg;
 
             if( UtilSys.getLogger() != null )  UtilSys.getLogger().log( level, msg );
-            else                               System.err.println( msg );
+            else                               UtilStr.toString( exc );
         }
     }
 }

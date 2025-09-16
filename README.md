@@ -3,10 +3,10 @@
 * A programming language (very close to natural language) named "_Une_".<br>
 * The tools associated with the _Une_ language.
 
-_Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills at all to learn and to use _Une_. If you are familiar with MS-Excel (or any other spreadsheet), you already know a lot about _Une_.
+_Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills.
 
 After being compiled, _Une_ can be executed on most of the existing Operative Systems (Windows, MacOS, Linux, Solaris and others).
-The name of the ecosystem (the language plus additional tools) provided here is: "Mingle Standard Platform" (MSP for short).
+The full name is: "Mingle Standard Platform" ('MSP' or 'Mingle' for short).
 
 Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license).
 
@@ -22,17 +22,16 @@ Here is how to say using _Une_ : <br>
  **Do I need to know computers programming?**
 
 > No, you do not: as far as you are familiar with spreadsheets (e.g.: MS Excel) you can successfully use _Une_.
-> It is also true that the more you know about programming computers and about electronics, the better for you.
+> It is also true that the more you know about programming computers and about electronics, the more you will do.
 
  **How should I start?**
 
 > A PC with Windows, macOS or Linux. In fact it runs in any machine where Java can run.
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_, but you do not need it.
-> If you are not technical person, the recommendation is to use the VirtualBox Machine.
 
  **What is the easiest way to start?**
 
-> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment to execute the compiled code. Using Glue you can even "see" what is hapenning inside the Execution Environment.
+> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code). Using Glue you can even "see" what is hapenning inside the Execution Environment.
 >
 > So, our recommendation is:
 >
@@ -47,7 +46,7 @@ Here is how to say using _Une_ : <br>
  **What about MSP?**
 
 > The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize.
-> You have a handbook (under "docs" folder) titled "The Mingle Standard Platform.pdf". It is highly recommended to read it carefuly in order to be familiar with the tools you will daily use.
+> You have a handbook (under "todeploy/docs" folder) titled "The Mingle Standard Platform.pdf". It is highly recommended to read it carefuly in order to be familiar with the tools you will daily use.
 >
 > These are the tools that compose the ISP:
 >
