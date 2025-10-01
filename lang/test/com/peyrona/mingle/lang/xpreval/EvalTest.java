@@ -113,7 +113,39 @@ public class EvalTest
         test( "! isEmpty( \"\" )", false );
         test( "(((5 | 3) == 7) && ((5 & 3) == 1)) || (2 > 8) && (3 < 5)", true );    // Checks that there are no conflicts mixing logical and bit ops
 
-        // Left and Right laizy boolean evaluation
+        // ALL and ANY tests
+        // Can not be done by invoking ::test(...) because Group Resolver has to be provided
+
+        IXprEval xpr;
+
+        xpr = new NAXE().build( "ALL windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr.set( "win1", true );
+        xpr.set( "win2", true );
+        xpr.set( "win3", true );
+        assertEquals( xpr.eval(), Boolean.TRUE );
+
+
+        xpr = new NAXE().build( "ALL windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr.set( "win1", true  );
+        xpr.set( "win2", false );
+        xpr.set( "win3", true  );
+        assertEquals( xpr.eval(), Boolean.FALSE );
+
+        xpr = new NAXE().build( "ANY windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr.set( "win1", false );
+        xpr.set( "win2", false );
+        xpr.set( "win3", true  );
+        assertEquals( xpr.eval(), Boolean.TRUE );
+
+
+        xpr = new NAXE().build( "ANY windows == FALSE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr.set( "win1", true  );
+        xpr.set( "win2", true  );
+        xpr.set( "win3", true  );
+        assertEquals( xpr.eval(), Boolean.FALSE );
+
+
+        // Bidirectional (Left and Right) Laizy Boolean evaluation
         // Can not be done by invoking ::test(...) because EvalByRPN does not have laizy eval
 
         assertEquals( new NAXE().build( "true  || x > 5" ).eval(), Boolean.TRUE  );    // Left lazy OR
