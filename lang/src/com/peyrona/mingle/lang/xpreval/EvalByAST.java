@@ -80,11 +80,12 @@ final class EvalByAST
     //------------------------------------------------------------------------//
     // CONSTRUCTOR (package scope)
 
-    EvalByAST( List<XprToken> lstInfix )                             // This method is invoked only if lstInfix is not empty
-    {
-        this( lstInfix, null );
-    }
-
+    /**
+     * Constructs de AST to evaluate the received expression.
+     *
+     * @param lstInfix List of instances of XprToken: returned by XprPreProc::getAsInfix()
+     * @param onSolv Can be null.
+     */
     EvalByAST( List<XprToken> lstInfix, Consumer<Object> onSolv )    // This method is invoked only if lstInfix is not empty
     {
         onSolved = onSolv;
@@ -526,7 +527,7 @@ final class EvalByAST
 // TODO:
 // WHEN clock >= 0
 // THEN console = "Tested simple AFTER and WITHIN"
-// IF (cell_1 == 3 AFTER 5s) && (cell_2 == 0 WITHIN 2s)  -->  así sí funciona, pero si le quito los paréntesis internos, no funciona. Da este error -->
+// IF (cell_1 == 3 AFTER 5s) && (cell_2 == 0 WITHIN 2s)  -->  así sí funciona, pero si le quito los paréntesis al IF, no funciona. Da este error -->
                     if( nodeDelay.token().isNotType( XprToken.NUMBER ) )
                     {
                         lstErrors.add( new CodeError( "Number not found after modifier \""+ token.text() +'"', nodeDelay.token() ) );

@@ -14,6 +14,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
+import java.util.function.Function;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import org.junit.Test;
@@ -31,7 +32,7 @@ public class EvalTest
 //        doWithinForTrue();
 //        doWithinForFalse();
 
-        doBothForAfterWithAnd();
+//        doBothForAfterWithAnd();
 //        doBothForWithinWithAnd();
 
 //        doBothForAfterWithOr();
@@ -117,32 +118,43 @@ public class EvalTest
         // Can not be done by invoking ::test(...) because Group Resolver has to be provided
 
         IXprEval xpr;
+        Function<String,String[]> fn = (t) -> new String[] {"win1", "win2", "win3"};
 
-        xpr = new NAXE().build( "ALL windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr = new NAXE().build( "ALL windows == TRUE", null, fn );
         xpr.set( "win1", true );
         xpr.set( "win2", true );
         xpr.set( "win3", true );
         assertEquals( xpr.eval(), Boolean.TRUE );
 
 
-        xpr = new NAXE().build( "ALL windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr = new NAXE().build( "ALL windows == TRUE", null, fn );
         xpr.set( "win1", true  );
         xpr.set( "win2", false );
         xpr.set( "win3", true  );
         assertEquals( xpr.eval(), Boolean.FALSE );
 
-        xpr = new NAXE().build( "ANY windows == TRUE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr = new NAXE().build( "ANY windows == TRUE", null, fn );
         xpr.set( "win1", false );
         xpr.set( "win2", false );
         xpr.set( "win3", true  );
         assertEquals( xpr.eval(), Boolean.TRUE );
 
 
-        xpr = new NAXE().build( "ANY windows == FALSE", null, (t) -> new String[] {"win1", "win2", "win3"} );
+        xpr = new NAXE().build( "ANY windows == FALSE", null, fn );
         xpr.set( "win1", true  );
         xpr.set( "win2", true  );
         xpr.set( "win3", true  );
         assertEquals( xpr.eval(), Boolean.FALSE );
+
+
+        fn = (t) -> (t.equals("doors")) ? new String[] {"door1", "door2"} : new String[] {"win1", "win2"};
+
+        xpr = new NAXE().build( "(! ALL doors == TRUE) && (ANY window == FALSE)", null, fn );
+        xpr.set( "door1", false );
+        xpr.set( "door2", true  );
+        xpr.set( "win1" , true  );
+        xpr.set( "win2" , false );
+        assertEquals( xpr.eval(), Boolean.TRUE );
 
 
         // Bidirectional (Left and Right) Laizy Boolean evaluation
@@ -187,10 +199,10 @@ public class EvalTest
 
         test( "floor(2.8,2)", 2.0f );
         test( "2.8:floor(2)", 2.0f );
-        test( "floor(3.7,2)", 2.0f );
-        test( "floor(-2.5,-2)", -2.0f );
-        test( "floor(1.58,0.1)", 1.5f );
-        test( "FlOoR(0.234,0.01)", 0.22999999f );     // TODO: esto habría que ahcerlo mejor y que salga 0.23 en lugar de lo que sale
+        test( "floor(3.7, 2)", 2.0f );
+        test( "floor(-2.5, -2)", -2.0f );
+        test( "floor(1.58, 0.1)", 1.5f );
+        test( "FlOoR(0.234, 0.01)", 0.22999999f );     // TODO: esto habría que ahcerlo mejor y que salga 0.23 en lugar de lo que sale
 
         test( "ceiling(2.2,1)", 3.0f );
         test( "2.2:ceiling(1)", 3.0f );
@@ -210,11 +222,11 @@ public class EvalTest
 
         test( "round(22.3)", 22.0f );
         test( "22.3:round()", 22.0f );
-        test( "round(2.15,1)", 2.2f );
+        test( "round(2.15, 1)", 2.2f );
         test( "round(2.149, 1)", 2.1f );
         test( "round(-1.475, 2)", -1.47f );
         test( "round(626.3, 3)", 626.3f );
-        test( "round(626.3, -3)", 999.99994f );    // TODO: esto habría que ahcerlo mejor y que salga 1000 en lugar de lo que sale
+        test( "round(626.3, -3)", 999.99994f );    // TODO: esto habría que hacerlo mejor y que salga 1000 en lugar de lo que sale
         test( "round(1.98,-1)", 0.0f );
         test( "round(-50.55,-2)", -100.0f );
 
@@ -260,7 +272,7 @@ public class EvalTest
         test( "\"A une passante\":mid(7,99)", "passante" );
         test( "\"A une passante\":mid(80,99)", "" );
         test( "\"A horse, my kingdom for a horse\":mid(\"MY\",\"For\"):trim()", "kingdom" );
-        test( "\"A horse, my kingdom for a horse\":mid(\"for\",\"horse\")", " a " );       // Searches for the second horse, the one that is after 'for'
+        test( "\"A horse, my kingdom for a horse\":mid(\"for\",\"horse\")", " a " );       // Searches for the second horse, the one that is after 'for a'
         test( "mid(\"12348\", 3, 3) == 348", true );
         test( "mid(12348, 3, 3) == 348", true );
         test( "\"one , two, three\":substitute(\"o\", \"88\")", "88ne , tw88, three");
@@ -272,7 +284,7 @@ public class EvalTest
 
         test( "put(\"varSaved\", var)", true, new Pair( "var", "MyVarOrDevice" ) );
         test( "get(\"varsaved\")", "MyVarOrDevice" );
-     // test( "del(\"varSaved\")", true );       // Can not invoke this because when 1st time it is evaluated by RPN and it is true, but then it is evaluated again by AST, then it is false
+        test( "del(\"varSaved\")", true );
         test( "del(\"notSaved\")", false );
 
         test( "isReachable(\"localhost\", 100 )", true );
@@ -434,7 +446,7 @@ public class EvalTest
         if( ! preproc.getErrors().isEmpty() )
             throw new MingleException("Errors");
 
-        System.out.println( new EvalByAST( preproc.getAsInfix() ).eval() );
+        System.out.println( new EvalByAST( preproc.getAsInfix(), null ).eval() );
     }
 
     private void test( String xpr, Object expected, Pair<String,Object>... vars  )
@@ -462,7 +474,7 @@ public class EvalTest
             }
 
             List<XprToken> lstInfix = preproc.getAsInfix();
-            EvalByAST      ast      = new EvalByAST( lstInfix );
+            EvalByAST      ast      = new EvalByAST( lstInfix, null );
 
             if( ast.getErrors().isEmpty() )   // ast includes all errors detected by rpn
             {
