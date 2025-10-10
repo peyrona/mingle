@@ -6,7 +6,7 @@ package com.peyrona.mingle.lang.interfaces.network;
  *
  * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public interface INetClient
 {
@@ -15,9 +15,9 @@ public interface INetClient
      *
      * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
      */
     public interface IListener
     {

@@ -6,5 +6,5 @@ Agent-Class: com.peyrona.mingle.lang.japi.JarLoader
 Bundle-Name: Lang module
 Bundle-Date: 2023-11-15 17:59:09 CET
 Implementation-Title: Mingle
-Implementation-URL: https://mingle.peyrona.com
+Implementation-URL: https://github.com/peyrona/mingle
 

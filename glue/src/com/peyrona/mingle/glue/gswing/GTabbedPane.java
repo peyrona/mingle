@@ -33,7 +33,7 @@ import jiconfont.swing.IconFontSwing;
  *
  * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public class GTabbedPane extends JTabbedPane
 {

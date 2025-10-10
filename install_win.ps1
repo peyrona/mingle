@@ -36,7 +36,7 @@ if not exist "%JDK_FOLDER%" (
 
 :: Step 5: Download "update.jar" into the "mingle" folder
 echo Downloading update.jar...
-set "UPDATE_JAR_URL=https://mingle.peyrona.com/update.jar"
+set "UPDATE_JAR_URL=https://github.com/peyrona/mingle/update.jar"
 powershell -Command "Invoke-WebRequest -Uri '%UPDATE_JAR_URL%' -OutFile '%MINGLE_DIR%\update.jar'"
 
 :: Check if the update.jar was downloaded successfully

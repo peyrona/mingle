@@ -135,7 +135,7 @@ fi
 echo ""
 echo ""
 echo "Downloading Mingle..."
-MSP="https://mingle.peyrona.com/msp"
+MSP="https://github.com/peyrona/mingle/msp"
 # Use wget to download all files and folders recursively
 wget --recursive --no-parent --no-clobber --convert-links --adjust-extension --directory-prefix="$MINGLE_DIR" "$MSP"
 

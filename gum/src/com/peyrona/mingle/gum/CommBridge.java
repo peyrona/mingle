@@ -39,7 +39,7 @@ import java.util.concurrent.TimeUnit;
  * </pre>
  *
  * @author Francisco José Morero Peyrona
- * @see <a href="https://mingle.peyrona.com">Official website</a>
+ * @see <a href="https://github.com/peyrona/mingle">Official website</a>
  */
 public final class CommBridge implements WebSocketConnectionCallback
 {
