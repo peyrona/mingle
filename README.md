@@ -23,13 +23,13 @@ Here is how to say using _Une_ : <br>
 > No, you do not: as far as you are familiar with spreadsheets (e.g.: MS Excel) you can successfully use _Une_.
 > It is also true that the more you know about programming computers and about electronics, the more you will be able to do.
 
- **How computer do I need?**
+ **What computer do I need?**
 
 > A PC with Windows, macOS or Linux. In fact Mingle runs in any machine where Java 11 can run.
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
-> 1. Download last release (at the right side of this web page).
+> 1. Download lastest release (at the right side of this web page: onli the "mingle-*.zip" file is needed).
 > 2. Create a folder in you PC named "Mingle" (or whatever you like).
 > 3. Unzip the downlaoded relase file inside your local "Mingle" folder.
 > 4. Either:
@@ -62,6 +62,7 @@ Here is how to say using _Une_ : <br>
 > *   **Stick**: the Execution Environment. Where the "model"s run.
 > *   **Glue**: an Intergated Development Environment that assist in the whole development/debugging/monitoring cycle.
 > *   **Gum**: a HTML/Javscript based tool to monitorize one or more ExEns.
+> *   **Updater**: Keeps MSP up to date.
 
  **What licence has Mingle?**
 
