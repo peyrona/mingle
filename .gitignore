@@ -27,6 +27,7 @@ Thumbs.db
 
 # Otros ficheros y dirs
 FTP_and_GitHub.txt
+count_lines.sh
 pack.sh
 .*
 !/.gitignore
@@ -36,7 +37,6 @@ pack.sh
 *.odg
 *.zip
 *.model
-count_lines.sh
 /docs/images/
 todeploy/log/
 todeploy/tmp/
