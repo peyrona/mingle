@@ -11,7 +11,7 @@ After being compiled, _Une_ can be executed on most of the existing Operative Sy
 # How looks it like?
 
 Here is how to say using _Une_ : <br>
-“when the alarm is on and any door or window is opened, then send to my Telegram the message *DANGER! Intruders at home*”.
+“When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
 
 ![Une language basic example](une-1st-example.png)
 
@@ -23,32 +23,31 @@ Here is how to say using _Une_ : <br>
 > No, you do not: as far as you are familiar with spreadsheets (e.g.: MS Excel) you can successfully use _Une_.
 > It is also true that the more you know about programming computers and about electronics, the more you will be able to do.
 
- **How should I start?**
+ **How computer do I need?**
 
-> A PC with Windows, macOS or Linux. In fact it runs in any machine where Java 11 can run.
+> A PC with Windows, macOS or Linux. In fact Mingle runs in any machine where Java 11 can run.
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
-> 1. Download the '/todeploy' folder (and all subfolders) to you local machine.
-> 2. Rename the folder to 'Mingle' (or whatever you like).
+> 1. Create a folder in you PC named "Mingle" (or whatever you like).
+> 2. From here, download to your "Mingle" folder all the folders and files that are here: [todeploy](https://github.com/peyrona/mingle/tree/main/todeploy)
 > 3. Either:
->    a) Install Java 11 or higher in your local machine
->    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux")
-> 4. Place inside the Java folder all Java needed files. You can download them from here: [Adoptium](https://adoptium.net)
+>    a) Install Java 11 or higher in your local machine.
+>    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux") and place inside the Java folder all Java needed files. You can download them from here: [Adoptium](https://adoptium.net)
 
 
  **What is the easiest way to start?**
 
-> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code). Using Glue you can even "see" what is hapenning inside the Execution Environment.
+> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code). Using Glue you can even "see" what is hapenning inside the Execution Environment (ExEn).
 >
 > So, our recommendation is:
 >
-> 1.  Start Glue (for Linux, use "menu.sh" for other OOSS use their "run_*" file)
-> 2.  Open de editor (click icon at toolbar)
-> 3.  Open an example (under 'examples' folder): they are numbered from easier to harder
-> 4.  Take "The Une language.pdf" handbook (under "docs" folder)
-> 5.  Read, understand and test
-> 6.  Modify the _Une_ source code and re-test
+> 1.  Start Glue: for Linux, use "menu.sh"; for other OOSS use their "run_*" file.
+> 2.  Open de editor (click the pencil icon at toolbar).
+> 3.  Open an example (under 'examples' folder): they are numbered from easiest to smartest.
+> 4.  Take "The Une language.pdf" handbook (under "docs" folder).
+> 5.  Read, understand and test.
+> 6.  Modify the _Une_ source code and re-test.
 > 7.  Go to #3
 
  **What about MSP?**
@@ -65,7 +64,7 @@ Here is how to say using _Une_ : <br>
 
  **What licence has Mingle?**
 
-> Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license). So, everyone can use and distribute it for free (no charges, never, for nothing).
+> Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license): one about Mingle and the other about _Une_. So, everyone can use and distribute it for free (no charges, never, for nothing).
 
  **What about the logo?**
 
