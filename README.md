@@ -5,24 +5,23 @@
 
 _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills.
 
-After being compiled, _Une_ can be executed on most of the existing Operative Systems (Windows, MacOS, Linux, Solaris and others).
-The full name is: "Mingle Standard Platform" ('MSP' or 'Mingle' for short).
+After being compiled, _Une_ can be executed on most of the existing Operative Systems: Windows, MacOS, Linux, Solaris and others.
 
-Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license).
 
 # How looks it like?
 
 Here is how to say using _Une_ : <br>
-“when the alarm is on and any door or window is opened, then send the message "DANGER! Intruders at home" to my Telegram”.
+“when the alarm is on and any door or window is opened, then send to my Telegram the message *DANGER! Intruders at home*”.
 
 ![Une language basic example](une-1st-example.png)
 
+
 # Questions and Answers
 
- **Do I need to know computers programming?**
+ **Do I need to know about computer programming?**
 
 > No, you do not: as far as you are familiar with spreadsheets (e.g.: MS Excel) you can successfully use _Une_.
-> It is also true that the more you know about programming computers and about electronics, the more you will do.
+> It is also true that the more you know about programming computers and about electronics, the more you will be able to do.
 
  **How should I start?**
 
@@ -31,11 +30,11 @@ Here is how to say using _Une_ : <br>
 
  **How to install Mingle?**
 > 1. Download the '/todeploy' folder (and all subfolders) to you local machine.
-> 2. Rename it to 'Mingle' (or whatever you like).
+> 2. Rename the folder to 'Mingle' (or whatever you like).
 > 3. Either:
 >    a) Install Java 11 or higher in your local machine
 >    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux")
-> 4. Place inside the Java folder all Java needed files. You can download them from here:
+> 4. Place inside the Java folder all Java needed files. You can download them from here: [Adoptium](https://adoptium.net)
 
 
  **What is the easiest way to start?**
@@ -64,7 +63,10 @@ Here is how to say using _Une_ : <br>
 > *   **Glue**: an Intergated Development Environment that assist in the whole development/debugging/monitoring cycle.
 > *   **Gum**: a HTML/Javscript based tool to monitorize one or more ExEns.
 
- **What about Raspberry Pi?**
+ **What licence has Mingle?**
 
-> We recommend to use it as your development environment: Mingle works out-of-the-box smoothly with RPi GPIO.
-> And Glue (our IDE) allows to monitorize from a PC an _Une_ program running inside a RPi.
+> Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license). So, everyone can use and distribute it for free (no charges, never, for nothing).
+
+ **What about the logo?**
+
+> The mascot for the _Une_ language is an electric anguilla named _Tune_. You can use it anywhere, as long as it's related to _Mingle_ or _Une_.
