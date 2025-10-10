@@ -26,8 +26,17 @@ Here is how to say using _Une_ : <br>
 
  **How should I start?**
 
-> A PC with Windows, macOS or Linux. In fact it runs in any machine where Java can run.
-> Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_, but you do not need it.
+> A PC with Windows, macOS or Linux. In fact it runs in any machine where Java 11 can run.
+> Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
+
+ **How to install Mingle?**
+> 1. Download the '/todeploy' folder (and all subfolders) to you local machine.
+> 2. Rename it to 'Mingle' (or whatever you like).
+> 3. Either:
+>    a) Install Java 11 or higher in your local machine
+>    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux")
+> 4. Place inside the Java folder all Java needed files. You can download them from here:
+
 
  **What is the easiest way to start?**
 
@@ -35,7 +44,7 @@ Here is how to say using _Une_ : <br>
 >
 > So, our recommendation is:
 >
-> 1.  Start Glue
+> 1.  Start Glue (for Linux, use "menu.sh" for other OOSS use their "run_*" file)
 > 2.  Open de editor (click icon at toolbar)
 > 3.  Open an example (under 'examples' folder): they are numbered from easier to harder
 > 4.  Take "The Une language.pdf" handbook (under "docs" folder)
