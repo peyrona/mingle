@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<!--
+Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
+Click nbfs://nbhost/SystemFileSystem/Templates/Other/html.html to edit this template
+-->
+<html>
+    <head>
+        <title>MSP Editor Help</title>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <style>
+            html, body
+            {
+                color: #d4e6f1;
+                background-color: #222222;
+                border: 9px solid #222222;
+                font-family: 'Open Sans', sans-serif;
+                font-size: 10px;
+            }
+
+            table
+            {
+                border-collapse: collapse;
+                width: 98%;
+            }
+
+            th, td
+            {
+                border: 1px solid black;
+                border-color: #686256;
+                padding: 8px;
+                text-align: left;
+                background-color: transparent;
+            }
+
+            th
+            {
+                background-color: #36486b;
+            }
+
+            tr:nth-child(even)
+            {
+
+                background-color: #454140;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Brief help about the 'Mingle Standard Platform' Editor</h1>
+
+        <p>
+            All controls in the editor tool bar has a tool-tip with a brief explanation. Just place the mouse cursor over them and it will show up.
+        </p>
+
+        <p>
+            <u><b>Autosave</b></u><br>
+            <p style="margin-left: 20px;">
+                When checked, files are saved automatically every 5 minutes.
+            </p>
+        </p>
+
+        <br>
+
+        <p>
+            <u><b>Grid</b></u><br>
+            <p style="margin-left: 20px;">
+                When checked, files are transpiled for running in a grid.<br>
+                <br>
+                This value is initially read from file "config.json", but when changed, it prevails over the initial value (file is not altered).
+                <br>
+            </p>
+        </p>
+
+        <br>
+
+        <p>
+            <u><b>Fake-drivers</b></u><br>
+            <p style="margin-left: 20px;">
+                If checked, Drivers and Controller would work in faked mode: simulating interaction with the physical device.<br>
+                This is just a hint: a controller can ignore this request. It depends on whether the controller was created to obey this request or not.<br>
+                <br>
+                This value is initially read from file "config.json", but when changed, it prevails over the initial value (file is not altered).
+            </p>
+        </p>
+
+        <br>
+
+        <p>
+            <u><b>Log level</b></u><br>
+            <p style="margin-left: 20px;">
+                Allows to overwrite the log level sat in the "config.json": this value is initially read from file "config.json", but when
+                changed, it prevails over the initial value (file is not altered).<br>
+                <br>
+                Different color is applied for SEVERE, WARNING and the rest of levels.
+            </p>
+        </p>
+
+        <br>
+
+        <h2>Keyboard shortcuts</h2>
+        <table>
+        <tr>
+            <th>Shortcut</th>
+            <th>Action</th>
+        </tr>
+        <tr>
+            <td>F1</td>
+            <td>Shows this help.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-Space</td>
+            <td>
+                Launches 'DumbSense' (it is not very 'Intelli' but is better than nothing).<br>
+                It helps only for drivers (invoke it when cursor is after the DRIVER keyword) and for expressions (invoke it when writing expressions).<br>
+                <br>
+                Hint: "Templates" combo-box (in editor toolbar) is also a nice help.
+            </td>
+        </tr>
+        <tr>
+            <td>Ctrl-N</td>
+            <td>Open an empty editor in a new tab.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-O</td>
+            <td>Open file chooser dialog (several file types can be open: Une (source & model), JSON, Java, JS, Python, ...).</td>
+        </tr>
+        <tr>
+            <td>Ctrl-S</td>
+            <td>Saves file in current editor.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-Shift-S</td>
+            <td>Saves all open files.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-T</td>
+            <td>Transpile Une script in current editor (saves the file previously if needed)</td>
+        </tr>
+        <tr>
+            <td>Ctrl-R</td>
+            <td>Run script in current editor; saving and transpiling it previously.<br>
+                You can connect with this running ExEn using the plus button ('+') from the Glue's main too-bar (main window).<br>
+                Check the assigned Socket port (IP is 'localhost').
+            </td>
+        </tr>
+        <tr>
+            <td>Ctrl-F4</td>
+            <td>Closes current editor.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-ArrowUp</td>
+            <td>Duplicates current line in current editor.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-ArrowDown</td>
+            <td>Duplicates current line in current editor.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-C</td>
+            <td>Copies highlighted text into the clipboard.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-V</td>
+            <td>Copies highlighted text from the clipboard into caret position.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-Z</td>
+            <td>Undo last typing action.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-Y</td>
+            <td>Redo last typing action.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-A</td>
+            <td>Select all text.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-I</td>
+            <td>Toggle commented estate for selected lines or just current line if no lines are selected.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-F</td>
+            <td>Set focus on find (search) text field. If there is any selected text, it is copied here.</td>
+        </tr>
+        <tr>
+            <td>Ctrl-Shift-F</td>
+            <td>Copy current editor file name and path to clipboard.</td>
+        </tr>
+        <tr>
+            <td>ESC</td>
+            <td>Clears both text fields: search and replace.</td>
+        </tr>
+    </table>
+
+    </body>
+</html>
