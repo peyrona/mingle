@@ -127,12 +127,12 @@ public class EvalProfile
             // Compilation (paring and AST creation) -----------------------------------
 
             for( int n = 0; n < (itera/100); n++ )    // JIT warm-up
-                evaluator = new EvalByAST( lstInfix );
+                evaluator = new EvalByAST( lstInfix, null );
 
             start = System.currentTimeMillis();       // The real one
 
             for( int n = 0; n < itera; n++ )
-                evaluator = new EvalByAST( lstInfix );
+                evaluator = new EvalByAST( lstInfix, null );
 
             end = System.currentTimeMillis();
 
