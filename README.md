@@ -29,9 +29,10 @@ Here is how to say using _Une_ : <br>
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
-> 1. Create a folder in you PC named "Mingle" (or whatever you like).
-> 2. From here, download to your "Mingle" folder all the folders and files that are here: [todeploy](https://github.com/peyrona/mingle/tree/main/todeploy)
-> 3. Either:
+> 1. Download last release (at the right side of this web page).
+> 2. Create a folder in you PC named "Mingle" (or whatever you like).
+> 3. Unzip the downlaoded relase file inside your local "Mingle" folder.
+> 4. Either:
 >    a) Install Java 11 or higher in your local machine.
 >    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux") and place inside the Java folder all Java needed files. You can download them from here: [Adoptium](https://adoptium.net)
 

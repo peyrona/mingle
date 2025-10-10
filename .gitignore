@@ -15,10 +15,6 @@
 *.war
 *.ear
 
-# But DO NOT ignore the todeploy directory or the .jar files inside it, recursively
-!todeploy/
-!todeploy/**/*.jar
-
 # IDE files
 *.iml
 *.ipr
