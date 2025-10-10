@@ -22,15 +22,15 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * This class downloads from a remote server those files that are newer (more recent) than local files.
+ * This class download from a remote server those files that are newer (more recent) than local files.
  *
  * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class Updater
 {
-    private static final String sBASE_URL    = "https://mingle.peyrona.com/";
+    private static final String sBASE_URL    = "https://github.com/peyrona/mingle/tree/main/todeploy";
     private static final File   fLastSuccess = new File( UtilSys.getEtcDir(), "updater.last.success.txt" );
     private static final File   fWorking     = new File( UtilSys.getEtcDir(), "updater.working.txt" );
 

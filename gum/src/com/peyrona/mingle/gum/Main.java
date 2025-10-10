@@ -25,7 +25,7 @@ import java.util.List;
  *
  * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public class Main
 {
@@ -111,7 +111,7 @@ public class Main
                             '\n'+
                             "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n"+
                             '\n'+
-                            "For detailed information, refer to the handbook or visit: https://mingle.peyrona.com/docs" );
+                            "For detailed information, refer to the handbook or visit: https://github.com/peyrona/mingle/docs" );
     }
 
     private static String getLogo()

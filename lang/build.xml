@@ -86,7 +86,7 @@
             <attribute name="Bundle-Name" value="Lang module" />
             <attribute name="Bundle-Date" value="${NOW}" />
             <attribute name="Implementation-Title" value="Mingle" />
-            <attribute name="Implementation-URL" value="https://mingle.peyrona.com" />
+            <attribute name="Implementation-URL" value="https://github.com/peyrona/mingle" />
         </manifest>
     </target>
     -->

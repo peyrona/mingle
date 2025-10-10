@@ -32,7 +32,7 @@ public class EvalTest
 //        doWithinForTrue();
 //        doWithinForFalse();
 
-//        doBothForAfterWithAnd();
+        doBothForAfterWithAnd();
 //        doBothForWithinWithAnd();
 
 //        doBothForAfterWithOr();

@@ -19,7 +19,7 @@ import java.util.Scanner;
  *
  * @author Francisco José Morero Peyrona
  *
- * Official web site at: <a href="https://mingle.peyrona.com">https://mingle.peyrona.com</a>
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public class Main
 {
@@ -141,7 +141,7 @@ public class Main
                             "\t\t+ http://<uri>\n"+
                             "\t\t+ https://<uri>\n"+
                             "\n\n"+
-                            "For detailed information, refer to the handbook at: https://mingle.peyrona.com/docs" );
+                            "For detailed information, refer to the handbook at: https://github.com/peyrona/mingle/docs" );
     }
 
     public static String getlogo()

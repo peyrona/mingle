@@ -6,7 +6,7 @@
 # This file is part of the Mingle project, which is licensed under Apache 2.0 License
 #
 # @author : Francisco José Morero Peyrona
-# @project: https://mingle.peyrona.com
+# @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
 DEVICE CPU_1                          # Without delta property
