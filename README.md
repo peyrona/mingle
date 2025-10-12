@@ -27,6 +27,7 @@ _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/w
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
+ 
 > 1. Download lastest release (at the right side of this web page: only the "mingle-*.zip" file is needed).
 > 2. Create a folder in you PC named "Mingle" (or whatever you like).
 > 3. Unzip the downloaded file inside your local "Mingle" folder.
@@ -51,14 +52,14 @@ _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/w
 
  **What about MSP?**
 
-> The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize.
-> You have a handbook (under "todeploy/docs" folder) titled "The Mingle Standard Platform.pdf". It is highly recommended to read it carefuly in order to be familiar with the tools you will daily use.
+> The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize. All these tools are integrated in the IDE. So, beginners only need to know the IDE.
+> You have a handbook (under "todeploy/docs" folder) titled "The Mingle Standard Platform.pdf". It is recommended to read it carefuly.
 >
-> These are the tools that compose the ISP:
+> These are the tools that compose the MSP:
 >
 > *   **Tape**: The transpiler. Used to compile _Une_ source code into a ".model" file, which can be used by **Stick** (an ExEn).
 > *   **Stick**: The Execution Environment (ExEn). Where the "model"s run.
-> *   **Glue**: An Intergated Development Environment (IDE) that assist in the whole development/debugging/monitoring cycle.
+> *   **Glue**: An IDE that assist in the whole development/debugging/monitoring cycle.
 > *   **Gum**: An HTML/Javscript based tool to monitorize one or more ExEns and to provide static web contents.
 > *   **Updater**: Keeps MSP up to date.
 
