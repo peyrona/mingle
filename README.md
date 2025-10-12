@@ -1,9 +1,7 @@
 # What is Mingle?
 
-* A close to natural language called "_Une_".<br>
+* A rules based language (close to natural language) called "_Une_".<br>
 * The tools associated with the _Une_ language.
-
-_Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills.
 
 
 # How looks it like?
@@ -12,6 +10,8 @@ Here is how to say using _Une_ : <br>
 “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
 
 ![Une language basic example](une-1st-example.png)
+
+_Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn.
 
 
 # Questions and Answers
