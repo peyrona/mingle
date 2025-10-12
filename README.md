@@ -1,11 +1,9 @@
 # What is Mingle?
 
-* A programming language (very close to natural language) named "_Une_".<br>
+* A close to natural language called "_Une_".<br>
 * The tools associated with the _Une_ language.
 
 _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn: it is not needed to have programming skills.
-
-After being compiled, _Une_ can be executed on most of the existing Operative Systems: Windows, MacOS, Linux, Solaris and others.
 
 
 # How looks it like?
@@ -25,13 +23,13 @@ Here is how to say using _Une_ : <br>
 
  **What computer do I need?**
 
-> A PC with Windows, macOS or Linux. In fact Mingle runs in any machine where Java 11 can run.
+> A PC with Windows, macOS, Linux... In fact **Mingle** runs in any machine where Java 11 can run.
 > Raspberry Pi is a 50 US$ computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
-> 1. Download lastest release (at the right side of this web page: onli the "mingle-*.zip" file is needed).
+> 1. Download lastest release (at the right side of this web page: only the "mingle-*.zip" file is needed).
 > 2. Create a folder in you PC named "Mingle" (or whatever you like).
-> 3. Unzip the downlaoded relase file inside your local "Mingle" folder.
+> 3. Unzip the downloaded file inside your local "Mingle" folder.
 > 4. Either:
 >    a) Install Java 11 or higher in your local machine.
 >    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" or "jre" (e.g. "jdk.11.linux") and place inside the Java folder all Java needed files. You can download them from here: [Adoptium](https://adoptium.net)
@@ -39,12 +37,12 @@ Here is how to say using _Une_ : <br>
 
  **What is the easiest way to start?**
 
-> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code). Using Glue you can even "see" what is hapenning inside the Execution Environment (ExEn).
+> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
 >
 > So, our recommendation is:
 >
-> 1.  Start Glue: for Linux, use "menu.sh"; for other OOSS use their "run_*" file.
-> 2.  Open de editor (click the pencil icon at toolbar).
+> 1.  Start Glue: for Linux, use "menu.sh"; for other OOSS use "run-win.ps1" or "run-mac.sh" file.
+> 2.  Open the editor (click the pencil icon at toolbar).
 > 3.  Open an example (under 'examples' folder): they are numbered from easiest to smartest.
 > 4.  Take "The Une language.pdf" handbook (under "docs" folder).
 > 5.  Read, understand and test.
@@ -58,16 +56,16 @@ Here is how to say using _Une_ : <br>
 >
 > These are the tools that compose the ISP:
 >
-> *   **Tape**: the transpiler. Used to "compile" _Une_ source scripts into a "model", which can be used by Stick.
-> *   **Stick**: the Execution Environment. Where the "model"s run.
-> *   **Glue**: an Intergated Development Environment that assist in the whole development/debugging/monitoring cycle.
-> *   **Gum**: a HTML/Javscript based tool to monitorize one or more ExEns.
+> *   **Tape**: The transpiler. Used to compile _Une_ source code into a ".model" file, which can be used by **Stick** (an ExEn).
+> *   **Stick**: The Execution Environment (ExEn). Where the "model"s run.
+> *   **Glue**: An Intergated Development Environment (IDE) that assist in the whole development/debugging/monitoring cycle.
+> *   **Gum**: An HTML/Javscript based tool to monitorize one or more ExEns and to provide static web contents.
 > *   **Updater**: Keeps MSP up to date.
 
  **What licence has Mingle?**
 
-> Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license): one about Mingle and the other about _Une_. So, everyone can use and distribute it for free (no charges, never, for nothing).
+> Everything is Open Source (available under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license): one about **Mingle** and the other about _Une_. So, everyone can use and distribute it for free (no charges, never, for nothing).
 
  **What about the logo?**
 
-> The mascot for the _Une_ language is an electric anguilla named _Tune_. You can use it anywhere, as long as it's related to _Mingle_ or _Une_.
+> Following the tradition, the mascot for the _Une_ language is an animal, int this case, an electric anguilla named _Tune_. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
