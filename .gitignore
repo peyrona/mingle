@@ -1,8 +1,8 @@
-# NetBeans specific
-/nbproject/private/
-/build/
-/dist/
-/.nb-gradle/
+# NetBeans specific (any project)
+nbproject/private/
+build/
+dist/
+
 
 # Compiled class files
 *.class
@@ -26,9 +26,6 @@
 Thumbs.db
 
 # Otros ficheros y dirs
-FTP_and_GitHub.txt
-count_lines.sh
-pack.sh
 .*
 !/.gitignore
 *.graphml
@@ -37,10 +34,14 @@ pack.sh
 *.odg
 *.zip
 *.model
-/docs/images/
-todeploy/log/
-todeploy/tmp/
-todeploy/etc/
-0.PhD/
-balata/
-website/
+FTP_and_GitHub.txt
+count_lines.sh
+pack.sh
+!/todeploy/**/*.jar
+/todeploy/examples/9*
+/todeploy/log/
+/todeploy/tmp/
+/todeploy/etc/
+/0.PhD/
+/balata/
+/website/

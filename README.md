@@ -6,7 +6,7 @@
 
 # How looks it like?
 
-Here is how to say using _Une_ : <br>
+Here is how to say: <br>
 “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
 
 ![Une language basic example](une-1st-example.png)

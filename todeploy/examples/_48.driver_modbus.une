@@ -1,0 +1,81 @@
+#==================================================================================================================================
+# This example shows the use of Modbus (one of the most IoT protocols).
+# To know more about Modbus, visit: https://modbus.org
+# Although Modbus can use RS-232, RS-485 and others, this implementation of the Modbus made in this driver works only vía TCP.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This DRIVER works slightly different to others: youi have to create a new DRIVER configuration per each DEVICE.
+# So if you have, lets say 3 temperature probes, you have to declare 3 DRIVERs.
+# ---------------------------------------------------------------------------------------------------------------------------------
+#
+# DRIVER ModbusTcpClientDriver
+#    SCRIPT ModbusTcpClientController
+#    CONFIG
+#        uri      AS string REQUIRED     # e.g.: "192.168.1.234:502" (if no port is declared, 502 is assumed)
+#        address  AS number REQUIRED     # Register address
+#        type     AS string REQUIRED     # One of: "boolean" (1 bit) "int" (2 bytes), "long" & "float" (4 bytes)
+#        order    AS string              # One of: "ABCD", "BADC", "CDAB" or "DCBA". By default: "ABCD"
+#        interval AS number              # Time between reads: useless for "write" addresses
+#
+#
+# Everytime a RULE changes the value of a DEVICE, this new value is sent to Modbus and the device's value will be updated using
+# the value returned by Modbus.
+# To update the value of a DEVICE (to read current state from Modbus), place an interval when creating the DERIVER definition.
+#
+#
+# For more information about Drivers, pleaser refer to the "Mingle Standard Platform" handbook.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+DEVICE t_boiler_1                            # Temperature for boiler #1
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = "192.168.19.166:1502"
+             address  = 62
+             type     = "float"
+             order    = "BADC"
+             interval = 3s
+
+DEVICE t_boiler_2                            # Temperature for boiler #2
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = "192.168.19.166:1502"
+             address  = 62
+             type     = "float"
+             order    = "BADC"
+             interval = 5s
+
+DEVICE screen
+    DRIVER OutputDriver
+
+DEVICE file
+    DRIVER FileDriver
+        CONFIG
+            file = "{*home.tmp*}modbus.csv"
+
+WHEN t_boiler_1 > - 999
+    THEN screen = "["+ time() +"] Bolier #1 = "+ t_boiler_1:format( "#,##0.00" )
+
+WHEN t_boiler_2 > - 999
+    THEN screen = "["+ time() +"] Bolier #2 = "+ t_boiler_2:format( "#,##0.00" )
+
+# We want to send values to the file using a longer interval that the one
+# used to show values in the screen: so, we use a clock just for this.
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 2m    # 2 minutes
+
+WHEN clock > 0
+    THEN file SET time() +", "+ t_boiler_1:format( "#,##0.00" ) +", "+ t_boiler_2:format( "#,##0.00" )
+
+INCLUDE "file://{*home.inc*}standard-includes.une"
+        "file://{*home.inc*}protocol-drivers.une"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<
