@@ -36,7 +36,7 @@ Thumbs.db
 *.model
 FTP_and_GitHub.txt
 count_lines.sh
-pack.sh
+release.sh
 !/todeploy/**/*.jar
 /todeploy/examples/9*
 /todeploy/log/

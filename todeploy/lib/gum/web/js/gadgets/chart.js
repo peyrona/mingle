@@ -173,14 +173,20 @@ class ChartWrap
     {
     // console.log( sDS_Name +' : '+ new Date( nWhen ).toLocaleTimeString() +' , '+ nY );
 
+        if( !this.chart || !this.chart.data ) {
+            console.error("Chart not initialized");
+            return this;
+        }
+
         let aoTargetSerie = this._findSerieData_( this.chart.data.datasets, sDS_Name );
 
         if( ! aoTargetSerie )
             throw sDS_Name + ": serie does not exist"
 
+        let nValue = parseFloat( nY );   // parseFloat because it could be a string (no harm if nY is already a number)
         let oDot = { when: nWhen,
                      x   : new Date( nWhen ).toLocaleTimeString(),
-                     y   : nY = parseFloat( nY ) };   // parseFloat because it could be a string (no harm if nY is already a number)
+                     y   : nValue };
 
         // ::aSeriesDots has all dots for all serires for all times
         // (used to copy some parts from ::aSeries to a certain serie)
@@ -189,17 +195,18 @@ class ChartWrap
             aSeriesDots.push( oDot );
 
         if( (aoTargetSerie.length > 0) && (nWhen < aoTargetSerie[0].when ) )   // When oDot.when is before the 1st dot shown in this serie, it is ignored
-            return;
+            return this;
 
         aoTargetSerie.push( this._setLabel_( aoTargetSerie, oDot ) );
 
         if( (this.timeframe > 0) &&
-            ((aoTargetSerie.last().when - aoTargetSerie[0].when ) > this.timeframe) )
+            (aoTargetSerie.length > 1) &&
+            ((aoTargetSerie[aoTargetSerie.length - 1].when - aoTargetSerie[0].when ) > this.timeframe) )
         {
             aoTargetSerie.shift();
         }
 
-        if( ! this.isPaused )
+        if( ! this.isPaused && this.chart )
             this.chart.update();
 
         return this;
@@ -207,8 +214,26 @@ class ChartWrap
 
     bulk( aSeries )
     {
+        if( ! this.chart || ! this.chart.config || ! this.chart.config.data )
+        {
+            console.error("Chart not initialized for bulk operation");
+            return this;
+        }
+
+        if( ! aSeries || ! Array.isArray(aSeries) )
+        {
+            console.error("Invalid series data for bulk operation");
+            return this;
+        }
+
         for( let s = 0; s < aSeries.length; s++ )
         {
+            if( !aSeries[s] || !aSeries[s].data || !Array.isArray(aSeries[s].data) )
+            {
+                console.error("Invalid series data at index", s);
+                continue;
+            }
+
             let aDots = new Array( aSeries[s].data.length );
 
             for( let p = 0; p < aSeries[s].data.length; p++ )
@@ -222,6 +247,12 @@ class ChartWrap
 
     clear()   // Implemented in this way to keep (to not loose) the references to the arrays and the rest of the configuration
     {
+        if( ! this.chart || ! this.chart.config || ! this.chart.config.data )
+        {
+            console.error("Chart not initialized for clear operation");
+            return this;
+        }
+
         this.chart.config.data.labels.length = 0;
 
         for( const dataset of this.chart.config.data.datasets )
@@ -237,7 +268,16 @@ class ChartWrap
         ChartWrap._aInstances_ = ChartWrap._aInstances_.filter( item => item.id !== id );    // deletes array item
 
         if( this.chart )
+        {
             this.chart.destroy();
+            this.chart = null;
+        }
+
+        if( this.canvas )
+        {
+            this.canvas.onwheel = null;
+            this.canvas = null;
+        }
 
         return this;
     }
@@ -254,11 +294,6 @@ class ChartWrap
 
         this.canvas = $('#'+this.divId).find('canvas')
                                        .first()[0];     // Now that div (which contains a canvas is appended, a reference to it can be assigned)
-
-        // TODO: no se ve el tooltip y además da un error -->
-        // let $tooltip = $container.tooltip( { content: 'Mouse wheel can be used to zoom in and out' } );
-        //     $tooltip.tooltip('open');
-        //     setInterval( () => $tooltip.tooltip('close'), 5000 );
 
         let self = this;
 
@@ -281,7 +316,15 @@ class ChartWrap
         if( this.chart )
             this.chart.destroy();
 
-        this.chart = new Chart( this.canvas.getContext('2d'),
+        let context = this.canvas.getContext('2d');
+
+        if( ! context )
+        {
+            console.error("Failed to get canvas context");
+            return this;
+        }
+
+        this.chart = new Chart( context,
                                 { type   : "line",
                                   data   : { labels: [], datasets: aDataset },    // 'labels' are the labels that appear at the X (the times as strings)
                                   options: this._getChartOptions_() } );
@@ -292,7 +335,8 @@ class ChartWrap
 
         let $div = $('#'+this.divId +' [name="chart_data_load_panel"]');
 
-        $div[0].style.visibility = (isDbPanelVisible ? "visible" : "hidden");     // Shows or hides these controls: time-ini, time-end and button Load/Live
+        if( $div.length > 0 )
+            $div[0].style.visibility = (isDbPanelVisible ? "visible" : "hidden");     // Shows or hides these controls: time-ini, time-end and button Load/Live
 
         return this;
     }
@@ -305,15 +349,24 @@ class ChartWrap
         function findClosest( serie, target )
         {
             return serie.reduce( (prev, curr) =>
-                                  Math.abs( curr.when - target ) < Math.abs( prev - target.when ) ? curr : prev );
-                        // FIXME: Math.abs( curr.when - target ) < Math.abs( prev.when - target ) ? curr : prev );
+                                  Math.abs( curr.when - target ) < Math.abs( prev.when - target ) ? curr : prev );
         }
 
-        let oLastShown = aoSerieDots.last();
-
-        if( aoSerieDots.length === 0 )
+        if( ! aoSerieDots || aoSerieDots.length === 0 )
         {
-            this.chart.data.labels.push( oDot.x );
+            if( this.chart && this.chart.data && this.chart.data.labels )
+                this.chart.data.labels.push( oDot.x );
+
+            return oDot;
+        }
+
+        let oLastShown = aoSerieDots[aoSerieDots.length - 1];
+
+        if( ! oLastShown )
+        {
+            if( this.chart && this.chart.data && this.chart.data.labels )
+                this.chart.data.labels.push( oDot.x );
+
             return oDot;
         }
 
@@ -321,15 +374,18 @@ class ChartWrap
 
         if( Math.abs( oDot.when - oLastShown.when ) > 100 )
         {
-            this.chart.data.labels.push( oDot.x );
+            if( this.chart && this.chart.data && this.chart.data.labels )
+                this.chart.data.labels.push( oDot.x );
+
             return oDot;
         }
 
-        // Let's find the coloset exiting label for receviced oDot
+        // Let's find the coloset exiting label for recevived oDot
 
         let nNewWhen = findClosest( aoSerieDots, oDot.when );
 
-        oDot.x = nNewWhen.x;
+        if( nNewWhen && nNewWhen.x )
+            oDot.x = nNewWhen.x;
 
         return oDot;
     }
@@ -337,6 +393,11 @@ class ChartWrap
     _zoom_( event )
     {
         event.preventDefault();
+
+        if( !this.chart || !this.chart.options || !this.canvas ) {
+            console.error("Chart not initialized for zoom operation");
+            return;
+        }
 
         let nMinWhen = this._getMinShownWhen_();
         let nMaxWhen = this._getMaxShownWhen_();
@@ -349,6 +410,10 @@ class ChartWrap
 
         let bTitleY   = this.chart.options.scales.y.title.display;          // Para descontar el ancho de la escala a la izq t el título si lo tuviera
         let offset    = $(this.canvas).offset();
+        if( !offset ) {
+            console.error("Failed to get canvas offset for zoom");
+            return;
+        }
         let offsetX   = event.pageX - offset.left - (bTitleY ? 80 : 60);
         let xPercent  = offsetX / this.canvas.width;                        // Porcentaje de desplazamiento del puntero de ratón en la X con respecto al origen de coordenadas
             xPercent  = p_base.setBetween( 0, xPercent, 1 );
@@ -385,15 +450,14 @@ class ChartWrap
         let max = -1;
 
         for( const dataset of this.chart.config.data.datasets )
-            if( dataset.data.length > 0 )
-                max = Math.max( max, dataset.data.last().when );
+            if( dataset.data.length > 0 && dataset.data[dataset.data.length - 1] )
+                max = Math.max( max, dataset.data[dataset.data.length - 1].when );
 
         return max;
     }
 
     /**
-     * Devuelve el dataset que corresponde a la etiqueta es la pasada o null si no
-     * corresponde a ninguno.
+     * Returns the dataset corresponding with passed label or throws an error if none.
      *
      * @param {Array} aoData Where to search (array of objects).
      * @param {String} sLabel La etiqueta del data set q sequiere obtener.
@@ -427,9 +491,13 @@ class ChartWrap
                 }
             }
 
-            let dataSet = this.chart.config.data.datasets[nDS];
+            if( nDS < this.chart.config.data.datasets.length )
+            {
+                let dataSet = this.chart.config.data.datasets[nDS];
+
                 dataSet.data.length = 0;
                 dataSet.data.push( ...aDot2Show );
+            }
         }
     }
 
@@ -547,6 +615,30 @@ class ChartWrap
                                 {
                                   display: true,
                                   labels: { color: lbl_clr }   // Set the label color to blue
+                                },
+                                tooltip:
+                                {
+                                    enabled: true,
+                                    backgroundColor: 'rgba(0, 0, 0, 0.8)',
+                                    titleColor: '#fff',
+                                    bodyColor: '#fff',
+                                    borderColor: lbl_clr,
+                                    borderWidth: 1,
+                                    displayColors: true,
+                                    callbacks:
+                                    {
+                                        title: function(context)
+                                        {
+                                            return context[0].dataset.label;
+                                        },
+                                        label: function(context)
+                                        {
+                                            let dataPoint = context.raw;
+                                            let timestamp = new Date(dataPoint.when).toLocaleString();
+                                            let value = dataPoint.y;
+                                            return ['Time: ' + timestamp, 'Value: ' + value, '', 'Mouse wheel can be used to zoom in and out'];
+                                        }
+                                    }
                                 }
                             }
             };
@@ -565,10 +657,20 @@ class ChartWrap
      */
     static _setTimeFrame_( divId4Chart )
     {
-        let wrapper = ChartWrap._aInstances_.find( item => item.id === divId4Chart ).chart;
+        let instance = ChartWrap._aInstances_.find( item => item.id === divId4Chart );
+
+        if( ! instance )
+            return;
+
+        let wrapper = instance.chart;
         let sValue  = $('#'+divId4Chart+' [name="txtTimeFrame"]').val();
         let sUnit   = $('#'+divId4Chart+' [name="lstTimeFrameUnit"]').val();
         let nValue  = parseInt( sValue );
+
+        if( isNaN(nValue) || nValue < 0 ) {
+            console.error("Invalid timeframe value");
+            return;
+        }
 
         if( nValue === 0 )
             return;
@@ -596,8 +698,13 @@ class ChartWrap
     static _loadFromDB_( divId4Chart )
     {
         let $btnLoadOrLive = $('#'+divId4Chart+' [name="btnLoadOrLive"]');                      // Can have one of these 2 labels: "Load" or "Live"
-        let wrapper        = ChartWrap._aInstances_.find( item => item.id === divId4Chart ).chart;
-        let gadget         = wrapper.parent;
+        let instance       = ChartWrap._aInstances_.find( item => item.id === divId4Chart );
+
+        if( ! instance )
+            return;
+
+        let wrapper = instance.chart;
+        let gadget  = wrapper.parent;
 
         if( $btnLoadOrLive.text() === "Live" )     // Is showing stored data?
         {
