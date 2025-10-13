@@ -25,6 +25,12 @@ public class EvalTest
 {
     public static void main( String[] args )
     {
+        new EvalTest().testAfterAndWithin();
+    }
+
+    @Test
+    public void testAfterAndWithin()
+    {
 //        doAfterForTrue();
 //        doAfterForFalse();
 //        doAfterForNotInit();
@@ -32,11 +38,12 @@ public class EvalTest
 //        doWithinForTrue();
 //        doWithinForFalse();
 
-        doBothForAfterWithAnd();
+////        doBothForAfterWithAnd();
 //        doBothForWithinWithAnd();
 
 //        doBothForAfterWithOr();
 //        doBothForWithinWithOr();
+
     }
 
     @Test
