@@ -173,15 +173,20 @@ class ChartWrap
     {
     // console.log( sDS_Name +' : '+ new Date( nWhen ).toLocaleTimeString() +' , '+ nY );
 
-        if( !this.chart || !this.chart.data ) {
-            console.error("Chart not initialized");
+        if( ! this.chart || ! this.chart.data )
+        {
+            console.error( "Chart not initialized" );
             return this;
         }
 
         let aoTargetSerie = this._findSerieData_( this.chart.data.datasets, sDS_Name );
+        let aSeriesDots   = this._findSerieData_( this.aSeries, sDS_Name );
 
         if( ! aoTargetSerie )
             throw sDS_Name + ": serie does not exist"
+
+        if( ! aSeriesDots )
+            throw sDS_Name + ": serie does not exist in series data"
 
         let nValue = parseFloat( nY );   // parseFloat because it could be a string (no harm if nY is already a number)
         let oDot = { when: nWhen,
@@ -190,8 +195,6 @@ class ChartWrap
 
         // ::aSeriesDots has all dots for all serires for all times
         // (used to copy some parts from ::aSeries to a certain serie)
-
-        let aSeriesDots = this._findSerieData_( this.aSeries, sDS_Name );
             aSeriesDots.push( oDot );
 
         if( (aoTargetSerie.length > 0) && (nWhen < aoTargetSerie[0].when ) )   // When oDot.when is before the 1st dot shown in this serie, it is ignored

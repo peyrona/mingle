@@ -250,24 +250,27 @@
                           error   : (xhr) => p_app.showAjaxError( xhr ),
                           success : function( asFileNames )
                                     {
-                                        asFileNames.sort();
-
-                                        asFileNames.forEach(
-                                            (value) => $("#lst-files").append( $('<option />')
-                                                                      .val( value )
-                                                                      .text( delExt( value ) ) ) );
-
-                                        if( asFileNames.length > 0 )
-                                            $("#lst-files option:eq(0)").prop( 'selected', true );
-
                                         if( ! isMaster )
                                             $('#div-pwd').hide();
 
-                                        $('#btnOpen' )[0].disabled = asFileNames.length === 0;
-                                        $('#btnNew'  )[0].disabled = (! isMaster);
-                                        $('#btnClone')[0].disabled = (! isMaster);
-                                        $('#btnName' )[0].disabled = (! isMaster);
-                                        $('#btnDel'  )[0].disabled = (! isMaster) || (asFileNames.length === 0);
+                                        if( Array.isArray( asFileNames ) )
+                                        {
+                                            asFileNames.sort();
+
+                                            asFileNames.forEach(
+                                                (value) => $("#lst-files").append( $('<option />')
+                                                                        .val( value )
+                                                                        .text( delExt( value ) ) ) );
+
+                                            if( asFileNames.length > 0 )
+                                                $("#lst-files option:eq(0)").prop( 'selected', true );
+
+                                            $('#btnOpen' )[0].disabled = asFileNames.length === 0;
+                                            $('#btnNew'  )[0].disabled = (! isMaster);
+                                            $('#btnClone')[0].disabled = (! isMaster);
+                                            $('#btnName' )[0].disabled = (! isMaster);
+                                            $('#btnDel'  )[0].disabled = (! isMaster) || (asFileNames.length === 0);
+                                        }
                                     }
                         } );
             }

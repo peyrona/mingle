@@ -29,6 +29,9 @@ var free =
 
     isChanged : function()
     {
+        if( ! gum.isInDesignMode() )
+            return false;
+
         if( this._isChanged_ )
             return true;
 
@@ -219,7 +222,9 @@ var free =
               .offset( { left: gadget.x, top: gadget.y } );   // Has to be after width, height and added to the body
 
         gadget.show();
-        this._showGadgetInfo_();
+
+        if( gum.isInDesignMode() )
+            this._showGadgetInfo_();
 
         return this;
     },
@@ -474,6 +479,26 @@ var free =
         }
 
         throw "Error: no gadget found for the given window";
+    },
+
+    _updateGadgetSize_( $gadWnd, isOngoing = false )
+    {
+        let gadget = free._getGadget_( $gadWnd );
+        let z      = $gadWnd.css('z-index');
+
+        gadget.x      = parseInt( $gadWnd.offset().left );
+        gadget.y      = parseInt( $gadWnd.offset().top );
+        gadget.z      = (p_base.isNumeric( z ) ? z : 0);
+        gadget.width  = parseInt( $gadWnd.width() );
+        gadget.height = parseInt( $gadWnd.height() );
+
+        this._showGadgetInfo_( gadget );
+        this._gadgetFocus_.show( isOngoing );
+
+        if( ! isOngoing )
+            free._isChanged_ = true;
+
+        return this;
     },
 
     _onBrowserResized_ : function()
