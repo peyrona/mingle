@@ -64,15 +64,20 @@
     <script>
         var aSelected = [];
 
+        // Declare authService in broader scope
+        let authService = null;
+
         $(document).ready(function ()
                             {
                                 $('.button').prop('disabled', true);
 
-                                authenticator.start( {
+                                // Initialize the authentication service with proper configuration
+                                authService = new AuthenticationService({
                                                         container: "#login-dialog",    // TODO: esto no funciona bien, no se ve el dialog
                                                         title: "File Manager",
                                                         success: loadTree
-                                                     } );
+                                                     });
+                                authService.start();
                                 loadTree();
                             } );
 
@@ -252,7 +257,7 @@
             $.ajax({
                         url: '/gum/ws/files',
                         type: "GET",
-                        error: (xhr) => authenticator.doDefaultOnAjaxError(xhr), // The error has to be managed by the authenticator
+                        error: (xhr) => authService.doDefaultOnAjaxError(xhr), // The error has to be managed by the authenticator
                         complete: () => p_app.hideLoading(uuid),
                         success: (ja) =>
                                 {                                  // ja == JsonArray

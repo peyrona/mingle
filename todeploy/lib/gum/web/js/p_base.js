@@ -75,7 +75,7 @@ var p_base =
         // Third: Check for Infinity and -Infinity.
         // Realistically we want finite numbers, or there was probably a division by 0 somewhere.
 
-        if( aVar === Infinity || aVar === (! Infinity) )
+        if( aVar === Infinity || aVar === -Infinity )
             return false;
 
         return true;
@@ -272,11 +272,11 @@ var p_base =
      * Function to generate a hash SHA-256 from a string.<br>
      * <p>
      * This function uses the SubtleCrypto API, which is available in modern browsers.
-     * 
-     * @param {String} text 
+     *
+     * @param {String} text
      * @returns SHA-256 from received string.
      */
-    toHash : async function( text ) 
+    toHash : async function( text )
     {
         const encoder    = new TextEncoder();
         const data       = encoder.encode( text );
@@ -937,7 +937,7 @@ var p_base =
     },
 
     /**
-     * 
+     *
      * @param {string} sAmount
      * @param {string} sLocale A valid locale
      * @returns {string}
@@ -991,7 +991,7 @@ var p_base =
 
         if( bBuster )
             sURL = this.addCacheBuster( sURL );
-        
+
         return sURL;
     },
 
@@ -1002,7 +1002,13 @@ var p_base =
      */
     isLocalHost : function()
     {
-        return this.doURL().indexOf( 'localhost' ) > -1;
+        const hostname = window.location.hostname;
+
+        return hostname === 'localhost' ||
+               hostname === '127.0.0.1' ||
+               hostname.startsWith('192.168.') ||
+               hostname.startsWith('10.') ||
+               hostname.endsWith('.local');
     },
 
     /**

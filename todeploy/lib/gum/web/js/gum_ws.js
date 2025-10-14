@@ -19,20 +19,19 @@ var gum_ws =
     {
         if( this.socket !== null )
             return;
-// FIXME: --------------------------------------------->>>>>>>>>>>>>>>>>>>>>>>>>>>>
+
         // Create a unique tab identifier that persists for the session
         let tabId = sessionStorage.getItem('gum_tab_id');
 
-        if( ! tabId )
+        if( ! tabId || tabId.length < 5 )
         {
             tabId = Date.now() + '_' + Math.random().toString(36).substring(2,9);
             sessionStorage.setItem('gum_tab_id', tabId);
         }
-        
+
         // Use the tab ID as part of the WebSocket path, not just query parameter
         const wsUrl = "ws://" + location.host + "/gum/bridge/" + tabId;
         this.socket = new WebSocketWrap( p_base.addCacheBuster( wsUrl ) );
-        //this.socket = new WebSocketWrap( p_base.addCacheBuster( "ws://"+ location.host +"/gum/bridge" ) );    // Bustering is need also here because the way web browsers work with WebSockets.
         this.socket.addOnMessage( (msg) => gum_ws._onMessageReceived_( msg ) );
         this.socket.addOnOpen( fnOnConnected );
         this.socket.addOnError( (error) =>
@@ -44,20 +43,30 @@ var gum_ws =
                                         gum_ws.socket = null;   // As the socket is closed, I must set it to null
 
                                         if( error.wasClean )
-                                            authenticator.throw401AjaxError();    // The authenticator will: throw the error, capture it and handle it
+                                            new AuthenticationService().throw401AjaxError();    // The authenticator will: throw the error, capture it and handle it
+                                        else
+                                            sessionStorage.removeItem('gum_tab_id');            // Clean up tab ID on abnormal closure
                                     }
                                 }
                               );
 
         if( p_base.isLocalHost() )
         {
-            this.socket.addLogger( (msg,sender) => { 
-                                                        if( sender && "connected closed".includes( sender ) ) 
-                                                            console.log( msg ); 
+            this.socket.addLogger( (msg,sender) => {
+                                                        if( sender && "connected closed".includes( sender ) )
+                                                            console.log( msg );
                                                    } );
         }
-    
+
         this.socket.connect();
+
+        // Add page unload cleanup
+        window.addEventListener('beforeunload', () =>   {
+                                                            if( this.socket !== null )
+                                                                this.socket.close();
+
+                                                            sessionStorage.removeItem('gum_tab_id');
+                                                        });
     },
 
     isConnected : function()
@@ -68,10 +77,16 @@ var gum_ws =
     close : function()
     {
         if( this.socket !== null )
+        {
             this.socket.close();
+            this.socket = null;
+        }
+
+        // Clean up the persistent tab ID
+        sessionStorage.removeItem('gum_tab_id');
     },
 
-    /** 
+    /**
      * Received function is executed everytime a 'List' commands is sent here from an ExEn.
      */
     setOnList( fn )
@@ -158,7 +173,7 @@ var gum_ws =
         {
             case "string" : /* nothing to do */                                                             break;
             case "boolean": xValue = xValue.toString().trim().toLowerCase() === 'true';                     break;
-            case "mumber" :
+            case "number" :
             case "numeric": xValue = parseFloat( xValue );                                                  break;
             case "date"   : xValue = { class: 'date', data: xValue.getTime() };                             break;
             case "time"   : xValue = { class: 'time', data: p_base.millisSinceMidnight( xValue ) / 1000 };  break;    // x / 1000 because my time() class uses seconds

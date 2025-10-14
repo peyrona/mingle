@@ -344,165 +344,228 @@ var gt =
 // AUTHENTICATION MANAGEMENT
 //---------------------------------------------------------------------------//
 
-if( typeof authenticator === "undefined" )
+class SessionManager
+{
+    constructor()
     {
-        var authenticator =
-        {
-            container : null,
-            title     : null,
-            success   : null,
-
-            start : function( options )
-            {
-                if( options.container.charAt(0) !== '#' )
-                    throw "Container must start by '#'";
-
-                this.container = options.container;
-                this.title     = options.title;
-                this.success   = options.success;
-
-                // Attaches the event handler to the form
-                $(document).off( 'submit', '#auth-login-form' )    // To avoid duplicating it
-                           .on(  'submit', '#auth-login-form', (event) => authenticator._handleLogin_(event) );
-
-                // Intercepts AJAX errors to show the dialog
-                $(document).ajaxError( (event, xhr) => authenticator.doDefaultOnAjaxError( xhr ) );
-            },
-
-            throw401AjaxError : function()
-            {
-                const fakeXHR = { status      : 401,   // Simulate a 401 Unauthorized error
-                                  statusText  : "Unauthorized",
-                                  responseText: "Authentication required" };
-
-                // Create a jqXHR object (jQuery's version of XMLHttpRequest)
-                const jqXHR = $.extend( new $.Deferred(), fakeXHR ) ;
-
-                // Options object (ajax settings)
-                const ajaxOptions = { url: '/some-fake-url', type: 'GET' };
-
-                // Trigger the ajaxError event manually with proper parameters (it will captured by line '$(document).ajaxError(...)' at ::start())
-                $(document).trigger( 'ajaxError', [jqXHR, ajaxOptions, 'Unauthorized'] );
-            },
-
-            doDefaultOnAjaxError : function( xhr )
-            {
-                if( xhr.status === 401 )
-                {
-                    this._injectDialog_();
-                    $(this.container).show();
-                }
-                else
-                {
-                    p_app.showAjaxError( xhr );
-                }
-            },
-
-            _handleLogin_ : function( event )
-            {
-                event.preventDefault();
-
-                $.ajax( {
-                            url        : '/gum/login',
-                            method     : 'POST',
-                            contentType: 'application/json',
-                            data       : JSON.stringify( { username: $('#auth-login-form input[type="text"]:first'    ).val(),
-                                                           password: $('#auth-login-form input[type="password"]:first').val() } ),
-                            success    : (response) =>
-                                        {
-                                            $('#auth-dlg-msg').hide();            // In case it was showing the "...session expired..." message
-                                            $(authenticator.container).hide();
-                                            authenticator.success( response );
-                                            authenticator._setSessionExpiration_();
-                                        },
-                            error      : (xhr) =>
-                                        {
-                                            if( xhr.status === 401 )
-                                            {
-                                                $('#auth-dlg-msg').text('Invalid username and/or password').show();
-                                                $('#auth-login-form :input:first').focus();
-                                                setTimeout( () => $('#auth-dlg-msg').hide(), 4000 );
-                                            }
-                                            else
-                                            {
-                                                p_app.showAjaxError( xhr );
-                                            }
-                                        },
-                            complete    : () => {
-                                                    $('#auth-login-form input[type="text"]:first'    ).val('');    // Must set to empty, so when session expires, and the dialog
-                                                    $('#auth-login-form input[type="password"]:first').val('')     // is shown again, the values of the fields are not shown
-                                                }
-                        } );
-            },
-
-            _setSessionExpiration_ : function()     // Forces a logout after the timeout specified in the server
-            {
-                $.ajax( {   url     : '/gum/ws/util/sessionTimeout',
-                            method  : 'GET',
-                            error   : (xhr)  => p_app.setSessionTimeout( authenticator._doSessionExpired_, 30 ),
-                            success : (secs) => p_app.setSessionTimeout( authenticator._doSessionExpired_, Number(secs)/60 )    // Received in seconds, sent in minutes
-                        } );
-            },
-
-            _doSessionExpired_ : function()
-            {
-                $.ajax( {
-                            url     : '/gum/logout',
-                            method  : 'POST',
-                            error   : (xhr) => p_app.showAjaxError( xhr ),
-                            success : () => {
-                                              authenticator._injectDialog_();
-                                              $('#auth-dlg-msg').html("Due to inactivity, session expired.<br>You have to login again.").show();
-                                              $(authenticator.container).show();
-                                            }
-                        } );
-            },
-
-            _injectDialog_ : function()
-            {
-                $(this.container).html( this._getDialogHTML_().replace( '{*Title*}', this.title ) );
-            },
-
-            _getDialogHTML_ : function()
-            {
-                return `
-                    <div style="display:flex; min-height:100vh; justify-content:center; align-items:center;">
-                        <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:100%; max-width:400px; padding:2rem; border-radius:8px; box-shadow: 0 2px 10px rgba(10, 10, 10, 0.3); background-color:#FFFAF0;">
-                            <p style="font-size:1.4rem; font-weight:500; margin-bottom:2rem; text-align:center; color:#363636;">::: {*Title*} :::</p>
-
-                            <form id="auth-login-form">
-                                <div class="field">
-                                    <div class="control has-icons-left">
-                                        <input class="input" type="text" placeholder="Username" required>
-                                        <span class="icon is-small is-left">
-                                            <i class="ti ti-user-filled"></i>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div class="field">
-                                    <div class="control has-icons-left">
-                                        <input class="input" type="password" placeholder="Password" required>
-                                        <span class="icon is-small is-left">
-                                            <i class="ti ti-lock-filled"></i>
-                                        </span>
-                                    </div>
-                                </div>
-
-                                <div style="margin-top: 1.5rem;">
-                                    <div class="control">
-                                        <button class="button is-primary is-fullwidth">Sign In</button>
-                                    </div>
-                                </div>
-                            </form>
-
-                            <p id="auth-dlg-msg" style="display:none; margin:1rem; text-align:center; color:red;"></p>
-                        </div>
-                    </div>
-                `;
-            }
-        };
+        this.onSessionExpired = null;
     }
+
+    setSessionExpiration( callback )
+    {
+        this.onSessionExpired = callback;
+        
+        $.ajax( {   url     : '/gum/ws/util/sessionTimeout',
+                    method  : 'GET',
+                    error   : (xhr)  => p_app.setSessionTimeout( this._doSessionExpired_, 30 ),
+                    success : (secs) => p_app.setSessionTimeout( this._doSessionExpired_, Number(secs)/60 )    // Received in seconds, sent in minutes
+                } );
+    }
+
+    _doSessionExpired_()
+    {
+        $.ajax( {
+                    url     : '/gum/logout',
+                    method  : 'POST',
+                    error   : (xhr) => p_app.showAjaxError( xhr ),
+                    success : () => {
+                              if( this.onSessionExpired )
+                                  this.onSessionExpired();
+                            }
+                } );
+    }
+}
+
+class LoginUI
+{
+    constructor()
+    {
+        this.container = null;
+        this.title     = null;
+    }
+
+    injectDialog( container, title )
+    {
+        this.container = container;
+        this.title     = title;
+        
+        $(container).html( this._getDialogHTML_().replace( '{*Title*}', title ) );
+    }
+
+    showDialog()
+    {
+        $(this.container).show();
+    }
+
+    hideDialog()
+    {
+        $(this.container).hide();
+    }
+
+    showMessage( message )
+    {
+        $('#auth-dlg-msg').text(message).show();
+        setTimeout( () => $('#auth-dlg-msg').hide(), 4000 );
+    }
+
+    showSessionExpiredMessage()
+    {
+        $('#auth-dlg-msg').html("Due to inactivity, session expired.<br>You have to login again.").show();
+    }
+
+    clearForm()
+    {
+        $('#auth-login-form input[type="text"]:first'    ).val('');
+        $('#auth-login-form input[type="password"]:first').val('');
+    }
+
+    focusFirstField()
+    {
+        $('#auth-login-form :input:first').focus();
+    }
+
+    _getDialogHTML_()
+    {
+        return `
+            <div style="display:flex; min-height:100vh; justify-content:center; align-items:center;">
+                <div style="position:fixed; top:50%; left:50%; transform:translate(-50%,-50%); width:100%; max-width:400px; padding:2rem; border-radius:8px; box-shadow: 0 2px 10px rgba(10, 10, 10, 0.3); background-color:#FFFAF0;">
+                    <p style="font-size:1.4rem; font-weight:500; margin-bottom:2rem; text-align:center; color:#363636;">::: {*Title*} :::</p>
+
+                    <form id="auth-login-form">
+                        <div class="field">
+                            <div class="control has-icons-left">
+                                <input class="input" type="text" placeholder="Username" required>
+                                <span class="icon is-small is-left">
+                                    <i class="ti ti-user-filled"></i>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div class="field">
+                            <div class="control has-icons-left">
+                                <input class="input" type="password" placeholder="Password" required>
+                                <span class="icon is-small is-left">
+                                    <i class="ti ti-lock-filled"></i>
+                                </span>
+                            </div>
+                        </div>
+
+                        <div style="margin-top: 1.5rem;">
+                            <div class="control">
+                                <button class="button is-primary is-fullwidth">Sign In</button>
+                            </div>
+                        </div>
+                    </form>
+
+                    <p id="auth-dlg-msg" style="display:none; margin:1rem; text-align:center; color:red;"></p>
+                </div>
+            </div>
+        `;
+    }
+}
+
+class AuthenticationService
+{
+    constructor( options = {} )
+    {
+        this.container      = options.container;
+        this.title          = options.title || 'Login';
+        this.onSuccess      = options.success || (() => {});
+        this.sessionManager = options.sessionManager || new SessionManager();
+        this.loginUI        = options.loginUI || new LoginUI();
+        this.isStarted      = false;
+    }
+
+    start()
+    {
+        if( ! this.container || this.container.charAt(0) !== '#' )
+            throw "Container must start by '#'";
+
+        this.isStarted = true;
+        
+        // Setup UI
+        this.loginUI.injectDialog( this.container, this.title );
+        
+        // Setup session manager callback
+        this.sessionManager.onSessionExpired = () => {
+            this.loginUI.injectDialog( this.container, this.title );
+            this.loginUI.showSessionExpiredMessage();
+            this.loginUI.showDialog();
+        };
+
+        // Attaches the event handler to the form
+        $(document).off( 'submit', '#auth-login-form' )    // To avoid duplicating it
+                   .on(  'submit', '#auth-login-form', (event) => this._handleLogin_(event) );
+
+        // Intercepts AJAX errors to show the dialog
+        $(document).ajaxError( (event, xhr) => this.doDefaultOnAjaxError( xhr ) );
+    }
+
+    throw401AjaxError()
+    {
+        const fakeXHR = { status      : 401,   // Simulate a 401 Unauthorized error
+                          statusText  : "Unauthorized",
+                          responseText: "Authentication required" };
+
+        // Create a jqXHR object (jQuery's version of XMLHttpRequest)
+        const jqXHR = $.extend( new $.Deferred(), fakeXHR ) ;
+
+        // Options object (ajax settings)
+        const ajaxOptions = { url: '/some-fake-url', type: 'GET' };
+
+        // Trigger the ajaxError event manually with proper parameters (it will captured by line '$(document).ajaxError(...)' at ::start())
+        $(document).trigger( 'ajaxError', [jqXHR, ajaxOptions, 'Unauthorized'] );
+    }
+
+    doDefaultOnAjaxError( xhr )
+    {
+        if( xhr.status === 401 )
+        {
+            this.loginUI.showDialog();
+        }
+        else
+        {
+            p_app.showAjaxError( xhr );
+        }
+    }
+
+    _handleLogin_( event )
+    {
+        event.preventDefault();
+
+        $.ajax( {
+                    url        : '/gum/login',
+                    method     : 'POST',
+                    contentType: 'application/json',
+                    data       : JSON.stringify( { username: $('#auth-login-form input[type="text"]:first'    ).val(),
+                                                   password: $('#auth-login-form input[type="password"]:first').val() } ),
+                    success    : (response) =>
+                                {
+                                    $('#auth-dlg-msg').hide();            // In case it was showing the "...session expired..." message
+                                    this.loginUI.hideDialog();
+                                    this.onSuccess( response );
+                                    this.sessionManager.setSessionExpiration();
+                                },
+                    error      : (xhr) =>
+                                {
+                                    if( xhr.status === 401 )
+                                    {
+                                        this.loginUI.showMessage('Invalid username and/or password');
+                                        this.loginUI.focusFirstField();
+                                    }
+                                    else
+                                    {
+                                        p_app.showAjaxError( xhr );
+                                    }
+                                },
+                    complete    : () => {
+                                    this.loginUI.clearForm();    // Must set to empty, so when session expires, and the dialog is shown again, the values of the fields are not shown
+                                }
+                } );
+    }
+}
+
+
 
 //----------------------------------------------------------------------------------//
 // Background class

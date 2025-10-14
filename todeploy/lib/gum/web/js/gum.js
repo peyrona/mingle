@@ -14,6 +14,7 @@ var gum =
     _name_        : null,    // Dashboard name
     _password_    : "",      // Password to allow the dashboard to be edited
     _resizeTimer_ : null,    // Timer to avoid multiple resize events
+    _isSaving_    : false,   // Flag to prevent concurrent saves
 
     run : function( oConfig )    // This function is called by _template_.html::getConfig() to pass the config
     {
@@ -23,7 +24,7 @@ var gum =
                 console.log('All scripts have been loaded.');
                 return gum._loadChuncks_();
             } )
-            .done( function()          
+            .done( function()
             {
                 gum._init_( oConfig );    // This is called after both scripts and chunks are loaded.
             } )
@@ -261,16 +262,16 @@ var gum =
         const uuid = p_base.uuid();
 
         const openPreview = () =>
-        {
-            p_app.hideLoading( uuid );
+                            {
+                                p_app.hideLoading( uuid );
 
-            const loc = gt.normalizeHtmlName( gum._name_ ) +'?design=false';
-            const use = gt.read( "_GUM_REUSE_WND_", false );
-            const wnd = window.open( p_base.doURL( loc, true ), (use ? '_self' : '_blank') );
+                                const loc = gt.normalizeHtmlName( gum._name_ ) +'?design=false';
+                                const use = gt.read( "_GUM_REUSE_WND_", false );
+                                const wnd = window.open( p_base.doURL( loc, true ), (use ? '_self' : '_blank') );
 
-            if( wnd ) wnd.focus();
-            else      p_app.alert( "Can't open the window: it may have been blocked.\nAre popups allowed for this site?" );
-        };
+                                if( wnd ) wnd.focus();
+                                else      p_app.alert( "Can't open the window: it may have been blocked.\nAre popups allowed for this site?" );
+                            };
 
         if( gum._layout_.isChanged() )  gum._save_( openPreview );
         else                            openPreview();
@@ -332,10 +333,16 @@ var gum =
 
     _save_ : function( fnOnOK = () => {} )
     {
+        if( this._isSaving_ )
+            return;
+
+        this._isSaving_ = true;
+
         const sData = this._getData2Save_();
 
         if( p_base.isEmpty( sData ) )      // Even if there is no data to save, we have to call fnOnOK()   (i.e. for preview)
         {
+            this._isSaving_ = false;
             fnOnOK();
             return;
         }
@@ -345,42 +352,9 @@ var gum =
                     type       : "POST",
                     data       : sData,              // My POST at server side expects JSON
                     contentType: "application/json; charset=UTF-8",
-                    error      : (xhr) => p_app.showAjaxError( xhr, "Error saving dashboard" ),
+                    error      : (xhr) => { gum._isSaving_ = false; p_app.showAjaxError( xhr, "Error saving dashboard" ); },
                     success    : () => { gum._layout_.saved(); fnOnOK(); }    // Only on success can be executed this func
-                } ).always((xhr, status) => console.log('AJAX save() status:', status));
-    },
-
-    /**
-     * NOTE: relying on 'beforeunload' for asynchronous operations like saving data is unreliable.
-     * The browser does not guarantee that asynchronous code (like a fetch or XMLHttpRequest 
-     * inside the gum._save_() function) will complete before the page is torn down.
-     *     ---> window.addEventListener( 'beforeunload', function(evt) { gum._save_(); } );
-     * The Modern Solution: The Beacon API.
-     * The 'visibilitychange' event is a reliable way to detect when the user leaves the page.
-     */ 
-    _autoSave_ : function()
-    {
-        document.addEventListener('visibilitychange', () =>    // This is not invoked when F5 is pressed and this is intended (F5 should not save).
-        {
-            if( document.visibilityState === 'hidden' )
-            {
-                const sData = this._getData2Save_();
-
-                if( p_base.isNotEmpty( sData ) )
-                {
-                    // The browser handles this in the background, ensuring it's sent even if the page closes.
-                    if( navigator.sendBeacon )     // sendBeacon sends a POST request with the data.
-                    {
-                        navigator.sendBeacon( '/gum/ws/board', sData ); 
-                    }
-                    else
-                    {
-                        console.warn( 'sendBeacon is not supported, falling back to AJAX save.' );
-                        gum._save_();
-                    }
-                }
-            }
-        } );
+                } ).always((xhr, status) => { gum._isSaving_ = false; console.log('AJAX save() status:', status); });
     },
 
     _getData2Save_ : function()
@@ -399,7 +373,7 @@ var gum =
         let oLayout = { type    : gum.isUsingGridLayout() ? "grid" : "free",
                         contents: contents };
 
-        let oRest = { background: gum._oBackGr_,        
+        let oRest = { background: gum._oBackGr_,
                       password  : gum.getDashboardPassword(),
                       exens     : gum.getAllExEn(),
                       layout    : oLayout };
@@ -415,7 +389,38 @@ var gum =
     _init_ : function( oConfig )
     {
         if( this.isInDesignMode )
-            gum._autoSave_();    // To initialice the event manager: has to be invoked only once.
+        {
+            // To initialice the event manager: has to be invoked only once.
+            //
+            // NOTE: relying on 'beforeunload' for asynchronous operations like saving data is unreliable.
+            // The browser does not guarantee that asynchronous code (like a fetch or XMLHttpRequest
+            // inside the gum._save_() function) will complete before the page is torn down.
+            //     ---> window.addEventListener( 'beforeunload', function(evt) { gum._save_(); } );
+            // The Modern Solution: The Beacon API.
+            // The 'visibilitychange' event is a reliable way to detect when the user leaves the page.
+
+            document.addEventListener( 'visibilitychange', () =>    // 'visibilitychange' is not invoked when F5 (reload) is pressed and this is intended (F5 should not save).
+            {
+                if( document.visibilityState === 'hidden' && ! gum._isSaving_ )
+                {
+                    const sData = this._getData2Save_();
+
+                    if( p_base.isNotEmpty( sData ) )
+                    {
+                        // The browser handles this in the background, ensuring it's sent even if the page closes.
+                        if( navigator.sendBeacon )     // sendBeacon sends a POST request with the data.
+                        {
+                            navigator.sendBeacon( '/gum/ws/board', sData );
+                        }
+                        else
+                        {
+                            console.warn( 'sendBeacon is not supported, falling back to AJAX save.' );
+                            gum._save_();
+                        }
+                    }
+                }
+            } );
+        }
 
         // Init dashboard name
         let name = window.location.pathname.split('/').pop();
