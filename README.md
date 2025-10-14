@@ -9,7 +9,7 @@
 > Here is how to say:
 > “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
 
-![Une language basic example](une-1st-example.png)
+> ![Une language basic example](une-1st-example.png)
 
 > _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn.
 
@@ -47,7 +47,7 @@
 > 4.  Take "The Une language.pdf" handbook (under "docs" folder).
 > 5.  Read, understand and test.
 > 6.  Modify the _Une_ source code and re-test.
-7.  Go to #3
+> 7.  Go to #3
 
 ▶ **What about MSP?**
 
