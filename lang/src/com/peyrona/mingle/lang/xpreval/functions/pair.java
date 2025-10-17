@@ -271,20 +271,25 @@ public final class pair
     {
         checkIsBasicUneType( key );
 
-        Object old = inner.remove( key );
+        Object old;
 
-        if( (old == null) && (key instanceof String) )
+        synchronized( inner )
         {
-            Map.Entry entry = getEntryFor( (String) key );   // As getEntryFor(...) performs a no sensitive search,
+            old = inner.remove( key );
 
-            if( entry != null )
+            if( (old == null) && (key instanceof String) )
             {
-                key = entry.getKey();                        // the Entry returned has the key as it appears inside the Map (with its proper case)
+                Map.Entry entry = getEntryFor( (String) key );   // As getEntryFor(...) performs a no sensitive search,
 
-                old = inner.remove( key );
+                if( entry != null )
+                {
+                    key = entry.getKey();                        // the Entry returned has the key as it appears inside the Map (with its proper case)
+
+                    old = inner.remove( key );
+                }
             }
+         // else --> the dictionary does not contains the key --> nothing to do
         }
-     // else --> the dictionary does not contains the key --> nothing to do
 
         if( old != null )
             firePropertyChanged( key, old, null );
@@ -302,11 +307,14 @@ public final class pair
     {
         pair cloned = new pair();
 
-        for( Object key : inner.keySet() )
+        synchronized( inner )
         {
-            Object val = inner.get( key );
+            for( Object key : inner.keySet() )
+            {
+                Object val = inner.get( key );
 
-            cloned.put( cloneValue( key ), cloneValue( val ) );
+                cloned.put( cloneValue( key ), cloneValue( val ) );
+            }
         }
 
         return cloned;

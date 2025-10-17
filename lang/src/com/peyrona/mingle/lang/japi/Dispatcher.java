@@ -158,9 +158,9 @@ public final class Dispatcher<T>
     }
 
     /**
-     * Returns current message processing speed.
+     * Returns current message processing speed (messages per minute).
      *
-     * @return Current message processing speed.
+     * @return Current message processing speed (messages per minute).
      */
     public int getSpeed()
     {

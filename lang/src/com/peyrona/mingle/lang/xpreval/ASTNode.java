@@ -14,8 +14,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This class instances are the nodes used to construct an AST tree that represents an
@@ -30,22 +28,15 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 final class ASTNode
 {
-    private volatile ASTNode       left         = null;   // Left child
-    private volatile ASTNode       right        = null;   // Right child
-    private volatile ASTNode       parent       = null;   // ReadOnly property
-    private          XprToken      token        = null;   // Literal, operator, variable or func_name
-    private          List<ASTNode> lstFnArgs    = null;   // Function arguments (AKA parameters)
-    private          short         nFutureType  =    0;   // -1 == AFTER , 1 == WITHIN, 0 == this node is not a future
-    private          AtomicReference<Object> oWithInitVal = null;   // WITHIN initial Value (null when this node is not of type 'future' (0 false, 1 true, -1 not inited yet)
-    private          AtomicInteger nFutureValue = null;   // Updated when Timer ends for AFTER and when a var changed or timer ended for WITHIN.
-                                                          // After ended, it has the furure result (futures are always booleans: 1 for true and 0 for false).
-                                                          // If -1 it is a 'future' but it is not resolved yet. If null, this Node is not a node of type 'future'
+    private XprToken      token     = null;   // Literal, operator, variable or func_name
+    private ASTNode       left      = null;   // Left child        (no sync needed)
+    private ASTNode       right     = null;   // Right child       (no sync needed)
+    private ASTNode       parent    = null;   // ReadOnly property (no sync needed)
+    private List<ASTNode> lstFnArgs = null;   // Function arguments (AKA parameters)
+    private Future        future    = null;   // Used to make this class less verbose
 
     private static final String sOP_LOGIC_AND = "&&";
     private static final String sOP_LOGIC_OR  = "||";
-
-    private static final short nTYPE_AFTER  = -1;
-    private static final short nTYPE_WITHIN =  1;
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE
@@ -93,9 +84,9 @@ final class ASTNode
      * @param node
      * @return Itself.
      */
-    synchronized ASTNode left( ASTNode node )
+    ASTNode left( ASTNode node )
     {
-        assert node != null;
+        assert node != null && left == null;
 
         node.parent = this;
         this.left   = node;
@@ -118,9 +109,9 @@ final class ASTNode
      * @param node
      * @return Itself.
      */
-    synchronized ASTNode right( ASTNode node )
+    ASTNode right( ASTNode node )
     {
-        assert node != null;
+        assert node != null && right == null;
 
         node.parent = this;
         this.right  = node;
@@ -143,18 +134,17 @@ final class ASTNode
         this.token = token;
 
         if( token.isType( XprToken.RESERVED_WORD ) )
-        {
-            nFutureType  = (short) (token.isText( XprUtils.sAFTER ) ? nTYPE_AFTER : nTYPE_WITHIN);
-            nFutureValue = new AtomicInteger( -1 );
-
-            if( token.isText( XprUtils.sWITHIN ) )
-                oWithInitVal = new AtomicReference<>( null );
-        }
+            future = new Future( token );
 
         return this;
     }
 
-    synchronized ASTNode addFnArg( ASTNode node )
+    long delay()
+    {
+        return (future == null) ? -1 : UtilType.toLong( right.token.value() );    // Better to return -1 to provoke an exc
+    }
+
+    ASTNode addFnArg( ASTNode node )
     {
         if( lstFnArgs == null )
             lstFnArgs = new ArrayList<>();
@@ -162,12 +152,6 @@ final class ASTNode
         lstFnArgs.add( node );
 
         return this;
-    }
-
-    int delay()
-    {
-        return token.isNotType( XprToken.RESERVED_WORD ) ? 0    // RESERVED_WORD -> can only be "after" or "within" (in lower case)
-                                                         : UtilType.toInteger( right.token.value() );
     }
 
 // NOT USED
@@ -178,44 +162,12 @@ final class ASTNode
 
     boolean isAfter()
     {
-        return nFutureType == nTYPE_AFTER;
+        return future != null && future.isAfter();
     }
 
     boolean isWithin()
     {
-        return nFutureType == nTYPE_WITHIN;
-    }
-
-    /**
-     * Node (future AFTER or WITHIN) timeout has elapsed.
-     *
-     * @param ops
-     * @param fns
-     * @param vars
-     * @param hasAllVars
-     */
-    void expired( StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )
-    {
-        assert nFutureType != 0;
-
-        if( isAfter() )
-        {
-            Object result = left.eval( ops, fns, vars, hasAllVars );
-
-            if( result == null )  nFutureValue.set( 0 );   // When the xpr can not be resolved (e.g. variable's value never arrived), NAXE set AFTER result to false
-            else                  nFutureValue.set( (((Boolean) result) ? 1 : 0) );
-        }
-        else    // Must be a WITHIN
-        {
-            if( oWithInitVal.get() == null )
-            {
-                nFutureValue.set( 0 );            // When the variable's value never arrived, NAXE set WITHIN result to false
-            }
-            else if( nFutureValue.get() == -1 )   // If the result value of this future is not initialized yet, it is because it never changed its value (see ::eval(...)),
-            {
-                nFutureValue.set( 1 );            // therefore, the WITHIN is true (1)
-            }
-        }
+        return future != null && future.isWithin();
     }
 
     boolean isLeaf()
@@ -240,6 +192,23 @@ final class ASTNode
     }
 
     /**
+     * Invoked when this node (future AFTER or WITHIN) timeout has elapsed.
+     *
+     * @param ops
+     * @param fns
+     * @param vars
+     * @param hasAllVars
+     * @return
+     */
+    boolean expired( StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )
+    {
+        if( future.result() == null )    // If not already already solved
+            future.expired( left.eval( ops, fns, vars, hasAllVars ) );
+
+        return future.result();
+    }
+
+    /**
      * Evaluates all its child nodes and finally evaluates itself.
      * <p>
      * This method returns null if there were one or more nodes with unsatisfied future
@@ -256,8 +225,8 @@ final class ASTNode
         // 'hasAllVars' is needed because this evaluator is a lazy one: under certain
         // circumstances it can operate even when not all variables varlues are known.
 
-        if( nFutureValue != null && nFutureValue.get() != -1 )    // This branch (starting at this node) was a future and the future was already resolved.
-            return nFutureValue.get() == 1;                       // The future was resolved to true or false (futures always resolve to a boolean value).
+        if( future != null && future.result() != null )    // This branch (starting at this node) was a future and the future was already resolved.
+            return future.result();                        // The future was resolved to true or false (futures always resolve to a boolean value).
 
         switch( token.type() )
         {
@@ -274,8 +243,8 @@ final class ASTNode
                 {
                     if( hasAllVars )
                     {
-                        Object[] aoArgs = prepend( left.eval( ops, fns, vars, hasAllVars ),
-                                                   right.params2Array( ops, fns, vars, hasAllVars ) );
+                        Object   leftValue = left.eval( ops, fns, vars, hasAllVars );
+                        Object[] aoArgs    = right.toArrayAndPrepare( leftValue, ops, fns, vars, hasAllVars );
 
                         return fns.invoke( right.token.text(), aoArgs );
                     }
@@ -359,41 +328,12 @@ final class ASTNode
 
             case XprToken.FUNCTION:
                 if( hasAllVars )
-                    return fns.invoke( token.text(), params2Array( ops, fns, vars, hasAllVars ) );
+                    return fns.invoke( token.text(), toArray( ops, fns, vars, hasAllVars ) );
 
                 break;
 
-            case XprToken.RESERVED_WORD:    // AFTER or WITHIN
-                assert nFutureType != 0;
-
-                if( ! hasAllVars )
-                    break;
-
-                if( isAfter() )
-                {
-                    return left.eval( ops, fns, vars, hasAllVars );
-                }
-                else
-                {
-                    Object result = left.eval( ops, fns, vars, hasAllVars );
-
-                    if( oWithInitVal.get() == null )    // Not initialized yet
-                    {
-                        oWithInitVal.set( ((Boolean) result) ? 1 : 0 );
-                    }
-                    else
-                    {
-                        if( ! Objects.equals( result, oWithInitVal ) )    // Has changed
-                        {
-                            nFutureValue.set( 0 );   // 0 == false
-                            return Boolean.FALSE;
-                        }
-
-                        // return null;    // null beause it is still working
-                    }
-                }
-
-                break;
+            case XprToken.RESERVED_WORD:
+                return future.apply( left.eval( ops, fns, vars, hasAllVars ) );    // Returns either false (if WITHIN failed) or null (if still working)
 
             default:
                 throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
@@ -410,21 +350,8 @@ final class ASTNode
         if( right != null )     // It is null for Unary operators
             right.reset();
 
-        if( token.isType( XprToken.RESERVED_WORD ) )
-        {
-            nFutureValue.set( -1 );        // Will always exist when AFTER or WITHIN
-
-            if( oWithInitVal != null )
-                oWithInitVal.set( null );
-        }
-        else
-        {
-            synchronized( this )
-            {
-                oWithInitVal = null;
-                nFutureValue = null;
-            }
-        }
+        if( future != null )
+            future.reset();
 
         return this;
     }
@@ -492,41 +419,40 @@ final class ASTNode
 
     private Object[] args = new Object[1];   // To save CPU
 
-    private Object[] params2Array( StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )   // vars is never null, checked at ::eval(...)
+    private Object[] toArray( StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )   // vars is never null, checked at ::eval(...)
     {
-        if( lstFnArgs == null )
-            return null;
+        return toArrayAndPrepare( null, ops, fns, vars, hasAllVars );
+    }
 
-        int size = lstFnArgs.size();    // No need to sync on lstFnArgs beacuse once created it is inmutable
+    private Object[] toArrayAndPrepare( Object prependValue, StdXprOps ops, StdXprFns fns, Map<String,Object> vars, boolean hasAllVars )
+    {
+        if( UtilColls.isEmpty( lstFnArgs ) )
+            return (prependValue == null) ? null : new Object[] { prependValue };
 
-        if( size == 0 )
-            return null;
+        int size      = lstFnArgs.size();    // No need to sync on lstFnArgs beacuse once created it is inmutable
+        int totalSize = size + (prependValue != null ? 1 : 0);
 
-        if( args.length != size )
-            args = new Object[size];
+        if( args.length != totalSize )
+            args = new Object[totalSize];
      // else --> when the size is the same as the last call, we reuse 'args'
 
         int len = size;
         size--;
 
+        // Place prepend value at the beginning if provided
+        int startIndex = 0;
+
+        if( prependValue != null )
+        {
+            args[0] = prependValue;
+            startIndex = 1;
+        }
+
+        // Evaluate function arguments in reverse order
         for( int n = 0; n < len; n++ )
-            args[size-n] = lstFnArgs.get( n ).eval( ops, fns, vars, hasAllVars );    // Items in lstFnArgs are in reverse order
+            args[startIndex + (size-n)] = lstFnArgs.get( n ).eval( ops, fns, vars, hasAllVars );    // Items in lstFnArgs are in reverse order
 
         return args;
-    }
-
-    // Inserts 'item' as first element of 'array'
-    private Object[] prepend( Object item, Object[] array )
-    {
-        if( array == null || array.length == 0 )
-            return new Object[] { item };
-
-        Object[] toRet = new Object[ array.length + 1 ];
-                 toRet[0] = item;
-
-        System.arraycopy( array, 0, toRet, 1, array.length );
-
-        return toRet;
     }
 
     private MingleException invalidArg( String sExpected, Object found )
@@ -545,8 +471,95 @@ final class ASTNode
 
         for( ASTNode nod : lstFnArgs )
             EvalByAST.visitor( nod, EvalByAST.VISIT_IN_ORDER, node -> sb.append( node.toText() ).append( ',' ) );
-            //sb.append( nod.token.original() ).append( ',' );
 
         return UtilStr.removeLast( sb, 1 ).append( ')' ).toString();
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+    /**
+     * Used to manage nodes that are of type AFTER ow WITHIN
+     */
+    private final class Future
+    {
+        private final boolean  isAfter;
+        private       Object   oWithInitVal = null;   // WITHIN initial Value (null when this node is not of type 'future' and 'new AtomicReference(null)' when not initialized yet
+        private       Boolean  bResult      = null;   // Updated when Timer ends for AFTER and when a var changed or timer ended for WITHIN.
+                                                      // After ended, it has the furure result (futures are always booleans). null means that it is not resolved yet.
+
+        //------------------------------------------------------------------------//
+
+        Future( XprToken token )
+        {
+            isAfter = token.isText( XprUtils.sAFTER );
+        }
+
+        //------------------------------------------------------------------------//
+
+        boolean isAfter()
+        {
+            return isAfter;
+        }
+
+        boolean isWithin()
+        {
+            return ! isAfter;
+        }
+
+        Boolean result()
+        {
+            return bResult;
+        }
+
+        Boolean apply( Object value )
+        {
+            if( bResult != null )
+                return bResult;
+
+            if( value == null )
+                return null;
+
+            // If this ASTNode is AFTER, there is nothing to do beacuse when the delay is elapsed,
+            // the ASTNode::expired(...) will be invoked by EvalByAST and the AFTER will be evaluated.
+
+            if( isWithin() )
+            {
+                if( oWithInitVal == null )    // Not initialized yet
+                {
+                    oWithInitVal = value;
+                }
+                else
+                {
+                    if( ! Objects.equals( value, oWithInitVal ) )   // Has changed
+                    {
+                        bResult = false;                            // 0 == false
+                        return Boolean.FALSE;                       // Can resolve now
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        void expired( Object value )
+        {
+            if( isAfter() )
+            {
+                if( value == null )  bResult = false;              // When variable's value never arrived, the AFTER result hast to be 'false'
+                else                 bResult = (Boolean) value;
+            }
+            else
+            {
+                if( oWithInitVal == null )  bResult = false;       // When the variable's value never arrived, WITHIN has to evaluate to false
+                else                        bResult = Objects.equals( value, oWithInitVal );   // The value never changed
+            }
+        }
+
+        void reset()
+        {
+            bResult      = null;
+            oWithInitVal = null;
+        }
     }
 }

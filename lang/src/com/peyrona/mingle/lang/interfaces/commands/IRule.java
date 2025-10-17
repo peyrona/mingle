@@ -39,7 +39,9 @@ public interface IRule extends ICommand
      * Evaluates the rule if it is affected by the device.
      * <p>
      * If WHEN clause is satisfied (the expression returns true), the IF clause (if any) will be evaluated.<br>
-     * When no IF or IF is satisfied, all actions will be executed in same order as they appear in the command.
+     * When no IF or IF is satisfied, all actions will be executed in same order as they appear in the command.<br>
+     * <br>
+     * This method is invoked every time an instance of MsgDeviceChanged arrives to the bus.
      *
      * @param deviceName Device's unique name (id).
      * @param deviceValue Device's new value.

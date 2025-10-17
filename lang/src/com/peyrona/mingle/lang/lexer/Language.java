@@ -73,22 +73,22 @@ public final class Language
      * @param cSuffix u | t | s | m | h | d
      * @return The amount of milliseconds.
      */
-    public static int toMillis( float nTime, char cSuffix )
+    public static long toMillis( float nTime, char cSuffix )
     {
         switch( cSuffix )
-        {                                                // No suffiz --> milliseconds
+        {                                                 // No suffix --> milliseconds
             case 'u':
-            case 'U': return (int) (nTime *       10);   // Centésimas
+            case 'U': return (long) (nTime *       10);   // Centésimas
             case 't':
-            case 'T': return (int) (nTime *      100);   // Décimas
+            case 'T': return (long) (nTime *      100);   // Décimas
             case 's':
-            case 'S': return (int) (nTime *     1000);   // Segundos
+            case 'S': return (long) (nTime *     1000);   // Segundos
             case 'm':
-            case 'M': return (int) (nTime *    60000);   // Minutos
+            case 'M': return (long) (nTime *    60000);   // Minutos
             case 'h':
-            case 'H': return (int) (nTime *  3600000);   // Horas
+            case 'H': return (long) (nTime *  3600000);   // Horas
             case 'd':
-            case 'D': return (int) (nTime * 86400000);   // Días
+            case 'D': return (long) (nTime * 86400000);   // Días
 
             default : throw new IllegalArgumentException();
         }

@@ -86,9 +86,10 @@ DEVICE Msgs_Pending                # The amount of internal messages that are qu
 
 WHEN clock > 0
 THEN temperature_outside SET rand(   8,  35 )
+   # alarm               SET rand(   0,   1 ) > 0.70  --> This value has to be changed manually (from a dashboard)
      temperature_bedroom SET rand(  20,  24 )
      light_kitchen       SET rand(   0,   1 ) > 0.70    # 30% of times will be TRUE (ON) and the other 70% will be FALSE (OFF)
      voltage             SET rand( 228, 232 )
-   # alarm               SET rand(   0,   1 ) > 0.70  --> This value has to be changed manually (from a dashboard)
+
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

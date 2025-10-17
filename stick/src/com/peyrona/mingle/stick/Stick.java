@@ -707,9 +707,9 @@ public final class Stick
 
         private BusListener()
         {
-            driver4device = new ConcurrentHashMap<>( 5 );   // Cached drivers for every device (5 just because it is small. Map will grow as needed)
+            driver4device = new ConcurrentHashMap<>( 5 );   // Cached driver for every device (5 to start small: will grow as needed)
 
-            msgHandler = Map.of(MsgDeviceChanged.class , this::handleDeviceChanged,
+            msgHandler = Map.of( MsgDeviceChanged.class , this::handleDeviceChanged,
                                  MsgDeviceReaded.class  , this::handleDeviceReaded,
                                  MsgChangeActuator.class, this::handleChangeActuator,
                                  MsgTrigger.class       , this::handleExecute,

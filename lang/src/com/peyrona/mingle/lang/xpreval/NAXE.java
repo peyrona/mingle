@@ -15,6 +15,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -52,10 +53,11 @@ import java.util.function.Function;
  */
 public final class NAXE implements IXprEval
 {
-    private EvalByAST                 evaluator   = null;    // Is null only when the expression is empty
-    private List<ICandi.IError>       lstErrors   = null;
-    private String                    sOriginal   = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
-    private Function<String,String[]> fnGroupWise = null;
+    private       EvalByAST                 evaluator    = null;    // Is null only when the expression is empty
+    private       List<ICandi.IError>       lstErrors    = null;
+    private       String                    sOriginal    = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
+    private       Function<String,String[]> fnGroupWise  = null;
+    private final AtomicBoolean             isEvaluating = new AtomicBoolean( false );   // Just a re-entrance flag
 
     //------------------------------------------------------------------------//
 
@@ -112,6 +114,10 @@ public final class NAXE implements IXprEval
     @Override
     public Object eval()
     {
+        if( ! isEvaluating.compareAndSet( false, true ) )
+            // TODO: cambiar la exc por esto --> UtilSys.getLogger().log( ILogger.Level.WARNING, "Expression ["+ sOriginal +"] is already being evaluated" );
+            throw new IllegalStateException( "Expression ["+ sOriginal +"] is already being evaluated" );
+
         try
         {
             return evaluator.eval();
@@ -126,6 +132,10 @@ public final class NAXE implements IXprEval
                                            "\n has errors. Check '::getErrors()' prior to evalute" );    // This Exception is intended
 
             throw new MingleException( "Error evaluating:\n"+ sOriginal, exc );
+        }
+        finally
+        {
+            isEvaluating.set( false );
         }
     }
 
@@ -158,7 +168,7 @@ public final class NAXE implements IXprEval
     public IXprEval cancel()
     {
         if( evaluator != null )
-            evaluator.cancel();
+            evaluator.reset();
 
         return this;
     }

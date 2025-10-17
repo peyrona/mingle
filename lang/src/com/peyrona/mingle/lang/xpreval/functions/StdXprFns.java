@@ -42,11 +42,17 @@ import java.util.regex.Pattern;
 public final class StdXprFns
 {
     // JUST FEW CACHES
-    private static final Map<String,DecimalFormat> mapFormats = new ConcurrentHashMap<>();     // Used by ::format(...)
-    private static final Map<MapKey,MethodHandle>  mapMethods = new HashMap<>();               // Only added, never deleted
-    private              Object[]                  argsCache  = new Object[0];                 // Cached arrays
-    private        final pair                      pairTriggered   = new pair().put( "name" , "" )  // Last device name and value
-                                                                               .put( "value", "" );
+    private static final Map<String,DecimalFormat> mapFormats  = new ConcurrentHashMap<>();   // Used by ::format(...)
+    private static final Map<MapKey,MethodHandle>  mapMethods  = new ConcurrentHashMap<>();
+
+    // Pre-allocated arrays to avoid repeated allocations
+    private static final Class[] EMPTY_CLASS_ARRAY = new Class[0];
+    private static final Class[] ONE_CLASS_ARRAY   = {Object.class};
+    private static final Class[] TWO_CLASS_ARRAY   = {Object.class, Object.class};
+    private static final Class[] THREE_CLASS_ARRAY = {Object.class, Object.class, Object.class};
+
+    private        final pair    pairTriggered     = new pair().put( "name" , "" )  // Last device name and value
+                                                               .put( "value", "" );
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE (NON STATIC)
@@ -60,95 +66,81 @@ public final class StdXprFns
      */
     public Object invoke( String sFnName, Object[] aoArgs )
     {
-        // In case of extended types (date, time, list & pair), the class can be in sFnName or in aoArgs[0]
-        Object  target     = null;
-        Class   clazz      = null;
-        Class[] aParamType = null;
+        if( aoArgs == null || aoArgs.length == 0 )    // Fast path for null/empty args
+            return invokeNoArgs( sFnName );
 
-        // Speed over clarity  ----------------------
+        // Check for extended types (date, time, list & pair)
+        Class<?> clazz;
+        Class[]  aParamType;
+        Object   target        = null;
+        Object[] actualArgs    = aoArgs;
+        Object   firstArg      = aoArgs[0];
+        Class<?> firstArgClass = firstArg.getClass();
 
-        if( aoArgs == null || aoArgs.length == 0 )
+        if( isExtendedType( firstArgClass ) )
         {
-            aoArgs = null;
-        }
-        else
-        {
-            target = aoArgs[0];
-            clazz  = target.getClass();
+            target = firstArg;
 
-            if( (clazz == date.class)  ||   // Lets check if it is an Extended-Type
-                (clazz == time.class)  ||
-                (clazz == list.class)  ||
-                (clazz == pair.class) )
+            // Create view without first element instead of copying when possible
+            if( aoArgs.length > 1 )
             {
-                aoArgs = (aoArgs.length <= 1) ? null : Arrays.copyOfRange( aoArgs, 1, aoArgs.length );
+                actualArgs = Arrays.copyOfRange( aoArgs, 1, aoArgs.length );
             }
             else
             {
-                target = null;
+                return invokeNoArgsOnTarget( sFnName, target );
             }
+        }
 
-            if( aoArgs != null )     // Needed to check again
-            {
-                aParamType = new Class[aoArgs.length];
+        // Use pre-allocated parameter type arrays
+        int argCount = (actualArgs != null) ? actualArgs.length : 0;
+
+        switch( argCount )
+        {
+            case 0: aParamType = EMPTY_CLASS_ARRAY; break;
+            case 1: aParamType = ONE_CLASS_ARRAY;   break;
+            case 2: aParamType = TWO_CLASS_ARRAY;   break;
+            case 3: aParamType = THREE_CLASS_ARRAY; break;
+            default:
+                aParamType = new Class[argCount];
                 Arrays.fill( aParamType, Object.class );
-            }
+                break;
         }
 
         if( target == null )
         {
             target = this;
-            clazz  = StdXprFns.class;
+            clazz = StdXprFns.class;
         }
-
-        MapKey       mapKey  = new MapKey( clazz, sFnName, aParamType );
-        MethodHandle metHdle = mapMethods.get( mapKey );
-
-        if( metHdle == null )
+        else
         {
-            try
-            {
-                Method method = UtilReflect.getMethod( clazz, sFnName, aParamType );    // First get the Method using existing reflection logic
-
-                if( method == null )
-                    throw new MingleException( '"' + sFnName + "\" does not exist, in: " + toInvocation( clazz, sFnName, aoArgs ) );
-
-                method.setAccessible( true );
-
-                metHdle = MethodHandles.lookup().unreflect( method );    // Convert Method to MethodHandle for better performance
-
-                synchronized( mapMethods )
-                {
-                    mapMethods.put( mapKey, metHdle );
-                }
-            }
-            catch( IllegalAccessException exc )
-            {
-                throw new MingleException( "Error creating MethodHandle for " + toInvocation( clazz, sFnName, aoArgs ), exc );
-            }
+            clazz = target.getClass();
         }
+
+        MethodHandle metHdle = getMethod( clazz, sFnName, aParamType, actualArgs );
 
         try
         {
-            if( aoArgs == null )      // Simple MethodHandle invocation
+            if( actualArgs == null )
                 return metHdle.invoke( target );
 
-            switch( aoArgs.length )
+            // Fast path for common argument counts
+            switch( actualArgs.length )
             {
-                case 1: return metHdle.invoke( target, aoArgs[0] );
-                case 2: return metHdle.invoke( target, aoArgs[0], aoArgs[1] );
-                case 3: return metHdle.invoke( target, aoArgs[0], aoArgs[1], aoArgs[2] );
+                case 1: return metHdle.invoke( target, actualArgs[0] );
+                case 2: return metHdle.invoke( target, actualArgs[0], actualArgs[1] );
+                case 3: return metHdle.invoke( target, actualArgs[0], actualArgs[1], actualArgs[2] );
 
-                default: // Create arguments array: target + method arguments (for 4 or mor agrs)  (reusing thread-local array)
-                        Object[] allArgs    = getCachedArray( aoArgs.length + 1 );
+                default: // For 4+ args (rare), create array
+                        Object[] allArgs = new Object[actualArgs.length + 1];
                                  allArgs[0] = target;
-                        System.arraycopy( aoArgs, 0, allArgs, 1, aoArgs.length );
+                        System.arraycopy( actualArgs, 0, allArgs, 1, actualArgs.length );
                         return metHdle.invokeWithArguments( allArgs );
             }
         }
-        catch( Throwable exc ) // MethodHandle.invoke() throws Throwable, not just reflection exceptions
+        catch( Throwable exc )
         {
-            MingleException me = new MingleException( "Error executing " + toInvocation( clazz, sFnName, aoArgs ), exc.getCause() );
+            MingleException me = new MingleException( "Error executing " + toInvocation( clazz, sFnName, actualArgs ), exc.getCause() );
 
             if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
             else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
@@ -157,10 +149,84 @@ public final class StdXprFns
         }
     }
 
+    // Fast path methods for common cases
+    private Object invokeNoArgs( String sFnName )
+    {
+        MethodHandle metHdle = getMethod( StdXprFns.class, sFnName, EMPTY_CLASS_ARRAY, null );
+
+        try
+        {
+            return metHdle.invoke( this );
+        }
+        catch( Throwable exc )
+        {
+            MingleException me = new MingleException( "Error executing " + sFnName + "()", exc.getCause() );
+
+            if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
+            else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
+
+            throw me;
+        }
+    }
+
+    private Object invokeNoArgsOnTarget( String sFnName, Object target )
+    {
+        MethodHandle metHdle = getMethod( target.getClass(), sFnName, EMPTY_CLASS_ARRAY, null );
+
+        try
+        {
+            return metHdle.invoke( target );
+        }
+        catch( Throwable exc )
+        {
+            MingleException me = new MingleException( "Error executing " + target.getClass().getSimpleName() + ":" + sFnName + "()", exc.getCause() );
+
+            if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
+            else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
+
+            throw me;
+        }
+    }
+
+    private MethodHandle getMethod( Class clazz, String sFnName, Class[] aParamType, Object[] actualArgs )
+    {
+        MapKey       mapKey  = new MapKey( clazz, sFnName, aParamType );
+        MethodHandle metHdle = mapMethods.get( mapKey );
+
+        if( metHdle == null )
+        {
+            try
+            {
+                Method method = UtilReflect.getMethod( clazz, sFnName, aParamType );
+
+                if( method == null )
+                    throw new MingleException( '"' + sFnName + "\" does not exist, in: " + toInvocation( clazz, sFnName, actualArgs ) );
+
+                method.setAccessible( true );
+                metHdle = MethodHandles.lookup().unreflect( method );
+
+                mapMethods.put( mapKey, metHdle );
+            }
+            catch( IllegalAccessException exc )
+            {
+                throw new MingleException( "Error creating MethodHandle for " + toInvocation( clazz, sFnName, actualArgs ), exc );
+            }
+        }
+
+        return metHdle;
+    }
+
+    //------------------------------------------------------------------------//
+    // PUBLIC METHOD
+
+    // sync because .put(...) is not atomic
     public void setTriggeredBy( String devName, Object devValue )
     {
-        pairTriggered.put( "name" , devName  )
-                     .put( "value", devValue );
+        synchronized( pairTriggered )
+        {
+            pairTriggered.put( "name" , devName  )
+                         .put( "value", devValue );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -181,6 +247,15 @@ public final class StdXprFns
                (o instanceof time) ||
                (o instanceof list) ||
                (o instanceof pair);
+    }
+
+    // Fast class-based check to avoid instanceof overhead
+    public static boolean isExtendedType( Class<?> clazz )
+    {
+        return (clazz == date.class) ||
+               (clazz == time.class) ||
+               (clazz == list.class) ||
+               (clazz == pair.class);
     }
 
     public static boolean isExtendedType( String sFn )
@@ -614,7 +689,7 @@ public final class StdXprFns
         float min = UtilType.toFloat( lower );
         float max = UtilType.toFloat( upper );
 
-        return new Random().nextFloat() * (max - min) + min;
+        return (float) (new Random().nextFloat() * (max - min) + min);
     }
 
     /**
@@ -1220,40 +1295,6 @@ public final class StdXprFns
         }
 
         return UtilStr.removeLast( sb, 1 ).append( ')' ).toString();
-    }
-
-    /**
-     * Returns an array of 'size' number of items (all are of type Object).<br>
-     * <br>
-     * size = 1 -> argsCache[size] -> { Object1 }
-     * size = 2 -> argsCache[size] -> { Object1, Object2 }
-     * size = 3 -> argsCache[size] -> { Object1, Object2, Object3 }
-     * .....................
-     *
-     * @param size The number of items of type Object that the array that this method has to return.
-     * @return An array of 'size' number of items
-     */
-    private Object[] getCachedArray( int size )
-    {
-        assert size > 0;
-
-        while( argsCache.length < size + 1 )
-        {
-            Object[] aNewTmp = Arrays.copyOf( argsCache, argsCache.length + 1 );
-            Object[] aItem   = new Object[aNewTmp.length - 1];
-
-            for( int n = 0; n < aItem.length; n++ )   // Each array position should have an unique object
-                aItem[n] = new Object();
-
-            aNewTmp[ aNewTmp.length-1 ] = aItem;
-
-            synchronized( this )
-            {
-                argsCache = aNewTmp;
-            }
-        }
-
-        return (Object[]) argsCache[size];
     }
 
     //------------------------------------------------------------------------//
