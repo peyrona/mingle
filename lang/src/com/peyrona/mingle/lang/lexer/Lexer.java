@@ -143,41 +143,42 @@ public final class Lexer
         {
             char ch = readChar( true );     // true == obey line-continuation-char (do not ignore it)
 
-// FIXME:
-// I want to allow comments like following -->
-//     DRIVER RPiGpioDriver
-//     CONFIG
-//         pin    SET 10
-//       # pull   SET "up"   <--------------
-//         invert SET true
-//
-// In these cases, it is necessary to jump over the last char: '\n' (so the '\n' will not be taken in consideration)
-//
-//            if( ch == Language.COMMENT )
-//            {
-//                while( isNotEoF() && readChar( false ) != Language.END_OF_LINE )
-//                    skip( 1 );
-//
-//                if( isNotEoF() )
-//                {
-//                    skip( 1 );    // Skip the newline character and
-//                    line++;       // update line and
-//                    column = 0;   // column tracking
-//                }
-//
-//                continue;
-//            }
-
             if( Language.isBlank( ch ) )    // Language.END_OF_LINE is not blank because it has a special meaning in Une language
             {
                 skip( 1 );
             }
             else if( ch == Language.COMMENT )
             {
+                // Check if this is a comment-only line by looking backwards from current position
+                boolean isCommentOnlyLine = true;
+                int     checkOffset       = offset - 1;
+
+                while( checkOffset >= 0 )
+                {
+                    char prevChar = code.charAt( checkOffset );
+
+                    if( prevChar == Language.END_OF_LINE )
+                        break;  // Reached start of line
+
+                    if( ! Language.isBlank( prevChar ) )
+                    {
+                        isCommentOnlyLine = false;  // Found non-whitespace before comment
+                        break;
+                    }
+
+                    checkOffset--;
+                }
+
                 while( isNotEoF() && (readChar( true ) != Language.END_OF_LINE) )
                     skip( 1 );
 
-                // skip( 1 ); --> Do not do this becasue offset has to point to the END_OF_LINE, so lines like this can be properly processed: "day AS number     # This is a comment\n"
+                // Only skip the newline if it's a comment-only line
+                if( isCommentOnlyLine && isNotEoF() )
+                {
+                    skip( 1 );    // Skip the '\n'
+                    line++;       // Update line tracking
+                    column = 0;   // Reset column tracking
+                }
             }
             else if( ch == Language.END_OF_LINE )
             {

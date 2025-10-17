@@ -5,6 +5,7 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Lexer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
@@ -15,6 +16,8 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.function.Function;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.fail;
 import org.junit.Test;
@@ -31,19 +34,19 @@ public class EvalTest
     @Test
     public void testAfterAndWithin()
     {
-//        doAfterForTrue();
-//        doAfterForFalse();
-//        doAfterForNotInit();
+        doAfterForTrue();
+        doAfterForFalse();
+        doAfterForNotInit();
 
-//        doWithinForTrue();
-//        doWithinForFalse();
+        doWithinForTrue();
+        doWithinForFalse();
+        doWithinForNotInit();
 
-////        doBothForAfterWithAnd();
-//        doBothForWithinWithAnd();
+        doBothWithAnd();
+        doBothWithOr();
 
-//        doBothForAfterWithOr();
-//        doBothForWithinWithOr();
-
+        do2After();
+        do2Within();
     }
 
     @Test
@@ -525,91 +528,88 @@ public class EvalTest
 
     private static void doAfterForTrue()
     {
-        Timer t1 = new Timer();
-        Timer t2 = new Timer();
+        Timer t1  = new Timer();
+        Timer t2  = new Timer();
+        long  now = System.currentTimeMillis();
 
-        IXprEval xprAfterTrue = new NAXE().build( "var == 7 AFTER 3000",
-                                          (value) -> {
-                                                        assertEquals( value, Boolean.TRUE );
-                                                        System.out.println( "AFTER  when TRUE  successfully executed" );
+        IXprEval xpr = new NAXE().build( "var == 7 AFTER 3000",
+                                         (value) -> {
                                                         t1.cancel(); t2.cancel();
+                                                        long time = System.currentTimeMillis() - now;
+                                                        assertEquals( value, Boolean.TRUE );
+                                                        assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                        System.out.println( "AFTER  when TRUE  successfully executed ("+ time +" millis)" );
                                                      },
-                                          null );
+                                         null );
 
-        xprAfterTrue.eval( "var", 7.0f );    // Starts being TRUE
+        xpr.eval( "var", 7.0f );    // Starts being TRUE
 
 
         t1.schedule( new TimerTask()
                     {   @Override
-                        public void run() { xprAfterTrue.set( "var", 7.0f ); }    // Becomes FALSE
-                    }, 1000 );                                                    // after 1 second
+                        public void run() { xpr.set( "var", 7.0f ); }    // Becomes FALSE
+                    }, 1000 );                                           // after 1 second
 
 
         t2.schedule( new TimerTask()
                     {   @Override
-                        public void run() { xprAfterTrue.set( "var", 7.0f ); }    // Becomes TRUE
-                    }, 2000 );                                                    // after 2 seconds
+                        public void run() { xpr.set( "var", 7.0f ); }    // Becomes TRUE
+                    }, 2000 );                                           // after 2 seconds
     }
 
     private static void doAfterForFalse()
     {
         Timer timer = new Timer();
+        long  now   = System.currentTimeMillis();
 
-        IXprEval xprAfterFalse = new NAXE().build( "var == 7 AFTER 3000",
-                                                   (value) -> {
-                                                                assertEquals( value, Boolean.FALSE );
-                                                                System.out.println( "AFTER  when FALSE successfully executed" );
-                                                                timer.cancel();
-                                                              },
-                                                   null );
+        IXprEval xpr = new NAXE().build( "var == 7 AFTER 3000",
+                                         (value) -> {
+                                                        timer.cancel();
+                                                        long time = System.currentTimeMillis() - now;
+                                                        assertEquals( value, Boolean.FALSE );
+                                                        assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                        System.out.println( "AFTER  when FALSE successfully executed ("+ time +" millis)" );
+                                                    },
+                                         null );
 
-        xprAfterFalse.eval( "var", 7.0f );    // Starts being TRUE
+        xpr.eval( "var", 7.0f );    // Starts being TRUE
 
         timer.schedule( new TimerTask()
                         {   @Override
-                            public void run() { xprAfterFalse.set( "var", 9.0f ); }    // Becomes FALSE
-                        }, 1000 );                                                     // after 1 second
+                            public void run() { xpr.set( "var", 9.0f ); }    // Becomes FALSE
+                        }, 1000 );                                           // after 1 second
     }
 
     private static void doAfterForNotInit()
     {
-        Timer timer = new Timer();
+        long now = System.currentTimeMillis();
 
-        IXprEval xprAfterFalse = new NAXE().build( "var == 7 AFTER 3000",
-                                                   (value) -> {
-                                                                assertEquals( value, Boolean.FALSE );
-                                                                System.out.println( "AFTER  when var never initialized successfully executed" );
-                                                                timer.cancel();
-                                                              },
-                                                   null );
+        IXprEval xpr = new NAXE().build( "var == 7 AFTER 3000",
+                                         (value) -> {
+                                                        long time = System.currentTimeMillis() - now;
+                                                        assertEquals( value, Boolean.FALSE );
+                                                        assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                        System.out.println( "AFTER  when var never initialized successfully executed ("+ time +" millis)" );
+                                                    },
+                                         null );
 
-        xprAfterFalse.eval();    // Variable 'var' is never initialized
-
-        timer.schedule( new TimerTask()
-                        {   @Override
-                            public void run() { }    // Just wait
-                        }, 4000 );                   // for 4 seconds
+        xpr.eval();    // Variable 'var' is never initialized
     }
 
     private static void doWithinForTrue()
     {
-        Timer timer = new Timer();
-        long  now   = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
 
-        IXprEval xprWithinTrue = new NAXE().build( "var == 7 WITHIN 3000",
-                                                   (value) -> {
-                                                                assertEquals( value, Boolean.TRUE );
-                                                                System.out.println( "WITHIN when TRUE  successfully executed ("+ (System.currentTimeMillis() - now) +" millis)" );
-                                                                timer.cancel();
-                                                              },
-                                                   null );
+        IXprEval xpr = new NAXE().build( "var == 7 WITHIN 3000",
+                                         (value) -> {
+                                                        long time = System.currentTimeMillis() - now;
+                                                        assertEquals( value, Boolean.TRUE );
+                                                        assertEquals( UtilUnit.isBetween( 2850, time, 3150 ) , Boolean.TRUE );
+                                                        System.out.println( "WITHIN when TRUE  successfully executed ("+ time +" millis)" );
+                                                    },
+                                         null );
 
-        xprWithinTrue.eval( "var", 7.0f );    // Starts being TRUE
-
-        timer.schedule( new TimerTask()
-                        {   @Override
-                            public void run() { }    // Just wait
-                        }, 4000 );                   // for 4 seconds
+        xpr.eval( "var", 7.0f );    // Starts being TRUE
     }
 
     private static void doWithinForFalse()
@@ -617,78 +617,138 @@ public class EvalTest
         Timer timer = new Timer();
         long  now   = System.currentTimeMillis();
 
-        IXprEval xprWithinFalse = new NAXE().build( "var == 7 WITHIN 3000",
-                                                    (value) -> {
-                                                                 assertEquals( value, Boolean.FALSE );
-                                                                 System.out.println( "WITHIN when FALSE successfully executed ("+ (System.currentTimeMillis() - now) +" millis)" );
-                                                                 timer.cancel();
-                                                               },
-                                                    null );
+        IXprEval xpr = new NAXE().build( "var == 7 WITHIN 3000",
+                                         (value) -> {
+                                                       timer.cancel();
+                                                       long time = System.currentTimeMillis() - now;
+                                                       assertEquals( UtilUnit.isBetween( 1000, time, 1150 ) , Boolean.TRUE );
+                                                       assertEquals( value, Boolean.FALSE );
+                                                       System.out.println( "WITHIN when FALSE successfully executed ("+ time +" millis)" );
+                                                    },
+                                         null );
 
-        xprWithinFalse.eval( "var", 7.0f );    // Starts being TRUE
+        xpr.eval( "var", 7.0f );    // Starts being TRUE
 
         timer.schedule( new TimerTask()
                         {   @Override
-                            public void run() { xprWithinFalse.set( "var", 2.0f ); }    // Becomes FALSE
-                        }, 1000 );                                                      // in 1 second
-
-
+                            public void run() { xpr.set( "var", 2.0f ); }    // Becomes FALSE
+                        }, 1000 );                                           // in 1 second
     }
 
-    private static void doBothForAfterWithAnd()
+    private static void doWithinForNotInit()
     {
-        Timer timer = new Timer();
-        long  now   = System.currentTimeMillis();
+        long now = System.currentTimeMillis();
+
+        IXprEval xpr = new NAXE().build( "var == 7 WITHIN 3000",
+                                         (value) -> {
+                                                      long time = System.currentTimeMillis() - now;
+                                                      assertEquals( value, Boolean.FALSE );
+                                                      assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                      System.out.println( "WITHIN when FALSE successfully executed ("+ time +" millis)" );
+                                                    },
+                                         null );
+
+
+        xpr.eval();    // Variable 'var' is never initialized
+    }
+
+    private static void doBothWithAnd()
+    {
+        for( int n = 0; n < 5; n++ )
+        {
+        long now = System.currentTimeMillis();
 
         IXprEval xprBothAfter = new NAXE().build( "(var1 == 5 AFTER 1000) && (var2 == 7 WITHIN 3000)",
                                                    (value) -> {
+                                                                long time = System.currentTimeMillis() - now;
                                                                 assertEquals( value, Boolean.TRUE );
-                                                                System.out.println( "AFTER and WITHIN successfully executed ("+ (System.currentTimeMillis() - now) +" millis)" );
-                                                                timer.cancel();
+                                                                assertEquals( UtilUnit.isBetween( 3000, time, 3250 ) , Boolean.TRUE );
+                                                                System.out.println( "AFTER and WITHIN successfully executed ("+ time +" millis)" );
                                                               },
                                                    null );
 
-        // Starts being TRUE
-        xprBothAfter.eval( "var1", 5.0f );
-        xprBothAfter.eval( "var2", 7.0f );
-
-        timer.schedule( new TimerTask()
-                        {   @Override
-                            public void run() { }    // Just wait
-                        }, 4000 );                   // for 4 seconds
+        xprBothAfter.eval( "var1", 5.0f );   // Starts being TRUE
+        xprBothAfter.eval( "var2", 7.0f );   // Starts being FALSE
+            try
+            {
+                Thread.sleep( 500 );
+            }
+            catch( InterruptedException ex )
+            {
+                Logger.getLogger( EvalTest.class.getName() ).log( Level.SEVERE, null, ex );
+            }
+        }
     }
 
-    private static void doBothForWithinWithAnd()
+    private static void doBothWithOr()
     {
         Timer timer = new Timer();
         long  now   = System.currentTimeMillis();
 
-        IXprEval xprBothWithin = new NAXE().build( "(var1 == 5 WITHIN 5000) && (var2 == 2 WITHIN 2000)",
+        IXprEval xprBothWithin = new NAXE().build( "(var1 == 5 AFTER 1000) || (var2 == 2 WITHIN 3000)",
                                                    (value) -> {
-                                                                assertEquals( value, Boolean.TRUE );
-                                                                System.out.println( "AFTER and WITHIN successfully executed ("+ (System.currentTimeMillis() - now) +" millis)" );
                                                                 timer.cancel();
+                                                                long time = System.currentTimeMillis() - now;
+                                                                assertEquals( value, Boolean.TRUE );
+                                                                assertEquals( UtilUnit.isBetween( 1000, time, 1150 ) , Boolean.TRUE );
+                                                                System.out.println( "AFTER AND WITHIN successfully executed ("+ time +" millis)" );
                                                               },
                                                    null );
 
-        // Starts being TRUE
-        xprBothWithin.eval( "var1", 5.0f );
-        xprBothWithin.eval( "var2", 7.0f );
 
+        xprBothWithin.eval( "var1", 5.0f );   // Starts being TRUE
 
         timer.schedule( new TimerTask()
                         {   @Override
                             public void run() { xprBothWithin.set( "var2", 7.0f ); }    // Becomes FALSE
-                        }, 1000 );                                                      // in 1 second
+                        }, 4000 );                                                      // in 1 second
     }
 
-    private static void doBothForAfterWithOr()
+    private static void do2After()
     {
+        Timer timer = new Timer();
+        long  now   = System.currentTimeMillis();
 
+        IXprEval xprBothWithin = new NAXE().build( "(var1 == 5 AFTER 3000) || (var2 == 2 AFTER 2000)",
+                                                   (value) -> {
+                                                                timer.cancel();
+                                                                long time = System.currentTimeMillis() - now;
+                                                                assertEquals( value, Boolean.TRUE );
+                                                                assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                                System.out.println( "2 AFTERs successfully executed ("+ time +" millis)" );
+                                                              },
+                                                   null );
+
+
+        xprBothWithin.eval( "var1", 5.0f );   // Starts being TRUE
+
+        timer.schedule( new TimerTask()
+                        {   @Override
+                            public void run() { xprBothWithin.set( "var2", 7.0f ); }    // Becomes FALSE
+                        }, 500 );                                                       // in 1/2 second
     }
 
-    private static void doBothForWithinWithOr()
+    private static void do2Within()
     {
+        Timer timer = new Timer();
+        long  now   = System.currentTimeMillis();
 
+        IXprEval xprBothWithin = new NAXE().build( "(var1 == 5 WITHIN 3000) || (var2 == 2 WITHIN 2000)",
+                                                   (value) -> {
+                                                                timer.cancel();
+                                                                long time = System.currentTimeMillis() - now;
+                                                                assertEquals( value, Boolean.TRUE );
+                                                                assertEquals( UtilUnit.isBetween( 3000, time, 3150 ) , Boolean.TRUE );
+                                                                System.out.println( "2 WITHINs successfully executed ("+ time +" millis)" );
+                                                              },
+                                                   null );
+
+
+        xprBothWithin.eval( "var1", 5.0f );   // Starts being TRUE
+
+        timer.schedule( new TimerTask()
+                        {   @Override
+                            public void run() { xprBothWithin.set( "var2", 7.0f ); }    // Becomes FALSE
+                        }, 4000 );                                                      // in 1 second
     }
 }

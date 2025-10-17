@@ -38,6 +38,9 @@
 
  **What is the easiest way to start?**
 
+> The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize. All these tools are integrated in the IDE. So, beginners only need to know the IDE.
+>
+>
 > "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
 >
 > So, our recommendation is:
@@ -49,23 +52,18 @@
 > 6.  Modify the _Une_ source code and re-test.
 > 7.  Go to #3
 
- **What about MSP?**
-
-> The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize. All these tools are integrated in the IDE. So, beginners only need to know the IDE.
-> You have a handbook (under "todeploy/docs" folder) titled "The Mingle Standard Platform.pdf". It is recommended to read it carefuly.
->
-> These are the tools that compose the MSP:
->
-> * **Tape**: The transpiler. Used to compile _Une_ source code into a ".model" file, which can be used by **Stick** (an ExEn).
-> * **Stick**: The Execution Environment (ExEn). Where the "model"s run.
-> * **Glue**: An IDE that assist in the whole development/debugging/monitoring cycle.
-> * **Gum**: An HTML/Javscript based tool to monitorize one or more ExEns and to provide static web contents.
-> * **Updater**: Keeps MSP up to date.
 
  **What licence has Mingle?**
 
-> Everything is Open Source (under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation (2 books created under the Creative Commons license): one about **Mingle** and the other about _Une_ plus one reference-sheet. So, everyone can use and distribute it for free (no charges, never, for nothing).
+> Everything is Open Source (under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation. So everyone can use and distribute everything for free (no charges, never, for nothing).
+>
+> The books (licensed as Creative Commons) are under "todeploy/docs" folder:
+> * Une_language.pdf
+> * Mingle_Standard__Platform.pdf
+> * Une_reference__sheet.pdf
 
  **What about the logo?**
 
-> Following the tradition, the mascot for the _Une_ language is an animal, int this case, an electric anguilla named _Tune_. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
+> Following the tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
+
+![Une language logo](https://github.com/peyrona/mingle/blob/main/todeploy/docs/images/mingle-logo-64x64.png)

@@ -73,7 +73,7 @@ public final class list
         if( maxSize <= 0 )
             throw new MingleException( "Invalid max size" );
 
-        synchronized( this )
+        synchronized( inner )
         {
             maxLen = maxSize;
 
@@ -262,10 +262,13 @@ public final class list
         if( item instanceof String )
             item = UtilType.toUneBasics( item.toString() );     // v.g.: "12.5" --> 12.5f
 
-        if( inner.size() > maxLen )
-            inner.remove( 0 );
+        synchronized( inner )
+        {
+            if( inner.size() > maxLen )
+                inner.remove( 0 );
 
-        inner.add( item );
+            inner.add( item );
+        }
 
         return this;
     }
@@ -287,19 +290,23 @@ public final class list
             item = UtilType.toUne( item.toString() );     // v.g.: "12.5" --> 12.5f
 
         Object old = null;
+        int    ndx;
 
-        if( inner.size() > maxLen )
+        synchronized( inner )
         {
-            old = inner.remove( 0 );
-            firePropertyChanged( 0, old, null );
+            if( inner.size() > maxLen )
+            {
+                old = inner.remove( 0 );
+                firePropertyChanged( 0, old, null );
+            }
+
+            ndx = toIndex( index );
+
+            if( ndx < inner.size() )
+                old = inner.get( ndx );
+
+            inner.add( ndx, item );
         }
-
-        int ndx = toIndex( index );
-
-        if( ndx < inner.size() )
-            old = inner.get( ndx );
-
-        inner.add( ndx, item );
 
         firePropertyChanged( ndx, old, item );
 
@@ -401,8 +408,11 @@ public final class list
     {
         list cloned = new list();
 
-        for( Object item : inner )
-            cloned.add( cloneValue( item ) );
+        synchronized( inner )
+        {
+            for( Object item : inner )
+                cloned.add( cloneValue( item ) );
+        }
 
         return cloned;
     }
@@ -450,7 +460,7 @@ public final class list
         if( inner.isEmpty() )
             return this;
 
-        // inner.addAll( new HashSet( inner ) ); --> Can not do this because Set has no order and list must keep the adding order
+        // inner.clear().addAll( new HashSet( inner ) ); --> Can not do this because Set has no order and list must keep the adding order
 
         Set set = new HashSet();
 

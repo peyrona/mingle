@@ -263,7 +263,7 @@ public final class time
      */
     public time twilightSunRise( Object latitude, Object longitude )
     {
-        return twilightSunRise( longitude, latitude, null, null );
+        return twilightSunRise( latitude, longitude, null, null );
     }
 
     /**
@@ -439,9 +439,8 @@ public final class time
         Duration duration = Duration.between( time, ((time)o).time );
         long     seconds  = duration.getSeconds();
 
-             if( seconds == 0 ) return  0;
-        else if( seconds >  0 ) return -1;
-        else                    return  1;
+        return (seconds == 0) ? 0
+                              : (seconds > 0) ? -1 : 1;
     }
 
     @Override

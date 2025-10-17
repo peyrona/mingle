@@ -28,15 +28,15 @@ public final class date
 
     //------------------------------------------------------------------------//
 
-    public static boolean isValid( String date )
+    public static boolean isValid( String sDate )
     {
-        if( date == null )
+        if( sDate == null )
             return false;
 
-        date = date.trim();
+        sDate = sDate.trim();
 
-        return date.length() == 10 &&
-               areDigits( date.substring( 0, 4 ) + date.substring( 5, 7 ) + date.substring( 8, 10 ) );
+        return sDate.length() == 10 &&
+               areDigits( sDate.substring( 0, 4 ) + sDate.substring( 5, 7 ) + sDate.substring( 8, 10 ) );
     }
 
     //------------------------------------------------------------------------//
@@ -298,6 +298,9 @@ public final class date
     {
         UtilJson json  = parse( o );
         String   sDate = json.getString( "data", null );     // At this point it is never null
+
+        if( ! isValid( sDate ) )
+            throw new MingleException( "Invalid date: "+ sDate );
 
         int year  = UtilType.toInteger( sDate.substring( 0, 4 ) );
         int month = UtilType.toInteger( sDate.substring( 5, 7 ) );

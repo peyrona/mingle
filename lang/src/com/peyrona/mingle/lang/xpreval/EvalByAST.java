@@ -17,6 +17,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.Stack;
 import java.util.concurrent.ConcurrentHashMap;
@@ -127,8 +128,8 @@ final class EvalByAST
                 {
                     try
                     {
-                        solveConstantNodes( root );     // Makes some optimizations
-                        exec = new MyExecutor( nFutures );
+                        solveConstantNodes( root );              // Makes some optimizations
+                        exec = new MyExecutor( nFutures + 3 );   // +3 to provide some extra margin (most probably it is not needed)
                     }
                     catch( RuntimeException me )
                     {
@@ -198,19 +199,8 @@ final class EvalByAST
 
         mapVars.put( name, value );
 
-        if( ! hasAllVars )
-        {
-            hasAllVars = true;
-
-            for( Object val : mapVars.values() )
-            {
-                if( val == null )
-                {
-                    hasAllVars = false;
-                    break;
-                }
-            }
-        }
+        if( ! hasAllVars )                              // Once all vars had been initializaed, there is need to check
+            hasAllVars = mapVars.values().stream().noneMatch( Objects::isNull );
 
         if( hasWithin )     // AFTERs are not needed to be evaluated everytime a variable changes its value, but if the expression has
             eval();         // WITHINs they have to be evaluated in case the new value of the variable could resolve the expression.
@@ -225,9 +215,9 @@ final class EvalByAST
      //     throw new MingleException( "Can not eval() an expression with errors" );
 
         if( (! isBoolean) && (! hasAllVars) )
-            return null;    // result is null when some needed vars are not yet initialized, but only if the expression is not of type boolean,
-                            // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts, because
-                            // lazy eval: "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated.
+            return null;          // result is null when some needed vars are not yet initialized, but only if the expression is not of type boolean,
+                                  // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts, because
+                                  // lazy eval: "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated.
 
         Object result = null;
 
@@ -241,9 +231,7 @@ final class EvalByAST
             // It is not needed to do 'root.reset()' because this expr has no futures
         }
         else                      // The expression has futures --------------------------------------------------------------------------------
-        {
-            // If there are futures, the return value must be a boolean: a future always resolves to boolean
-
+        {                         // A future always resolves to boolean
             if( ! isFutureing() )
             {
                 root.reset();
@@ -253,24 +241,32 @@ final class EvalByAST
                 visitor( root, VISIT_PRE_ORDER, (node) ->     // Order here is not important: -1, 0, 1, will produce same result
                         {
                                  if( node.isAfter()  )  EvalByAST.this.executor.execute( new RunFuture( node ) );
-                            else if( node.isWithin() )  EvalByAST.this.executor.submit(  new RunFuture( node ) );
+                            else if( node.isWithin() )  EvalByAST.this.executor.execute( new RunFuture( node ) );
                         } );
             }
             else                     // If the eval is already initialized...
             {
-                result = resolve();  // execute it
+                result = root.eval( operators, functions, mapVars, hasAllVars );
+
+                if( result != null )
+                {
+                    reset();
+                    onSolved.accept( result );
+                }
             }
         }
 
         return result;
     }
 
-    void cancel()
+    void reset()
     {
         if( executor != null )
             executor.cancelAllTasks();
 
         root.reset();
+
+        // Do not clear the mapVars !
     }
 
     @Override
@@ -391,23 +387,6 @@ final class EvalByAST
                (token.isType( XprToken.VARIABLE ) || token.isType( XprToken.FUNCTION ));   // original expression was like this: 'var == true' what is optimized into: 'var'
     }
 
-    /**
-     * Attempts to resolve the expression: this has to be invoked every time a variable
-     * involved in a WITHIN changes its value and every time a MyTimer finishes.
-     */
-    private synchronized Object resolve()
-    {
-        Object result = root.eval( operators, functions, mapVars, hasAllVars );
-
-        if( result != null )
-        {
-            cancel();
-            onSolved.accept( result );
-        }
-
-        return result;
-    }
-
     // This toString shows a tree (because to print the original expression, we have NAXE::sOriginal).
     private String toString( ASTNode node )
     {
@@ -433,7 +412,7 @@ final class EvalByAST
         //------------------------------------------------------------------------//
         // Validates all nodes
 
-        int[] aMaxDelay = { 0 };
+        long[] aMaxDelay = { 0 };
 
         visitor( node,
                  VISIT_PRE_ORDER,
@@ -722,7 +701,7 @@ final class EvalByAST
 
             shutdown();    // Initiate orderly shutdown
 
-            // Optional: Wait for termination with timeout
+            // Wait for termination with timeout
 
             try
             {
@@ -759,7 +738,7 @@ final class EvalByAST
     {
         private final ASTNode node;
 
-        RunFuture(final ASTNode node )
+        RunFuture( final ASTNode node )
         {
             this.node = node;
         }
@@ -769,7 +748,10 @@ final class EvalByAST
         {
             try
             {
-                executeTask();
+                Thread.sleep( node.delay() );
+
+                node.expired( operators, functions, mapVars, hasAllVars );
+                EvalByAST.this.eval();
             }
             catch( InterruptedException ie )
             {
@@ -782,27 +764,6 @@ final class EvalByAST
                 if(  logger == null )  System.err.println( UtilStr.toString( e ) );
                 else                   logger.log( ILogger.Level.INFO, e );
             }
-        }
-
-        private void executeTask() throws InterruptedException
-        {
-            if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted before execution" );
-
-            long delayMs = node.delay();
-
-            if( delayMs > 0 )
-                Thread.sleep( delayMs );
-
-            if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted during sleep" );
-
-            node.expired( operators, functions, mapVars, hasAllVars );
-
-            if( Thread.currentThread().isInterrupted() )
-                throw new InterruptedException( '\''+ getClass().getSimpleName() +"' was interrupted before resolution" );
-
-            EvalByAST.this.resolve();     // Resolve in the outer class context
         }
     }
 }
