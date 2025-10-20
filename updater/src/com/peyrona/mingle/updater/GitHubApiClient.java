@@ -18,7 +18,7 @@ import java.nio.file.StandardCopyOption;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class GitHubApiClient
+public final class GitHubApiClient
 {
     // GitHub repository constants
     private static final String GITHUB_API_BASE = "https://api.github.com";
@@ -32,9 +32,9 @@ public class GitHubApiClient
     private static final String USER_AGENT = "Mingle-Updater/1.0";
 
     // Rate limiting constants
-    private static final long DEFAULT_DELAY_MS = 1000; // 1 second between API calls
-    private static final long MAX_BACKOFF_MS   = 16000; // Maximum backoff time
-    private static final int  MAX_RETRIES      = 3; // Maximum retry attempts
+    private static final long DEFAULT_DELAY_MS = 2000; // 2 seconds between API calls
+    private static final long MAX_BACKOFF_MS   = 32000; // Maximum backoff time
+    private static final int  MAX_RETRIES      = 5; // Maximum retry attempts
 
     // Rate limiting state - made instance-based for better thread safety
     private volatile long lastApiCallTime = 0;
@@ -57,8 +57,27 @@ public class GitHubApiClient
 
         if( limit != null && remaining != null )
         {
-            UtilSys.getLogger().log( ILogger.Level.INFO,
-                String.format( "Rate limit: %s/%s requests remaining", remaining, limit ) );
+            String logMessage = String.format( "Rate limit: %s/%s requests remaining", remaining, limit );
+
+            // Add reset time if available
+            if( reset != null )
+            {
+                try
+                {
+                    long resetTimestamp = Long.parseLong( reset );
+                    String resetTime = java.time.Instant.ofEpochSecond( resetTimestamp )
+                                                .atZone( java.time.ZoneOffset.UTC )
+                                                .format( java.time.format.DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" ) ) +" UTC";
+                    logMessage += String.format( ". Resets at: %s", resetTime );
+                }
+                catch( NumberFormatException e )
+                {
+                    // If reset timestamp is invalid, just ignore it
+                    logMessage += ". Reset time unavailable";
+                }
+            }
+
+            UtilSys.getLogger().log( ILogger.Level.INFO, logMessage );
         }
     }
 
@@ -107,9 +126,37 @@ public class GitHubApiClient
         else if( responseCode == 403 )
         {
             String rateLimitRemaining = connection.getHeaderField( "X-RateLimit-Remaining" );
+
             if( "0".equals( rateLimitRemaining ) )
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath );
+                String reset = connection.getHeaderField( "X-RateLimit-Reset" );
+                if( reset != null )
+                {
+                    try
+                    {
+                        long resetTimestamp = Long.parseLong( reset );
+                        long currentTime = System.currentTimeMillis() / 1000;
+                        long waitTime = resetTimestamp - currentTime;
+                        
+                        if( waitTime > 0 )
+                        {
+                            UtilSys.getLogger().log( ILogger.Level.WARNING, 
+                                String.format( "Rate limit exceeded for: %s. Reset in %d seconds", filePath, waitTime ) );
+                        }
+                        else
+                        {
+                            UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath + " (should reset soon)" );
+                        }
+                    }
+                    catch( NumberFormatException e )
+                    {
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath );
+                    }
+                }
+                else
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath );
+                }
                 return true; // Should retry after backoff
             }
             else
@@ -131,11 +178,12 @@ public class GitHubApiClient
     private static int executeWithRetry(URL url, String filePath) throws IOException
     {
         int retryCount = 0;
-        long backoffTime = 1000; // Start with 1 second
+        long backoffTime = 2000; // Start with 2 seconds
 
         while( retryCount <= MAX_RETRIES )
         {
             HttpURLConnection connection = null;
+
             try
             {
                 connection = (HttpURLConnection) url.openConnection();
@@ -154,7 +202,7 @@ public class GitHubApiClient
                     return responseCode;
                 }
 
-                if( !handleRateLimit( responseCode, connection, filePath ) )
+                if( ! handleRateLimit( responseCode, connection, filePath ) )
                 {
                     return responseCode; // Not a rate limit issue, return immediately
                 }
@@ -165,9 +213,15 @@ public class GitHubApiClient
                     return responseCode;
                 }
 
-                // Exponential backoff
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Rate limited, waiting " + backoffTime + "ms before retry for: " + filePath );
-                Thread.sleep( backoffTime );
+                // Exponential backoff with jitter to avoid thundering herd
+                long jitter = (long) (Math.random() * 1000); // Add up to 1 second jitter
+                long totalWaitTime = backoffTime + jitter;
+                
+                UtilSys.getLogger().log( ILogger.Level.INFO, 
+                    String.format( "Rate limited, waiting %dms before retry (%d/%d) for: %s", 
+                        totalWaitTime, retryCount + 1, MAX_RETRIES, filePath ) );
+                Thread.sleep( totalWaitTime );
+                
                 backoffTime = Math.min( backoffTime * 2, MAX_BACKOFF_MS );
                 retryCount++;
 
@@ -181,9 +235,7 @@ public class GitHubApiClient
             finally
             {
                 if( connection != null )
-                {
                     connection.disconnect();
-                }
             }
         }
 
@@ -244,15 +296,15 @@ public class GitHubApiClient
     {
         // Check cache first
         GitHubFileResponse cached = getCachedMetadata( filePath );
+
         if( cached != null )
-        {
             return cached;
-        }
 
         // Apply rate limiting before making API call
         rateLimitInstance.applyRateLimiting();
 
         HttpURLConnection connection = null;
+
         try
         {
             String apiUrl = String.format( "%s/repos/%s/%s/contents/%s/%s", GITHUB_API_BASE, REPO_OWNER, REPO_NAME, REPO_PATH, filePath );
@@ -324,8 +376,11 @@ public class GitHubApiClient
      */
     public static boolean downloadFile(String filePath, Path targetPath)
     {
+        // Apply rate limiting before making download call
+        rateLimitInstance.applyRateLimiting();
+
         HttpURLConnection connection = null;
-        
+
         try
         {
             // Use proper URI building to handle path encoding correctly
@@ -336,20 +391,21 @@ public class GitHubApiClient
             String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
 
             URL url = new URL( rawUrl );
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 60000 );
-
-            int responseCode = connection.getResponseCode();
+            int responseCode = executeWithRetry( url, filePath );
 
             if( responseCode != 200 )
             {
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download file, status " + responseCode + ": " + filePath );
                 return false;
             }
+
+            // Create a new connection for reading the response
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod( "GET" );
+            connection.setRequestProperty( "User-Agent", USER_AGENT );
+
+            connection.setConnectTimeout( 10000 );
+            connection.setReadTimeout( 60000 );
 
             // Create parent directories if they don't exist
             Files.createDirectories( targetPath.getParent() );
@@ -383,6 +439,9 @@ public class GitHubApiClient
      */
     public static boolean downloadFileFromRoot(String filePath, Path targetPath)
     {
+        // Apply rate limiting before making download call
+        rateLimitInstance.applyRateLimiting();
+
         HttpURLConnection connection = null;
         try
         {
@@ -393,20 +452,21 @@ public class GitHubApiClient
             String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
 
             URL url = new URL( rawUrl );
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 60000 );
-
-            int responseCode = connection.getResponseCode();
+            int responseCode = executeWithRetry( url, filePath );
 
             if( responseCode != 200 )
             {
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download file from root, status " + responseCode + ": " + filePath );
                 return false;
             }
+
+            // Create a new connection for reading the response
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod( "GET" );
+            connection.setRequestProperty( "User-Agent", USER_AGENT );
+
+            connection.setConnectTimeout( 10000 );
+            connection.setReadTimeout( 60000 );
 
             // Create parent directories if they don't exist
             Files.createDirectories( targetPath.getParent() );

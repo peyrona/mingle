@@ -10,14 +10,25 @@ import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 
 /**
- * Utility class for calculating SHA-256 hashes of files.
+ * Utility class for calculating SHA-1 and SHA-256 hashes of files.
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class HashCalculator
+public final class HashCalculator
 {
+    /**
+     * Calculates SHA-1 hash of a file.
+     *
+     * @param file The file to calculate hash for
+     * @return SHA-1 hash as hexadecimal string, or null if error occurs
+     */
+    public static String calculateSHA1(File file)
+    {
+        return calculateHashWithAlgorithm( file, "SHA-1" );
+    }
+
     /**
      * Calculates SHA-256 hash of a file.
      *
@@ -25,6 +36,46 @@ public class HashCalculator
      * @return SHA-256 hash as hexadecimal string, or null if error occurs
      */
     public static String calculateSHA256(File file)
+    {
+        return calculateHashWithAlgorithm( file, "SHA-256" );
+    }
+
+    /**
+     * Calculates hash of a file using the appropriate algorithm based on expected hash length.
+     *
+     * @param file The file to calculate hash for
+     * @param expectedHash The expected hash to determine algorithm (40 chars = SHA-1, 64 chars = SHA-256)
+     * @return Hash as hexadecimal string, or null if error occurs
+     */
+    public static String calculateHash(File file, String expectedHash)
+    {
+        if( ! file.exists() || ! file.isFile() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File does not exist or is not a regular file: " + file.getAbsolutePath() );
+            return null;
+        }
+
+        String algorithm;
+        
+        // Determine algorithm based on expected hash length
+        if( isValidSHA1( expectedHash ) )
+        {
+            algorithm = "SHA-1";
+        }
+        else if( isValidSHA256( expectedHash ) )
+        {
+            algorithm = "SHA-256";
+        }
+        else
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Cannot determine hash algorithm from expected hash: " + expectedHash );
+            return null;
+        }
+
+        return calculateHashWithAlgorithm( file, algorithm );
+    }
+
+    private static String calculateHashWithAlgorithm(File file, String algorithm)
     {
         if( ! file.exists() || ! file.isFile() )
         {
@@ -34,7 +85,7 @@ public class HashCalculator
 
         try
         {
-            MessageDigest digest = MessageDigest.getInstance( "SHA-256" );
+            MessageDigest digest = MessageDigest.getInstance( algorithm );
 
             try( java.io.InputStream inputStream = Files.newInputStream( file.toPath() ) )
             {
@@ -53,7 +104,7 @@ public class HashCalculator
         }
         catch( NoSuchAlgorithmException e )
         {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "SHA-256 algorithm not available" );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, algorithm + " algorithm not available" );
             return null;
         }
         catch( IOException e )
@@ -84,6 +135,17 @@ public class HashCalculator
         }
 
         return hexString.toString();
+    }
+
+    /**
+     * Validates if a string is a valid SHA-1 hash (40 hexadecimal characters).
+     *
+     * @param hash String to validate
+     * @return true if valid SHA-1 hash, false otherwise
+     */
+    public static boolean isValidSHA1(String hash)
+    {
+        return hash != null && hash.length() == 40 && hash.matches( "[a-fA-F0-9]+" );
     }
 
     /**

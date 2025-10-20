@@ -18,7 +18,7 @@ import java.util.List;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class BackupManager
+public final class BackupManager
 {
     private static final String BACKUP_SUFFIX = ".backup.";
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern( "yyyyMMdd_HHmmss" );
