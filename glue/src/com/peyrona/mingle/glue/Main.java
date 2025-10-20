@@ -16,6 +16,7 @@ import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.util.function.Supplier;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -32,8 +33,6 @@ import jiconfont.swing.IconFontSwing;
  * A "Mission Control Tool" for the IoT: development and monitoring.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
@@ -70,17 +69,19 @@ public class Main
 
                     frame.showIt();
 
-                    Updater.updateIfNeeded( new File( "." ), UtilSys.isDevEnv, (nFiles) ->
-                            {
-                                return JTools.confirm( "There is a new version of the MSP\navailable for download.\n\nDo you want to update it now?" );
-                            } );
-
                     Tip.show( "Welcome to Glue - The Mingle Swiss-knife tool\n\n"+
                               "Please read the Mingle Standard Platform manual to get familiar with Glue.\n\n"+
                               "Suggested actions:\n"+
                               "     a) Connect with a running ExEn ('+' icon)\n"+
                               "     b) Start a local ExEn ('play' icon or F5)\n"+
                               "     c) Open the Script-Editor ('pencil' icon or F2)." );
+
+                    // Check for MSP new version ------------------------------------------------------
+                    File              fBase   = new File( (UtilSys.isDevEnv ? "./todeploy" : ".") );
+                    boolean           bDryRun = UtilSys.isDevEnv;
+                    Supplier<Boolean> fnAsk   = () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); };
+
+                    Updater.updateIfNeeded( fBase, bDryRun, fnAsk );
                 } );
         }
         catch( Exception exc )

@@ -7,14 +7,11 @@ import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import com.peyrona.mingle.updater.Updater;
-import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
 import java.util.List;
-import java.util.Scanner;
 
 /**
  *
@@ -42,10 +39,6 @@ public class Main
             showHelp();
             return;
         }
-
-        // Following has to be here, not inside ::transpile(...) ---------------
-
-        Updater.updateIfNeeded( new File( "." ), UtilSys.isDevEnv, (nFiles) -> { return isAccepted(); } );
 
         String    sCfgURI = cli.getValue( "config", null );
         IConfig   config  = new Config().load( sCfgURI ).setCliArgs( as );
@@ -95,20 +88,6 @@ public class Main
     }
 
     //------------------------------------------------------------------------//
-
-    private static boolean isAccepted()
-    {
-        System.out.println( "::: YOUR ATTENTION, PLEASE :::" );
-        System.out.println( "There is a new version of the MSP (Mingle Standard Platform)" );
-        System.out.println( "Do you want to update it now? (y/N + Enter) " );
-
-        try( Scanner in = new Scanner( System.in ) )
-        {
-            String s = in.next();
-
-            return (! s.isEmpty()) && ((s.charAt( 0 ) == 'y') || (s.charAt( 0 ) == 'Y'));
-        }
-    }
 
     private static void showHelp()
     {

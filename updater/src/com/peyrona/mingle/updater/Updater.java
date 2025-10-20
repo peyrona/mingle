@@ -8,7 +8,7 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.Objects;
-import java.util.function.Function;
+import java.util.function.Supplier;
 
 /**
  * Main class for checking and updating files from GitHub repository.
@@ -17,7 +17,7 @@ import java.util.function.Function;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class Updater
+public final class Updater
 {
     private static volatile boolean isWorking = false;
 
@@ -30,18 +30,19 @@ public class Updater
         if( (args.length == 0) || cli.hasOption( "help" ) || cli.hasOption( "h" ) )
         {
             System.out.println( "Usage: java Updater <folder> [-dry]" );
-            System.out.println( " folder  : Path to Mingle base directory" );
-            System.out.println( " -dry    : Optional flag to simulate updates without modifying files" );
-            System.out.println( " -help|-h: Show this help" );
+            System.out.println( "   folder  : Path to Mingle base directory" );
+            System.out.println( "   -dry    : Optional flag to simulate updates without modifying files" );
+            System.out.println( "   -help|-h: Show this help" );
             System.exit( (args.length == 0) ? 1 : 0 );
         }
 
-        UtilSys.setLogger( "Updater", UtilSys.getConfig() );
+        UtilSys.setLogger( "Updater", UtilSys.getConfig() )
+               .setLevel( ILogger.Level.ALL );
 
         boolean dryRun   = cli.hasOption( "dry" );
         File    fBaseDir = new File( args[0] );
 
-        updateIfNeeded( fBaseDir, dryRun, (n) -> { return true; } );
+        updateIfNeeded( fBaseDir, dryRun, () -> { return true; } );
 
         System.exit( 0 );
     }
@@ -66,7 +67,7 @@ public class Updater
      * @param bDryRun If true, simulate updates without modifying files
      * @param fnExcuteUpdate Receives the number of files that are needed to be updated and returns true if the update method has to be invoked.
      */
-    public static void updateIfNeeded( File fMingleDir, boolean bDryRun, Function<Integer,Boolean> fnExcuteUpdate )
+    public static void updateIfNeeded( File fMingleDir, boolean bDryRun, Supplier<Boolean> fnExcuteUpdate )
     {
         if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
         {
@@ -102,15 +103,15 @@ public class Updater
             }
 
             // Get remote catalog version
-            String remoteVersion = null;
-            File tempRemoteCatalog = null;
+            String remoteVersion;
+            File   tempRemoteCatalog;
 
             try
             {
                 tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
                 tempRemoteCatalog.deleteOnExit();
 
-                if( GitHubApiClient.downloadFileFromRoot( "catalog.json", tempRemoteCatalog.toPath() ) )
+                if( GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempRemoteCatalog.toPath() ) )
                 {
                     String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
                     remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
@@ -127,11 +128,6 @@ public class Updater
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Error downloading remote catalog.json: " + e.getMessage() );
                 return;
             }
-            finally
-            {
-                if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
-                    tempRemoteCatalog.delete();
-            }
 
             // Compare versions
             if( remoteVersion == null )
@@ -146,11 +142,7 @@ public class Updater
             {
                 UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
 
-                // Count files needing update for the consumer
-                GitHubFileUpdater checker = new GitHubFileUpdater( fMingleDir, true );
-                int filesNeedingUpdate = checker.checkFilesOnly();
-
-                if( fnExcuteUpdate.apply( filesNeedingUpdate ) )
+                if( fnExcuteUpdate.get() )
                     update( fMingleDir, bDryRun );
             }
         }
