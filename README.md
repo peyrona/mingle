@@ -11,7 +11,6 @@
 >
 > ![Une language basic example](une-1st-example.png)
 >
-> _Une_ is focused in the Internet of the Things ([IoT](https://en.wikipedia.org/wiki/Internet_of_things)) and it is extremely easy to learn.
 
 
 # Questions and Answers
@@ -28,7 +27,7 @@
 
  **How to install Mingle?**
 
-> 1. Download lastest release (at the right side of this web page: only the "mingle-*.zip" file is needed).
+> 1. Download lastest release (at the right side of this web page).
 > 2. Create a folder in you PC named "Mingle" (or whatever you like).
 > 3. Unzip the downloaded file inside your local "Mingle" folder.
 > 4. Either:<br>
@@ -38,24 +37,23 @@
 
  **What is the easiest way to start?**
 
-> The "Mingle Standard Platform" is a set of tools created to make easy the daily tasks about _Une_ applications: create, compile, deploy and monitorize. All these tools are integrated in the IDE. So, beginners only need to know the IDE.
+> All needed tools are integrated in the IDE (Integrated Development Environment). So, beginners only need to know about the IDE.
 >
 >
-> "Glue" is the name for the IDE (Integrated Development Environment), it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
+> "Glue" is the name for the IDE, it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
 >
 > So, our recommendation is:
-> 1.  Start Glue: for Linux, use "menu.sh"; for other OOSS use "run-win.ps1" or "run-mac.sh" file.
+> 1.  Start **Glue**: for Linux, use "menu.sh"; for other OOSS use "run-win.ps1" or "run-mac.sh" file.
 > 2.  Open the editor (click the pencil icon at toolbar).
 > 3.  Open an example (under 'examples' folder): they are numbered from easiest to smartest.
-> 4.  Take "The Une language.pdf" handbook (under "docs" folder).
-> 5.  Read, understand and test.
-> 6.  Modify the _Une_ source code and re-test.
-> 7.  Go to #3
+> 4.  Read, understand and test (play with it).
+> 5.  Modify the _Une_ source code and re-test.
+> 6.  Go to #3
 
 
  **What licence has Mingle?**
 
-> Everything is Open Source (under the Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation. So everyone can use and distribute everything for free (no charges, never, for nothing).
+> Everything is Open Source (Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation. So everyone can use and distribute everything for free (no charges, never, for nothing).
 >
 > The books (licensed as Creative Commons) are under "todeploy/docs" folder:
 > * Une_language.pdf

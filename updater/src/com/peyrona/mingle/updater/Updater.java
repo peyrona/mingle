@@ -1,343 +1,203 @@
 
 package com.peyrona.mingle.updater;
 
-import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonArray;
-import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.japi.UtilIO;
-import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.BufferedInputStream;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.net.URI;
-import java.net.URISyntaxException;
-import java.net.URL;
-import java.time.LocalDate;
-import java.time.temporal.ChronoUnit;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.function.Consumer;
+import java.nio.file.Files;
+import java.util.Objects;
+import java.util.function.Function;
 
 /**
- * This class download from a remote server those files that are newer (more recent) than local files.
+ * Main class for checking and updating files from GitHub repository.
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public final class Updater
+public class Updater
 {
-    private static final String sBASE_URL    = "https://github.com/peyrona/mingle/tree/main/todeploy";
-    private static final File   fLastSuccess = new File( UtilSys.getEtcDir(), "updater.last.success.txt" );
-    private static final File   fWorking     = new File( UtilSys.getEtcDir(), "updater.working.txt" );
+    private static volatile boolean isWorking = false;
 
     //------------------------------------------------------------------------//
 
-    public static synchronized boolean isWorking()
+    public static void main( String[] args )
     {
-        return fWorking.exists();
-    }
+        UtilCLI cli = new UtilCLI( args );
 
-    public static LocalDate lastSuccess()
-    {
-        return fLastSuccess.exists() ? UtilSys.toLocalDate( fLastSuccess.lastModified() )
-                                     : null;
-    }
-
-    public static synchronized boolean isNeeded()
-    {
-        if( isWorking() )
-            return false;
-
-        LocalDate dLocalFile = lastSuccess();
-
-        if( dLocalFile == null )
-            return true;
-
-        if( dLocalFile.until( LocalDate.now(), ChronoUnit.DAYS ) <= 7 )   // Do not access server more than once per week (to save traffic)
-            return false;
-
-        try
+        if( (args.length == 0) || cli.hasOption( "help" ) || cli.hasOption( "h" ) )
         {
-            long stamp = Long.parseLong( download( Util.sFILE_LAST_NAME ) );    // Can throw IO, NumberFormat, Null... exceptions
-
-            return dLocalFile.isBefore( UtilSys.toLocalDate( stamp ) );
-        }
-        catch( Exception ex )
-        {
-            // Nothing to do: this method returns false (this is what is needed)
+            System.out.println( "Usage: java Updater <folder> [-dry]" );
+            System.out.println( " folder  : Path to Mingle base directory" );
+            System.out.println( " -dry    : Optional flag to simulate updates without modifying files" );
+            System.out.println( " -help|-h: Show this help" );
+            System.exit( (args.length == 0) ? 1 : 0 );
         }
 
-        return false;  // Flow arrives here when there were an error accessing the server or accessing the file sFILE_LIST_NAME.
-    }                  // In both cases, the update process can not be accomplished.
+        UtilSys.setLogger( "Updater", UtilSys.getConfig() );
 
-    public static void update()
-    {
-        update( (sMsg) -> System.out.println( sMsg ),
-                (sErr) -> System.err.println( sErr ),
-                true );
+        boolean dryRun   = cli.hasOption( "dry" );
+        File    fBaseDir = new File( args[0] );
+
+        updateIfNeeded( fBaseDir, dryRun, (n) -> { return true; } );
+
+        System.exit( 0 );
     }
 
     /**
-     * 1. Download the file that contains the list of all files and their timestamp.
-     * 2. Compare  every file in the list with its correspondent local file.
-     * 3. Download all files that are newer than local files into a temporal folder.
-     * 4. Move     all files from the temporal folder to MSP home.
+     * Checks if the Updater is currently working (performing its job).
      *
-     * @param onMessage
-     * @param onError
-     * @param bDryRun
+     * @return true if the updater is currently running, false otherwise
      */
-    public static void update( Consumer<String> onMessage, Consumer<String> onError, boolean bDryRun )
+    public static boolean isWorking()
     {
-        if( isWorking() )
+        return isWorking;
+    }
+
+    //------------------------------------------------------------------------//
+
+    /**
+     * Checks if updates are needed by comparing catalog.json versions.
+     * If versions differ, executes the consumer with the number of files needing updates.
+     *
+     * @param fMingleDir Base directory path to check
+     * @param bDryRun If true, simulate updates without modifying files
+     * @param fnExcuteUpdate Receives the number of files that are needed to be updated and returns true if the update method has to be invoked.
+     */
+    public static void updateIfNeeded( File fMingleDir, boolean bDryRun, Function<Integer,Boolean> fnExcuteUpdate )
+    {
+        if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
             return;
-
-        JsonArray jaRemote = null;
-
-        setWorking( true );
-
-        if( ! isNeeded() )
-            setWorking( false );
-
-        if( onMessage == null )
-            onMessage = (str) -> {};
-
-        if( onError == null )
-            onError = (str) -> {};
-
-        onMessage.accept( "Downloading files list..." );
+        }
 
         try
         {
-            jaRemote = getRemoteFileListContents();
-        }
-        catch( IOException exc )
-        {
-            throw new MingleException( "Update aborted because unsatisfied prerequisites.", exc );
-        }
-        finally
-        {
-            setWorking( false );
-        }
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions" );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
 
-        boolean    bSuccess = true;
-        List<File> lstLocal = new ArrayList<>();
-        File       fTmpDir  = new File( UtilSys.getTmpDir(), UtilIO.UUFileName() );     // After all files are downloaded without errors, the entire folder is moved to UtilSys.fHome
+            // Get local catalog version
+            File localCatalogFile = new File( fMingleDir, "catalog.json" );
+            String localVersion = null;
 
-        try
-        {
-            UtilIO.mkdirs( fTmpDir );
-
-            onMessage.accept( "Processing files list..." );
-
-            lstLocal = new ArrayList<>( Util.getLocalDistroFiles().values() );
-
-            for( int n = 0; n < jaRemote.size(); n++ )
-            {
-                JsonObject joRemote = jaRemote.get( n ).asObject();
-                File       fLocal   = getLocalTwinFile( joRemote, lstLocal );
-
-                if( (fLocal == null) || isRemoteNewer( joRemote, fLocal ) )    // null == does not exist locally
-                {
-                    String  sRemote = joRemote.get( Util.sJSON_NAME   ).asString();
-                    boolean isDir   = joRemote.get( Util.sJSON_FOLDER ).asBoolean();
-                    File    file    = new File( fTmpDir, sRemote );
-
-                    try
-                    {
-                        if( isDir && ! file.exists() )
-                        {
-                            onMessage.accept( "Creating folder: "+ file );
-
-                            if( bDryRun )  onMessage.accept( "Dry-run: "+ file );
-                            else           UtilIO.mkdirs( file );
-                        }
-                        else
-                        {
-                            onMessage.accept( "Downloading file: "+ file );
-
-                            if( bDryRun )  onMessage.accept( "Dry-run: "+ file );
-                            else           download( sRemote, file );
-                        }
-                    }
-                    catch( IOException ioe )
-                    {
-                        bSuccess = false;
-                        onError.accept( "Updater error processing: "+ fLocal + UtilStr.toStringBrief( ioe ) );
-                    }
-                }
-            }
-        }
-        catch( IOException ioe )
-        {
-            bSuccess = false;
-            onError.accept( "Error updating MSP files: "+ ioe.getMessage() );
-
-            try
-            {
-                if( bDryRun )
-                    onMessage.accept( "Removing temporal folder" );
-
-                UtilIO.delete( fTmpDir );
-            }
-            catch( IOException exc )
-            {
-                onError.accept( "Error deleting folder: ["+ fTmpDir +"]\nYou should delete it manually.\n"+ UtilStr.toStringBrief( exc ) );
-            }
-        }
-
-        if( bSuccess )
-        {
-            onMessage.accept( "Deleting unnecesary local files" );
-
-            // Remaining local files (in lstLocal) do not exist remotely: can be deleted.
-            // It is not important if deleting fails: next update there will be another opportunity to delete the files.
-
-            for( File fLocal : lstLocal )
+            if( localCatalogFile.exists() && localCatalogFile.isFile() )
             {
                 try
                 {
-                    onMessage.accept( "Delete "+ (fLocal.isDirectory() ? "folder: " : "file: ") + fLocal );
-
-                    if( ! fLocal.isDirectory() &&                 // Better not to remove dirs: user coud create
-                        UtilIO.hasExtension( fLocal, "jar" ) )    // Bettor delete only JARs, user could create many files: props, html, js, css, txt...
-                    {
-                        if( bDryRun )  onMessage.accept( "Dry-run: "+ fLocal );
-                        else           UtilIO.delete( fLocal );
-                    }
+                    String localCatalogContent = Files.readString( localCatalogFile.toPath() );
+                    localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
+                    UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
                 }
-                catch( IOException ioe )
+                catch( IOException e )
                 {
-                    if( bDryRun )
-                        onMessage.accept( "Dry-run: "+ ioe.getMessage() );
-                 // else --> Nothing to do (not need to inform the user): next update there will be another opportunity to delete the files.
-                 // Do not need to set bSuccess to false
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Error reading local catalog.json: " + e.getMessage() );
                 }
             }
-        }
+            else
+            {
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog.json not found" );
+            }
 
-        if( bSuccess )
-        {
+            // Get remote catalog version
+            String remoteVersion = null;
+            File tempRemoteCatalog = null;
+
             try
             {
-                // Time to move temporal folder to UtilSys.fHomeDir
+                tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
+                tempRemoteCatalog.deleteOnExit();
 
-                onMessage.accept( "Moving temporal folder-tree from ["+ fTmpDir +"]  --->  ["+ UtilSys.fHomeDir +']' );
-
-                UtilIO.move( fTmpDir, UtilSys.fHomeDir );
-
-                // Updates the file that is used as flag
-
-                onMessage.accept( "Updating last successful operation flag file ["+ fLastSuccess +']' );
-
-                UtilIO.newFileWriter()
-                      .setFile( fLastSuccess )
-                      .replace( "" );           // File is empty: I am only insterested in the time-stamp of this file
+                if( GitHubApiClient.downloadFileFromRoot( "catalog.json", tempRemoteCatalog.toPath() ) )
+                {
+                    String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
+                    remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
+                    UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
+                }
+                else
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download remote catalog.json" );
+                    return;
+                }
             }
-            catch( IOException ioe )
+            catch( IOException e )
             {
-                bSuccess = false;
-
-                if( fTmpDir.exists() )
-                    onError.accept( "Error deleting folder: "+ fTmpDir +"\nYou should delete it manually." );
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Error downloading remote catalog.json: " + e.getMessage() );
+                return;
             }
             finally
             {
-                setWorking( false );
+                if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
+                    tempRemoteCatalog.delete();
             }
-        }
 
-        onMessage.accept( "Update process finished " + (bSuccess ? "successfully" : "with errors") );
-    }
-
-    //----------------------------------------------------------------------------//
-    // PRIVATE
-
-    private static synchronized void setWorking( boolean start )
-    {
-        if( start )
-        {
-            if( ! fWorking.exists() )
+            // Compare versions
+            if( remoteVersion == null )
             {
-                try
-                {
-                    if( fWorking.createNewFile() )
-                        fWorking.deleteOnExit();      // Do not really needed, just to be sure
-                }
-                catch( IOException ex )
-                {
-                    throw new MingleException( "Can not create file "+ fWorking );
-                }
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "No remote version found, cannot determine update need" );
+            }
+            else if( Objects.equals( remoteVersion, localVersion ) )
+            {
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Versions match (local: " + localVersion + "), no update needed" );
+            }
+            else
+            {
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
+
+                // Count files needing update for the consumer
+                GitHubFileUpdater checker = new GitHubFileUpdater( fMingleDir, true );
+                int filesNeedingUpdate = checker.checkFilesOnly();
+
+                if( fnExcuteUpdate.apply( filesNeedingUpdate ) )
+                    update( fMingleDir, bDryRun );
             }
         }
-        else    // stop
+        catch( Exception e )
         {
-            if( ! fWorking.delete() )
-                throw new MingleException(  fWorking +": still exists, it has to be removed manually." );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error during version check: " + e.getMessage() );
         }
     }
 
-    private static File getLocalTwinFile( JsonObject joRemote, List<File> lstLocal ) throws IOException
+    /**
+     * Updates files from GitHub repository for the specified path.
+     *
+     * @param fMingleDir Base directory path to check
+     * @param bDryRun If true, simulate updates without modifying files
+     * @return true if update process completed successfully, false otherwise
+     */
+    public static boolean update( File fMingleDir, boolean bDryRun )
     {
-        String sRemote = joRemote.get( Util.sJSON_NAME ).asString();
-
-        for( File f: lstLocal )
-            if( f.getCanonicalPath().endsWith( sRemote ) )
-                return f;
-
-        return null;
-    }
-
-    private static boolean isRemoteNewer( JsonObject joRemote, File fLocal )
-    {
-        long nTime = joRemote.get( Util.sJSON_MODIFIED ).asLong();
-
-        return (nTime > fLocal.lastModified());
-    }
-
-    private static JsonArray getRemoteFileListContents() throws IOException
-    {
-        JsonArray ja = null;
-
         try
         {
-            String sContent = download( Util.sFILE_LIST_NAME ).trim();
+            // Set working state to true before starting the update process
+            isWorking = true;
 
-            if( sContent.isEmpty() )
-                throw new IOException( Util.sFILE_LIST_NAME +": remote file does not exists or is empty" );
+            if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
+            {
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
+                return false;
+            }
 
-            ja = Json.parse( sContent ).asArray();
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
 
-            if( (ja == null) || ja.isNull() || (! ja.isArray()) )
-                throw new IOException( "Malformed JSON file: "+ Util.sFILE_LIST_NAME );
+            GitHubFileUpdater updater = new GitHubFileUpdater( fMingleDir, bDryRun );
+            updater.checkAndUpdateFiles();
+
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+
+            return true;
         }
-        catch( Exception exc )
+        catch( Exception e )
         {
-            throw new IOException( exc );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Update failed" );
+            return false;
         }
-
-        return ja;
-    }
-
-    private static String download( String sRemote ) throws IOException, URISyntaxException
-    {
-        URI uri = new URL( sBASE_URL + sRemote ).toURI();
-
-             if( Util.isBinary( sRemote ) ) return UtilIO.getAsText( uri );
-        else if( Util.isASCII(  sRemote ) ) return UtilIO.getAsText( uri );
-
-        throw new IOException( UtilIO.getExtension( sRemote ) +" extension not recognized" );
-    }
-
-    private static void download( String sRemote, File fLocalFile ) throws IOException
-    {
-        URL url = new URL( sBASE_URL + sRemote );
-
-        UtilIO.copy( new BufferedInputStream( url.openStream() ),
-                     new FileOutputStream( fLocalFile ) );
+        finally
+        {
+            isWorking = false;   // Always set working state to false when done
+        }
     }
 }

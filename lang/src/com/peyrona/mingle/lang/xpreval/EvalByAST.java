@@ -25,6 +25,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
@@ -407,34 +408,35 @@ final class EvalByAST
         if( node == null )
             return false;
 
-        final boolean[] bRet = { true };    // Trick to avoid the fact that local variables used in lambda expressions must be effectively final
+        final AtomicBoolean bRet       = new AtomicBoolean( true );
+        final Stack<Long>   delayStack = new Stack<>();
 
-        //------------------------------------------------------------------------//
-        // Validates all nodes
-
-        long[] aMaxDelay = { 0 };
-
+        // Ckeck that a nested delay is not bigger than its parent delay -----------------------------
         visitor( node,
-                 VISIT_PRE_ORDER,
-                 (ASTNode child) ->
-                 {
-                    bRet[0] = child.validate( lstErrors ) && bRet[0];     // child.validate(...) is 1st to avoid lazy evaluation
+                VISIT_POST_ORDER,     // Visit childs first
+                (ASTNode child) ->
+                {
+                    bRet.set( child.validate( lstErrors ) && bRet.get() );
 
-// TODO: probar si esto funciona -->
                     if( child.delay() > 0 )
                     {
-                        if( aMaxDelay[0] > 0 && child.delay() > aMaxDelay[0] )
-                            lstErrors.add( new CodeError( "Nested delay ("+ child.delay() +") is bigger than parent ("+ aMaxDelay[0] +") delay", child.token() ) );
-                        else
-                            aMaxDelay[0] = child.delay();
+                        long currentMax = delayStack.isEmpty() ? 0 : delayStack.peek();
+
+                        if( currentMax > 0 && child.delay() > currentMax )
+                        {
+                            lstErrors.add( new CodeError( "Nested delay (" + child.delay() + ") is bigger than parent (" + currentMax + ") delay", child.token() ) );
+                        }
+
+                        delayStack.push( child.delay() );
                     }
+                    else if( !delayStack.isEmpty() && delayStack.peek() > 0 )
+                    {
+                        // Pop when we've finished a subtree that had a delay
+                        delayStack.pop();
+                    }
+                } );
 
-                    if( child.isLeaf() )
-                        aMaxDelay[0] = 0;
-                 }
-               );
-
-        return bRet[0];
+        return bRet.get();
     }
 
     /**

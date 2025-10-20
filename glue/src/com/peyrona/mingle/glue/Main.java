@@ -70,14 +70,13 @@ public class Main
 
                     frame.showIt();
 
-                    if( (! UtilSys.isDevEnv) && Updater.isNeeded() &&    // To test Updater, use Updater:Test()
-                        JTools.confirm( "There is a new version of the MSP (Mingle Standard Platform)\navailable for download.\n\nDo you want to update it now?" ) )
-                    {
-                        UtilSys.execute( Main.class.getName(), () -> Updater.update( null, (msg) -> JTools.error( msg ), UtilSys.isDevEnv ) );
-                    }
+                    Updater.updateIfNeeded( new File( "." ), UtilSys.isDevEnv, (nFiles) ->
+                            {
+                                return JTools.confirm( "There is a new version of the MSP\navailable for download.\n\nDo you want to update it now?" );
+                            } );
 
                     Tip.show( "Welcome to Glue - The Mingle Swiss-knife tool\n\n"+
-                              "Please read the MSP manual to get familiar with Glue.\n\n"+
+                              "Please read the Mingle Standard Platform manual to get familiar with Glue.\n\n"+
                               "Suggested actions:\n"+
                               "     a) Connect with a running ExEn ('+' icon)\n"+
                               "     b) Start a local ExEn ('play' icon or F5)\n"+
@@ -169,7 +168,9 @@ public class Main
             {
                 if( Updater.isWorking() )
                 {
-                    JTools.alert( "Glue cannot be closed because it is being updated\nand could end in a state that would make the whole MSP unusable." );
+                    JTools.alert( "Glue cannot be closed because MSP is being updated\n"+
+                                  "and could end in a state that would make the whole MSP unusable."+
+                                  "\nWait for acouple of minutes and try again." );
                     return;
                 }
 
