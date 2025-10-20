@@ -8,6 +8,7 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.updater.Updater;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -43,17 +44,8 @@ public class Main
         }
 
         // Following has to be here, not inside ::transpile(...) ---------------
-        // To test Updater, use Updater:Test()
 
-        if( (! UtilSys.isDevEnv) && (System.console() != null) && Updater.isNeeded() && isAccepted() )
-        {
-            Updater.update( (str) -> System.out.println( str ),
-                            (str) -> System.err.println( str ),
-                            UtilSys.isDevEnv );    // Dry-run?
-            System.out.println( "You have to start Glue manually." );
-            System.exit( 0 );
-        }
-        // ---------------------------------------------------------------------
+        Updater.updateIfNeeded( new File( "." ), UtilSys.isDevEnv, (nFiles) -> { return isAccepted(); } );
 
         String    sCfgURI = cli.getValue( "config", null );
         IConfig   config  = new Config().load( sCfgURI ).setCliArgs( as );

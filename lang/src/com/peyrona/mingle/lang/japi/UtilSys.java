@@ -84,7 +84,7 @@ public final class UtilSys
         return logger;
     }
 
-    public static void setLogger( String name, IConfig config )
+    public static ILogger setLogger( String name, IConfig config )
     {
         config = (config == null) ? getConfig() : config;
 
@@ -95,6 +95,8 @@ public final class UtilSys
         logger = new Logger().init( name.trim(), bDisk, b2Console )
                              .setLevel( sLogLevel )
                              .deleteOlderThan( (UtilSys.isDevEnv ? 21 : config.get( "common", "log_expire", -1 )) );
+
+        return logger;
     }
 
     public static IConfig getConfig()

@@ -3,8 +3,10 @@ package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Lexer;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
@@ -114,9 +116,18 @@ public final class NAXE implements IXprEval
     @Override
     public Object eval()
     {
-        if( ! isEvaluating.compareAndSet( false, true ) )
-            // TODO: cambiar la exc por esto --> UtilSys.getLogger().log( ILogger.Level.WARNING, "Expression ["+ sOriginal +"] is already being evaluated" );
-            throw new IllegalStateException( "Expression ["+ sOriginal +"] is already being evaluated" );
+        boolean bOnEval = ! isEvaluating.compareAndSet( false, true );
+
+        assert ! bOnEval;
+
+        if( bOnEval )
+        {
+            String  msg = "Expression ["+ sOriginal +"] is already being evaluated";
+            ILogger lgr = UtilSys.getLogger();
+
+            if( lgr == null )  System.err.println( msg );
+            else               lgr.log( ILogger.Level.WARNING, msg );
+        }
 
         try
         {
