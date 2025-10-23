@@ -138,7 +138,8 @@ public final class UneEditorPane extends RTextScrollPane
                         {
                             int    caret = rsta.getCaretPosition();
                             int    line  = rsta.getLineOfOffset( caret );
-                            String text  = getText().split( "\n" )[line];
+                            String[] lines = getText().split( "\n" );
+                            String text  = (line >= 0 && line < lines.length) ? lines[line] : "";
                             int    where = rsta.getLineEndOffset( line );
 
                             rsta.insert( text +'\n', where );

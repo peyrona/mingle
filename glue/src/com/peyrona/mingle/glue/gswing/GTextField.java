@@ -7,8 +7,15 @@ import java.awt.event.FocusListener;
 import javax.swing.JTextField;
 
 /**
+ * A JTextField extension that supports placeholder text.
+ * <p>
+ * This class provides a text field with the ability to display placeholder text
+ * when the field is empty and not focused. The placeholder text appears in gray
+ * and disappears automatically when the user starts typing or the field gains focus.
  *
- * @author francisco
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class GTextField extends JTextField implements FocusListener
 {

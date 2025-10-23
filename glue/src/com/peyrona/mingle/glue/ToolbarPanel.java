@@ -6,8 +6,10 @@ import com.peyrona.mingle.glue.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GFrame;
+import com.peyrona.mingle.glue.images.pnlInfo;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -21,6 +23,7 @@ import java.net.URI;
 import java.net.URISyntaxException;
 import javax.swing.JButton;
 import javax.swing.JComponent;
+import javax.swing.JFrame;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
@@ -32,23 +35,21 @@ import jiconfont.swing.IconFontSwing;
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 final class ToolbarPanel extends javax.swing.JPanel
 {
     private Process procExEn  = null;
     private Process procGum   = null;
+    private GFrame  wndGum    = null;
     private GFrame  frmEditor = null;
 
-    private javax.swing.JButton btnAdd;
-    private javax.swing.JButton btnDel;
-    private javax.swing.JButton btnEdit;
-    private javax.swing.JButton btnExEn;
-    private javax.swing.JButton btnGum;
-    private javax.swing.JButton btnInfo;
-    private javax.swing.JButton btnLoad;
-    private javax.swing.JButton btnSave;
+    private JButton btnAdd;
+    private JButton btnDel;
+    private JButton btnEdit;
+    private JButton btnExEn;
+    private JButton btnGum;
+    private JButton btnInfo;
+    private JButton btnSave;
 
     //------------------------------------------------------------------------//
 
@@ -73,9 +74,7 @@ final class ToolbarPanel extends javax.swing.JPanel
             UneMultiEditorPanel umep = JTools.getChild( frmEditor, UneMultiEditorPanel.class );
 
             if( umep.isAnyScriptUnsaved() && JTools.confirm( "There is one or more unsaved modified scripts.\nDo you want to cancel exiting?" ) )
-            {
                 return false;
-            }
 
             frmEditor.dispatchEvent( new WindowEvent( frmEditor, WindowEvent.WINDOW_CLOSING ) );    // Gently tells the editor to close
         }
@@ -90,6 +89,7 @@ final class ToolbarPanel extends javax.swing.JPanel
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
 
     private void initExtra()
     {
@@ -112,7 +112,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
             .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onUneEditor(),
+            .registerKeyboardAction( (ActionListener) -> onOpenUneEditor(),
                                      KeyStroke.getKeyStroke( KeyEvent.VK_F4, 0 ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
@@ -139,7 +139,6 @@ final class ToolbarPanel extends javax.swing.JPanel
     {
         int nTabCount = Main.frame.getExEnTabsPane().getTabCount();
 
-        btnLoad.setEnabled( nTabCount > 0 );     // Load File
         btnSave.setEnabled( nTabCount > 0 );
         btnDel.setEnabled(  nTabCount > 0 );
         btnAdd.setEnabled(  true );
@@ -154,21 +153,17 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     private void initComponents()
     {
-        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn [F2]" );
-        btnSave = new GButton(this).setIcon( FontAwesome.FOLDER  , 16 ).addAction( (ActionEvent evt) -> onSaveCurrentModel() ).setToolTip( "Save current model" );
-        btnDel  = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onEmptyExEn()        ).setToolTip( "Empty current model" );
-        btnLoad = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onLoadModel()        ).setToolTip( "Load model from file and deploy it to a ExEn linked in Glue" );
-        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunLocalExEn()     ).setToolTip( "Executes a local ExEn (Stick) using default local configuration file [F3]" );
-        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onUneEditor()        ).setToolTip( "Editor for Une script and configuration files [F4]" );     // Editor for Une files (always enabled)
+        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn already running [F2]" );
+        btnSave = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onSaveCurrentModel() ).setToolTip( "Save current model" );
+        btnDel  = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onClearExEn()        ).setToolTip( "Empty current model: delete all rules and devices" );
+        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunLocalExEn()     ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F3]" );
+        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenUneEditor()    ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F4]" );  // Editor is always enabled
         btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()       ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F5]" );
         btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()             ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
     }
 
-    private void onLoadModel() {
-        Main.frame.getExEnTabsPane().onLoadModel();
-    }
-
-    private void onConnect2ExEn() {
+    private void onConnect2ExEn()
+    {
         Main.frame.getExEnTabsPane().add();
     }
 
@@ -176,7 +171,8 @@ final class ToolbarPanel extends javax.swing.JPanel
      * This action removes all commands from highlighted ExEn sending requests to the ExEn.
      * @param evt
      */
-    private void onEmptyExEn() {
+    private void onClearExEn()
+    {
 
         if( JTools.confirm( "Do you want to remove all commands?" ) )
             Main.frame.getExEnTabsPane().clear();
@@ -239,7 +235,7 @@ final class ToolbarPanel extends javax.swing.JPanel
         Main.frame.getExEnTabsPane().save();
     }
 
-    private void onUneEditor()
+    private void onOpenUneEditor()
     {
         frmEditor = GFrame.make()
                           .title( "Editor for the Mingle Standard Platform (MSP)" )
@@ -247,43 +243,63 @@ final class ToolbarPanel extends javax.swing.JPanel
                           .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
                           .onClose( GFrame.DISPOSE_ON_CLOSE )
                           .setVisible()
-                          .size( -1, 90 );    // -1 keeps width, but works only after :pack()
+                          .sizeAsPercent( -1, 90 );    // -1 keeps width, but works only after :pack()
     }
 
     private void onRunStopGum()
     {
-        if( ! UtilSys.isAtLeastJava11() )
-        {
-            JTools.alert( "Java version at folder: "+ UtilSys.getJavaHome() +'\n'+
-                          "is "+ System.getProperty( "java.version" ) +". But minimum needed to run Gum is Java 11." );
-            return;
-        }
-
         if( procGum == null )
         {
             JTools.showWaitFrame( "Starting Gum and default WebBrowser..." );
 
             procGum = Util.runGum();
 
+            wndGum = new GFrame()
+                         .title( "'Gum' console" )
+                         .closeOnEsc()
+                         .onClose( JFrame.DISPOSE_ON_CLOSE )
+                         .onClose( (frm) -> { if( JTools.confirm( "Stop also Gum?", wndGum ) ) stopGum(); } )
+                         .setContent( new ConsolePanel() )
+                         .setVisible()                       // Has to be before to setSize(...)
+                         .size( 800, 500 );
+
+            Util.catchOutput( procGum, (str) -> ((ConsolePanel) wndGum.getContent()).append( str ) );
+
+            // Change Gum icon to blue when it starts
+            SwingUtilities.invokeLater( () ->
+                {
+                    btnGum.setIcon( IconFontSwing.buildIcon( FontAwesome.CLOUD, 16, Color.PINK ) );
+                    btnGum.setToolTipText( "Stops Gum WebServer" );
+                } );
+
+            // Awful but useful
             UtilSys.execute( getClass().getName(),
-                             1500,
-                             () ->    // Awful but useful
+                             2000,
+                             () ->
                                 {
-                                    try
+                                    if( isDesktopBrowseSupported() )
                                     {
-                                       Desktop.getDesktop().browse( new URI( "http://localhost:8080/gum" ) );
-                                       JTools.hideWaitFrame();
+                                        try
+                                        {
+                                           Desktop.getDesktop().browse( new URI( "http://localhost:8080/gum/index.html" ) );
+                                           JTools.hideWaitFrame();
+                                        }
+                                        catch( IOException | URISyntaxException exc )
+                                        {
+                                            JTools.hideWaitFrame();
+                                            JTools.error( "Failed to open browser: " + exc.getMessage() );
+                                        }
                                     }
-                                    catch( IOException | URISyntaxException exc )
+                                    else
                                     {
-                                        JTools.error( exc );
+                                        JTools.hideWaitFrame();
+                                        showBrowserNotSupportedDialog();
                                     }
                                 } );
         }
         else if( JTools.confirm( "Are you sure you want to stop Gum WebServer?" ) )
         {
-            Util.killProcess( procGum );
-            procGum = null;
+            stopGum();
         }
     }
 
@@ -293,5 +309,65 @@ final class ToolbarPanel extends javax.swing.JPanel
                 dlg.add( new pnlInfo(), BorderLayout.CENTER );
                 dlg.setResizable( false );
                 dlg.setVisible();
+    }
+
+    //------------------------------------------------------------------------//
+    // PRIVATE METHODS
+    //------------------------------------------------------------------------//
+
+    private static boolean isDesktopBrowseSupported()
+    {
+        return Desktop.isDesktopSupported() &&
+               Desktop.getDesktop().isSupported( Desktop.Action.BROWSE );
+    }
+
+    private static void showBrowserNotSupportedDialog()
+    {
+        String url = "http://localhost:8080/gum";
+        String message = "Cannot automatically open browser.\n\n" +
+                        "Please manually open this URL:\n" +
+                        url + "\n\n" +
+                        "Would you like to copy this URL to clipboard?";
+
+        if( JTools.confirm( message ) )
+        {
+            copyUrlToClipboard( url );
+            JTools.info( "URL copied to clipboard!\n\nPaste it in your browser to access Gum WebServer." );
+        }
+    }
+
+    private static void copyUrlToClipboard( String url )
+    {
+        try
+        {
+            java.awt.datatransfer.Clipboard clipboard =
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            java.awt.datatransfer.StringSelection selection =
+                new java.awt.datatransfer.StringSelection( url );
+            clipboard.setContents( selection, null );
+        }
+        catch( Exception ex )
+        {
+            JTools.error( "Failed to copy URL to clipboard: " + ex.getMessage() );
+        }
+    }
+
+    private void stopGum()
+    {
+        if( wndGum != null )
+        {
+            wndGum.dispose();
+            wndGum = null;
+        }
+
+        Util.killProcess( procGum );
+        procGum = null;
+
+        // Reset Gum icon to original color when it stops
+        SwingUtilities.invokeLater( () ->
+            {
+                btnGum.setIcon( IconFontSwing.buildIcon( FontAwesome.CLOUD, 16, JTools.getIconColor() ) );
+                btnGum.setToolTipText( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F5]" );
+            } );
     }
 }

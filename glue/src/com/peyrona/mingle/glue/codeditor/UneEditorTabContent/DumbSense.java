@@ -39,9 +39,22 @@ import javax.swing.text.BadLocationException;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
 /**
- * Similar to, but not as smart as IntelliSense.
+ * Code completion popup for the Une editor providing intelligent suggestions.
+ * <p>
+ * This class implements a simplified IntelliSense-like functionality that provides
+ * context-aware code completion suggestions including:
+ * <ul>
+ * <li>Available functions from the expression evaluator</li>
+ * <li>Driver configurations with their CONFIG blocks</li>
+ * <li>Extended data types and their methods</li>
+ * <li>Automatic type detection based on current context</li>
+ * </ul>
+ * The popup is triggered by user interaction and provides keyboard and mouse
+ * navigation for selecting suggestions.
  *
- * @author francisco
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 final class DumbSense extends JPopupMenu
 {

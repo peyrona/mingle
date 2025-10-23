@@ -3,8 +3,8 @@ package com.peyrona.mingle.network;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
-import com.peyrona.mingle.network.plain.PlainSocketClient;
-import com.peyrona.mingle.network.plain.PlainSocketServer;
+import com.peyrona.mingle.network.plain.SocketClient;
+import com.peyrona.mingle.network.plain.SocketServer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -42,8 +42,8 @@ final class TestSockets
 
         if( type.contains( "MSP" ) )
         {
-            server = new PlainSocketServer();
-            client = new PlainSocketClient();
+            server = new SocketServer();
+            client = new SocketClient();
         }
         else
         {

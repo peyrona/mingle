@@ -2,23 +2,23 @@
 package com.peyrona.mingle.glue.gswing;
 
 import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.lang.MingleException;
 import java.awt.Container;
+import java.awt.event.ComponentAdapter;
+import java.awt.event.ComponentEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import javax.swing.JComponent;
 import javax.swing.JTable;
 import javax.swing.JViewport;
+import javax.swing.SwingUtilities;
 import javax.swing.event.AncestorEvent;
 import javax.swing.event.AncestorListener;
 import javax.swing.event.ChangeEvent;
-import javax.swing.table.TableColumn;
 import javax.swing.table.TableColumnModel;
 
 /**
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  * @param <T>
@@ -34,16 +34,39 @@ public class GTable<T> extends JTable
 
     public GTable( GTableModel<T> model, int... anColWidths )
     {
-        this.model       = model;
-        this.anColWidths = anColWidths;
+        if( model == null )
+            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+
+        this.model = model;
 
         setModel( model );
-        setAutoResizeMode( JTable.AUTO_RESIZE_OFF );
+        setAutoResizeMode( JTable.AUTO_RESIZE_SUBSEQUENT_COLUMNS );
         setCellSelectionEnabled( false );
         setRowSelectionAllowed(  true  );
         setFillsViewportHeight(  true  );
-        setFillsViewportHeight(  true  );
 
+        // Verify column widths -----------------------
+        int nCols = getColumnModel().getColumnCount();
+
+        if( anColWidths.length > nCols )
+            throw new MingleException( "There are more column widths than table columns" );
+
+        if( anColWidths.length < nCols )
+        {
+            int totalPercent = 0;
+
+            for( int n = 0; n < nCols; n++ )
+            {
+                anColWidths[n] = Math.abs( anColWidths[n] );
+                totalPercent += anColWidths[n];
+            }
+
+            anColWidths[ anColWidths.length - 1 ] = 100 - totalPercent;
+        }
+
+        this.anColWidths = anColWidths;
+
+        // Events ------------------------------------
         addMouseListener( new MouseAdapter()
         {
             @Override
@@ -62,7 +85,22 @@ public class GTable<T> extends JTable
                 Container parent = event.getAncestorParent();
 
                 if( parent instanceof JViewport )
-                    ((JViewport) parent).addChangeListener( (ChangeEvent ce) -> GTable.this.resizeColumns( ce ) );
+                {
+                    ((JViewport) parent).addChangeListener( (ChangeEvent ce) -> GTable.this.resizeColumns() );
+
+                    // Also listen to component resize events
+                    GTable.this.addComponentListener( new ComponentAdapter()
+                    {
+                        @Override
+                        public void componentResized( ComponentEvent ce )
+                        {
+                            GTable.this.resizeColumns();
+                        }
+                    } );
+
+                    // Initial resize
+                    GTable.this.resizeColumns();
+                }
             }
 
             @Override
@@ -127,20 +165,37 @@ public class GTable<T> extends JTable
     /**
      * Set the width of the columns as percentages.
      * <p>
-     * Note: this method does NOT verify that all percentages add up to 100% and for
-     * the columns to appear properly, it is recommended that the widths for ALL columns be specified.
+     * This method calculates column widths based on the percentage values provided
+     * in the constructor. If no percentage is specified for a column, a default
+     * percentage is calculated. The method ensures minimum column widths for usability
+     * and handles edge cases gracefully.
      *
-     * @param ce
+     * @param ce ChangeEvent from viewport (can be null for direct calls)
      */
-    protected void resizeColumns( ChangeEvent ce )
+    protected void resizeColumns()
     {
-        int              width = ((JComponent) ce.getSource()).getWidth();
-        TableColumnModel tcm   = getColumnModel();
+        if( anColWidths == null || anColWidths.length == 0 )
+            return;
 
-        for( int columnIndex = 0; columnIndex < tcm.getColumnCount(); columnIndex++ )
-        {
-            TableColumn column = tcm.getColumn( columnIndex );
-                        column.setPreferredWidth( anColWidths[columnIndex] * width / 100 );
-        }
+        SwingUtilities.invokeLater( () ->
+            {
+                int nTotalWidth = 0;
+
+                if( getParent() != null )
+                    nTotalWidth = getParent().getWidth();
+
+                if( nTotalWidth <= 0 )
+                    return;     // Still no valid width, skip resizing
+
+                TableColumnModel tcm   = getColumnModel();
+                int              nCols = tcm.getColumnCount();
+
+                for( int nCol = 0; nCol < nCols; nCol++ )
+                {
+                    int nColWidth = Math.max( 50, anColWidths[nCol] * nTotalWidth / 100 ); // Minimum 50 pixels
+
+                    tcm.getColumn( nCol ).setPreferredWidth( nColWidth );
+                }
+            } );
     }
 }

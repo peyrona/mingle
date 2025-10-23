@@ -124,7 +124,6 @@ public abstract class      ControllerBase
 
     protected void sendChanged( String deviceName, Object newValue )
     {
- // System.out.println( System.currentTimeMillis() +" -> "+ deviceName +" == "+ newValue );
         if( listener != null )
             listener.onChanged( deviceName, newValue );
         else

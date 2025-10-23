@@ -26,6 +26,18 @@ import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
 /**
+ * Expression evaluation panel for testing and debugging Mingle expressions.
+ * <p>
+ * This panel provides an interactive environment where users can write and evaluate
+ * Mingle expressions in real-time. It includes:
+ * <ul>
+ * <li>A text editor for entering expressions</li>
+ * <li>Evaluation button to execute the expression</li>
+ * <li>Result display showing evaluation output or errors</li>
+ * <li>Clear button to reset the editor</li>
+ * </ul>
+ * The panel validates expressions for unsupported features like futures and variables
+ * before evaluation.
  *
  * @author Francisco José Morero Peyrona
  *

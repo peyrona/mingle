@@ -1,19 +1,10 @@
 
 package com.peyrona.mingle.glue.exen;
 
-import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.exen.commands.PnlAllCmdsSelector;
 import com.peyrona.mingle.glue.exen.tables.TabbedPaneTables;
-import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
-import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
-import com.peyrona.mingle.lang.japi.ExEnComm;
-import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilSys;
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.Consumer;
@@ -78,32 +69,10 @@ public final class Pnl4ExEn extends JSplitPane
         return pnlCommands.getUneSourceCode();
     }
 
-    public void setModel( String s )
-    {
-        if( UtilStr.isMeaningless( s ) )
-        {
-            JTools.alert( "Model is empty: nothing to do." );
-            return;
-        }
-
-        clear();
-
-        List<ICommand> lstCmds = new ArrayList<>();
-        ICmdEncDecLib  builder = UtilSys.getConfig().newCILBuilder();
-
-        Json.parse( s )
-            .asObject()
-            .get( "commands" )
-            .asArray()
-            .forEach( (JsonValue jv) -> lstCmds.add( builder.build( jv.toString() ) ) );
-
-        exenClient.sendSetOfCmds( ExEnComm.Request.Add, lstCmds );
-    }
-
     public void clear()
     {
         pnlCommands.deleteAll();
-        tabbedTables.clean();
+        tabbedTables.clear();
     }
 
     public void disconnect()

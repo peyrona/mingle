@@ -32,12 +32,9 @@ final class   ScriptManager
     //------------------------------------------------------------------------//
 
     /**
-     * This method is invoked by Stick::delUnusedDrivers() and can not be auto-invoked because so far
+     * This method is invoked by Stick::remove(...) and can not be auto-invoked because so far
      * I can not find a way to solve this: what if the script is going to be used by another
      * native SCRIPT (from Java, Une, etc...)
-     *
-     * NEXT: si encuentro una forma de solucionar este problema, puedo quitar el método
-     * Stick::delUnusedDrivers() y la variable del Config "clearDrivers".
      */
     synchronized void clean()
     {
@@ -49,13 +46,13 @@ final class   ScriptManager
 
         forEach( (IScript scpt) ->
                 {
-                    if( scpt.isOnStart() || scpt.isOnStop() )    // Add all that are ONSTART or ONSTOP
+                    if( (! isStarted() && scpt.isOnStart()) || scpt.isOnStop() )    // Add all that are ONSTART (if not started yet) or ONSTOP
                     {
                         lstUsed.add( scpt );
                     }
                     else
                     {
-                        for( IDriver drv : aDrivers )            // Add all that are used by DRIVERs
+                        for( IDriver drv : aDrivers )    // Add all that are used by DRIVERs
                         {
                             if( scpt.name().equals( drv.getScriptName() ) )
                             {
@@ -64,7 +61,7 @@ final class   ScriptManager
                             }
                         }
 
-                        for( IRule rule : aRules )               // Add all that are used by RULEs
+                        for( IRule rule : aRules )       // Add all that are used by RULEs
                         {
                             for( IRule.IAction action : rule.getActions() )
                             {

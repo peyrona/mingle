@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicReference;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -58,7 +59,7 @@ public final class UneMultiEditorPanel extends JPanel
     private final UneEditorToolBar toolBar     = new UneEditorToolBar();
     private final GTabbedPane      tabbedPane  = new GTabbedPane();
     private final File             fLastDirTxt = new File( UtilSys.getEtcDir(), "glue_editor_last_used_dir.txt" );    // File containing last used dir
-    private       ScheduledFuture  futureSave;
+    private final AtomicReference<ScheduledFuture> futureSave = new AtomicReference<>();
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -75,11 +76,11 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.btnNew.addActionListener(     (e) -> onNew() );
         toolBar.btnOpen.addActionListener(    (e) -> onOpen() );
         toolBar.btnSave.addActionListener(    (e) -> onSave( null ) );    // null == save all
-        toolBar.btnUndo.addActionListener(    (e) -> getFocusedUnit().undo() );
-        toolBar.btnRedo.addActionListener(    (e) -> getFocusedUnit().redo() );
-        toolBar.btnRTF.addActionListener(     (e) -> getFocusedUnit().copyAsRTF() );
-        toolBar.btnNext.addActionListener(    (e) -> getFocusedUnit().findNextSearch( toolBar.txtSearch.getText() ) );
-        toolBar.btnPrev.addActionListener(    (e) -> getFocusedUnit().findPreviousSearch( toolBar.txtSearch.getText() ) );
+        toolBar.btnUndo.addActionListener(    (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.undo(); } );
+        toolBar.btnRedo.addActionListener(    (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.redo(); } );
+        toolBar.btnRTF.addActionListener(     (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.copyAsRTF(); } );
+        toolBar.btnNext.addActionListener(    (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.findNextSearch( toolBar.txtSearch.getText() ); } );
+        toolBar.btnPrev.addActionListener(    (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.findPreviousSearch( toolBar.txtSearch.getText() ); } );
         toolBar.btnHelp.addActionListener(    (e) -> onHelp() );
         toolBar.btnRuns.addActionListener(    (e) -> onRun() );
         toolBar.btnRepl.addActionListener(    (e) -> onReplace( false ) );
@@ -402,14 +403,15 @@ public final class UneMultiEditorPanel extends JPanel
     {
         if( ! toolBar.chkAutoSave.isSelected() )
         {
-            if( futureSave != null )
-                futureSave.cancel( true );
+            ScheduledFuture current = futureSave.get();
+            if( current != null )
+                current.cancel( true );
 
-            futureSave = null;
+            futureSave.set( null );
         }
         else
         {
-            futureSave = UtilSys.executeAtFixed( getClass().getName(), 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) );
+            futureSave.set( UtilSys.executeAtFixed( getClass().getName(), 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
         }
     }
 
@@ -504,7 +506,33 @@ public final class UneMultiEditorPanel extends JPanel
         while( tabbedPane.getTabCount() > 0 )
             close( 0 );
 
+        cleanup();
         window.dispose();
+    }
+
+    /**
+     * Cleanup method to prevent memory leaks by removing listeners and canceling tasks.
+     */
+    private void cleanup()
+    {
+        // Cancel auto-save task
+        ScheduledFuture current = futureSave.get();
+        if( current != null )
+        {
+            current.cancel( false );
+            futureSave.set( null );
+        }
+
+        // Remove listeners from all editor units
+        for( UneEditorUnit unit : getAllEditors() )
+        {
+            if( unit != null )
+            {
+                // Remove document and caret listeners to prevent memory leaks
+                // Note: RSyntaxTextArea doesn't provide direct access to remove listeners,
+                // but the units will be garbage collected when the panel is disposed
+            }
+        }
     }
 
     File getLastUsedDir()

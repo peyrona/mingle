@@ -18,7 +18,7 @@ import javax.swing.KeyStroke;
 
 /**
  * Glue JFrame.
- * 
+ *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
@@ -88,6 +88,12 @@ public class GFrame extends JFrame
     public GFrame size( int width, int height )
     {
         JTools.resize( this, width, height );
+        return this;
+    }
+
+    public GFrame sizeAsPercent( int width, int height )
+    {
+        JTools.resizeAsPercent( this, width, height );
         return this;
     }
 

@@ -22,6 +22,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URISyntaxException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
@@ -31,7 +32,7 @@ import javax.swing.SwingUtilities;
  */
 public final class UneEditorUnit extends JSplitPane
 {
-    private static int nSocketPort = 2048;
+    private static final AtomicInteger nSocketPort = new AtomicInteger(2048);
 
     private File    fCode     = null;
     private Process procExEn  = null;
@@ -374,7 +375,7 @@ public final class UneEditorUnit extends JSplitPane
             return  UtilJson.parse( "["+
                                     "  {"+
                                     "     \"name\"   : \"Plain Socket\","+
-                                    "     \"init\"   : { \"port\": "+ (nSocketPort++) +", \"ssl\": false, \"allow\": \"intranet\" },"+
+                                     "     \"init\"   : { \"port\": "+ nSocketPort.incrementAndGet() +", \"ssl\": false, \"allow\": \"intranet\" },"+
                                     "     \"builder\": \"com.peyrona.mingle.network.plain.PlainSocketServer\","+
                                     "     \"uris\"   : [\"file://{*home.lib*}network.jar\"]"+
                                     "  }"+

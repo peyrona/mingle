@@ -7,7 +7,6 @@ import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.network.plain.PlainSocketClient;
 import java.io.IOException;
 import java.util.Map;
 
@@ -20,7 +19,7 @@ import java.util.Map;
  */
 public final class SocketClient
        extends ControllerBase
-{// TODO: hacer un ejemplo probando este driver
+{
     private INetClient client = null;
     private boolean    bWS;
     private String     sHost;
@@ -84,7 +83,7 @@ public final class SocketClient
         }
         else
         {
-            PlainSocketClient psc = new PlainSocketClient();
+            com.peyrona.mingle.network.plain.SocketClient psc = new com.peyrona.mingle.network.plain.SocketClient();
                               psc.add( new MyListener() );
                               psc.connect( "{\"host\":"+ sHost +", \"port\":"+ nPort +'}' );
             client = psc;

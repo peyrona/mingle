@@ -34,8 +34,8 @@ public abstract class      Command
 
     /**
      * This method is invoked for every command and only once (successive invocations
-     * for same command will result in erratic behavior). The ExEn invokes this method
-     * just after the command is added to the ExEn (only after the thread started).
+     * for same command will be ignored). The ExEn invokes this method just after the
+     * command is added to the ExEn (only after the thread started).
      * <p>
      * Implementation note: at this class this method assigns passed bus to an
      * interval variable.
@@ -45,23 +45,22 @@ public abstract class      Command
     @Override
     public void start( IRuntime rt )
     {
-        assert (this.rt == null) && (rt != null);    // IRuntime is always needed
+        this.rt = rt;       // Atomic
 
-        this.rt = rt;    // Atomic
+        assert rt != null;  // After assign to maintain atomicity
     }
 
     /**
      * This method is invoked for every command and only once (subsequent invocations
-     * for same command will result in erratic behavior). The ExEn invokes this method
-     * just before the command is about to be removed from the ExEn.
+     * for same command will be ignored). The ExEn invokes this method just before
+     * the command is about to be removed from the ExEn or the ExEn is about to finish
+     * its execution.
      * <p>
      * At this class this method makes the bus null (to be collected by the GC).
      */
     @Override
     public void stop()
     {
-        assert isStarted();
-
         this.rt = null;    // Atomic
     }
 

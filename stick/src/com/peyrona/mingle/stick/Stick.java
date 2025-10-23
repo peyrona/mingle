@@ -420,8 +420,8 @@ public final class Stick
 
         if( bOK )
         {
-            srptMgr.clean();
             drvrMgr.clean();
+            srptMgr.clean();
         }
 
         eventBus.resume();

@@ -15,8 +15,25 @@ import org.fife.ui.rsyntaxtextarea.Token;
 import org.fife.ui.rsyntaxtextarea.TokenMap;
 
 /**
+ * Syntax highlighting token maker for the Une programming language.
+ * <p>
+ * This class extends AbstractTokenMaker to provide syntax highlighting for Une code
+ * in the RSyntaxTextArea component. It handles tokenization of various language elements
+ * including:
+ * <ul>
+ * <li>Reserved words and commands</li>
+ * <li>Functions and extended type methods</li>
+ * <li>Operators (arithmetic, boolean, relational, bitwise)</li>
+ * <li>Literals (strings, numbers, booleans)</li>
+ * <li>Comments and whitespace</li>
+ * <li>Identifiers and separators</li>
+ * </ul>
+ * The token maker dynamically loads language elements from the system configuration
+ * to ensure consistent highlighting with the language parser.
  *
- * @author francisco
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 final class UneTokenMaker extends AbstractTokenMaker
 {

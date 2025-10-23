@@ -9,6 +9,15 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 
 /**
+ * Configuration dialog panel for GTable instances.
+ * <p>
+ * This panel provides UI controls to configure table settings including:
+ * <ul>
+ * <li>Maximum number of rows to display (0 for unlimited)</li>
+ * <li>Filter text with support for regular expressions</li>
+ * <li>Clear table functionality</li>
+ * </ul>
+ * The configuration is applied when the dialog is closed.
  *
  * @author Francisco José Morero Peyrona
  *

@@ -3,6 +3,7 @@ package com.peyrona.mingle.glue.exen.commands;
 
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
 import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.glue.Util;
 import com.peyrona.mingle.glue.exen.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GList;
@@ -16,6 +17,7 @@ import java.awt.BorderLayout;
 import java.time.LocalTime;
 import java.util.Map;
 import javax.swing.JButton;
+import javax.swing.SpinnerNumberModel;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -69,11 +71,11 @@ final class PnlDevice extends PnlCmdBase
     {
         // Device init --------------------------------------------
 
-        int    nDelta    = ((Number) spnDelta.getModel().getValue()).intValue();
-        int    nDowntime = ((Number) spnDowntimed.getModel().getValue()).intValue();
+        float  nDelta    = ((Number) spnDelta.getModel().getValue()).floatValue();
+        long   nDowntime = ((Number) spnDowntimed.getModel().getValue()).longValue();
         String sValue    = (txtValue.getText().trim().isEmpty() ? "" : "\t\tvalue = \""+ txtValue.getText().trim() +'"');
         String sDelta    = ((nDelta    <= 0) ? "" : "\t\tdelta = "+ nDelta);
-        String sDowntime = ((nDowntime <= 0) ? "" : "\t\tdowntimed = "+ nDowntime);
+        String sDowntime = ((nDowntime <= 0) ? "" : "\t\tdowntimed = "+ nDowntime) + JTools.getTimeUnitFromComboBox( cmbTimeUnit );
         String sGroups   = (txtGroups.getText().trim().isEmpty() ? "" : "\t\tgroups = \""+ txtGroups.getText().trim() +'"');
 
         if( (! sValue.isEmpty()) && (! Language.isBooleanOp( sValue )) && (! Language.isNumber( sValue )) )
@@ -123,6 +125,17 @@ final class PnlDevice extends PnlCmdBase
     {
         JTools.setJTextIsUneName( txtName );
 
+        cmbTimeUnit.setSelectedIndex( 0 );   // Millis
+        spnDowntimed.setModel( new SpinnerNumberModel( 0,              // initial value
+                                                       0,              // min
+                                                       Long.MAX_VALUE, // max
+                                                       1 ) );          // step;
+
+        spnDelta.setModel( new SpinnerNumberModel( 0,               // initial value
+                                                   0,               // min
+                                                   Float.MAX_VALUE, // max
+                                                   1 ) );           // step;
+
         lstBtn2Check4Changes.add( btnDriverConfigAdd );
         lstBtn2Check4Changes.add( btnDriverConfigDel );
 
@@ -160,6 +173,7 @@ final class PnlDevice extends PnlCmdBase
         spnDowntimed = new javax.swing.JSpinner();
         jLabel1 = new javax.swing.JLabel();
         txtValue = new javax.swing.JTextField();
+        cmbTimeUnit = new javax.swing.JComboBox<>();
         pnlDriver = new javax.swing.JPanel();
         cmbDriverName = new javax.swing.JComboBox<>();
         pnlDriverConfig = new javax.swing.JPanel();
@@ -201,6 +215,8 @@ final class PnlDevice extends PnlCmdBase
 
         jLabel1.setText("Value");
 
+        cmbTimeUnit.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "1/1000 of a second", "1/100 of a second (u)", "1/10 of a second (t)", "Seconds (s)", "Minutes (m)", "Hours (h)", "Days (d)" }));
+
         javax.swing.GroupLayout pnlDeviceInitLayout = new javax.swing.GroupLayout(pnlDeviceInit);
         pnlDeviceInit.setLayout(pnlDeviceInitLayout);
         pnlDeviceInitLayout.setHorizontalGroup(
@@ -215,31 +231,33 @@ final class PnlDevice extends PnlCmdBase
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlDeviceInitLayout.createSequentialGroup()
                         .addComponent(jLabel1)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(txtValue)
-                        .addGap(18, 18, 18)
+                        .addComponent(txtValue))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlDeviceInitLayout.createSequentialGroup()
                         .addComponent(lblDelta)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spnDelta, javax.swing.GroupLayout.PREFERRED_SIZE, 86, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(spnDelta, javax.swing.GroupLayout.PREFERRED_SIZE, 159, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
                         .addComponent(lblDelta1)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spnDowntimed, javax.swing.GroupLayout.PREFERRED_SIZE, 86, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                        .addComponent(spnDowntimed, javax.swing.GroupLayout.DEFAULT_SIZE, 86, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(cmbTimeUnit, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                 .addContainerGap())
         );
         pnlDeviceInitLayout.setVerticalGroup(
             pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlDeviceInitLayout.createSequentialGroup()
                 .addGap(11, 11, 11)
-                .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(lblDelta)
-                        .addComponent(spnDelta, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(lblDelta1)
-                        .addComponent(spnDowntimed, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                        .addComponent(jLabel1)
-                        .addComponent(txtValue, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel1)
+                    .addComponent(txtValue, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addGap(18, 18, 18)
+                .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(lblDelta1)
+                    .addComponent(spnDowntimed, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(cmbTimeUnit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(lblDelta)
+                    .addComponent(spnDelta, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addGroup(pnlDeviceInitLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(txtGroups, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
@@ -476,6 +494,7 @@ final class PnlDevice extends PnlCmdBase
     private javax.swing.JButton btnDriverConfigDel;
     private javax.swing.JButton btnSendMsg2Actuator;
     private javax.swing.JComboBox<String> cmbDriverName;
+    private javax.swing.JComboBox<String> cmbTimeUnit;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel5;

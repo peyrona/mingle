@@ -5,11 +5,11 @@ import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
-import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Image;
@@ -26,7 +26,6 @@ import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.border.EmptyBorder;
-import javax.swing.filechooser.FileNameExtensionFilter;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -135,27 +134,6 @@ public final class ExEnsTabbedPane extends GTabbedPane
         }
     }
 
-    void onLoadModel()
-    {
-        if( getSelectedIndex() == -1 )
-            return;
-
-        File[] afModel = JTools.fileLoader( Main.frame, null, false,
-                                            new FileNameExtensionFilter( "Model: transpiled script (*.model)", "model" ) );
-
-        if( afModel.length > 0 )
-        {
-            try
-            {
-                getFocused().setModel( UtilIO.getAsText( afModel[0] ) );
-            }
-            catch( IOException exc )
-            {
-                JTools.error( exc );
-            }
-        }
-    }
-
     //------------------------------------------------------------------------//
     // PROTECTED
 
@@ -167,7 +145,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
         int currentWidth = getWidth();
         int currentHeight = getHeight();
 
-        // Only create new scaled image if size has changed
+        // Only create new scaled image if sizeAsPercent has changed
         if( scaledImage == null || currentWidth != lastWidth || currentHeight != lastHeight )
         {
             scaledImage = getScaledImage( img, currentWidth, currentHeight );
@@ -180,11 +158,15 @@ public final class ExEnsTabbedPane extends GTabbedPane
         {
             g2d.setRenderingHint( RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR );
 
-            // Calculate position to center the image
-            int x = (getWidth()  - scaledImage.getWidth(  null )) / 2;
-            int y = (getHeight() - scaledImage.getHeight( null )) / 2;
+            // Only draw if scaledImage is not null
+            if( scaledImage != null )
+            {
+                // Calculate position to center the image
+                int x = (getWidth()  - scaledImage.getWidth(  null )) / 2;
+                int y = (getHeight() - scaledImage.getHeight( null )) / 2;
 
-            g2d.drawImage( scaledImage, x, y, this );
+                g2d.drawImage( scaledImage, x, y, this );
+            }
         }
         finally
         {
@@ -197,7 +179,8 @@ public final class ExEnsTabbedPane extends GTabbedPane
 
     private Pnl4ExEn getFocused()
     {
-        return (Pnl4ExEn) getSelectedComponent();
+        Component selected = getSelectedComponent();
+        return (selected instanceof Pnl4ExEn) ? (Pnl4ExEn) selected : null;
     }
 
     private void saveUneSourceCode( String sCode )

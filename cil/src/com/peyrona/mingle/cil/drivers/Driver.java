@@ -78,7 +78,8 @@ public final class      Driver
     @Override
     public void start( IRuntime rt )
     {
-        assert ! isStarted();
+        if( isStarted() )
+            return;
 
         super.start( rt );
 
@@ -97,15 +98,13 @@ public final class      Driver
     @Override
     public void stop()
     {
-        assert isStarted();    // Only for testing under development
+        if( ! isStarted() )
+            return;
 
-        if( isStarted() )
-        {
-            map.values().forEach( (IController ctrlr) -> ctrlr.stop() );
-            map.clear();
+        map.values().forEach( (IController ctrlr) -> ctrlr.stop() );
+        map.clear();
 
-            super.stop();
-        }
+        super.stop();
     }
 
     @Override
@@ -130,7 +129,7 @@ public final class      Driver
 
         device.stop();
      // map.get( device.name() ).stop(); --> can not do this because other devices could be using the same Controller
-        map.remove( device.name() );
+        map.remove( device.name() ).stop();   // To stop the controller assocaited with the device
 
         return true;
     }

@@ -45,8 +45,16 @@ public final class UtilSys
 
     //------------------------------------------------------------------------//
 
-    static     // These are needed to be created if they do not exist
-    {          // IOException is never thrown, even if HD is read-only
+    static
+    {
+        if( ! isAtLeastJava11() )
+        {
+            System.err.println( "Java version at folder: "+ UtilSys.getJavaHome() +'\n'+
+                                "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11." );
+            System.exit( 1 );
+        }
+
+        // These are needed to be created if they do not exist. IOException is never thrown, even if HD is read-only.
         UtilIO.mkdirs( new File( fHomeDir, "log" ) );
         UtilIO.mkdirs( new File( fHomeDir, "tmp" ) );
         UtilIO.mkdirs( new File( fHomeDir, "etc" ) );    // This one has no macro associated because it is used internally only

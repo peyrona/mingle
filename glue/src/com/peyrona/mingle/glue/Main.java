@@ -2,20 +2,20 @@
 package com.peyrona.mingle.glue;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
 import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.updater.Updater;
-import java.awt.AWTException;
 import java.awt.BorderLayout;
-import java.awt.Robot;
-import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.net.URI;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.function.Supplier;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -23,11 +23,6 @@ import javax.swing.UIManager;
 import javax.swing.UnsupportedLookAndFeelException;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
-
-// https://github.com/parubok/awesome-swing
-
-// To be added into MANIFEST.MF
-// Class-Path: lib/lang.jar lib/candi.jar lib/minimal-json-0.9.5.jar lib/updater.jar lib/glue/jiconfont-1.0.0.jar lib/glue/jiconfont-font_awesome-4.7.0.1.jar lib/glue/jiconfont-swing-1.0.1.jar lib/glue/rsyntaxtextarea-3.3.3.jar
 
 /**
  * A "Mission Control Tool" for the IoT: development and monitoring.
@@ -38,7 +33,7 @@ import jiconfont.swing.IconFontSwing;
  */
 public class Main
 {
-    public  static final MainFrame frame = new MainFrame();
+    public static final MainFrame frame = new MainFrame();
 
     //------------------------------------------------------------------------//
 
@@ -76,12 +71,14 @@ public class Main
                               "     b) Start a local ExEn ('play' icon or F5)\n"+
                               "     c) Open the Script-Editor ('pencil' icon or F2)." );
 
-                    // Check for MSP new version ------------------------------------------------------
-                    File              fBase   = new File( (UtilSys.isDevEnv ? "./todeploy" : ".") );
-                    boolean           bDryRun = UtilSys.isDevEnv;
-                    Supplier<Boolean> fnAsk   = () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); };
+                    if( (! UtilSys.isDevEnv) && shouldCheckForUpdates() )
+                    {
+                        File              fBase   = new File( (UtilSys.isDevEnv ? "../todeploy" : ".") );
+                        boolean           bDryRun = UtilSys.isDevEnv;
+                        Supplier<Boolean> fnAsk   = () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); };
 
-                    Updater.updateIfNeeded( fBase, bDryRun, fnAsk );
+                        Updater.updateIfNeeded( fBase, bDryRun, fnAsk );
+                    }
                 } );
         }
         catch( Exception exc )
@@ -93,6 +90,38 @@ public class Main
     public static void exit()
     {
         frame.close();
+    }
+
+    //------------------------------------------------------------------------//
+    // PRIVATE
+    //------------------------------------------------------------------------//
+
+    private static boolean shouldCheckForUpdates()
+    {
+        File file = new File( UtilSys.getEtcDir(), "glue_last_update_check.txt" );
+
+        try
+        {
+            String todayDate     = LocalDate.now().format( DateTimeFormatter.ISO_LOCAL_DATE );
+            String lastCheckDate = null;
+
+            if( file.exists() )
+                lastCheckDate = UtilIO.getAsText( file ).trim();
+
+            if( todayDate.equals( lastCheckDate ) )
+                return false;
+
+            UtilIO.newFileWriter()
+                  .setFile( file )
+                  .append( todayDate );
+
+            return true;
+        }
+        catch( IOException ex )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, ex, "Error managing update check file" );
+            return true;  // If we can't manage the file, check for updates
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -139,28 +168,28 @@ public class Main
             add( toolBar, BorderLayout.NORTH  );
             add( tabExEn, BorderLayout.CENTER );
             pack();
-            JTools.resize( this, (UtilSys.isDevEnv ? 50 : 85), 90 );
+            JTools.resizeAsPercent( this, (UtilSys.isDevEnv ? 50 : 85), 90 );
             setLocationRelativeTo( null );
             setVisible( true );
 
-            if( UtilSys.isDevEnv )
-            {
-                UtilSys.execute( getClass().getName(),
-                                 500,
-                                 () ->
-                                    {
-                                        try
-                                        {
-                                            Robot robot = new Robot();
-                                                  robot.keyPress( KeyEvent.VK_F4 );
-                                                  robot.keyRelease( KeyEvent.VK_F4 );
-                                        }
-                                        catch( AWTException ex )
-                                        {
-                                            JTools.error( ex );
-                                        }
-                                    } );
-            }
+//            if( UtilSys.isDevEnv )
+//            {
+//                UtilSys.execute( getClass().getName(),
+//                                 500,
+//                                 () ->
+//                                    {
+//                                        try
+//                                        {
+//                                            Robot robot = new Robot();
+//                                                  robot.keyPress( KeyEvent.VK_F4 );
+//                                                  robot.keyRelease( KeyEvent.VK_F4 );
+//                                        }
+//                                        catch( AWTException ex )
+//                                        {
+//                                            JTools.error( ex );
+//                                        }
+//                                    } );
+//            }
         }
 
         private void close()
@@ -170,12 +199,12 @@ public class Main
                 if( Updater.isWorking() )
                 {
                     JTools.alert( "Glue cannot be closed because MSP is being updated\n"+
-                                  "and could end in a state that would make the whole MSP unusable."+
-                                  "\nWait for acouple of minutes and try again." );
+                                  "and could end in a state that would make the whole MSP unusable.\n"+
+                                  "Wait for acouple of minutes and try again." );
                     return;
                 }
 
-                SwingUtilities.invokeAndWait( () -> JTools.showWaitFrame( "Exiting..." ) );
+                SwingUtilities.invokeLater( () -> JTools.showWaitFrame( "Exiting..." ) );
 
                 if( ! toolBar.close() )    // This allows user to close ExEn and Gum the user started.
                     return;
@@ -189,7 +218,8 @@ public class Main
             }
             catch( Throwable th )
             {
-                System.exit( 0 );    // Must exit anyway
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, th, "Fatal error during shutdown" );
+                System.exit( 1 );    // Exit with error code
             }
         }
     }

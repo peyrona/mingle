@@ -34,7 +34,6 @@ Thumbs.db
 *.odg
 *.zip
 *.model
-FTP_and_GitHub.txt
 count_lines.sh
 release.sh
 !/todeploy/**/*.jar
