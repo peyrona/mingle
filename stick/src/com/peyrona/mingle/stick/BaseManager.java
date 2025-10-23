@@ -64,18 +64,20 @@ abstract class BaseManager<T extends ICommand>
      */
     T named( String name )
     {
-        return map.get( name );
+        return map.get( name.toLowerCase() );
     }
 
     boolean add( T cmd )
     {
-        if( map.containsKey( cmd.name() ) )
+        String name = cmd.name().toLowerCase();
+
+        if( map.containsKey( name ) )
         {
             runtime.log( ILogger.Level.INFO, "Attempting to add more than once: "+ cmd.getClass().getSimpleName() +':'+ cmd.name() );
             return true;
         }
 
-        map.put( cmd.name(), cmd );
+        map.put( name, cmd );
 
         if( isStarted() )
             cmd.start( runtime );
@@ -90,13 +92,12 @@ abstract class BaseManager<T extends ICommand>
      */
     boolean remove( T cmd )
     {
-        T t = map.remove( cmd.name() );
+        T t = map.remove( cmd.name().toLowerCase() );
 
-        if( t == null )     // This is normal because v.g. drivers can be in more than one device
+        if( t == null )   // This is normal because v.g. drivers can be in more than one device
             return false;
 
-        if( isStarted() )
-            t.stop();
+        t.stop();         // Stops the command
 
         return true;
     }

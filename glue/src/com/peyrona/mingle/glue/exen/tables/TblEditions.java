@@ -46,7 +46,7 @@ final class TblEditions
                            .iterator()
                            .next();
 
-        String         sRequest = pair.getName();    // TODO: mirar p q no uso esta var
+        String         sRequest = pair.getName();
         JsonValue      jvalue   = (pair.getValue().isNull() ? Json.NULL : pair.getValue());
         GTable<Member> table    = new GTable<>( new DetailsTableModel(), 30, 99 );
 
@@ -59,7 +59,7 @@ final class TblEditions
             add( table, jvalue );
         }
 
-        GDialog dlg = new GDialog( "Edition details", true );
+        GDialog dlg = new GDialog( "Edition details: "+ sRequest, true );
                 dlg.add( new JScrollPane( table ), BorderLayout.CENTER );
                 dlg.setVisible();
     }

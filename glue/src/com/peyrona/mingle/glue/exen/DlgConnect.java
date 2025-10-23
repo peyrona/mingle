@@ -14,6 +14,7 @@ import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.network.NetworkBuilder;
 import java.awt.BorderLayout;
 import java.awt.Dimension;
+import java.awt.event.ActionEvent;
 import java.awt.event.WindowEvent;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -42,6 +43,8 @@ final class DlgConnect extends GDialog
 {
     private final GList<JsonObject> ltbChannels;
     private       boolean           bCancelled;     // Did the user cancell the dialog?
+    private       File              fileCert;       // SSL certificate file
+    private       File              fileKey;        // SSL private key file
 
     private final static String sCONN_DEF_EXT = ".conn-def.props";
 
@@ -87,7 +90,15 @@ final class DlgConnect extends GDialog
 
     INetClient createNetworkClient()
     {
-        return NetworkBuilder.buildClient( ltbChannels.getSelected().toString() );    // This JSON contains only one client defintion
+        JsonObject channelConfig = ltbChannels.getSelected();
+
+        if( useSSL() && fileCert != null && fileKey != null )
+        {
+            channelConfig.set( "certFile", fileCert.getAbsolutePath() );   // TODO: creo q esta prop (certFile) y la siguiente (keyFile) no tienen
+            channelConfig.set( "keyFile",  fileKey.getAbsolutePath() );    //       el nombre apropiado para que las lea el SocketClient
+        }
+
+        return NetworkBuilder.buildClient( channelConfig.toString() );    // This JSON contains only one client defintion
     }
 
     public String getHost()
@@ -105,14 +116,24 @@ final class DlgConnect extends GDialog
         return chkUseSSL.isSelected();
     }
 
+    public File getCertFile()
+    {
+        return fileCert;
+    }
+
+    public File getKeyFile()
+    {
+        return fileKey;
+    }
+
     //------------------------------------------------------------------------//
 
     private void loadSavedConnectionDefinition( File file )
     {
-        try
+        try( FileReader reader = new FileReader( file ) )
         {
             Properties props = new Properties();
-                       props.load( new FileReader( file ) );
+                       props.load( reader );
 
             txtConnName.setText( props.getProperty( "label" ) );
             txtLocation.setText( props.getProperty( "url"   ) );
@@ -123,6 +144,22 @@ final class DlgConnect extends GDialog
             chkUseSSL.setSelected(  bSSL );
             btnFileCert.setEnabled( bSSL );
             btnFileKey.setEnabled(  bSSL );
+
+            String sCertFile = props.getProperty( "certFile" );
+            if( ! UtilStr.isEmpty( sCertFile ) )
+            {
+                fileCert = new File( sCertFile );
+                btnFileCert.setText( fileCert.getName() );
+                btnFileCert.setToolTipText( fileCert.getAbsolutePath() );
+            }
+
+            String sKeyFile = props.getProperty( "keyFile" );
+            if( ! UtilStr.isEmpty( sKeyFile ) )
+            {
+                fileKey = new File( sKeyFile );
+                btnFileKey.setText( fileKey.getName() );
+                btnFileKey.setToolTipText( fileKey.getAbsolutePath() );
+            }
 
             String sChannel = props.getProperty( "channel" );
 
@@ -141,6 +178,22 @@ final class DlgConnect extends GDialog
         btnConnect.setIcon(  IconFontSwing.buildIcon( FontAwesome.PLUG    , 16, JTools.getIconColor() ) );
         btnFileCert.setIcon( IconFontSwing.buildIcon( FontAwesome.FOLDER  , 16, JTools.getIconColor() ) );
         btnFileKey.setIcon(  IconFontSwing.buildIcon( FontAwesome.FOLDER  , 16, JTools.getIconColor() ) );
+
+        chkUseSSL.addActionListener( (ActionEvent e) -> {
+            boolean sslEnabled = chkUseSSL.isSelected();
+            btnFileCert.setEnabled( sslEnabled );
+            btnFileKey.setEnabled( sslEnabled );
+
+            if( ! sslEnabled )
+            {
+                fileCert = null;
+                fileKey  = null;
+                btnFileCert.setText( "Certific." );
+                btnFileCert.setToolTipText( "SSL Certificate file" );
+                btnFileKey.setText( "Key" );
+                btnFileKey.setToolTipText( "SSL Key file" );
+            }
+        } );
 
         String sJSON = UtilSys.getConfig().getNetworkClientsOutline();
 
@@ -385,6 +438,20 @@ final class DlgConnect extends GDialog
             return;
         }
 
+        if( useSSL() )
+        {
+            if( fileCert == null || ! fileCert.exists() )
+            {
+                JTools.alert( "SSL certificate file is required when SSL is enabled" );
+                return;
+            }
+            if( fileKey == null || ! fileKey.exists() )
+            {
+                JTools.alert( "SSL key file is required when SSL is enabled" );
+                return;
+            }
+        }
+
         bCancelled = false;
 
         dispatchEvent( new WindowEvent( this, WindowEvent.WINDOW_CLOSING ) );
@@ -402,16 +469,16 @@ final class DlgConnect extends GDialog
         String sChannel  = ltbChannels.getSelected().getString( "name", null );
 
         Properties props = new Properties();
-                   props.setProperty( "label"  , getConnName() );
-                   props.setProperty( "url"    , getHost() );
-                   props.setProperty( "port"   , String.valueOf( getPort() ) );
-                   props.setProperty( "ssl"    , String.valueOf( useSSL()  ) );
-                   props.setProperty( "channel", sChannel );
+                   props.setProperty( "label"   , getConnName() );
+                   props.setProperty( "url"     , getHost() );
+                   props.setProperty( "port"    , String.valueOf( getPort() ) );
+                   props.setProperty( "ssl"     , String.valueOf( useSSL()  ) );
+                   props.setProperty( "channel" , sChannel );
+                   props.setProperty( "certFile", (fileCert != null) ? fileCert.getAbsolutePath() : "" );
+                   props.setProperty( "keyFile" , (fileKey  != null) ? fileKey.getAbsolutePath()  : "" );
 
-        try
+        try( OutputStream os = new ByteArrayOutputStream() )
         {
-            OutputStream os = new ByteArrayOutputStream();
-
             props.store( os, "Glue connection definition file" );
 
             File file = new File( UtilSys.getEtcDir(), sFileName );
@@ -463,12 +530,30 @@ final class DlgConnect extends GDialog
 
     private void btnFileCertActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnFileCertActionPerformed
     {//GEN-HEADEREND:event_btnFileCertActionPerformed
-        // TODO add your handling code here:
+        File[] files = JTools.fileLoader( this, null, false,
+                                          new javax.swing.filechooser.FileNameExtensionFilter( "Certificate files (*.pem, *.crt, *.cer)", "pem", "crt", "cer" ),
+                                          new javax.swing.filechooser.FileNameExtensionFilter( "All files (*.*)", "*" ) );
+
+        if( files.length > 0 )
+        {
+            fileCert = files[0];
+            btnFileCert.setText( fileCert.getName() );
+            btnFileCert.setToolTipText( fileCert.getAbsolutePath() );
+        }
     }//GEN-LAST:event_btnFileCertActionPerformed
 
     private void btnFileKeyActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnFileKeyActionPerformed
     {//GEN-HEADEREND:event_btnFileKeyActionPerformed
-        // TODO add your handling code here:
+        File[] files = JTools.fileLoader( this, null, false,
+                                          new javax.swing.filechooser.FileNameExtensionFilter( "Key files (*.key, *.pem)", "key", "pem" ),
+                                          new javax.swing.filechooser.FileNameExtensionFilter( "All files (*.*)", "*" ) );
+
+        if( files.length > 0 )
+        {
+            fileKey = files[0];
+            btnFileKey.setText( fileKey.getName() );
+            btnFileKey.setToolTipText( fileKey.getAbsolutePath() );
+        }
     }//GEN-LAST:event_btnFileKeyActionPerformed
 
     // Variables declaration - do not modify//GEN-BEGIN:variables

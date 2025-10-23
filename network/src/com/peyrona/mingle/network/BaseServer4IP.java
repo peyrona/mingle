@@ -1,9 +1,12 @@
 
 package com.peyrona.mingle.network;
 
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilComm;
+import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import java.io.File;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -22,6 +25,8 @@ public abstract class   BaseServer4IP
     private       int           nTimeout;
     private       String        sKeyPath;
     private       short         nAllow;
+    private       File          fCert;    // File containing SSL certificate
+    private       File          fKey;     // File containing SSL key
     private final AtomicBoolean isRunning = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
@@ -45,6 +50,16 @@ public abstract class   BaseServer4IP
     public int getTimeout()
     {
         return nTimeout;
+    }
+
+    public File getSSLCert()
+    {
+        return fCert;
+    }
+
+    public File getSSLKey()
+    {
+        return fKey;
     }
 
     @Override
@@ -141,6 +156,28 @@ public abstract class   BaseServer4IP
 
         if( ! UtilComm.isValidPort( nPort ) )
             throw new IllegalArgumentException( "Invalid port: "+ nPort );
+
+        // SSL related --------------------------------------------
+        String sCertFile = uj.getString( "certFile", null );
+        String sKeyFile  = uj.getString( "keyFile" , null );
+
+        fCert = (sCertFile == null) ? null : new File( sCertFile );
+        fKey  = (sKeyFile  == null) ? null : new File( sKeyFile  );
+
+        // Only validate SSL files if they are provided
+        if( fCert != null || fKey != null )
+        {
+            if( UtilIO.canRead( fCert ) == null )    // null == fCert exists and can be read
+            {                                        // fCert exists and can be read: lets now check fKey
+                if( UtilIO.canRead( fKey ) != null )
+                    throw new MingleException( "SSL can not be activated: "+ UtilIO.canRead( fKey ) );
+            }
+            else
+            {
+                throw new MingleException( "SSL can not be activated: "+ UtilIO.canRead( fCert ) );
+            }
+        }
+        // --------------------------------------------------------
 
         return true;
     }

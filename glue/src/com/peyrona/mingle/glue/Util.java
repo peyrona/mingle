@@ -7,7 +7,7 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
-import java.lang.ProcessBuilder.Redirect;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
@@ -25,37 +25,39 @@ public final class Util
 
     public static Process runGum()
     {
-        File fJavaHome = UtilSys.getJavaHome();
+        File   fJavaHome   = UtilSys.getJavaHome();
+        String javaExecute = UtilSys.isWindows() ? "java.exe" : "java";
 
         List<String> lstCmd = new ArrayList<>();
-                     lstCmd.add( fJavaHome + "/bin/java" );
-                     lstCmd.add("-cp");
-                     lstCmd.add("gum.jar:lib/*:lib/gum/*");
-                     lstCmd.add("-disableassertions");
-                     lstCmd.add("-javaagent:lib/lang.jar");
-                     lstCmd.add("com.peyrona.mingle.gum.Main");
+                     lstCmd.add( fJavaHome + File.separator + "bin" + File.separator + javaExecute );
+                     lstCmd.add( "-cp" );
+                     lstCmd.add( "gum.jar" + File.pathSeparator + "lib/*" + File.pathSeparator + "lib/gum/*" );
+                     lstCmd.add( "-disableassertions" );
+                     lstCmd.add( "-javaagent:lib/lang.jar" );
+                     lstCmd.add( "com.peyrona.mingle.gum.Main" );
 
         ProcessBuilder pb = new ProcessBuilder();
                        pb.directory( UtilSys.fHomeDir );
                        pb.environment().put( "JAVA_HOME", fJavaHome.getAbsolutePath() );
                        pb.command( lstCmd );
                        pb.redirectErrorStream( true );
-                     pb.redirectOutput( Redirect.to( new File( UtilSys.fHomeDir, "mierda.txt" ) ) );    // Very useful for debugging
+                    // pb.redirectOutput( Redirect.to( new File( UtilSys.fHomeDir, "gum-inside-glue.out.txt" ) ) );    // Very useful for debugging
                     // pb.inheritIO(); -> When doing this, process.getInputStream() and process.getErrorStream() will not work
 
         try
         {
             final Process process = pb.start();
-
-            if( ! process.isAlive() )
-                throw new IOException( "Process Gum is not alive" );
-
-            return process;
+            return validateProcessStartup( process, "Gum" );
         }
         catch( IOException ex )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, ex, "Error executing Gum" );
             JTools.error( ex );
+        }
+        catch( InterruptedException ex )
+        {
+            Thread.currentThread().interrupt();
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Interrupted while starting Gum process" );
         }
 
         return null;
@@ -83,9 +85,11 @@ public final class Util
         String sFileModel  = ((fModel  == null) ? null : fModel.getAbsolutePath());
         String sFileConfig = ((fConfig == null) ? null : fConfig.getAbsolutePath());
         File   fJavaHome   = UtilSys.getJavaHome();
+        String javaExecute = UtilSys.isWindows() ? "java.exe" : "java";
+
 
         List<String> lstCmd = new ArrayList<>();
-                     lstCmd.add( fJavaHome + "/bin/java" );
+                     lstCmd.add( fJavaHome + File.separator + "bin" + File.separator + javaExecute );
                      lstCmd.add( "-javaagent:"+ UtilSys.fHomeDir + File.separator +"lib"+ File.separator +"lang.jar" );
                      lstCmd.add( "-jar" );
                      lstCmd.add( "stick.jar" );
@@ -101,22 +105,23 @@ public final class Util
                        pb.environment().put( "JAVA_HOME", fJavaHome.getAbsolutePath() );
                        pb.command( lstCmd );
                        pb.redirectErrorStream( true );
-                    // pb.redirectOutput( Redirect.to( new File( UtilSys.fHomeDir, "mierda.txt" ) ) );    // Very useful for debugging
+                    // pb.redirectOutput( Redirect.to( new File( UtilSys.fHomeDir, "stick-inside-glue.out.txt" ) ) );    // Very useful for debugging
                     // pb.inheritIO(); -> When doing this, process.getInputStream() and process.getErrorStream() will not work
 
         try
         {
             final Process process = pb.start();
-
-            if( ! process.isAlive() )
-                throw new IOException( "Process Stick is not alive" );
-
-            return process;
+            return validateProcessStartup( process, "Stick" );
         }
         catch( IOException ex )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, ex, "Error executing Stick" );
             JTools.error( ex );
+        }
+        catch( InterruptedException ex )
+        {
+            Thread.currentThread().interrupt();
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Interrupted while starting Stick process" );
         }
 
         return null;
@@ -127,34 +132,67 @@ public final class Util
         if( process == null || onOutput == null )
             return;
 
+        Thread t1 = new Thread( () ->
+                                {
+                                    try( BufferedReader brIn1 = new BufferedReader( new InputStreamReader( process.getInputStream(), StandardCharsets.UTF_8 ) ) )
+                                    {
+                                        String line;
+                                        while( ! Thread.currentThread().isInterrupted() && (line = brIn1.readLine()) != null )
+                                        {
+                                            // Process characters efficiently without creating temporary arrays
+                                            for( int i = 0; i < line.length(); i++ )
+                                                onOutput.accept( line.charAt( i ) );
+
+                                            onOutput.accept( System.lineSeparator().charAt( 0 ) );  // Preserve line endings
+                                        }
+                                    }
+                                    catch( IOException ex )
+                                    {
+                                        // Stream closed or error - normal termination
+                                    }
+                                } );
+
+        Thread t2 = new Thread( () ->
+                                {
+                                    try( BufferedReader brIn2 = new BufferedReader( new InputStreamReader( process.getErrorStream(), StandardCharsets.UTF_8 ) ) )
+                                    {
+                                        String line;
+                                        while( ! Thread.currentThread().isInterrupted() && (line = brIn2.readLine()) != null )
+                                        {
+                                            // Process characters efficiently without creating temporary arrays
+                                            for( int i = 0; i < line.length(); i++ )
+                                                onOutput.accept( line.charAt( i ) );
+
+                                            onOutput.accept( System.lineSeparator().charAt( 0 ) );  // Preserve line endings
+                                        }
+                                    }
+                                    catch( IOException ex )
+                                    {
+                                        // Stream closed or error - normal termination
+                                    }
+                                } );
+
         UtilSys.execute( Util.class.getName(),
                          () ->
                             {
-                                int nIn;
-
-                                try( BufferedReader brIn1 = new BufferedReader( new InputStreamReader( process.getInputStream() ) );
-                                     BufferedReader brIn2 = new BufferedReader( new InputStreamReader( process.getErrorStream() ) ) )
+                                try
                                 {
-                                    while( process.isAlive() )
-                                    {
-                                        nIn = brIn1.read();
+                                    t1.start();
+                                    t2.start();
 
-                                        if( nIn != -1 )
-                                            onOutput.accept( (char) nIn );
+                                    // Wait for process to complete (indefinitely for long-running processes)
+                                    process.waitFor();
 
-                                        nIn = brIn2.read();
-
-                                        if( nIn != -1 )
-                                            onOutput.accept( (char) nIn );
-                                    }
+                                    // After process completes, give streams reasonable time to flush remaining output
+                                    t1.join( 5000 );  // 5 seconds timeout for stdout
+                                    t2.join( 5000 );  // 5 seconds timeout for stderr
                                 }
-                                catch( IOException ex )
+                                catch( InterruptedException ex )
                                 {
-                                    // Nothing to do
-                                }
-                                finally
-                                {
-                                    onOutput.accept( '\0' );
+                                    // Restore interrupted status and interrupt stream threads
+                                    Thread.currentThread().interrupt();
+                                    t1.interrupt();
+                                    t2.interrupt();
                                 }
                             } );
     }
@@ -164,39 +202,18 @@ public final class Util
         if( proc == null )
             return;
 
-        boolean bOK = false;
-
-        if( UtilSys.isLinux() )
-        {
-            try
-            {
-                ProcessBuilder builder  = new ProcessBuilder( "kill", "-9", Long.toString( proc.pid() ) );
-                Process        process  = builder.start();
-                int            exitCode = process.waitFor();
-
-                bOK = (exitCode == 0);
-            }
-            catch( IOException | SecurityException | InterruptedException exc )
-            {
-                // JTools.error( exc );    // Best effort was done: nothing else to do
-            }
-        }
-
-        if( ! bOK )
-        {
-            UtilSys.execute( Util.class.getName(),
-                             () ->
+        UtilSys.execute( Util.class.getName(),
+                         () ->
+                            {
+                                try
                                 {
-                                    try
-                                    {
-                                        proc.destroyForcibly().waitFor();
-                                    }    // See API doc for ".waitFor()"
-                                    catch( InterruptedException ex )
-                                    {
-                                        /* Nothing to do */
-                                    }
-                                } );
-        }
+                                    proc.destroyForcibly().waitFor();
+                                }
+                                catch( InterruptedException ex )
+                                {
+                                    Thread.currentThread().interrupt();
+                                }
+                            } );
     }
 
     //------------------------------------------------------------------------//
@@ -204,5 +221,36 @@ public final class Util
 
     private Util()
     {
+    }
+
+    private static Process validateProcessStartup( Process process, String processName ) throws IOException, InterruptedException
+    {
+        // Give the process a moment to start and potentially fail
+        Thread.sleep( 100 );
+
+        if( ! process.isAlive() )
+        {
+            int exitCode = process.exitValue();
+            String errorMsg = String.format( "Process %s failed to start (exit code: %d)", processName, exitCode );
+
+            // Add specific diagnostics
+            switch( exitCode )
+            {
+                case 1:
+                    errorMsg += " - Configuration or classpath issue";
+                    break;
+                case 127:
+                    errorMsg += " - Command not found (check Java installation)";
+                    break;
+                default:
+                    if( exitCode > 128 )
+                        errorMsg += " - Terminated by signal " + (exitCode - 128);
+                    break;
+            }
+
+            throw new IOException( errorMsg );
+        }
+
+        return process;
     }
 }

@@ -15,7 +15,6 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.util.List;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
@@ -23,6 +22,7 @@ import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
+import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.plaf.basic.BasicButtonUI;
 import jiconfont.icons.font_awesome.FontAwesome;
@@ -53,33 +53,45 @@ public class GTabbedPane extends JTabbedPane
     {
         super.addTab( title, component );
 
-        setTabComponentAt( getTabCount() - 1, new TabPanel( this, icon, sTooltipText, al ) );
-        setSelectedIndex(  getTabCount() - 1 );
-        updateSelectedTab();
+        int newTabIndex = getTabCount() - 1;
+
+        if( newTabIndex >= 0 )
+        {
+            setTabComponentAt( newTabIndex, new TabPanel( this, icon, sTooltipText, al ) );
+
+            // Delay selection to prevent race condition with UI state changes
+            SwingUtilities.invokeLater( () ->
+            {
+                if( newTabIndex < getTabCount() )   // Double-check tab still exists
+                {
+                    setSelectedIndex( newTabIndex );
+                    updateSelectedTab();
+                }
+            } );
+        }
     }
 
-    /**
-     * Returns the tab index which contains passed button or -1 if not found.
-     * @param btn Button contained in the tab that is being searched.
-     * @return the tab index which contains passed button or -1 if not found.
-     */
-    public int getTabIndexWhichButtonIs( JButton btn )
+    @Override
+    public void removeTabAt(int index)
     {
-        for( int n = 0; n < getTabCount(); n++ )
-        {
-            List<Component> lstBtn = JTools.getOfClass( (TabPanel) getTabComponentAt( n ), JButton.class );
+        // Validate index to prevent race conditions
+        if( index < 0 || index >= getTabCount() )
+            return;
 
-            if( (! lstBtn.isEmpty()) && btn == lstBtn.get( 0 ) )
-                return n;
-        }
-throw new RuntimeException();
-        ////return -1;
+        super.removeTabAt(index);
+        updateRolloverState();
     }
 
     public int findIndex4( Component component )
     {
-        for( int n = 0; n < getTabCount(); n++ )
+        int tabCount = getTabCount();
+
+        for( int n = 0; n < tabCount; n++ )
         {
+            // Bounds check to prevent race conditions
+            if( n >= getTabCount() )
+                break;
+
             Component tabComponent = getComponentAt( n );
 
             if( tabComponent == component )
@@ -93,21 +105,68 @@ throw new RuntimeException();
                     return n;    // Return the index of the tab containing the component
             }
         }
-throw new RuntimeException();
-        ////return -1;    // Component not found in any tab
+
+        return -1;    // Component not found in any tab
+    }
+
+    /**
+     * Returns the index of the tab that contains the specified button.
+     * Returns -1 if the button is not found in any tab.
+     */
+    public int getTabIndexWhichButtonIs(JButton button)
+    {
+        int tabCount = getTabCount();
+        for( int i = 0; i < tabCount; i++ )
+        {
+            // Bounds check to prevent race conditions
+            if( i >= getTabCount() )
+                break;
+
+            Component tabComponent = getTabComponentAt( i );
+            if( tabComponent instanceof TabPanel )
+            {
+                TabPanel panel = (TabPanel) tabComponent;
+
+                for( Component comp : panel.getComponents() )
+                {
+                    if( comp == button )
+                        return i;
+                }
+            }
+        }
+
+        return -1; // Button not found
     }
 
     //------------------------------------------------------------------------//
 
     private void updateSelectedTab()
     {
-        for( int n = 0; n < getTabCount(); n++ )
-        {
-            TabPanel btn = (TabPanel) getTabComponentAt( n );
+        int tabCount = getTabCount();
+        int selectedIndex = getSelectedIndex();
 
-            if( btn != null )    // Because the event is triggered before the TabPanel can be added
-                btn.setSelected( n == getSelectedIndex() );
+        for( int n = 0; n < tabCount; n++ )
+        {
+            // Bounds check to prevent race conditions
+            if( n >= getTabCount() )
+                break;
+
+            Component tabComponent = getTabComponentAt( n );
+            if( tabComponent instanceof TabPanel )
+            {
+                TabPanel btn = (TabPanel) tabComponent;
+
+                if( btn != null )    // Because the event is triggered before the TabPanel can be added
+                    btn.setSelected( n == selectedIndex );
+            }
         }
+    }
+
+    private void updateRolloverState()
+    {
+        // Force UI update to handle rollover state changes
+        // This helps prevent ArrayIndexOutOfBoundsException when tabs are removed
+        repaint();
     }
 
     //------------------------------------------------------------------------//

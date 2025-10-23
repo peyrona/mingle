@@ -76,17 +76,20 @@ public final class ExEnClient
                                             // Needed prior to connect ------------------------
                                             netClient.add( new ClientListener() );
 
-                                            for( INetClient.IListener l : lstPendingListeners )
-                                                netClient.add( l );
+                                            synchronized( lstPendingListeners )
+                                            {
+                                                for( INetClient.IListener l : lstPendingListeners )
+                                                    netClient.add( l );
+                                            }
 
                                             lstPendingListeners.clear();
                                             // ------------------------------------------------
 
                                             netClient.connect( Json.object()
-                                                                    .add( "host", dlgConn.getHost() )
-                                                                    .add( "port", dlgConn.getPort() )
-                                                                    .add( "ssl" , dlgConn.useSSL()  )
-                                                                    .toString() );
+                                                                   .add( "host", dlgConn.getHost() )
+                                                                   .add( "port", dlgConn.getPort() )
+                                                                   .add( "ssl" , dlgConn.useSSL()  )
+                                                                   .toString() );
 
                                             // JTools.hideWaitFrame(); Will be executed at: INetClient.IListener:onConnected() --> see at the end of this file
                                         }

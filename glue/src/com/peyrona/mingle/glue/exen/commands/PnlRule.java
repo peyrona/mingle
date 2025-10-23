@@ -6,6 +6,7 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.candi.unec.parser.ParseRule;
 import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.glue.Util;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
@@ -63,7 +64,7 @@ final class PnlRule extends PnlCmdBase
             {
                 JsonObject joAction = jaActs.get( n ).asObject();
 
-                int    nAfter  = joAction.getInt( "after", 0 );
+                long   nAfter  = joAction.getLong( "after", 0 );
                 String sValue  = joAction.get( "value" ).isNull() ? "" : joAction.get( "value" ).toString();
                 String caption = joAction.get( "target" ).asString() +
                                  (sValue.isEmpty() ? "" : (" = "+ sValue)) +
@@ -140,9 +141,11 @@ final class PnlRule extends PnlCmdBase
         for( IScript scp : cmdWise.getScripts() )
             cmbThenScriptOrRule.addItem( scp.name() );
 
-        for( IRule rul : cmdWise.getRules())
+        for( IRule rul : cmdWise.getRules() )
+        {
             if( ! rul.name().equals( txtName.getText() ) )      // A Rule can not invoke itself
                 cmbThenScriptOrRule.addItem( rul.name() );
+        }
 
         for( IDevice act : cmdWise.getDevices() )
             cmbThenActionActuatorName.addItem( act.name() );
@@ -150,16 +153,18 @@ final class PnlRule extends PnlCmdBase
         for( String sGroupName : cmdWise.getGroups( cmdWise.getDevices() ) )
             cmbThenActionActuatorName.addItem( sGroupName + sGROUP_SUFFIX );
 
-        spnAfterAmount.setModel( new SpinnerNumberModel( 0,                 // initial value
-                                                         0,                 // min
-                                                         Integer.MAX_VALUE, // max
-                                                         1 ) );             // step;
+        cmbAfterTimeUnit.setSelectedIndex( 0 );    // Millis
+        spnAfterAmount.setModel( new SpinnerNumberModel( 0,              // initial value
+                                                         0,              // min
+                                                         Long.MAX_VALUE, // max
+                                                         1 ) );          // step;
         radGroupThen.add( radThenScript );
         radGroupThen.add( radThenAction );
         radThenAction.setSelected( true );
 
         if( (cmbThenScriptOrRule.getItemCount() == 0) || (cmbThenActionActuatorName.getItemCount() == 0) )
             JTools.alert( "Prior to create a RULE you must create\nat least one SCRIPT or one device" );
+
         return (cmbThenScriptOrRule.getItemCount() > 0);
     }
 
@@ -168,7 +173,7 @@ final class PnlRule extends PnlCmdBase
         if( isStarting )
             return;
 
-        int    nAfter  = ((Number) spnAfterAmount.getModel().getValue()).intValue();
+        long   nAfter  = ((Number) spnAfterAmount.getModel().getValue()).longValue();
 
         String sTarget = (radThenScript.isSelected() ? cmbThenScriptOrRule.getSelectedItem().toString()
                                                      : cmbThenActionActuatorName.getSelectedItem().toString());
@@ -180,11 +185,7 @@ final class PnlRule extends PnlCmdBase
                                                      : sTarget +" = "+ sValue);
 
         if( nAfter > 0 )
-        {
-            String  sUnit  = cmbAfterUnit.getSelectedItem().toString();
-            char    chUnit = sUnit.charAt( sUnit.length() -2 );
-            sAction       += " AFTER "+ nAfter + chUnit;
-        }
+            sAction += " AFTER "+ nAfter + JTools.getTimeUnitFromComboBox( cmbAfterTimeUnit );
 
         JsonObject joAction = Json.object()
                                   .add( "target", sTarget )
@@ -231,7 +232,7 @@ final class PnlRule extends PnlCmdBase
             cmbThenActionActuatorName.setSelectedIndex( index );                           // Do not move
         }
 
-        spnAfterAmount.getModel().setValue( joAction.getInt( "after", 0 ) );
+        spnAfterAmount.getModel().setValue( joAction.getLong( "after", 0 ) );
     }
 
     private void onRadioThenSelected()
@@ -266,7 +267,7 @@ final class PnlRule extends PnlCmdBase
         radThenAction = new javax.swing.JRadioButton();
         jLabel7 = new javax.swing.JLabel();
         spnAfterAmount = new javax.swing.JSpinner();
-        cmbAfterUnit = new javax.swing.JComboBox<>();
+        cmbAfterTimeUnit = new javax.swing.JComboBox<>();
         jScrollPane1 = new javax.swing.JScrollPane();
         lstThen = new javax.swing.JList<>();
         btnThenAdd = new javax.swing.JButton();
@@ -380,12 +381,12 @@ final class PnlRule extends PnlCmdBase
             }
         });
 
-        cmbAfterUnit.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "1/100 of a second (u)", "1/10 of a second (t)", "Seconds  (s)", "Minutes (m)", "Hours (h)", "Days (d)" }));
-        cmbAfterUnit.addActionListener(new java.awt.event.ActionListener()
+        cmbAfterTimeUnit.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "1/1000 of a second", "1/100 of a second (u)", "1/10 of a second (t)", "Seconds (s)", "Minutes (m)", "Hours (h)", "Days (d)" }));
+        cmbAfterTimeUnit.addActionListener(new java.awt.event.ActionListener()
         {
             public void actionPerformed(java.awt.event.ActionEvent evt)
             {
-                cmbAfterUnitActionPerformed(evt);
+                cmbAfterTimeUnitActionPerformed(evt);
             }
         });
 
@@ -450,7 +451,7 @@ final class PnlRule extends PnlCmdBase
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(spnAfterAmount, javax.swing.GroupLayout.PREFERRED_SIZE, 66, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                        .addComponent(cmbAfterUnit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(cmbAfterTimeUnit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(0, 0, Short.MAX_VALUE))
                     .addGroup(pnlTHENLayout.createSequentialGroup()
                         .addComponent(radThenExpr)
@@ -482,7 +483,7 @@ final class PnlRule extends PnlCmdBase
                 .addGroup(pnlTHENLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel7)
                     .addComponent(spnAfterAmount, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(cmbAfterUnit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                    .addComponent(cmbAfterTimeUnit, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addGroup(pnlTHENLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlTHENLayout.createSequentialGroup()
@@ -590,7 +591,7 @@ final class PnlRule extends PnlCmdBase
                     .addComponent(txtName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnNAXE))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(pnlWHEN, javax.swing.GroupLayout.PREFERRED_SIZE, 115, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(pnlWHEN, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(pnlTHEN, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
@@ -652,10 +653,10 @@ final class PnlRule extends PnlCmdBase
         updateSelectedItemInActionsListbox();
     }//GEN-LAST:event_cmbThenActionActuatorNameActionPerformed
 
-    private void cmbAfterUnitActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_cmbAfterUnitActionPerformed
-    {//GEN-HEADEREND:event_cmbAfterUnitActionPerformed
+    private void cmbAfterTimeUnitActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_cmbAfterTimeUnitActionPerformed
+    {//GEN-HEADEREND:event_cmbAfterTimeUnitActionPerformed
         updateSelectedItemInActionsListbox();
-    }//GEN-LAST:event_cmbAfterUnitActionPerformed
+    }//GEN-LAST:event_cmbAfterTimeUnitActionPerformed
 
     private void btnNAXEActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnNAXEActionPerformed
     {//GEN-HEADEREND:event_btnNAXEActionPerformed
@@ -676,10 +677,10 @@ final class PnlRule extends PnlCmdBase
     //------------------------------------------------------------------------//
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JButton btnNAXE;
     private javax.swing.JButton btnThenAdd;
     private javax.swing.JButton btnThenDel;
-    private javax.swing.JButton btnNAXE;
-    private javax.swing.JComboBox<String> cmbAfterUnit;
+    private javax.swing.JComboBox<String> cmbAfterTimeUnit;
     private javax.swing.JComboBox<String> cmbThenActionActuatorName;
     private javax.swing.JComboBox<String> cmbThenScriptOrRule;
     private javax.swing.JLabel jLabel1;

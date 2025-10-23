@@ -7,8 +7,6 @@ import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import java.util.ArrayList;
-import java.util.List;
 
 /**
  * This class maintains drivers instances: there is only one instance per driver type
@@ -55,7 +53,7 @@ final class   DriverManager
 
         if( driver == null )
         {
-            runtime.log( ILogger.Level.SEVERE, new MingleException( "Can not add device \""+ device.name() +"\" to driver \""+ device.getDriverName() +"\": driver does not exist" ) );
+            runtime.log( ILogger.Level.SEVERE, new MingleException( err( device, true ) ) );
             return false;
         }
 
@@ -70,7 +68,7 @@ final class   DriverManager
 
         if( driver == null )
         {
-            runtime.log(ILogger.Level.SEVERE, new MingleException( "Can not remove device \""+ device.name() +"\" from driver \""+ device.getDriverName() +"\": driver does not exist" ) );
+            runtime.log(ILogger.Level.SEVERE, new MingleException( err( device, false ) ) );
             return false;
         }
 
@@ -106,14 +104,19 @@ final class   DriverManager
 
     synchronized void clean()
     {
-        List<IDriver> lst2Del = new ArrayList<>();
-
         forEach( driver ->
                     {
                         if( driver.isEmpty() )
-                            lst2Del.add( driver );
+                            super.remove( driver );
                     } );
+    }
 
-        lst2Del.forEach( driver -> super.remove( driver ) );
+    //------------------------------------------------------------------------//
+
+    private String err( IDevice device, boolean adding )
+    {
+        return "Can not "+ (adding ? "add" : "remove")+" device \""+ device.name() +
+               "\" "+ (adding ? "to" : "from") +" driver \""+ device.getDriverName() +
+               "\": driver does not exist";
     }
 }

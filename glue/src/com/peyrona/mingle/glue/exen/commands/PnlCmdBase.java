@@ -104,7 +104,7 @@ abstract class PnlCmdBase extends JPanel
         @Override
         public int getColumnCount()
         {
-            return 4;
+            return columnNames.length;
         }
 
         @Override
@@ -117,9 +117,9 @@ abstract class PnlCmdBase extends JPanel
                 case 0: return error.message();
                 case 1: return error.line();
                 case 2: return error.column();
+                case 3: return "";  // Empty string for column 3
+                default: return null;
             }
-
-            return null;
         }
 
         @Override

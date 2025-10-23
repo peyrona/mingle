@@ -126,6 +126,9 @@ public final class      Script
     @Override
     public void stop()
     {
+        if( ! isStarted() )
+            return;
+
         if( isOnStop && canExecute() )    // Because bus could be stopped, can't do following --> getRuntime().bus().post( new MsgTrigger( getName() ) );
         {
             try

@@ -8,6 +8,12 @@ import com.peyrona.mingle.lang.lexer.Language;
 import javax.swing.JTextField;
 
 /**
+ * Panel for changing actuator values with type conversion support.
+ * <p>
+ * This panel provides UI components to modify actuator values by allowing users
+ * to input a value and select its data type (Number, String, or Boolean).
+ * It automatically detects the appropriate type based on input and provides
+ * validation and conversion to the selected type.
  *
  * @author Francisco José Morero Peyrona
  *

@@ -80,8 +80,6 @@ public final class      Rule
     @Override
     public void start( IRuntime rt )     // After creating a RULE on-the-fly, ::start(...) has to be invoked
     {
-        assert ! isStarted();    // Only for testing under development
-
         if( isStarted() )
             return;
 
@@ -138,8 +136,6 @@ public final class      Rule
     @Override
     public void stop()
     {
-        assert isStarted();    // Only for testing under development
-
         if( ! isStarted() )
             return;
 

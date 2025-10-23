@@ -31,7 +31,7 @@ import java.util.concurrent.TimeUnit;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public final class PlainSocketClient
+public final class SocketClient
              extends BaseClient4IP
 {
     private static final int  MAX_RETRIES  = 3;
@@ -82,7 +82,7 @@ public final class PlainSocketClient
                 {
                     if( attempt == MAX_RETRIES - 1 )
                     {
-                        forEachListener( l -> ((INetClient.IListener) l).onError( PlainSocketClient.this, ioe ) );
+                        forEachListener(l -> ((INetClient.IListener) l).onError(SocketClient.this, ioe ) );
                         break;
                     }
 
@@ -159,13 +159,13 @@ public final class PlainSocketClient
             exec   = Executors.newCachedThreadPool();
             exec.submit( new ThreadReader() );
 
-            forEachListener( l -> ((INetClient.IListener) l).onConnected( PlainSocketClient.this ) );
+            forEachListener(l -> ((INetClient.IListener) l).onConnected(SocketClient.this ) );
             return true;
         }
         catch( IOException ioe )
         {
             cleanupResources();
-            forEachListener( l -> ((INetClient.IListener) l).onError( PlainSocketClient.this, ioe ) );
+            forEachListener(l -> ((INetClient.IListener) l).onError(SocketClient.this, ioe ) );
             return false;
         }
     }
@@ -201,7 +201,7 @@ public final class PlainSocketClient
                 log( "Error closing socket: " + ioe.getMessage() );    // Log error but don't throw
             }
 
-            forEachListener( l -> ((INetClient.IListener) l).onDisconnected( PlainSocketClient.this ) );
+            forEachListener(l -> ((INetClient.IListener) l).onDisconnected(SocketClient.this ) );
         }
 
         synchronized( this )
@@ -221,7 +221,7 @@ public final class PlainSocketClient
         @Override
         public void run()
         {
-            Thread.currentThread().setName( PlainSocketClient.class.getSimpleName() +"_Reader-" + client.getRemoteSocketAddress() );
+            Thread.currentThread().setName(SocketClient.class.getSimpleName() +"_Reader-" + client.getRemoteSocketAddress() );
 
             while( (! isShuttingDown) && isConnected() && (! Thread.currentThread().isInterrupted()) )
             {
@@ -232,23 +232,23 @@ public final class PlainSocketClient
                     if( message == null )    // 'message' is null when thread is interrupted or when the communication channel is closed
                     {
                         if( ! Thread.interrupted() && ! isConnected() && ! isShuttingDown )
-                            forEachListener( l -> l.onError( PlainSocketClient.this, new MingleException( "Server was closed cleanly" ) ) );
+                            forEachListener(l -> l.onError(SocketClient.this, new MingleException( "Server was closed cleanly" ) ) );
 
                         break;
                     }
                     else
                     {
-                        forEachListener( l -> l.onMessage(PlainSocketClient.this, message ) );
+                        forEachListener(l -> l.onMessage(SocketClient.this, message ) );
                     }
                 }
                 catch( IOException exc )
                 {
                     if( ! isShuttingDown )
-                        forEachListener( l -> l.onError( PlainSocketClient.this, exc ) );
+                        forEachListener(l -> l.onError(SocketClient.this, exc ) );
                 }
                 catch( Throwable th )
                 {
-                    UtilSys.getLogger().log( Level.SEVERE, "Cannot suppress a null exception." );
+                    UtilSys.getLogger().log( Level.SEVERE, th );
                 }
             }
 

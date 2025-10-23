@@ -56,7 +56,7 @@ public final class TabbedPaneTables extends GTabbedPane
 
     //------------------------------------------------------------------------//
 
-    public void clean()
+    public void clear()
     {
         tblChanges.model.removeAllRows();
         tblEditions.model.removeAllRows();

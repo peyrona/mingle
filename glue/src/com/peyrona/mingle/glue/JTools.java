@@ -35,6 +35,7 @@ import javax.swing.BorderFactory;
 import javax.swing.ImageIcon;
 import javax.swing.InputMap;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
@@ -59,8 +60,6 @@ import javax.swing.text.JTextComponent;
  * Swing related utilities.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
@@ -267,13 +266,13 @@ public final class JTools
 
         try
         {
-            return ImageIO.read( JTools.class.getResourceAsStream( name ) );
+            return ImageIO.read( JTools.class.getResourceAsStream( "./images/"+ name ) );
         }
         catch( IOException exc )
         {
             try
             {
-                return ImageIO.read( JTools.class.getResourceAsStream( "glue.png" ) );
+                return ImageIO.read( JTools.class.getResourceAsStream( "/images/glue.png" ) );
             }
             catch( IOException ex )
             {
@@ -388,15 +387,29 @@ public final class JTools
     /**
      * Resize as percent of the size of the scree passed Window.
      *
-     * @param wnd           To resize
+     * @param wnd           To resizeAsPercent
      * @param widthPercent  A percent or -1 to keep current Window width (-1 works only after wnd:pack())
      * @param heightPercent A percent or -1 to keep current Window height (-1 works only after wnd:pack())
      */
-    public static void resize( Window wnd, int widthPercent, int heightPercent )
+    public static void resizeAsPercent( Window wnd, int widthPercent, int heightPercent )
     {
         Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+
         int nWidth  = (int) ((widthPercent  < 0) ? wnd.getWidth()  : (screen.width  * (widthPercent  / 100f)));
         int nHeight = (int) ((heightPercent < 0) ? wnd.getHeight() : (screen.height * (heightPercent / 100f)));
+
+        wnd.setSize( nWidth, nHeight );
+    }
+
+    public static void resize( Window wnd, int width, int height )
+    {
+        Dimension screen = Toolkit.getDefaultToolkit().getScreenSize();
+
+        int nWidth  = (int) ((width  < 10) ? screen.width  / 5 : width );
+        int nHeight = (int) ((height < 10) ? screen.height / 5 : height);
+
+        nWidth  = Math.min( nWidth , screen.width  );
+        nHeight = Math.min( nHeight, screen.height );
 
         wnd.setSize( nWidth, nHeight );
     }
@@ -429,7 +442,7 @@ public final class JTools
 
     public static List<Component> getOfClass( Container from, Class... aComponentClasses )
     {
-        List<Class> list = Arrays.asList( aComponentClasses );
+        List<Class<?>> list = Arrays.asList( aComponentClasses );
 
         return getAll( from, new ArrayList<>() ).stream()
                 .filter( (Component c) ->
@@ -452,7 +465,7 @@ public final class JTools
         {
             Class clazz = child.getClass();
 
-            if( clazz.isInstance( clazzOfParent )       ||
+            if( clazzOfParent.isInstance( child )       ||
                 clazz.isAssignableFrom( clazzOfParent ) ||
                 isSubclass( clazz, clazzOfParent ) )
             {
@@ -499,6 +512,20 @@ public final class JTools
         }
 
         return null;
+    }
+
+    //------------------------------------------------------------------------//
+
+    public static String getTimeUnitFromComboBox(JComboBox<String> cmbUnits)
+    {
+        String sItem = cmbUnits.getSelectedItem().toString();
+        String sUnit = "";
+        if( cmbUnits.getSelectedIndex() > 0 )
+        {
+            char cUnit = sUnit.charAt( sItem.length() - 2 ); // e.g.: "Seconds  (s)"
+            sUnit = Character.valueOf( cUnit ).toString();
+        }
+        return sUnit;
     }
 
     //------------------------------------------------------------------------//

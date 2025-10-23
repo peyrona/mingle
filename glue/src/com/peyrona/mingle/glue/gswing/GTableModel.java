@@ -10,13 +10,21 @@ import java.util.function.Function;
 import javax.swing.table.AbstractTableModel;
 
 /**
- * This table model inserts new rows at begining of the table and it can
- * keep the table not bigger than certain number of rows.
+ * A generic table model that inserts new rows at the beginning and supports
+ * maximum row limits and filtering.
+ * <p>
+ * This abstract table model provides functionality to:
+ * <ul>
+ * <li>Insert new rows at the top of the table (most recent first)</li>
+ * <li>Limit the maximum number of rows to prevent memory issues</li>
+ * <li>Filter rows based on a predicate function</li>
+ * <li>Thread-safe operations for concurrent access</li>
+ * </ul>
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
- * @param <T>
+ * @param <T> the type of objects stored in this table model
  */
 public abstract class GTableModel<T>
        extends AbstractTableModel

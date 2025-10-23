@@ -182,7 +182,7 @@
                           <EmptySpace max="-2" attributes="0"/>
                           <Component id="spnAfterAmount" min="-2" pref="66" max="-2" attributes="0"/>
                           <EmptySpace type="unrelated" max="-2" attributes="0"/>
-                          <Component id="cmbAfterUnit" min="-2" max="-2" attributes="0"/>
+                          <Component id="cmbAfterTimeUnit" min="-2" max="-2" attributes="0"/>
                           <EmptySpace min="0" pref="0" max="32767" attributes="0"/>
                       </Group>
                       <Group type="102" alignment="0" attributes="0">
@@ -219,7 +219,7 @@
                   <Group type="103" groupAlignment="3" attributes="0">
                       <Component id="jLabel7" alignment="3" min="-2" max="-2" attributes="0"/>
                       <Component id="spnAfterAmount" alignment="3" min="-2" max="-2" attributes="0"/>
-                      <Component id="cmbAfterUnit" alignment="3" min="-2" max="-2" attributes="0"/>
+                      <Component id="cmbAfterTimeUnit" alignment="3" min="-2" max="-2" attributes="0"/>
                   </Group>
                   <EmptySpace type="separate" min="-2" max="-2" attributes="0"/>
                   <Group type="103" groupAlignment="0" attributes="0">
@@ -288,21 +288,22 @@
             <EventHandler event="stateChanged" listener="javax.swing.event.ChangeListener" parameters="javax.swing.event.ChangeEvent" handler="spnAfterAmountStateChanged"/>
           </Events>
         </Component>
-        <Component class="javax.swing.JComboBox" name="cmbAfterUnit">
+        <Component class="javax.swing.JComboBox" name="cmbAfterTimeUnit">
           <Properties>
             <Property name="model" type="javax.swing.ComboBoxModel" editor="org.netbeans.modules.form.editors2.ComboBoxModelEditor">
-              <StringArray count="6">
-                <StringItem index="0" value="1/100 of a second (u)"/>
-                <StringItem index="1" value="1/10 of a second (t)"/>
-                <StringItem index="2" value="Seconds  (s)"/>
-                <StringItem index="3" value="Minutes (m)"/>
-                <StringItem index="4" value="Hours (h)"/>
-                <StringItem index="5" value="Days (d)"/>
+              <StringArray count="7">
+                <StringItem index="0" value="1/1000 of a second"/>
+                <StringItem index="1" value="1/100 of a second (u)"/>
+                <StringItem index="2" value="1/10 of a second (t)"/>
+                <StringItem index="3" value="Seconds (s)"/>
+                <StringItem index="4" value="Minutes (m)"/>
+                <StringItem index="5" value="Hours (h)"/>
+                <StringItem index="6" value="Days (d)"/>
               </StringArray>
             </Property>
           </Properties>
           <Events>
-            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="cmbAfterUnitActionPerformed"/>
+            <EventHandler event="actionPerformed" listener="java.awt.event.ActionListener" parameters="java.awt.event.ActionEvent" handler="cmbAfterTimeUnitActionPerformed"/>
           </Events>
           <AuxValues>
             <AuxValue name="JavaCodeGenerator_TypeParameters" type="java.lang.String" value="&lt;String&gt;"/>
