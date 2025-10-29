@@ -71,7 +71,7 @@ public class Main
                               "     b) Start a local ExEn ('play' icon or F5)\n"+
                               "     c) Open the Script-Editor ('pencil' icon or F2)." );
 
-                    if( (! UtilSys.isDevEnv) && shouldCheckForUpdates() )
+                    if( shouldCheckForUpdates() )
                     {
                         File              fBase   = new File( (UtilSys.isDevEnv ? "../todeploy" : ".") );
                         boolean           bDryRun = UtilSys.isDevEnv;
@@ -98,6 +98,9 @@ public class Main
 
     private static boolean shouldCheckForUpdates()
     {
+        if( UtilSys.isDevEnv )
+            return false;
+
         File file = new File( UtilSys.getEtcDir(), "glue_last_update_check.txt" );
 
         try
@@ -135,12 +138,23 @@ public class Main
 
         //------------------------------------------------------------------------//
 
+        private MainFrame()
+        {
+            setTitle( "Glue ::: Mission Control tool" );
+            setAutoRequestFocus( true );
+            setIconImage( JTools.getImage( "glue.png" ) );
+            setDefaultCloseOperation( JFrame.DO_NOTHING_ON_CLOSE );
+        }
+
+        //------------------------------------------------------------------------//
+
         public ExEnsTabbedPane getExEnTabsPane()
         {
             return tabExEn;
         }
 
         //------------------------------------------------------------------------//
+        // PRIVATE SCOPE
 
         private synchronized void showIt()
         {
@@ -161,10 +175,6 @@ public class Main
 
             ((BorderLayout) getLayout()).setVgap( 0 );
 
-            setTitle( "Glue ::: Mission Control tool" );
-            setAutoRequestFocus( true );
-            setIconImage( JTools.getImage( "glue.png" ) );
-            setDefaultCloseOperation( JFrame.DO_NOTHING_ON_CLOSE );
             add( toolBar, BorderLayout.NORTH  );
             add( tabExEn, BorderLayout.CENTER );
             pack();

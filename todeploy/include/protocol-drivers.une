@@ -37,6 +37,12 @@ DRIVER SocketClientDriver                     # This driver acts as a Socket (tr
         ssl       AS boolean                  # By default false. Can be ignored if the implementation does not support it.
         websocket AS boolean                  # Use websocket instead of plain old socket. By default false
 
+
+DRIVER HttpClientDriver                       # Generic HTTP client
+    SCRIPT HttpClientController
+    CONFIG
+        uri    AS string REQUIRED             # URI to connect to (e.g.: http://google.com)
+
 #----------------------------------------------------------------------------------------------------------------------------------
 
 SCRIPT MqttClientController                           # A controller that sends and receives messages to/from MQTT broker.
@@ -59,5 +65,11 @@ SCRIPT SocketClientController
    FROM     "file://{*home.lib*}controllers.jar"
             "file://{*home.lib*}slf4j-api-2.0.9.jar"
    CALL     "com.peyrona.mingle.controllers.SocketClient"
+
+
+SCRIPT HttpClientController                           # The controller for the HttpClientDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.HttpClient"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

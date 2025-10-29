@@ -34,7 +34,19 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
 
         try
         {
-            String catalogContent = Files.readString( catalogFile.toPath() );
+            String catalogContent;
+            // Use buffered reading for large files
+            try( java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader( catalogFile.toPath() ) )
+            {
+                StringBuilder content = new StringBuilder();
+                char[] buffer = new char[8192]; // 8KB buffer
+                int bytesRead;
+                while( (bytesRead = reader.read( buffer )) != -1 )
+                {
+                    content.append( buffer, 0, bytesRead );
+                }
+                catalogContent = content.toString();
+            }
             List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( catalogContent );
 
             for( CatalogParser.CatalogFileEntry entry : catalogFileEntries )
@@ -56,6 +68,11 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
         catch( IOException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error reading catalog.json" );
+        }
+        catch( RuntimeException e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error processing catalog.json" );
+            throw e;
         }
 
         // Add catalog.json entries at the end to ensure they're processed last

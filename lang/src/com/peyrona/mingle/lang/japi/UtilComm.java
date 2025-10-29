@@ -50,7 +50,7 @@ public class UtilComm
     public static final int UDP_PORT_MIN_ALLOWED      = 0;
     public static final int TCP_PORT_MAX_ALLOWED      = 0xFFFF;
     public static final int UDP_PORT_MAX_ALLOWED      = 0xFFFF;
-    public static final int PORT_USER_MIN_ALLOWED     =   1025;
+    public static final int PORT_USER_MIN_ALLOWED     =   1024;
     public static final int PORT_USER_MIN_RECOMMENDED = 0xC000;   // == 49152
 
     public static final int PORT_FTP_DEFAULT  =  21;

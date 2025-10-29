@@ -73,6 +73,10 @@ public interface IConfig
      */
     String getNetworkServersOutline();
 
+    /**
+     * Returns the location of the configuration file.
+     * @return The location of the configuration file
+     */
     String getURI();
 
     boolean isGridDeaf();

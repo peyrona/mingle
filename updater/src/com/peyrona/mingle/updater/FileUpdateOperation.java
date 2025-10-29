@@ -21,6 +21,21 @@ public class FileUpdateOperation
     public FileUpdateOperation( BackupManager backupManager, String relativePath,
                                 File localFile, GitHubApiClient.GitHubFileResponse githubInfo )
     {
+        if( relativePath == null || relativePath.trim().isEmpty() )
+        {
+            throw new IllegalArgumentException( "Relative path cannot be null or empty" );
+        }
+        
+        if( localFile == null )
+        {
+            throw new IllegalArgumentException( "Local file cannot be null" );
+        }
+        
+        if( githubInfo == null )
+        {
+            throw new IllegalArgumentException( "GitHub info cannot be null" );
+        }
+        
         this.backupManager = backupManager;
         this.relativePath = relativePath;
         this.localFile = localFile;
@@ -39,12 +54,19 @@ public class FileUpdateOperation
 
         if( localFile.exists() )
         {
-            backupFile = backupManager.createBackup( localFile );
-
-            if( backupFile == null )
+            if( backupManager != null )
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to create backup for: " + relativePath );
-                return false;
+                backupFile = backupManager.createBackup( localFile );
+
+                if( backupFile == null )
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to create backup for: " + relativePath );
+                    return false;
+                }
+            }
+            else
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Backup manager is null, skipping backup for: " + relativePath );
             }
         }
 

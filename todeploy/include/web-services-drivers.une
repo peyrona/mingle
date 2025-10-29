@@ -80,15 +80,6 @@ DRIVER OpenMeteoDriver                   # To retrieve weather information using
                                          # Any thing different for FALSE (ignoring case), will be considered TRUE.
 
 # --------------------------------------------------------------------------------------------------------------------------------
-# Generic HTTP client
-
-DRIVER HttpClientDriver
-    SCRIPT HttpClientController
-    CONFIG
-        uri    AS string REQUIRED    # URI to connect to (e.g.: http://google.com)
-        method AS string             # One of (case is ignored): GET, PUT, POST, DELETE. By default GET
-
-# --------------------------------------------------------------------------------------------------------------------------------
 # CARE: This driver exists just for teaching purposes: it is not intended to be used in real scenarios.
 
 DRIVER BitcoinUSDPriceDriver             # Retrieves price of Bitcoin in USD (https://api.coindesk.com/v1/bpi/currentprice.json)
@@ -116,12 +107,6 @@ SCRIPT OpenMeteoController                            # The controller for the O
    LANGUAGE java
    FROM "file://{*home.lib*}controllers.jar"
    CALL "com.peyrona.mingle.controllers.WeatherOpenMeteo"
-
-
-SCRIPT HttpClientController                           # The controller for the HttpClientDriver
-   LANGUAGE java
-   FROM "file://{*home.lib*}controllers.jar"
-   CALL "com.peyrona.mingle.controllers.HttpClient"
 
 
 SCRIPT BitcoinUSDPriceController

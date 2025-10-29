@@ -19,8 +19,9 @@ import java.util.concurrent.ScheduledFuture;
 public final class   SystemClock
              extends ControllerBase
 {
+    private static final String KEY = "interval";
+
     private ScheduledFuture timer = null;
-    private int             interval;
 
     //------------------------------------------------------------------------//
 
@@ -30,8 +31,9 @@ public final class   SystemClock
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        interval = ((Number) deviceInit.getOrDefault( "interval", 1000f )).intValue();
-        interval = setBetween( "interval", 10, interval, Integer.MAX_VALUE );
+        int interval = ((Number) deviceInit.getOrDefault( "interval", 1000f )).intValue();
+
+        setBetween( KEY, 10, interval, Integer.MAX_VALUE );
 
         setValid( true );
     }
@@ -58,7 +60,7 @@ public final class   SystemClock
         synchronized( this )
         {
             if( timer == null )
-                timer = UtilSys.executeAtRate( getClass().getName(), interval, interval, () -> read() );     // 'interval' must also be the initial delay
+                timer = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY ), (int) get( KEY ), () -> read() );     // 'interval' must also be the initial delay
         }
     }
 

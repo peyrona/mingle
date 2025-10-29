@@ -28,12 +28,33 @@ public class HybridFileComparator implements FileComparator
         }
         else if( context.githubInfo != null && context.githubInfo.lastModified > 0 )
         {
-            // Compare timestamps
+            // Compare timestamps - both should be in milliseconds since epoch
             long localLastModified = context.localFile.lastModified();
+            long remoteLastModified = context.githubInfo.lastModified;
             
-            if( localLastModified < context.githubInfo.lastModified )
+            // Add tolerance for clock skew (5 minutes)
+            final long TIMESTAMP_TOLERANCE_MS = 5 * 60 * 1000;
+            
+            // Validate timestamp values before comparison
+            if( localLastModified <= 0 )
             {
-                // Remote file is newer, verify with hash
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Invalid local timestamp for: " + context.relativePath );
+                // Fall back to hash-only comparison
+                localHash = HashCalculator.calculateHash( context.localFile, remoteHash );
+                needsUpdate = (localHash == null || remoteHash == null || ! localHash.equals( remoteHash ));
+                reason = needsUpdate ? "invalid local timestamp (SHA verified)" : "SHA verified (invalid local timestamp)";
+            }
+            else if( remoteLastModified <= 0 )
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Invalid remote timestamp for: " + context.relativePath );
+                // Fall back to hash-only comparison
+                localHash = HashCalculator.calculateHash( context.localFile, remoteHash );
+                needsUpdate = (localHash == null || remoteHash == null || ! localHash.equals( remoteHash ));
+                reason = needsUpdate ? "invalid remote timestamp (SHA verified)" : "SHA verified (invalid remote timestamp)";
+            }
+            else if( localLastModified < (remoteLastModified - TIMESTAMP_TOLERANCE_MS) )
+            {
+                // Remote file is significantly newer, verify with hash
                 localHash = HashCalculator.calculateHash( context.localFile, remoteHash );
                 if( localHash == null || remoteHash == null || ! localHash.equals( remoteHash ) )
                 {
@@ -45,9 +66,9 @@ public class HybridFileComparator implements FileComparator
                     reason = "same content despite newer timestamp";
                 }
             }
-            else if( localLastModified > context.githubInfo.lastModified )
+            else if( localLastModified > (remoteLastModified + TIMESTAMP_TOLERANCE_MS) )
             {
-                // Local file is newer, but still verify with hash for safety
+                // Local file is significantly newer, but still verify with hash for safety
                 localHash = HashCalculator.calculateHash( context.localFile, remoteHash );
                 if( localHash == null || remoteHash == null || ! localHash.equals( remoteHash ) )
                 {
@@ -61,8 +82,17 @@ public class HybridFileComparator implements FileComparator
             }
             else
             {
-                // Timestamps are equal, assume up-to-date
-                reason = "same timestamp";
+                // Timestamps are within tolerance, assume up-to-date but verify with hash
+                localHash = HashCalculator.calculateHash( context.localFile, remoteHash );
+                if( localHash == null || remoteHash == null || ! localHash.equals( remoteHash ) )
+                {
+                    needsUpdate = true;
+                    reason = "different content (timestamps similar but SHA mismatch)";
+                }
+                else
+                {
+                    reason = "same content (timestamps similar)";
+                }
             }
         }
         else

@@ -2,7 +2,6 @@
 package com.peyrona.mingle.glue.exen.commands;
 
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.Tip;
 import com.peyrona.mingle.glue.exen.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GList;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
@@ -17,6 +16,7 @@ import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.awt.Component;
 import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.temporal.ChronoUnit;
@@ -42,7 +42,8 @@ public class PnlAllCmdsSelector
        extends javax.swing.JPanel
 {
     private final ExEnClient     exenClient;
-    private final GList<IScript> ltbScript;
+    private final GList<IScript> ltbScrDrv;
+    private final GList<IScript> ltbScrInl;
     private final GList<IDriver> ltbDriver;
     private final GList<IDevice> ltbDevice;
     private final GList<IRule>   ltbRule;
@@ -58,7 +59,8 @@ public class PnlAllCmdsSelector
 
         initComponents();
 
-        ltbScript = new GList<>( lstScript );     // Don't move: has to be here
+        ltbScrDrv = new GList<>( lstScrDri );
+        ltbScrInl = new GList<>( lstScrInl );
         ltbDriver = new GList<>( lstDriver );
         ltbRule   = new GList<>( lstRule   );
         ltbDevice = new GList<>( lstDevice );
@@ -98,10 +100,11 @@ public class PnlAllCmdsSelector
           .append( "# Add here any other needed include *\n" )
           .append( "#************************************\n\n" );
 
-        cmdWise.getDevices().forEach( device -> sb.append( new PnlDevice( device, cmdWise, null ).getSourceCode() ).append( "\n\n" ) );
-        cmdWise.getRules().forEach(   rule   -> sb.append( new PnlRule(   rule  , cmdWise       ).getSourceCode() ).append( "\n\n" ) );
-        cmdWise.getDrivers().forEach( driver -> sb.append( new PnlDriver( driver, cmdWise       ).getSourceCode() ).append( "\n\n" ) );
-        cmdWise.getScripts().forEach( script -> sb.append( new PnlScript( script, cmdWise       ).getSourceCode() ).append( "\n\n" ) );
+        cmdWise.getDevices().forEach( device -> sb.append( new PnlDevice( device, cmdWise ).getSourceCode() ).append( "\n\n" ) );
+        cmdWise.getRules(  ).forEach( rule   -> sb.append( new PnlRule(   rule  , cmdWise ).getSourceCode() ).append( "\n\n" ) );
+        cmdWise.getDrivers().forEach( driver -> sb.append( new PnlDriver( driver, cmdWise ).getSourceCode() ).append( "\n\n" ) );
+        cmdWise.getScrInl( ).forEach( script -> sb.append( new PnlScrInl( script, cmdWise ).getSourceCode() ).append( "\n\n" ) );
+        cmdWise.getScrDrv( ).forEach( script -> sb.append( new PnlScrDrv( script, cmdWise ).getSourceCode() ).append( "\n\n" ) );
 
         UtilStr.removeLast( sb, 1 );
 
@@ -176,7 +179,8 @@ public class PnlAllCmdsSelector
 
             if( ! sExtra.isEmpty() )      // When Script or Driver is sent devices will be removed but it is
             {                             // not ExEn resposibility to inform about these collateral effects
-                ltbScript.clear();
+                ltbScrDrv.clear();
+                ltbScrInl.clear();
                 ltbDriver.clear();
                 ltbRule.clear();
                 ltbDevice.clear();
@@ -186,7 +190,7 @@ public class PnlAllCmdsSelector
         }
     }
 
-    private void edit( final Class clazz, final ICommand cmd )
+    private void edit( final Class clazz, final ICommand cmd, boolean isEditable )
     {
         final JPanel panel;
 
@@ -201,60 +205,64 @@ public class PnlAllCmdsSelector
             return;
         }
 
-             if( clazz == IScript.class )  panel = new PnlScript( (IScript) cmd, cmdWise );
-        else if( clazz == IDriver.class )  panel = new PnlDriver( (IDriver) cmd, cmdWise );
+        boolean isInlineScrip = (clazz == IScript.class) && (isEditable == true);   // Because Scripts for Drivers are not editable (this is a weak way to check it but it works)
+
+             if( clazz == IDriver.class )  panel = new PnlDriver( (IDriver) cmd, cmdWise );
         else if( clazz == IDevice.class )  panel = new PnlDevice( (IDevice) cmd, cmdWise, exenClient );
-        else                               panel = new PnlRule(   (IRule  ) cmd, cmdWise );
+        else if( clazz == IRule.class   )  panel = new PnlRule(   (IRule  ) cmd, cmdWise );
+        else if( isInlineScrip          )  panel = new PnlScrInl( (IScript) cmd, cmdWise );
+        else                               panel = new PnlScrDrv( (IScript) cmd, cmdWise );
 
-        String msg;
+        JTools.setEditable( panel, isEditable );
 
-             if( clazz == IScript.class )  msg = "SCRIPT dialog is used to create new SCRIPTs.\n\nTo load SCRIPTs from file, click on folder icon at application toolbar.\n\nAnd do not fortget: when a DRIVER is loaded, its associated SCRIPT is automatically loaded too.";
-        else if( clazz == IDriver.class )  msg = "DRIVER dialog is used to create new DRIVERs.\n\nTo load DRIVERSs from file, click on folder icon at application toolbar.";
-        else if( clazz == IDevice.class )  msg = null;
-        else                               msg = null;
+        String         title = clazz.getSimpleName().substring( 1 );
+        ActionListener al    = null;
 
-        if( msg != null )
-            Tip.show( msg );
+        if( isEditable )
+        {
+            al = (ActionEvent ae) ->
+                                {
+                                    String cmdNew = ((PnlCmdBase) panel).getTranspiled();
 
-        String title = panel.getClass().getSimpleName().substring( 3 );
+                                    if( cmdNew != null )
+                                    {
+                                        JTools.getParent( (Component) ae.getSource(), Dlg4Cmd.class ).dispose();
 
-        new Dlg4Cmd( title +" Command Editor", panel,
-                        (ActionEvent ae) ->
-                         {
-                             String cmdNew = ((PnlCmdBase) panel).getTranspiled();
+                                        ICommand cmd2Add = UtilSys.getConfig().newCILBuilder().build( cmdNew );
 
-                             if( cmdNew != null )
-                             {
-                                 JTools.getParent( (Component) ae.getSource(), Dlg4Cmd.class ).dispose();
+                                        if( cmd != null )
+                                            exenClient.sendReplace( cmd, cmd2Add );
+                                        else
+                                            exenClient.sendAdd( cmd2Add );
+                                    }
+                                };
+        }
 
-                                 ICommand cmd2Add = UtilSys.getConfig().newCILBuilder().build( cmdNew );
-
-                                 if( cmd != null )
-                                     exenClient.sendReplace( cmd, cmd2Add );
-                                 else
-                                     exenClient.sendAdd( cmd2Add );
-                             }
-                         }
-                   ).setVisible( true );
+        new Dlg4Cmd( title +" Editor", panel, al ).setVisible( true );
     }
 
     private GList getListBoxFor( ICommand cmd )
     {
-             if( cmd instanceof IScript )  return ltbScript;
-        else if( cmd instanceof IDriver )  return ltbDriver;
+             if( cmd instanceof IDriver )  return ltbDriver;
         else if( cmd instanceof IDevice )  return ltbDevice;
-        else                               return ltbRule;
+        else if( cmd instanceof IRule   )  return ltbRule;
+
+        // Must be an Script
+
+        return ((IScript) cmd).isInline() ? ltbScrInl : ltbScrDrv;
     }
 
     private void refreshButtons()
     {
-        btnScriptEdit.setEnabled(  ltbScript.isNotEmpty() );
-        btnScriptClone.setEnabled( ltbScript.isNotEmpty() );
-        btnScriptDel.setEnabled(   ltbScript.isNotEmpty() );
+        btnScrDrvShow.setEnabled(  ltbScrDrv.isNotEmpty() );
 
-        btnDriverEdit.setEnabled(  ltbDriver.isNotEmpty() );
-        btnDriverClone.setEnabled( ltbDriver.isNotEmpty() );
-        btnDriverDel.setEnabled(   ltbDriver.isNotEmpty() );
+        btnScrInlEdit.setEnabled(  ltbScrInl.isNotEmpty() );
+        btnScrInlClone.setEnabled( ltbScrInl.isNotEmpty() );
+        btnScrInlDel.setEnabled(   ltbScrInl.isNotEmpty() );
+
+        btnDriverShow.setEnabled(  ltbDriver.isNotEmpty() );
+     // btnDriverClone.setEnabled( ltbDriver.isNotEmpty() );   NOT USED
+     // btnDriverDel.setEnabled(   ltbDriver.isNotEmpty() );   NOT USED
 
         btnRuleEdit.setEnabled(    ltbRule.isNotEmpty()   );
         btnRuleClone.setEnabled(   ltbRule.isNotEmpty()   );
@@ -271,56 +279,56 @@ public class PnlAllCmdsSelector
         Icon iconEdit  = IconFontSwing.buildIcon( FontAwesome.PENCIL, 16, JTools.getIconColor() );
         Icon iconClone = IconFontSwing.buildIcon( FontAwesome.CLONE , 16, JTools.getIconColor() );
         Icon iconDel   = IconFontSwing.buildIcon( FontAwesome.TRASH , 16, JTools.getIconColor() );
+        Icon iconShow  = IconFontSwing.buildIcon( FontAwesome.EYE   , 16, JTools.getIconColor() );
 
-        btnScriptNew.setIcon( iconNew );
-        btnDriverNew.setIcon( iconNew );
-        btnDeviceNew.setIcon( iconNew );
-        btnRuleNew.setIcon(   iconNew );
-
-        btnScriptEdit.setIcon( iconEdit );
-        btnDriverEdit.setIcon( iconEdit );
-        btnDeviceEdit.setIcon( iconEdit );
-        btnRuleEdit.setIcon(   iconEdit );
-
-        btnScriptClone.setIcon( iconClone );
-        btnDriverClone.setIcon( iconClone );
-        btnDeviceClone.setIcon( iconClone );
-        btnRuleClone.setIcon(   iconClone );
-
-        btnScriptDel.setIcon( iconDel );
-        btnDriverDel.setIcon( iconDel );
-        btnDeviceDel.setIcon( iconDel );
-        btnRuleDel.setIcon(   iconDel );
-
-        ltbScript.setCaptionFn( (cmd) -> cmd.name() );
+        ltbScrDrv.setCaptionFn( (cmd) -> cmd.name() );
+        ltbScrInl.setCaptionFn( (cmd) -> cmd.name() );
         ltbDriver.setCaptionFn( (cmd) -> cmd.name() );
         ltbDevice.setCaptionFn( (cmd) -> cmd.name() );
         ltbRule.setCaptionFn(   (cmd) -> cmd.name() );
 
-        ltbScript.onPicked( (cmd) -> edit( IScript.class, cmd ) );
-        ltbDriver.onPicked( (cmd) -> edit( IDriver.class, cmd ) );
-        ltbDevice.onPicked( (cmd) -> edit( IDevice.class, cmd ) );
-        ltbRule.onPicked(   (cmd) -> edit( IRule.class  , cmd ) );
+        ltbScrDrv.onPicked( (cmd) -> edit( IScript.class, cmd, false ) );
+        ltbScrInl.onPicked( (cmd) -> edit( IScript.class, cmd, true  ) );
+        ltbDriver.onPicked( (cmd) -> edit( IDriver.class, cmd, false ) );
+        ltbDevice.onPicked( (cmd) -> edit( IDevice.class, cmd, true  ) );
+        ltbRule.onPicked(   (cmd) -> edit( IRule.class  , cmd, true  ) );
 
-        btnScriptNew.addActionListener(   evt -> edit(  IScript.class, null ) );
-        btnScriptEdit.addActionListener(  evt -> edit(  IScript.class, ltbScript.getSelected() ) );
-        btnScriptClone.addActionListener( evt -> clone( ltbScript ) );
-        btnScriptDel.addActionListener(   evt -> del(   ltbScript.getSelected() ) );
+        btnScrDrvShow.setIcon( iconShow );
+        btnScrDrvShow.addActionListener(  evt -> edit( IScript.class, ltbScrDrv.getSelected(), false ) );
 
-        btnDriverNew.addActionListener(   evt -> edit(  IDriver.class, null ) );
-        btnDriverEdit.addActionListener(  evt -> edit(  IDriver.class, ltbDriver.getSelected() ) );
-        btnDriverClone.addActionListener( evt -> clone( ltbDriver ) );
-        btnDriverDel.addActionListener(   evt -> del(   ltbDriver.getSelected() ) );
+        btnScrInlNew.setIcon(   iconNew   );
+        btnScrInlEdit.setIcon(  iconEdit  );
+        btnScrInlClone.setIcon( iconClone );
+        btnScrInlDel.setIcon(   iconDel   );
+        btnScrInlNew.addActionListener(   evt -> edit( IScript.class, null                   , true ) );
+        btnScrInlEdit.addActionListener(  evt -> edit( IScript.class, ltbScrInl.getSelected(), true ) );
+        btnScrInlClone.addActionListener( evt -> clone( ltbScrInl ) );
+        btnScrInlDel.addActionListener(   evt -> del(   ltbScrInl.getSelected() ) );
 
-        btnDeviceNew.addActionListener(   evt -> edit(  IDevice.class, null ) );
-        btnDeviceEdit.addActionListener(  evt -> edit(  IDevice.class, ltbDevice.getSelected() ) );
+        btnDriverShow.setIcon( iconShow );
+        btnDriverNew.setIcon(  iconNew  );
+        btnDriverClone.setVisible( false );    // ACTION NOT ALLOWED YET
+        btnDriverDel.setVisible(   false );    // ACTION NOT ALLOWED YET
+        btnDriverShow.addActionListener( evt -> edit( IDriver.class, ltbDriver.getSelected(), false ) );
+        btnDriverNew.addActionListener(  evt -> edit( IDriver.class, null                   , true  ) );
+
+        btnDeviceNew.setIcon(   iconNew   );
+        btnDeviceEdit.setIcon(  iconEdit  );
+        btnDeviceClone.setIcon( iconClone );
+        btnDeviceDel.setIcon(   iconDel   );
+        btnDeviceNew.addActionListener(   evt -> edit( IDevice.class, null                   , true ) );
+        btnDeviceEdit.addActionListener(  evt -> edit( IDevice.class, ltbDevice.getSelected(), true ) );
         btnDeviceClone.addActionListener( evt -> clone( ltbDevice ) );
         btnDeviceDel.addActionListener(   evt -> del(   ltbDevice.getSelected() ) );
 
-        btnRuleNew.addActionListener(     evt -> edit(  IRule.class, null ) );
-        btnRuleEdit.addActionListener(    evt -> edit(  IRule.class, ltbRule.getSelected() ) );
-        btnRuleClone.addActionListener(   evt -> clone( ltbRule  ) );
-        btnRuleDel.addActionListener(     evt -> del(   ltbRule.getSelected() ) );
+        btnRuleNew.setIcon(   iconNew );
+        btnRuleEdit.setIcon(  iconEdit );
+        btnRuleClone.setIcon( iconClone );
+        btnRuleDel.setIcon(   iconDel );
+        btnRuleNew.addActionListener(   evt -> edit( IRule.class, null                 , true ) );
+        btnRuleEdit.addActionListener(  evt -> edit( IRule.class, ltbRule.getSelected(), true ) );
+        btnRuleClone.addActionListener( evt -> clone( ltbRule ) );
+        btnRuleDel.addActionListener(   evt -> del(   ltbRule.getSelected() ) );
     }
 
     /** This method is called from within the constructor to
@@ -349,21 +357,28 @@ public class PnlAllCmdsSelector
         spDevice = new javax.swing.JScrollPane();
         lstDevice = new javax.swing.JList<>();
         lblDrivers = new javax.swing.JLabel();
+        btnDriverShow = new javax.swing.JButton();
         btnDriverNew = new javax.swing.JButton();
-        btnDriverEdit = new javax.swing.JButton();
         btnDriverClone = new javax.swing.JButton();
         btnDriverDel = new javax.swing.JButton();
         spDriver = new javax.swing.JScrollPane();
         lstDriver = new javax.swing.JList<>();
-        lblScripts = new javax.swing.JLabel();
-        btnScriptNew = new javax.swing.JButton();
-        btnScriptEdit = new javax.swing.JButton();
-        btnScriptClone = new javax.swing.JButton();
-        btnScriptDel = new javax.swing.JButton();
-        spScript = new javax.swing.JScrollPane();
-        lstScript = new javax.swing.JList<>();
+        lblScrInline = new javax.swing.JLabel();
+        btnScrInlNew = new javax.swing.JButton();
+        btnScrInlEdit = new javax.swing.JButton();
+        btnScrInlClone = new javax.swing.JButton();
+        btnScrInlDel = new javax.swing.JButton();
+        spScrDriver = new javax.swing.JScrollPane();
+        lstScrDri = new javax.swing.JList<>();
+        spScrInline = new javax.swing.JScrollPane();
+        lstScrInl = new javax.swing.JList<>();
+        lblScrDriver = new javax.swing.JLabel();
+        btnScrDrvShow = new javax.swing.JButton();
+
+        setPreferredSize(new java.awt.Dimension(760, 8));
 
         pnlCommands.setName("pnlCommands"); // NOI18N
+        pnlCommands.setPreferredSize(new java.awt.Dimension(919, 8));
 
         lblRules.setFont(lblRules.getFont().deriveFont(lblRules.getFont().getStyle() | java.awt.Font.BOLD, lblRules.getFont().getSize()+2));
         lblRules.setText("Rules");
@@ -406,11 +421,11 @@ public class PnlAllCmdsSelector
         lblDrivers.setFont(new java.awt.Font("Ubuntu", 1, 13)); // NOI18N
         lblDrivers.setText("Drivers");
 
-        btnDriverNew.setToolTipText("Create new item");
-        btnDriverNew.setFocusPainted(false);
+        btnDriverShow.setToolTipText("Create new item");
+        btnDriverShow.setFocusPainted(false);
 
-        btnDriverEdit.setToolTipText("Edit highlighted item");
-        btnDriverEdit.setFocusPainted(false);
+        btnDriverNew.setToolTipText("Edit highlighted item");
+        btnDriverNew.setFocusPainted(false);
 
         btnDriverClone.setToolTipText("Clone highlighted item");
         btnDriverClone.setFocusPainted(false);
@@ -422,24 +437,34 @@ public class PnlAllCmdsSelector
         lstDriver.setVisibleRowCount(12);
         spDriver.setViewportView(lstDriver);
 
-        lblScripts.setFont(new java.awt.Font("Ubuntu", 1, 13)); // NOI18N
-        lblScripts.setText("Scripts");
+        lblScrInline.setFont(new java.awt.Font("Ubuntu", 1, 13)); // NOI18N
+        lblScrInline.setText("Scripts (Inline)");
 
-        btnScriptNew.setToolTipText("Create new item");
-        btnScriptNew.setFocusPainted(false);
+        btnScrInlNew.setToolTipText("Create new item");
+        btnScrInlNew.setFocusPainted(false);
 
-        btnScriptEdit.setToolTipText("Edit highlighted item");
-        btnScriptEdit.setFocusPainted(false);
+        btnScrInlEdit.setToolTipText("Edit highlighted item");
+        btnScrInlEdit.setFocusPainted(false);
 
-        btnScriptClone.setToolTipText("Clone highlighted item");
-        btnScriptClone.setFocusPainted(false);
+        btnScrInlClone.setToolTipText("Clone highlighted item");
+        btnScrInlClone.setFocusPainted(false);
 
-        btnScriptDel.setToolTipText("Remove highlighted item");
-        btnScriptDel.setFocusPainted(false);
+        btnScrInlDel.setToolTipText("Remove highlighted item");
+        btnScrInlDel.setFocusPainted(false);
 
-        lstScript.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
-        lstScript.setVisibleRowCount(12);
-        spScript.setViewportView(lstScript);
+        lstScrDri.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        lstScrDri.setVisibleRowCount(12);
+        spScrDriver.setViewportView(lstScrDri);
+
+        lstScrInl.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        lstScrInl.setVisibleRowCount(12);
+        spScrInline.setViewportView(lstScrInl);
+
+        lblScrDriver.setFont(lblScrDriver.getFont().deriveFont(lblScrDriver.getFont().getStyle() | java.awt.Font.BOLD));
+        lblScrDriver.setText("Scripts (all others)");
+
+        btnScrDrvShow.setToolTipText("Create new item");
+        btnScrDrvShow.setFocusPainted(false);
 
         javax.swing.GroupLayout pnlCommandsLayout = new javax.swing.GroupLayout(pnlCommands);
         pnlCommands.setLayout(pnlCommandsLayout);
@@ -457,7 +482,7 @@ public class PnlAllCmdsSelector
                                 .addComponent(btnRuleClone))
                             .addComponent(btnRuleDel))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spRule, javax.swing.GroupLayout.DEFAULT_SIZE, 223, Short.MAX_VALUE)))
+                        .addComponent(spRule, javax.swing.GroupLayout.DEFAULT_SIZE, 187, Short.MAX_VALUE)))
                 .addGap(18, 18, 18)
                 .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlCommandsLayout.createSequentialGroup()
@@ -467,38 +492,68 @@ public class PnlAllCmdsSelector
                             .addComponent(btnDeviceClone, javax.swing.GroupLayout.Alignment.TRAILING)
                             .addComponent(btnDeviceDel, javax.swing.GroupLayout.Alignment.TRAILING))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spDevice, javax.swing.GroupLayout.DEFAULT_SIZE, 224, Short.MAX_VALUE))
+                        .addComponent(spDevice, javax.swing.GroupLayout.DEFAULT_SIZE, 187, Short.MAX_VALUE))
                     .addComponent(lblDevices))
                 .addGap(18, 18, 18)
                 .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlCommandsLayout.createSequentialGroup()
                         .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(btnDriverShow)
                             .addComponent(btnDriverNew)
-                            .addComponent(btnDriverEdit)
                             .addComponent(btnDriverDel)
                             .addComponent(btnDriverClone, javax.swing.GroupLayout.Alignment.TRAILING))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spDriver, javax.swing.GroupLayout.DEFAULT_SIZE, 222, Short.MAX_VALUE))
+                        .addComponent(spDriver, javax.swing.GroupLayout.DEFAULT_SIZE, 187, Short.MAX_VALUE))
                     .addComponent(lblDrivers))
                 .addGap(18, 18, 18)
                 .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlCommandsLayout.createSequentialGroup()
                         .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(btnScriptNew)
-                            .addComponent(btnScriptEdit)
-                            .addComponent(btnScriptDel)
-                            .addComponent(btnScriptClone))
+                            .addComponent(lblScrInline)
+                            .addComponent(lblScrDriver))
+                        .addContainerGap())
+                    .addGroup(pnlCommandsLayout.createSequentialGroup()
+                        .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(btnScrInlNew)
+                            .addComponent(btnScrInlEdit)
+                            .addComponent(btnScrInlDel)
+                            .addComponent(btnScrInlClone))
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(spScript, javax.swing.GroupLayout.DEFAULT_SIZE, 211, Short.MAX_VALUE))
-                    .addComponent(lblScripts))
-                .addContainerGap())
+                        .addComponent(spScrInline, javax.swing.GroupLayout.DEFAULT_SIZE, 270, Short.MAX_VALUE))
+                    .addGroup(pnlCommandsLayout.createSequentialGroup()
+                        .addComponent(btnScrDrvShow)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(spScrDriver))))
         );
         pnlCommandsLayout.setVerticalGroup(
             pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlCommandsLayout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(pnlCommandsLayout.createSequentialGroup()
+                        .addComponent(lblScrInline)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(pnlCommandsLayout.createSequentialGroup()
+                                .addComponent(spScrInline, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)
+                                .addGap(18, 18, 18))
+                            .addGroup(pnlCommandsLayout.createSequentialGroup()
+                                .addComponent(btnScrInlNew)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(btnScrInlEdit)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(btnScrInlClone)
+                                .addGap(18, 18, 18)
+                                .addComponent(btnScrInlDel)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 61, Short.MAX_VALUE)))
+                        .addComponent(lblScrDriver)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(spScrDriver, javax.swing.GroupLayout.DEFAULT_SIZE, 262, Short.MAX_VALUE)
+                            .addGroup(pnlCommandsLayout.createSequentialGroup()
+                                .addComponent(btnScrDrvShow)
+                                .addGap(0, 0, Short.MAX_VALUE))))
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlCommandsLayout.createSequentialGroup()
                         .addComponent(lblDevices)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -510,34 +565,21 @@ public class PnlAllCmdsSelector
                                 .addComponent(btnDeviceClone)
                                 .addGap(18, 18, 18)
                                 .addComponent(btnDeviceDel))
-                            .addComponent(spDevice, javax.swing.GroupLayout.DEFAULT_SIZE, 438, Short.MAX_VALUE)))
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, pnlCommandsLayout.createSequentialGroup()
-                        .addComponent(lblScripts)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(pnlCommandsLayout.createSequentialGroup()
-                                .addComponent(btnScriptNew)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(btnScriptEdit)
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(btnScriptClone)
-                                .addGap(18, 18, 18)
-                                .addComponent(btnScriptDel))
-                            .addComponent(spScript, javax.swing.GroupLayout.DEFAULT_SIZE, 438, Short.MAX_VALUE)))
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, pnlCommandsLayout.createSequentialGroup()
+                            .addComponent(spDevice)))
+                    .addGroup(pnlCommandsLayout.createSequentialGroup()
                         .addComponent(lblDrivers)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(pnlCommandsLayout.createSequentialGroup()
-                                .addComponent(btnDriverNew)
+                                .addComponent(btnDriverShow)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(btnDriverEdit)
+                                .addComponent(btnDriverNew)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                                 .addComponent(btnDriverClone)
                                 .addGap(18, 18, 18)
                                 .addComponent(btnDriverDel))
-                            .addComponent(spDriver, javax.swing.GroupLayout.DEFAULT_SIZE, 438, Short.MAX_VALUE)))
-                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, pnlCommandsLayout.createSequentialGroup()
+                            .addComponent(spDriver)))
+                    .addGroup(pnlCommandsLayout.createSequentialGroup()
                         .addComponent(lblRules)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addGroup(pnlCommandsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -550,7 +592,7 @@ public class PnlAllCmdsSelector
                                 .addGap(18, 18, 18)
                                 .addComponent(btnRuleDel)
                                 .addGap(0, 0, Short.MAX_VALUE))
-                            .addComponent(spRule, javax.swing.GroupLayout.DEFAULT_SIZE, 438, Short.MAX_VALUE))))
+                            .addComponent(spRule))))
                 .addContainerGap())
         );
 
@@ -558,11 +600,13 @@ public class PnlAllCmdsSelector
         this.setLayout(layout);
         layout.setHorizontalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(pnlCommands, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addGroup(layout.createSequentialGroup()
+                .addComponent(pnlCommands, javax.swing.GroupLayout.DEFAULT_SIZE, 754, Short.MAX_VALUE)
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addComponent(pnlCommands, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+            .addComponent(pnlCommands, javax.swing.GroupLayout.DEFAULT_SIZE, 431, Short.MAX_VALUE)
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -573,29 +617,33 @@ public class PnlAllCmdsSelector
     private javax.swing.JButton btnDeviceNew;
     private javax.swing.JButton btnDriverClone;
     private javax.swing.JButton btnDriverDel;
-    private javax.swing.JButton btnDriverEdit;
     private javax.swing.JButton btnDriverNew;
+    private javax.swing.JButton btnDriverShow;
     private javax.swing.JButton btnRuleClone;
     private javax.swing.JButton btnRuleDel;
     private javax.swing.JButton btnRuleEdit;
     private javax.swing.JButton btnRuleNew;
-    private javax.swing.JButton btnScriptClone;
-    private javax.swing.JButton btnScriptDel;
-    private javax.swing.JButton btnScriptEdit;
-    private javax.swing.JButton btnScriptNew;
+    private javax.swing.JButton btnScrDrvShow;
+    private javax.swing.JButton btnScrInlClone;
+    private javax.swing.JButton btnScrInlDel;
+    private javax.swing.JButton btnScrInlEdit;
+    private javax.swing.JButton btnScrInlNew;
     private javax.swing.JLabel lblDevices;
     private javax.swing.JLabel lblDrivers;
     private javax.swing.JLabel lblRules;
-    private javax.swing.JLabel lblScripts;
+    private javax.swing.JLabel lblScrDriver;
+    private javax.swing.JLabel lblScrInline;
     private javax.swing.JList<IDevice> lstDevice;
     private javax.swing.JList<IDriver> lstDriver;
     private javax.swing.JList<IRule> lstRule;
-    private javax.swing.JList<IScript> lstScript;
+    private javax.swing.JList<IScript> lstScrDri;
+    private javax.swing.JList<IScript> lstScrInl;
     private javax.swing.JPanel pnlCommands;
     private javax.swing.JScrollPane spDevice;
     private javax.swing.JScrollPane spDriver;
     private javax.swing.JScrollPane spRule;
-    private javax.swing.JScrollPane spScript;
+    private javax.swing.JScrollPane spScrDriver;
+    private javax.swing.JScrollPane spScrInline;
     // End of variables declaration//GEN-END:variables
 
     //------------------------------------------------------------------------//
@@ -609,7 +657,8 @@ public class PnlAllCmdsSelector
         {
             List<ICommand> lstCmds = new ArrayList<>();
 
-            lstCmds.addAll( getScripts() );
+            lstCmds.addAll( getScrInl()  );
+            lstCmds.addAll( getScrDrv()  );
             lstCmds.addAll( getDrivers() );
             lstCmds.addAll( getRules()   );
             lstCmds.addAll( getDevices() );
@@ -617,9 +666,14 @@ public class PnlAllCmdsSelector
             return lstCmds;
         }
 
-        public List<IScript> getScripts()
+        public List<IScript> getScrInl()
         {
-            return ltbScript.getAll();
+            return ltbScrInl.getAll();
+        }
+
+        public List<IScript> getScrDrv()
+        {
+            return ltbScrDrv.getAll();
         }
 
         public List<IDriver> getDrivers()
@@ -639,7 +693,7 @@ public class PnlAllCmdsSelector
 
         public boolean isScript( String name )
         {
-            for( IScript scp : getScripts() )
+            for( IScript scp : getScrInl() )
             {
                 if( scp.name().equals( name ) )
                     return true;

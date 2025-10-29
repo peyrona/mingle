@@ -36,13 +36,14 @@ import java.util.concurrent.ScheduledFuture;
 public final class   WeatherOpenMeteo
              extends ControllerBase
 {
-    private String          sLatitude;
-    private String          sLongitude;
-    private String          sTimeZone;
-    private boolean         useMetric;
-    private int             nForecast;   // Hours ahead from the moment the WebService is invoked to begin forecasting.
-    private int             nFrame;      // Hours to retrive starting at 'forecast' (when forecast > 0).
-    private int             nInterval;
+    private static final String KEY_LATITUDE  = "latitude";
+    private static final String KEY_LONGITUDE = "longitude";
+    private static final String KEY_INTERVAL  = "interval";
+    private static final String KEY_FORECAST  = "forecast";    // Hours ahead from the moment the WebService is invoked to begin forecasting.
+    private static final String KEY_FRAME     = "frame";       // Hours to retrive starting at 'forecast' (when forecast > 0).
+    private static final String KEY_TIME_ZONE = "timezone";
+    private static final String KEY_METRIC    = "metric";
+
     private ScheduledFuture timer;
 
     //------------------------------------------------------------------------//
@@ -53,12 +54,12 @@ public final class   WeatherOpenMeteo
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        float  latit    = (float)   deviceInit.get( "latitude"  );                                             // This is REQUIRED
-        float  longi    = (float)   deviceInit.get( "longitude" );                                             // This is REQUIRED
-        int    interval = ((Number) deviceInit.getOrDefault( "interval", 60 * UtilUnit.MINUTE )).intValue();   // Number of minutes between 2 consecutives calls to the Weather Web API
-        int    forecast = ((Number) deviceInit.getOrDefault( "forecast",  0 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours
-        int    frame    = ((Number) deviceInit.getOrDefault( "frame"   ,  1 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours (valid only when forecast > 0)
-        String timezone = (String)  deviceInit.getOrDefault( "timezone", "auto" );
+        float  latit    = (float)   deviceInit.get( KEY_LATITUDE  );                                             // This is REQUIRED
+        float  longi    = (float)   deviceInit.get( KEY_LONGITUDE );                                             // This is REQUIRED
+        int    interval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL , 60 * UtilUnit.MINUTE )).intValue();   // Number of minutes between 2 consecutives calls to the Weather Web API
+        int    forecast = ((Number) deviceInit.getOrDefault( KEY_FORECAST ,  0 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours
+        int    frame    = ((Number) deviceInit.getOrDefault( KEY_FRAME    ,  1 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours (valid only when forecast > 0)
+        String timezone = (String)  deviceInit.getOrDefault( KEY_TIME_ZONE, "auto" );
 
         if( isValid( latit, longi ) )
         {
@@ -74,13 +75,13 @@ public final class   WeatherOpenMeteo
                 forecast = (int) forecast / UtilUnit.HOUR;
                 frame    = (int) frame    / UtilUnit.HOUR;
 
-                this.sLatitude  = String.valueOf( latit );
-                this.sLongitude = String.valueOf( longi );
-                this.nInterval  = setBetween( "interval", 15, interval, 60*24*99 ) * UtilUnit.MINUTE;    // Need to convert into millis
-                this.nForecast  = setBetween( "forecast",  0, forecast, oneWeek -1 );                    // -1 == 1 hour before the limit (because minium frame is 1 hour)
-                this.nFrame     = setBetween( "frame"   ,  1, frame   , oneWeek - nForecast );           // Needed to do "- nForecast", so nFrame does not go beyond 1 week
-                this.useMetric  = (Boolean) deviceInit.getOrDefault( "metric", true );
-                this.sTimeZone  = timezone;
+                set( KEY_LATITUDE , String.valueOf( latit ) );
+                set( KEY_LONGITUDE, String.valueOf( longi ) );
+                set( KEY_INTERVAL , UtilUnit.setBetween( 15, interval, 60*24*99 ) * UtilUnit.MINUTE );           // Need to convert into millis
+                set( KEY_FORECAST , UtilUnit.setBetween(  0, forecast, oneWeek -1 ) );                           // -1 == 1 hour before the limit (because minium frame is 1 hour)
+                set( KEY_FRAME    , UtilUnit.setBetween(  1, frame   , oneWeek - (int) get( KEY_FORECAST ) ) );  // Needed to do "- nForecast", so nFrame does not go beyond 1 week
+                set( KEY_METRIC   , (Boolean) deviceInit.getOrDefault( "metric", true ) );
+                set( KEY_TIME_ZONE, timezone );
 
                 setValid( true );
             }
@@ -96,10 +97,11 @@ public final class   WeatherOpenMeteo
         UtilSys.execute( getClass().getName(),
                          () ->
                             {
-                                int nDays  = (nForecast + nFrame) / 24;
+                                int nDays  = ((int) get( KEY_FORECAST ) + (int) get( KEY_FRAME )) / 24;
                                     nDays += 2;    // +2 no harm and many things can happen (like invoking the service close to midnight): DO NOT DECREASE THIS VALUE
 
-                                String sURL = "https://api.open-meteo.com/v1/forecast?latitude="+ sLatitude +"&longitude="+ sLongitude +"&timezone="+ sTimeZone +
+                                String sURL = "https://api.open-meteo.com/v1/forecast?latitude="+
+                                              (String) get( KEY_LATITUDE ) +"&longitude="+ (String) get( KEY_LONGITUDE ) + "&timezone="+ (String) get( KEY_TIME_ZONE ) +
                                               "&hourly=temperature_2m,relativehumidity_2m,apparent_temperature,precipitation_probability,rain,showers,snowfall,weathercode,surface_pressure,"+
                                               "cloudcover,windspeed_10m,winddirection_10m&forecast_days="+ nDays;
 
@@ -146,14 +148,12 @@ public final class   WeatherOpenMeteo
         super.start( rt );
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), nInterval, nInterval, () -> read() );
+            timer = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY_INTERVAL ), (int) get( KEY_INTERVAL ), () -> read() );
     }
 
     @Override
     public void stop()
     {
-        sLatitude = sLongitude = null;
-
         if( timer != null )
         {
             timer.cancel( true );
@@ -198,7 +198,7 @@ public final class   WeatherOpenMeteo
                .asObject()
                .remove( "time" );   // We do not use this "hourly" array
 
-        if( nForecast == 0 )
+        if( (int) get( KEY_FORECAST ) == 0 )
         {
             int ndx = LocalTime.now().getHour();    // From 0 to 23 (JSON array also goes from 0 to 23)
 
@@ -209,8 +209,8 @@ public final class   WeatherOpenMeteo
         {
             LocalTime time   = LocalTime.now();
             int       nHour  = time.getHour() + (time.getMinute() > 35 ? 1 : 0);   // When hour is past 35 minutes we want next hour
-            int       nBegin = nHour  + nForecast;                                 // Begining array index (JSON array is zero based and hour is zero based too)
-            int       nEnd   = nBegin + nFrame;                                    // Ending array index
+            int       nBegin = nHour  + (int) get( KEY_FORECAST );                 // Begining array index (JSON array is zero based and hour is zero based too)
+            int       nEnd   = nBegin + (int) get( KEY_FRAME    );                                    // Ending array index
 
             for( String key : jo.names() )
             {
@@ -268,7 +268,9 @@ public final class   WeatherOpenMeteo
 
     private pair convert( pair dict )
     {
-        if( ! useMetric )
+        boolean notMetric = ! (Boolean) get( KEY_METRIC );
+
+        if( notMetric )
         {
             list keys = dict.keys();
 
@@ -276,7 +278,7 @@ public final class   WeatherOpenMeteo
             {
                 String sKey = keys.get( n ).toString();
 
-                if( (dict.get( sKey ) instanceof Float) && (! useMetric) )
+                if( (dict.get( sKey ) instanceof Float) && notMetric )
                 {
                     switch( sKey )
                     {

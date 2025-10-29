@@ -27,6 +27,9 @@ import java.util.Map;
 public final class ModbusTcpClientWrapper
        extends ControllerBase
 {
+    private static final String KEY_TIMEOUT  = "timeout";
+    private static final String KEY_INTERVAL = "interval";
+
     private IModbusClient client = null;
 
     //------------------------------------------------------------------------//
@@ -48,7 +51,7 @@ public final class ModbusTcpClientWrapper
             bOK = false;
         }
 
-        if( nPort < 1 || nPort > 65535 )
+        if( nPort < UtilComm.TCP_PORT_MIN_ALLOWED || nPort > UtilComm.TCP_PORT_MAX_ALLOWED )
         {
             sendIsInvalid( "Invalid port = "+ nPort );
             bOK = false;
@@ -81,20 +84,19 @@ public final class ModbusTcpClientWrapper
             }
         }
 
-        int nTimeout = ((Number) deviceInit.getOrDefault( "timeout", 4000f )).intValue();
-            nTimeout = setBetween( "timeout", 50, nTimeout, Integer.MAX_VALUE );
+        int nTimeout = ((Number) deviceInit.getOrDefault( KEY_TIMEOUT, 4000f )).intValue();
+            setBetween( KEY_TIMEOUT, 50, nTimeout, Integer.MAX_VALUE );
 
         if( ! bOK )
-        {
             return;    // Client is null
-        }
 
         setValid( true );
 
         int nInterval = ((Number) deviceInit.getOrDefault( "interval", 5000f )).intValue();   // Default is 5s
-            nInterval = setBetween( "interval", 30, nInterval, Integer.MAX_VALUE );           // I've estimated 30ms could be a good minimum interval for this old protocol
+            setBetween( KEY_INTERVAL, 30, nInterval, Integer.MAX_VALUE );           // I've estimated 30ms could be a good minimum interval for this old protocol
 
         client = new ModbusTcpClient4J2mod( sHost, nPort, nAddr, sSize, sOrder, nInterval, nTimeout, new MyListener() );
+        set( deviceInit );
     }
 
     @Override

@@ -32,6 +32,7 @@ public final class   RGBW2
 
 
         setValid( true );
+        set( "interval", interval );
     }
 
     @Override

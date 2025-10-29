@@ -7,6 +7,8 @@ import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This is the base class for controllers written in Java language.
@@ -27,11 +29,12 @@ import com.peyrona.mingle.lang.japi.UtilUnit;
 public abstract class      ControllerBase
                 implements IController
 {
-    protected boolean              isFaked  = false;
-    private   IRuntime             runtime  = null;
-    private   String               name     = null;    // device name
-    private   boolean              bValid   = false;
-    private   IController.Listener listener = null;
+    protected boolean              isFaked   = false;
+    private   IRuntime             runtime   = null;
+    private   String               devName   = null;    // device devName
+    private   boolean              bValid    = false;
+    private   IController.Listener listener  = null;
+    private   Map<String,Object>   mapConfig = null;
 
     //------------------------------------------------------------------------//
     // PROTECTED CONSTRUCTOR
@@ -46,6 +49,19 @@ public abstract class      ControllerBase
     public boolean isValid()
     {
         return bValid;
+    }
+
+
+    @Override
+    public String getDeviceName()
+    {
+        return devName;
+    }
+
+    @Override
+    public Map<String,Object> getDeviceConfig()
+    {
+        return mapConfig;
     }
 
     @Override
@@ -79,27 +95,26 @@ public abstract class      ControllerBase
         return runtime;
     }
 
-    protected String getName()
+    protected ControllerBase setName( String name )
     {
-        return name;
+        this.devName = name;
+        return this;
     }
 
-    protected void setName( String name )
-    {
-        this.name = name;
-    }
-
-    protected void setListener( IController.Listener l )
+    protected ControllerBase setListener( IController.Listener l )
     {
         listener = l;     // Atomic
+        return this;
     }
 
-    protected void setValid( boolean b )
+    protected ControllerBase setValid( boolean b )
     {
         bValid = b;
 
         if( ! b )
             listener = null;
+
+        return this;
     }
 
     protected boolean isInvalid()
@@ -107,55 +122,89 @@ public abstract class      ControllerBase
         return ! bValid;
     }
 
-    protected int setBetween( String name, int min, int value, int max )
+    protected Object get( String name )
+    {
+        return mapConfig.get( name );
+    }
+
+    protected ControllerBase set( Map<String,Object> map )
+    {
+        if( mapConfig == null )
+            mapConfig = new HashMap<>();
+
+        mapConfig.putAll( map );
+
+        return this;
+    }
+    protected ControllerBase set( String name, Object value )
+    {
+        if( mapConfig == null )
+            mapConfig = new HashMap<>();
+
+        mapConfig.put( name, value );
+
+        return this;
+    }
+
+    protected ControllerBase setBetween( String name, int min, int value, int max )
     {
         int newVal = UtilUnit.setBetween( min, value, max );
 
         if( value != newVal )
             sendIsInvalid( name +" was out of range. Changed from "+ value +" to "+ newVal );
 
-        return newVal;
+        set( name, newVal );
+
+        return this;
     }
 
-    protected void sendReaded( Object newValue )
+    protected ControllerBase sendReaded( Object newValue )
     {
-        sendChanged( getName(), newValue );
+        sendChanged(getDeviceName(), newValue );
+        return this;
     }
 
-    protected void sendChanged( String deviceName, Object newValue )
+    protected ControllerBase sendChanged( String deviceName, Object newValue )
     {
         if( listener != null )
             listener.onChanged( deviceName, newValue );
         else
             sendError( ILogger.Level.SEVERE, "", null );
+
+        return this;
     }
 
-    protected void sendReadError( Exception exc )
+    protected ControllerBase sendReadError( Exception exc )
     {
-        sendError( ILogger.Level.SEVERE, "Error reading value for device '"+ getName() +'\'', exc );
+        sendError(ILogger.Level.SEVERE, "Error reading value for device '"+ getDeviceName() +'\'', exc );
+        return this;
     }
 
-    protected void sendWriteError( Object value, Exception exc )
+    protected ControllerBase sendWriteError( Object value, Exception exc )
     {
         sendError( ILogger.Level.SEVERE, "Error writing value '"+ value +'\'', exc );
+        return this;
     }
 
-    protected void sendGenericError( ILogger.Level level, String sErr )
+    protected ControllerBase sendGenericError( ILogger.Level level, String sErr )
     {
         sendError( level, sErr, null );
+        return this;
     }
 
-    protected void sendIsNotReadable()
+    protected ControllerBase sendIsNotReadable()
     {
         sendError( ILogger.Level.WARNING, "Driver '"+ getClass() +"' is write-only: can not read", null );
+        return this;
     }
 
-    protected void sendIsNotWritable()
+    protected ControllerBase sendIsNotWritable()
     {
         sendError( ILogger.Level.WARNING, "Driver '"+ getClass() +"' is read-only: can not write", null );
+        return this;
     }
 
-    protected void sendIsInvalid( Object msg )
+    protected ControllerBase sendIsInvalid( Object msg )
     {
         bValid = false;
 
@@ -165,6 +214,8 @@ public abstract class      ControllerBase
             msg += UtilStr.toStringBrief( (Throwable) msg );
 
         sendError( ILogger.Level.WARNING, msg.toString(), null );
+
+        return this;
     }
 
     protected boolean checkOfClass( Object instance, Class<?> clazz )
@@ -190,7 +241,7 @@ public abstract class      ControllerBase
 
         if( listener != null )
         {
-            listener.onError( level, msg, name );
+            listener.onError(level, msg, devName );
         }
         else
         {

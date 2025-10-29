@@ -40,9 +40,17 @@ public final class GitHubApiClient
     private volatile long lastApiCallTime = 0;
     private final Object rateLimitLock = new Object();
 
-    // Simple cache for file metadata (5 minute TTL)
+    // Cache for file metadata with size limits and TTL
     private static final java.util.Map<String, CachedMetadata> metadataCache = new java.util.concurrent.ConcurrentHashMap<>();
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+    private static final int MAX_CACHE_SIZE = 1000; // Maximum number of cached entries
+    private static final long CACHE_CLEANUP_INTERVAL_MS = 60 * 1000; // Clean up every minute
+    private static volatile long lastCacheCleanup = 0;
+    
+    // Cache statistics for monitoring
+    private static final java.util.concurrent.atomic.AtomicLong cacheHits = new java.util.concurrent.atomic.AtomicLong( 0 );
+    private static final java.util.concurrent.atomic.AtomicLong cacheMisses = new java.util.concurrent.atomic.AtomicLong( 0 );
+    private static final java.util.concurrent.atomic.AtomicLong cacheEvictions = new java.util.concurrent.atomic.AtomicLong( 0 );
 
     //------------------------------------------------------------------------//
 
@@ -180,7 +188,7 @@ public final class GitHubApiClient
         int retryCount = 0;
         long backoffTime = 2000; // Start with 2 seconds
 
-        while( retryCount <= MAX_RETRIES )
+        while( retryCount < MAX_RETRIES )
         {
             HttpURLConnection connection = null;
 
@@ -207,7 +215,7 @@ public final class GitHubApiClient
                     return responseCode; // Not a rate limit issue, return immediately
                 }
 
-                if( retryCount == MAX_RETRIES )
+                if( retryCount >= MAX_RETRIES - 1 )
                 {
                     UtilSys.getLogger().log( ILogger.Level.SEVERE, "Max retries exceeded for: " + filePath );
                     return responseCode;
@@ -244,29 +252,41 @@ public final class GitHubApiClient
 
     /**
      * Gets cached metadata if available and not expired.
+     * Also performs periodic cache cleanup.
      *
      * @param filePath File path to check in cache
      * @return Cached metadata or null if not available/expired
      */
     private static GitHubFileResponse getCachedMetadata(String filePath)
     {
+        // Periodic cache cleanup
+        cleanupCacheIfNeeded();
+        
         CachedMetadata cached = metadataCache.get( filePath );
 
-        if( cached != null && (System.currentTimeMillis() - cached.timestamp) < CACHE_TTL_MS )
+        if( cached != null )
         {
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Using cached metadata for: " + filePath );
-            return cached.metadata;
+            long currentTime = System.currentTimeMillis();
+            if( (currentTime - cached.timestamp) < CACHE_TTL_MS )
+            {
+                cacheHits.incrementAndGet();
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Using cached metadata for: " + filePath + " (hit #" + cacheHits.get() + ")" );
+                return cached.metadata;
+            }
+            else
+            {
+                // Remove expired entry atomically
+                metadataCache.remove( filePath, cached );
+            }
         }
 
-        // Remove expired entry
-        if( cached != null )
-            metadataCache.remove( filePath );
-
+        cacheMisses.incrementAndGet();
         return null;
     }
 
     /**
      * Caches file metadata with timestamp.
+     * Enforces cache size limits.
      *
      * @param filePath File path
      * @param metadata Metadata to cache
@@ -275,6 +295,19 @@ public final class GitHubApiClient
     {
         if( metadata != null )
         {
+            // Enforce cache size limit atomically
+            if( metadataCache.size() >= MAX_CACHE_SIZE )
+            {
+                synchronized( GitHubApiClient.class )
+                {
+                    // Double-check under lock
+                    if( metadataCache.size() >= MAX_CACHE_SIZE )
+                    {
+                        evictOldestEntries();
+                    }
+                }
+            }
+            
             CachedMetadata cached = new CachedMetadata();
             cached.metadata = metadata;
             cached.timestamp = System.currentTimeMillis();
@@ -294,6 +327,13 @@ public final class GitHubApiClient
      */
     public static GitHubFileResponse getFileMetadata(String filePath)
     {
+        // Input validation
+        if( filePath == null || filePath.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
+            return null;
+        }
+        
         // Check cache first
         GitHubFileResponse cached = getCachedMetadata( filePath );
 
@@ -310,7 +350,14 @@ public final class GitHubApiClient
             String apiUrl = String.format( "%s/repos/%s/%s/contents/%s/%s", GITHUB_API_BASE, REPO_OWNER, REPO_NAME, REPO_PATH, filePath );
 
             URL url = new URL( apiUrl );
-            int responseCode = executeWithRetry( url, filePath );
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod( "GET" );
+            connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
+            connection.setRequestProperty( "User-Agent", USER_AGENT );
+            connection.setConnectTimeout( 10000 );
+            connection.setReadTimeout( 30000 );
+
+            int responseCode = connection.getResponseCode();
 
             if( responseCode != 200 )
             {
@@ -329,22 +376,17 @@ public final class GitHubApiClient
                 return null;
             }
 
-            // Create a new connection for reading the response
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 30000 );
-
+            // Read the response using the existing connection
             try( BufferedReader reader = new BufferedReader( new InputStreamReader( connection.getInputStream() ) ) )
             {
                 StringBuilder response = new StringBuilder();
-                String line;
-
-                while( (line = reader.readLine()) != null )
-                    response.append( line );
+                char[] buffer = new char[8192]; // 8KB buffer for better performance
+                int bytesRead;
+                
+                while( (bytesRead = reader.read( buffer )) != -1 )
+                {
+                    response.append( buffer, 0, bytesRead );
+                }
 
                 GitHubFileResponse metadata = parseGitHubFileResponse( response.toString(), filePath );
 
@@ -376,6 +418,19 @@ public final class GitHubApiClient
      */
     public static boolean downloadFile(String filePath, Path targetPath)
     {
+        // Input validation
+        if( filePath == null || filePath.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
+            return false;
+        }
+        
+        if( targetPath == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Target path cannot be null" );
+            return false;
+        }
+        
         // Apply rate limiting before making download call
         rateLimitInstance.applyRateLimiting();
 
@@ -391,7 +446,13 @@ public final class GitHubApiClient
             String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
 
             URL url = new URL( rawUrl );
-            int responseCode = executeWithRetry( url, filePath );
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod( "GET" );
+            connection.setRequestProperty( "User-Agent", USER_AGENT );
+            connection.setConnectTimeout( 10000 );
+            connection.setReadTimeout( 30000 );
+
+            int responseCode = connection.getResponseCode();
 
             if( responseCode != 200 )
             {
@@ -399,21 +460,27 @@ public final class GitHubApiClient
                 return false;
             }
 
-            // Create a new connection for reading the response
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 60000 );
-
             // Create parent directories if they don't exist
             Files.createDirectories( targetPath.getParent() );
 
-            // Download file
-            Files.copy( connection.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded: " + filePath );
-            return true;
+            // Download file with buffered copying for better performance
+            try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() );
+                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath, 
+                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
+            {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                long totalBytes = 0;
+                
+                while( (bytesRead = inputStream.read( buffer )) != -1 )
+                {
+                    outputStream.write( buffer, 0, bytesRead );
+                    totalBytes += bytesRead;
+                }
+                
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded: " + filePath + " (" + totalBytes + " bytes)" );
+                return true;
+            }
 
         }
         catch( IOException e )
@@ -439,6 +506,19 @@ public final class GitHubApiClient
      */
     public static boolean downloadFileFromRoot(String filePath, Path targetPath)
     {
+        // Input validation
+        if( filePath == null || filePath.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
+            return false;
+        }
+        
+        if( targetPath == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Target path cannot be null" );
+            return false;
+        }
+        
         // Apply rate limiting before making download call
         rateLimitInstance.applyRateLimiting();
 
@@ -452,7 +532,13 @@ public final class GitHubApiClient
             String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
 
             URL url = new URL( rawUrl );
-            int responseCode = executeWithRetry( url, filePath );
+            connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod( "GET" );
+            connection.setRequestProperty( "User-Agent", USER_AGENT );
+            connection.setConnectTimeout( 10000 );
+            connection.setReadTimeout( 30000 );
+
+            int responseCode = connection.getResponseCode();
 
             if( responseCode != 200 )
             {
@@ -460,22 +546,27 @@ public final class GitHubApiClient
                 return false;
             }
 
-            // Create a new connection for reading the response
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 60000 );
-
             // Create parent directories if they don't exist
             Files.createDirectories( targetPath.getParent() );
 
-            // Download file
-            Files.copy( connection.getInputStream(), targetPath, StandardCopyOption.REPLACE_EXISTING );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded from root: " + filePath );
-
-            return true;
+            // Download file with buffered copying for better performance
+            try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() );
+                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath, 
+                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
+            {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                long totalBytes = 0;
+                
+                while( (bytesRead = inputStream.read( buffer )) != -1 )
+                {
+                    outputStream.write( buffer, 0, bytesRead );
+                    totalBytes += bytesRead;
+                }
+                
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded from root: " + filePath + " (" + totalBytes + " bytes)" );
+                return true;
+            }
         }
         catch( IOException e )
         {
@@ -588,6 +679,104 @@ public final class GitHubApiClient
         public String toString()
         {
             return "GitHubFileResponse{path='" + path + "', sha='" + sha + "', size=" + size + ", lastModified=" + lastModified + "}";
+        }
+    }
+
+    /**
+     * Performs periodic cache cleanup to remove expired entries.
+     */
+    private static void cleanupCacheIfNeeded()
+    {
+        long currentTime = System.currentTimeMillis();
+        if( currentTime - lastCacheCleanup > CACHE_CLEANUP_INTERVAL_MS )
+        {
+            synchronized( GitHubApiClient.class )
+            {
+                // Double-check under lock
+                if( currentTime - lastCacheCleanup > CACHE_CLEANUP_INTERVAL_MS )
+                {
+                    int removedCount = 0;
+                    java.util.Iterator<java.util.Map.Entry<String, CachedMetadata>> iterator = metadataCache.entrySet().iterator();
+                    while( iterator.hasNext() )
+                    {
+                        java.util.Map.Entry<String, CachedMetadata> entry = iterator.next();
+                        CachedMetadata cached = entry.getValue();
+                        if( cached != null && (currentTime - cached.timestamp) >= CACHE_TTL_MS )
+                        {
+                            iterator.remove();
+                            removedCount++;
+                        }
+                    }
+                    
+                    if( removedCount > 0 )
+                    {
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Cache cleanup: removed " + removedCount + " expired entries" );
+                    }
+                    
+                    lastCacheCleanup = currentTime;
+                }
+            }
+        }
+    }
+    
+    /**
+     * Evicts oldest entries from cache to make room for new ones.
+     */
+    private static void evictOldestEntries()
+    {
+        synchronized( GitHubApiClient.class )
+        {
+            // Remove 10% of entries when cache is full
+            int entriesToRemove = Math.max( 1, MAX_CACHE_SIZE / 10 );
+            
+            // Find oldest entries
+            java.util.List<java.util.Map.Entry<String, CachedMetadata>> entries = new java.util.ArrayList<>( metadataCache.entrySet() );
+            entries.sort( java.util.Comparator.comparingLong( e -> e.getValue().timestamp ) );
+            
+            int removedCount = 0;
+            for( int i = 0; i < Math.min( entriesToRemove, entries.size() ); i++ )
+            {
+                String key = entries.get( i ).getKey();
+                metadataCache.remove( key );
+                removedCount++;
+            }
+            
+            if( removedCount > 0 )
+            {
+                cacheEvictions.addAndGet( removedCount );
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Cache eviction: removed " + removedCount + " oldest entries (total evictions: " + cacheEvictions.get() + ")" );
+            }
+        }
+    }
+
+    /**
+     * Logs cache statistics for monitoring.
+     */
+    public static void logCacheStatistics()
+    {
+        long hits = cacheHits.get();
+        long misses = cacheMisses.get();
+        long total = hits + misses;
+        double hitRate = total > 0 ? (double) hits / total * 100 : 0;
+        
+        UtilSys.getLogger().log( ILogger.Level.INFO, String.format( 
+            "Cache stats: %d hits, %d misses, %.1f%% hit rate, %d entries cached, %d evictions",
+            hits, misses, hitRate, metadataCache.size(), cacheEvictions.get() ) );
+    }
+    
+    /**
+     * Clears all cache entries and resets statistics.
+     */
+    public static void clearCache()
+    {
+        synchronized( GitHubApiClient.class )
+        {
+            metadataCache.clear();
+            cacheHits.set( 0 );
+            cacheMisses.set( 0 );
+            cacheEvictions.set( 0 );
+            lastCacheCleanup = 0;
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Cache cleared and statistics reset" );
         }
     }
 

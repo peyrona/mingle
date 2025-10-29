@@ -18,22 +18,23 @@ import javax.swing.WindowConstants;
 
 /**
  * Glue JDialog.
- * 
+ *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public class GDialog extends JDialog
 {
-    private ActionListener onOkBtnPressed;
+    //------------------------------------------------------------------------//
+
+    private ActionListener onOkBtnPressed = null;
 
     //------------------------------------------------------------------------//
 
     public GDialog( String title, boolean modal )
     {
-        this( title,
-              (modal ? DEFAULT_MODALITY_TYPE
-                     : ModalityType.MODELESS ) );
+        this( title, (modal ? DEFAULT_MODALITY_TYPE
+                            : ModalityType.MODELESS ) );
     }
 
     public GDialog( String title, ModalityType modelType )
@@ -61,6 +62,8 @@ public class GDialog extends JDialog
         getRootPane().registerKeyboardAction( escListener,
                                               KeyStroke.getKeyStroke( KeyEvent.VK_ESCAPE, 0 ),
                                               JComponent.WHEN_IN_FOCUSED_WINDOW );
+
+        WndBoundsPersist.initialize( this );
     }
 
     //------------------------------------------------------------------------//
@@ -69,13 +72,16 @@ public class GDialog extends JDialog
     public void pack()
     {
         super.pack();
-        setLocationRelativeTo( Main.frame );
+
+        WndBoundsPersist.handlePack( this );
     }
 
     @Override
     public void setVisible( boolean b )
     {
-        pack();
+        if( b )
+            pack();
+
         super.setVisible( b );
     }
 

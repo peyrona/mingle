@@ -26,8 +26,7 @@ import java.util.Map;
 public final class MqttClientWrapper
        extends ControllerBase
 {
-    private IMqttClient        client = null;
-    private Map<String,Object> mapConfig;
+    private IMqttClient client = null;
 
     //------------------------------------------------------------------------//
 
@@ -37,7 +36,7 @@ public final class MqttClientWrapper
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        this.mapConfig = mapConfig;
+        set( mapConfig );
 
         try
         {
@@ -58,20 +57,20 @@ public final class MqttClientWrapper
     {
         super.start( rt );
 
-        String sURI  = (String) mapConfig.get( "uri"      );   // This is REQUIRED
-        String sUID  = (String) mapConfig.get( "name"     );
-        String sUser = (String) mapConfig.get( "user"     );
-        String sPwd  = (String) mapConfig.get( "password" );
+        String sURI  = (String) get( "uri"      );   // This is REQUIRED
+        String sUID  = (String) get( "name"     );
+        String sUser = (String) get( "user"     );
+        String sPwd  = (String) get( "password" );
 
         try
         {
             client.connect( sURI, sUID, sUser, sPwd );
 
-            if( mapConfig.containsKey( "subscribe" ) )  doSubscribe( client, mapConfig.get( "subscribe" ) );    // In another method just for clarity
-            else                                        client.subscribe( "#", 2 );                             // All messages with QoS == 2
+            if( get( "subscribe" ) != null )  doSubscribe( client, get( "subscribe" ) );    // In another method just for clarity
+            else                              client.subscribe( "#", 2 );                   // All messages with QoS == 2
 
-            if( mapConfig.containsKey( "initial" ) )
-                write( (String) mapConfig.get( "initial" ) );
+            if( get( "initial" ) != null )
+                write( (String) get( "initial" ) );
         }
         catch( Exception exc )
         {
@@ -110,7 +109,6 @@ public final class MqttClientWrapper
      * </pre>
      * Where QoS (default is 2) and Retained (default is false) are optional.
      *
-     * @param deviceName The name of the device.
      * @param request The message to be sent.
      */
     @Override
@@ -143,10 +141,10 @@ public final class MqttClientWrapper
             {
                 client.send( pReq.get( "topic" ).toString(),
                              pReq.get( "payload" ).toString().getBytes(),
-                             setBetween( "qos", 0, nQoS.intValue(), 2 ),
+                             UtilUnit.setBetween( 0, nQoS.intValue(), 2 ),
                              bRetained );
 
-             // sendReaded( getName(), request ); --> This does not make sense because user can subscribe to whatever he/she wants
+             // sendReaded( getDeviceName(), request ); --> This does not make sense because user can subscribe to whatever he/she wants
             }
             catch( Exception exc )
             {

@@ -35,6 +35,11 @@ public class GitHubFileUpdater
      */
     public GitHubFileUpdater( File baseDir, boolean dryRun )
     {
+        if( baseDir == null )
+        {
+            throw new IllegalArgumentException( "Base directory cannot be null" );
+        }
+        
         this.baseDir   = baseDir;
         this.dryRun    = dryRun;
         this.backupMgr = dryRun ? null : new BackupManager();
@@ -162,20 +167,37 @@ public class GitHubFileUpdater
             }
             else
             {
-                if( tempCatalog != null && tempCatalog.exists() )
-                    tempCatalog.delete();
-
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download catalog.json from GitHub todeploy directory" );
+                cleanupTempFile( tempCatalog );
                 return null;
             }
         }
         catch( IOException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error creating temporary file for catalog.json" );
-
-            if( tempCatalog != null && tempCatalog.exists() )
-                tempCatalog.delete();
-
+            cleanupTempFile( tempCatalog );
             return null;
+        }
+        catch( RuntimeException e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error downloading catalog.json" );
+            cleanupTempFile( tempCatalog );
+            throw e;
+        }
+    }
+    
+    private void cleanupTempFile( File tempFile )
+    {
+        if( tempFile != null && tempFile.exists() )
+        {
+            try
+            {
+                tempFile.delete();
+            }
+            catch( SecurityException e )
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Could not delete temporary file: " + tempFile.getAbsolutePath() );
+            }
         }
     }
 
@@ -226,6 +248,27 @@ public class GitHubFileUpdater
      */
     private void processFile( FileDiscoveryStrategy.FileEntry entry, FileComparator comparator, boolean performUpdates )
     {
+        if( entry == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File entry is null, skipping" );
+            errors++;
+            return;
+        }
+        
+        if( comparator == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File comparator is null for: " + entry.path );
+            errors++;
+            return;
+        }
+        
+        if( entry.path == null || entry.path.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path is null or empty, skipping" );
+            errors++;
+            return;
+        }
+        
         filesChecked++;
 
         // Log when processing catalog.json to ensure it's last
@@ -246,8 +289,22 @@ public class GitHubFileUpdater
             FileComparator.ComparisonContext context = new FileComparator.ComparisonContext( entry.path, entry, localFile, githubInfo );
             FileComparator.ComparisonResult result = comparator.compare( context );
 
+            if( result == null )
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Comparison result is null for: " + entry.path );
+                errors++;
+                return;
+            }
+
             if( result.needsUpdate )  handleFileNeedsUpdate( entry, result, performUpdates );
             else                      UtilSys.getLogger().log( ILogger.Level.INFO, "File is up to date: " + entry.path + " (" + result.reason + ")" );
+        }
+        catch( RuntimeException e )
+        {
+            // Re-throw runtime exceptions to indicate serious issues
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error checking file: " + entry.path );
+            errors++;
+            throw e;
         }
         catch( Exception e )
         {
@@ -325,6 +382,9 @@ public class GitHubFileUpdater
             : String.format( "Process completed: %d files checked, %d files updated, %d errors", filesChecked, filesUpdated, errors );
 
         UtilSys.getLogger().log( ILogger.Level.INFO, summary );
+        
+        // Log cache statistics
+        GitHubApiClient.logCacheStatistics();
     }
 
     //------------------------------------------------------------------------//

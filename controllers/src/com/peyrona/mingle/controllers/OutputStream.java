@@ -18,7 +18,7 @@ import java.util.Map;
 public final class   OutputStream
              extends ControllerBase
 {
-    private boolean isAutoNL;    // Add New Line for every ::write(...)?
+    private static final String KEY_AUTO_NL = "autofeed";    // Add New Line for every ::write(...)?
 
     @Override
     public synchronized void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
@@ -27,7 +27,7 @@ public final class   OutputStream
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
         setValid( true );            // Always valid because this driver has no config: mapConfig.size() == 0
 
-        isAutoNL = (Boolean) mapConfig.getOrDefault( "autofeed", Boolean.TRUE );
+        set( KEY_AUTO_NL, (Boolean) mapConfig.getOrDefault( "autofeed", Boolean.TRUE ) );
     }
 
     @Override
@@ -43,8 +43,8 @@ public final class   OutputStream
         if( (value == null) )             // value is null until device is initialized
             return;
 
-        if( isAutoNL ) System.out.println( value );
-        else           System.out.print(   value );
+        if( (Boolean) get( KEY_AUTO_NL ) ) System.out.println( value );
+        else                               System.out.print(   value );
 
         sendReaded( value );
     }

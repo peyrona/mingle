@@ -56,6 +56,7 @@ public final class   Control
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
         sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
         setValid( true );
+        set( deviceInit );
     }
 
     @Override

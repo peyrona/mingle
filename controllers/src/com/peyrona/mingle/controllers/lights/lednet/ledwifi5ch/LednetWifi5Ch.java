@@ -38,6 +38,7 @@ public final class LednetWifi5Ch
                 device = new Wifi5ChDevice( sIpAddr, (val) -> sendWriteError( val, new IOException( "Error writting in socket at "+ device.getIP() ) )  );
 
             setValid( true );
+            set( "address", sIpAddr );
         }
         catch( IOException mue )
         {

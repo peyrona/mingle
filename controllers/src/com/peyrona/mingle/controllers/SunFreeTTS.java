@@ -29,11 +29,11 @@ import javax.speech.synthesis.SynthesizerModeDesc;
 public final class   SunFreeTTS
              extends ControllerBase
 {
+    private static final String KEY_LOCALE = "locale";
+
                          // DevName,DevVal
     private static final Map<String,String> mapPending = new ConcurrentHashMap<>();
     private static       Synthesizer        synthesizer;
-
-    private Locale locale;
 
     //------------------------------------------------------------------------//
 
@@ -43,12 +43,12 @@ public final class   SunFreeTTS
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        String sLocale = (String) mapConfig.getOrDefault( "locale", Locale.US.toString() );
-
-        locale = new Locale( sLocale );
+        Locale locale = new Locale( (String) mapConfig.getOrDefault( KEY_LOCALE, Locale.US.toString() ) );
 
         // NEXT: allow other languages and locales and make sy not static final (one instance per DEVICE is needed)
         locale = Locale.US;
+
+        set( KEY_LOCALE, locale );
         // --------------------------------------------------------------------------------------------------------
 
         setValid( true );
@@ -68,7 +68,7 @@ public final class   SunFreeTTS
 
         boolean bNoPending = mapPending.isEmpty();
 
-        mapPending.put( getName(), String.valueOf( text ) );
+        mapPending.put( getDeviceName(), String.valueOf( text ) );
 
         if( bNoPending )     // Otherwise there is a Thread already working (processing the map)
         {
@@ -101,7 +101,7 @@ public final class   SunFreeTTS
                 System.setProperty( "freetts.voices", "com.sun.speech.freetts.en.us" + ".cmu_us_kal.KevinVoiceDirectory" );
                 Central.registerEngineCentral( "com.sun.speech.freetts" + ".jsapi.FreeTTSEngineCentral" );
 
-                synthesizer = Central.createSynthesizer( new SynthesizerModeDesc( locale ) );
+                synthesizer = Central.createSynthesizer( new SynthesizerModeDesc( (Locale) get( KEY_LOCALE ) ) );
                 synthesizer.allocate();
                 synthesizer.resume();
 

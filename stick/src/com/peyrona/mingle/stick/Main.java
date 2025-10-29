@@ -52,7 +52,7 @@ public final class Main
             catch( Exception exc )
             {
                 if( stick != null )  stick.log( ILogger.Level.SEVERE, exc );
-                else                 System.err.println( exc.getMessage() + "\nStick can not continue.");
+                else                 System.err.println( exc.getMessage() + "\nStick can not continue.\n"+ UtilStr.toString( exc ) );
             }
         }
     }

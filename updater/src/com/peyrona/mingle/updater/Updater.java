@@ -19,12 +19,18 @@ import java.util.function.Supplier;
  */
 public final class Updater
 {
-    private static volatile boolean isWorking = false;
+    private static final java.util.concurrent.atomic.AtomicBoolean isWorking = new java.util.concurrent.atomic.AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
 
     public static void main( String[] args )
     {
+        if( args == null )
+        {
+            System.err.println( "Error: args cannot be null" );
+            System.exit( 1 );
+        }
+        
         UtilCLI cli = new UtilCLI( args );
 
         if( (args.length == 0) || cli.hasOption( "help" ) || cli.hasOption( "h" ) )
@@ -40,7 +46,15 @@ public final class Updater
                .setLevel( ILogger.Level.ALL );
 
         boolean dryRun   = cli.hasOption( "dry" );
-        File    fBaseDir = new File( args[0] );
+        String pathArg   = args[0];
+        
+        if( pathArg == null || pathArg.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error: Base directory path cannot be null or empty" );
+            System.exit( 1 );
+        }
+        
+        File fBaseDir = new File( pathArg );
 
         updateIfNeeded( fBaseDir, dryRun, () -> { return true; } );
 
@@ -54,7 +68,7 @@ public final class Updater
      */
     public static boolean isWorking()
     {
-        return isWorking;
+        return isWorking.get();
     }
 
     //------------------------------------------------------------------------//
@@ -69,6 +83,18 @@ public final class Updater
      */
     public static void updateIfNeeded( File fMingleDir, boolean bDryRun, Supplier<Boolean> fnExcuteUpdate )
     {
+        if( fMingleDir == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
+            return;
+        }
+        
+        if( fnExcuteUpdate == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Update function cannot be null" );
+            return;
+        }
+        
         if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
@@ -84,13 +110,20 @@ public final class Updater
             File localCatalogFile = new File( fMingleDir, "catalog.json" );
             String localVersion = null;
 
-            if( localCatalogFile.exists() && localCatalogFile.isFile() )
+            if( localCatalogFile != null && localCatalogFile.exists() && localCatalogFile.isFile() )
             {
                 try
                 {
                     String localCatalogContent = Files.readString( localCatalogFile.toPath() );
-                    localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
+                    if( localCatalogContent != null && ! localCatalogContent.trim().isEmpty() )
+                    {
+                        localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
+                    }
+                    else
+                    {
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Local catalog.json is empty" );
+                    }
                 }
                 catch( IOException e )
                 {
@@ -103,19 +136,27 @@ public final class Updater
             }
 
             // Get remote catalog version
-            String remoteVersion;
-            File   tempRemoteCatalog;
+            String remoteVersion = null;
+            File   tempRemoteCatalog = null;
 
             try
             {
                 tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
-                tempRemoteCatalog.deleteOnExit();
+                if( tempRemoteCatalog != null )
+                    tempRemoteCatalog.deleteOnExit();
 
                 if( GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempRemoteCatalog.toPath() ) )
                 {
                     String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
-                    remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
+                    if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
+                    {
+                        remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
+                    }
+                    else
+                    {
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Remote catalog.json is empty" );
+                    }
                 }
                 else
                 {
@@ -127,6 +168,14 @@ public final class Updater
             {
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Error downloading remote catalog.json: " + e.getMessage() );
                 return;
+            }
+            finally
+            {
+                // Clean up temp file
+                if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
+                {
+                    tempRemoteCatalog.delete();
+                }
             }
 
             // Compare versions
@@ -161,11 +210,22 @@ public final class Updater
      */
     public static boolean update( File fMingleDir, boolean bDryRun )
     {
+        // Input validation
+        if( fMingleDir == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
+            return false;
+        }
+        
+        // Set working state to true before starting the update process
+        if( ! isWorking.compareAndSet( false, true ) )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Update process is already running" );
+            return false;
+        }
+
         try
         {
-            // Set working state to true before starting the update process
-            isWorking = true;
-
             if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
             {
                 UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
@@ -189,7 +249,7 @@ public final class Updater
         }
         finally
         {
-            isWorking = false;   // Always set working state to false when done
+            isWorking.set( false );   // Always set working state to false when done
         }
     }
 }

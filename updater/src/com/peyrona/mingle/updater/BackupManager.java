@@ -50,6 +50,13 @@ public final class BackupManager
      */
     public File createBackup(File originalFile)
     {
+        // Input validation
+        if( originalFile == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Original file cannot be null" );
+            return null;
+        }
+        
         if( ! originalFile.exists() || ! originalFile.isFile() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Cannot backup file that does not exist: " + originalFile.getAbsolutePath() );
@@ -62,8 +69,17 @@ public final class BackupManager
             String backupFileName = originalFile.getName() + BACKUP_SUFFIX + timestamp;
             File backupFile = new File( backupDir, backupFileName );
 
-            // Create backup
-            Files.copy( originalFile.toPath(), backupFile.toPath(), StandardCopyOption.REPLACE_EXISTING );
+            // Create backup with proper error handling
+            try( java.io.InputStream inStream = new java.io.BufferedInputStream( Files.newInputStream( originalFile.toPath() ) );
+                 java.io.OutputStream outStream = new java.io.BufferedOutputStream( Files.newOutputStream( backupFile.toPath() ) ) )
+            {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                while( (bytesRead = inStream.read( buffer )) != -1 )
+                {
+                    outStream.write( buffer, 0, bytesRead );
+                }
+            }
 
             createdBackups.add( backupFile );
             UtilSys.getLogger().log( ILogger.Level.INFO, "Created backup: " + backupFile.getAbsolutePath() );
@@ -87,6 +103,19 @@ public final class BackupManager
      */
     public boolean restoreFromBackup(File backupFile, File originalFile)
     {
+        // Input validation
+        if( backupFile == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Backup file cannot be null" );
+            return false;
+        }
+        
+        if( originalFile == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Original file cannot be null" );
+            return false;
+        }
+        
         if( !backupFile.exists() || !backupFile.isFile() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Backup file does not exist: " + backupFile.getAbsolutePath() );
@@ -102,8 +131,17 @@ public final class BackupManager
                 parentDir.mkdirs();
             }
 
-            // Restore from backup
-            Files.copy( backupFile.toPath(), originalFile.toPath(), StandardCopyOption.REPLACE_EXISTING );
+            // Restore from backup with proper buffering
+            try( java.io.InputStream inStream = new java.io.BufferedInputStream( Files.newInputStream( backupFile.toPath() ) );
+                 java.io.OutputStream outStream = new java.io.BufferedOutputStream( Files.newOutputStream( originalFile.toPath() ) ) )
+            {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                while( (bytesRead = inStream.read( buffer )) != -1 )
+                {
+                    outStream.write( buffer, 0, bytesRead );
+                }
+            }
 
             UtilSys.getLogger().log( ILogger.Level.INFO, "Restored file from backup: " + originalFile.getAbsolutePath() );
             return true;
@@ -130,34 +168,51 @@ public final class BackupManager
         // First, try to delete all backup files
         for( File backupFile : createdBackups )
         {
-            if( backupFile.exists() )
+            if( backupFile != null && backupFile.exists() )
             {
                 try
                 {
-                    Files.delete( backupFile.toPath() );
-                    deletedFiles++;
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup: " + backupFile.getAbsolutePath() );
+                    boolean deleted = backupFile.delete();
+                    if( deleted )
+                    {
+                        deletedFiles++;
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup: " + backupFile.getAbsolutePath() );
+                    }
+                    else
+                    {
+                        failedFiles++;
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup (delete returned false): " + backupFile.getAbsolutePath() );
+                        success = false;
+                    }
                 }
-                catch( IOException e )
+                catch( SecurityException e )
                 {
                     failedFiles++;
-                    UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Failed to delete backup: " + backupFile.getAbsolutePath() );
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Security exception deleting backup: " + backupFile.getAbsolutePath() );
                     success = false;
                 }
             }
         }
 
         // Only attempt to delete directory if all files were deleted successfully
-        if( backupDir.exists() && failedFiles == 0 )
+        if( backupDir != null && backupDir.exists() && failedFiles == 0 )
         {
             try
             {
-                Files.delete( backupDir.toPath() );
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup directory: " + backupDir.getAbsolutePath() );
+                boolean deleted = backupDir.delete();
+                if( deleted )
+                {
+                    UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup directory: " + backupDir.getAbsolutePath() );
+                }
+                else
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup directory (delete returned false): " + backupDir.getAbsolutePath() );
+                    success = false;
+                }
             }
-            catch( IOException e )
+            catch( SecurityException e )
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Failed to delete backup directory: " + backupDir.getAbsolutePath() );
+                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Security exception deleting backup directory: " + backupDir.getAbsolutePath() );
                 success = false;
             }
         }

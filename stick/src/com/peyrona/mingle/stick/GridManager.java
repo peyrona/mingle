@@ -195,7 +195,7 @@ final class GridManager
     //              {
     //                  "nodes" : [{ "host": "192.168.7.3:55886", "ssl": false, "timeout": 5 },
     //                             { "host": "192.168.7.2:55885", "ssl": false, "timeout": 5 }],
-    //                  "client": "com.peyrona.mingle.network.plain.PlainSocketClient",
+    //                  "client": "com.peyrona.mingle.network.socket.SocketClient",
     //                  "uris"  : ["file://{*home.lib*}network.jar"]
     //              }
     //           ]

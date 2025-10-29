@@ -49,6 +49,7 @@ public final class   DMX512
 
 
         setValid( true );
+        set( "interval", interval );
     }
 
     @Override

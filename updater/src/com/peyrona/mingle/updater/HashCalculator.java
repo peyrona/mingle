@@ -26,7 +26,28 @@ public final class HashCalculator
      */
     public static String calculateSHA1(File file)
     {
-        return calculateHashWithAlgorithm( file, "SHA-1" );
+        // Input validation
+        if( file == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File cannot be null" );
+            return null;
+        }
+        
+        if( ! file.exists() || ! file.isFile() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File does not exist or is not a regular file: " + file.getAbsolutePath() );
+            return null;
+        }
+        
+        try
+        {
+            return calculateHashWithAlgorithm( file, "SHA-1" );
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error calculating SHA-1 hash for file: " + file.getAbsolutePath() );
+            return null;
+        }
     }
 
     /**
@@ -37,7 +58,28 @@ public final class HashCalculator
      */
     public static String calculateSHA256(File file)
     {
-        return calculateHashWithAlgorithm( file, "SHA-256" );
+        // Input validation
+        if( file == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File cannot be null" );
+            return null;
+        }
+        
+        if( ! file.exists() || ! file.isFile() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File does not exist or is not a regular file: " + file.getAbsolutePath() );
+            return null;
+        }
+        
+        try
+        {
+            return calculateHashWithAlgorithm( file, "SHA-256" );
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error calculating SHA-256 hash for file: " + file.getAbsolutePath() );
+            return null;
+        }
     }
 
     /**
@@ -49,6 +91,18 @@ public final class HashCalculator
      */
     public static String calculateHash(File file, String expectedHash)
     {
+        if( file == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File cannot be null" );
+            return null;
+        }
+        
+        if( expectedHash == null || expectedHash.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Expected hash cannot be null or empty" );
+            return null;
+        }
+        
         if( ! file.exists() || ! file.isFile() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File does not exist or is not a regular file: " + file.getAbsolutePath() );
@@ -72,46 +126,49 @@ public final class HashCalculator
             return null;
         }
 
-        return calculateHashWithAlgorithm( file, algorithm );
-    }
-
-    private static String calculateHashWithAlgorithm(File file, String algorithm)
-    {
-        if( ! file.exists() || ! file.isFile() )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, "File does not exist or is not a regular file: " + file.getAbsolutePath() );
-            return null;
-        }
-
         try
         {
-            MessageDigest digest = MessageDigest.getInstance( algorithm );
+            return calculateHashWithAlgorithm( file, algorithm );
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error calculating hash for file: " + file.getAbsolutePath() );
+            return null;
+        }
+    }
 
-            try( java.io.InputStream inputStream = Files.newInputStream( file.toPath() ) )
+    private static String calculateHashWithAlgorithm(File file, String algorithm) throws IOException, NoSuchAlgorithmException
+    {
+        if( file == null )
+        {
+            throw new IllegalArgumentException( "File cannot be null" );
+        }
+        
+        if( algorithm == null || algorithm.trim().isEmpty() )
+        {
+            throw new IllegalArgumentException( "Algorithm cannot be null or empty" );
+        }
+        
+        if( ! file.exists() || ! file.isFile() )
+        {
+            throw new IOException( "File does not exist or is not a regular file: " + file.getAbsolutePath() );
+        }
+
+        MessageDigest digest = MessageDigest.getInstance( algorithm );
+
+        try( java.io.InputStream inputStream = Files.newInputStream( file.toPath() ) )
+        {
+            byte[] buffer = new byte[65536]; // 64KB buffer for better performance
+            int bytesRead;
+
+            while( (bytesRead = inputStream.read( buffer )) != -1 )
             {
-                byte[] buffer = new byte[65536]; // 64KB buffer for better performance
-                int bytesRead;
-
-                while( (bytesRead = inputStream.read( buffer )) != -1 )
-                {
-                    digest.update( buffer, 0, bytesRead );
-                }
+                digest.update( buffer, 0, bytesRead );
             }
+        }
 
-            byte[] hashBytes = digest.digest();
-            return bytesToHex( hashBytes );
-
-        }
-        catch( NoSuchAlgorithmException e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, algorithm + " algorithm not available" );
-            return null;
-        }
-        catch( IOException e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error reading file: " + file.getAbsolutePath() );
-            return null;
-        }
+        byte[] hashBytes = digest.digest();
+        return bytesToHex( hashBytes );
     }
 
     /**

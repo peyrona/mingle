@@ -376,7 +376,7 @@ public final class UneEditorUnit extends JSplitPane
                                     "  {"+
                                     "     \"name\"   : \"Plain Socket\","+
                                      "     \"init\"   : { \"port\": "+ nSocketPort.incrementAndGet() +", \"ssl\": false, \"allow\": \"intranet\" },"+
-                                    "     \"builder\": \"com.peyrona.mingle.network.plain.PlainSocketServer\","+
+                                    "     \"builder\": \"com.peyrona.mingle.network.socket.PlainSocketServer\","+
                                     "     \"uris\"   : [\"file://{*home.lib*}network.jar\"]"+
                                     "  }"+
                                     "]").asArray();

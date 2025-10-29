@@ -83,15 +83,15 @@ public abstract class BaseClient4IP extends BaseClient
         final UtilJson uj   = new UtilJson( (UtilStr.isEmpty( sCfgAsJSON ) ? "{}" : sCfgAsJSON) );
         final int      time = (int) (uj.getInt( "timeout", 0 ) * 1000);    // From seconds to millis
 
-        sHost     = UtilComm.getHost( uj.getString( "host", null ) );
-        nPort     = uj.getInt( "port", -1 );
+        sHost     = UtilComm.getHost( uj.getString( BaseServer4IP.KEY_HOST, null ) );
+        nPort     = uj.getInt( BaseServer4IP.KEY_PORT, -1 );
         nTimeout  = UtilUnit.setBetween( 0, time, Integer.MAX_VALUE );
 
         if( sHost == null )
         {
             try
             {
-                sHost = uj.getString( "host", InetAddress.getLocalHost().getHostAddress() );
+                sHost = uj.getString( BaseServer4IP.KEY_HOST, InetAddress.getLocalHost().getHostAddress() );
             }
             catch( UnknownHostException uhe )
             {
@@ -101,7 +101,7 @@ public abstract class BaseClient4IP extends BaseClient
 
         if( nPort < 0 )      // Then has to be like this: {"host":"localhost", "port": 65534, ... }
         {
-            nPort = UtilComm.getPort( uj.getString( "host", null ), -1 );
+            nPort = UtilComm.getPort( uj.getString( BaseServer4IP.KEY_HOST, null ), -1 );
 
             if( nPort < 0 )
                 nPort = nDefPort;
