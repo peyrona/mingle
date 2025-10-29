@@ -31,8 +31,8 @@ import java.util.concurrent.ScheduledFuture;
 public final class   Sensors
              extends ControllerBase
 {
-    private static final String T_INSIDE  = "t_inside";      // Name for humans
-    private static final String T_OUTSIDE = "t_outside";     // Name for humans
+    private static final String KEY_ADRESS   = "address";
+    private static final String KEY_INTERVAL = "interval";
 
     private Talker          talker;
     private ScheduledFuture timer;
@@ -47,11 +47,11 @@ public final class   Sensors
 
         try
         {
-            String sIpAddr   = deviceInit.get( "address" ).toString();    // This is mandatory
-            int    nInterval = ((Number) deviceInit.getOrDefault( "interval", (5 * UtilUnit.MINUTE) )).intValue();
+            String sIpAddr   = deviceInit.get( KEY_ADRESS ).toString();    // This is mandatory
+            int    nInterval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (5 * UtilUnit.MINUTE) )).intValue();
 
             if( ! UtilSys.isDevEnv )     // When under development, any value is accepted
-                nInterval = setBetween( "interval", 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
+                nInterval = UtilUnit.setBetween( 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
 
             timer = UtilSys.executeAtRate( getClass().getName(), 5000, nInterval, () -> read() );
 
@@ -59,6 +59,8 @@ public final class   Sensors
                 talker = new Talker( sIpAddr );
 
             setValid( true );
+            set( KEY_ADRESS  , sIpAddr   );
+            set( KEY_INTERVAL, nInterval );
         }
         catch( IOException ioe )
         {
@@ -76,8 +78,8 @@ public final class   Sensors
         {
             StdXprFns fn = new StdXprFns();
 
-            sendReaded( new pair().put( T_INSIDE , fn.invoke( "rand", new Integer[] { 5,44} ))
-                                  .put( T_OUTSIDE, fn.invoke( "rand", new Integer[] {-9,44} )) );
+            sendReaded( new pair().put( "t_inside" , fn.invoke( "rand", new Integer[] { 5,44} ))
+                                  .put( "t_outside", fn.invoke( "rand", new Integer[] {-9,44} )) );
         }
         else
         {
@@ -94,10 +96,10 @@ public final class   Sensors
                     String sValue;
 
                     sValue = map.get( Const.What.InsideTemperature.key );
-                    pair2ret.put( T_INSIDE , (Language.isNumber( sValue ) ? UtilType.toFloat( sValue ) : -99f) );
+                    pair2ret.put( "t_inside" , (Language.isNumber( sValue ) ? UtilType.toFloat( sValue ) : -99f) );
 
                     sValue = map.get( Const.What.OutsideTemperature.key );
-                    pair2ret.put( T_OUTSIDE, (Language.isNumber( sValue ) ? UtilType.toFloat( sValue ) : -99f) );
+                    pair2ret.put( "t_outside", (Language.isNumber( sValue ) ? UtilType.toFloat( sValue ) : -99f) );
 
                     sendReaded( pair2ret );
                 }

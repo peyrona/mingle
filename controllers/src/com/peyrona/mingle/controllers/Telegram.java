@@ -23,8 +23,9 @@ import java.util.Map;
 public final class   Telegram
              extends ControllerBase
 {
-    private String chat;
-    private String token;
+    private static final String KEY_CHAT  = "chat";
+    private static final String KEY_TOKEN = "token";
+
     private String sLastSent = "";
 
     //------------------------------------------------------------------------//
@@ -33,15 +34,9 @@ public final class   Telegram
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
         setName( deviceName );
-        setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
-
-        synchronized( this )
-        {
-            token = deviceInit.get( "token" ).toString();    // Guarranted to exist because the Transpiler checks it
-            chat  = deviceInit.get( "chat"  ).toString();    // Guarranted to exist because the Transpiler checks it
-        }
-
-        setValid( true );     // This controller is always valid
+        setListener( listener );   // Must be at begining: in case an error happens, Listener is needed
+        setValid( true );          // This controller is always valid
+        set( deviceInit );         // Can be done because mapConfig values are not modified
     }
 
     @Override
@@ -64,7 +59,7 @@ public final class   Telegram
 
                                     try
                                     {
-                                        _sendIM_( token, chat, msg );
+                                        _sendIM_( (String) get( KEY_TOKEN ), (String) get( KEY_CHAT ), msg );
                                         sLastSent = msg;
                                         sendReaded( msg );
                                     }
@@ -74,13 +69,6 @@ public final class   Telegram
                                         sendWriteError( msg, ioe );
                                     }
                                 } );
-    }
-
-    @Override
-    public void stop()
-    {
-        chat = token = null;
-        super.stop();
     }
 
     //------------------------------------------------------------------------//

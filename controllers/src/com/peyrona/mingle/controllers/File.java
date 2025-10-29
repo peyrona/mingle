@@ -27,15 +27,16 @@ import java.util.concurrent.ScheduledFuture;
 public final class File
        extends ControllerBase
 {
+    private static final String KEY_INTERVAL  = "interval";
+    private static final String KEY_APEND     = "append";
+    private static final String KEY_AUTO_FEED = "autofeed";
+    private static final String KEY_CHARSET   = "charset";
+
     private URI               uri  = null;
-    private boolean           bAutoNL;
     private boolean           bLocal;            // Local or Remote file
-    private boolean           bAppend;
     private java.io.File      file    = null;
     private UtilIO.FileWriter writer  = null;
-    private Charset           charset = null;
     private ScheduledFuture   future  = null;
-    private int               interval;
 
     //------------------------------------------------------------------------//
 
@@ -45,14 +46,14 @@ public final class File
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        bAppend = (Boolean) deviceInit.getOrDefault( "append"  , Boolean.TRUE );
-        bAutoNL = (Boolean) deviceInit.getOrDefault( "autofeed", Boolean.TRUE );
+        set( KEY_APEND    , (Boolean) deviceInit.getOrDefault( KEY_APEND    , Boolean.TRUE ) );
+        set( KEY_AUTO_FEED, (Boolean) deviceInit.getOrDefault( KEY_AUTO_FEED, Boolean.TRUE ) );
 
-        if( deviceInit.get( "charset" ) != null )
+        if( deviceInit.get( KEY_CHARSET ) != null )
         {
             try
             {
-                charset = Charset.forName( (String) deviceInit.get( "charset" ) );
+                set( KEY_CHARSET, Charset.forName( (String) deviceInit.get( KEY_CHARSET ) ) );
             }
             catch( IllegalCharsetNameException | UnsupportedCharsetException exc )
             {
@@ -62,6 +63,8 @@ public final class File
 
         try
         {
+            set( "file", (String) deviceInit.get( "file" ) );
+
             String    sURI   = (String) deviceInit.get( "file" );    // This is REQUIRED
             List<URI> lstURI = UtilIO.expandPath( sURI );
 
@@ -84,14 +87,14 @@ public final class File
 
         if( isValid() )
         {
-            interval = ((Number) deviceInit.getOrDefault( "interval", -1f )).intValue();
+            set( KEY_INTERVAL, ((Number) deviceInit.getOrDefault( KEY_INTERVAL, -1f )).intValue() );
 
-            if( interval > -1 )
+            if( (int) get( KEY_INTERVAL ) > -1 )
             {
-                int n = bLocal ? Math.max(   99, interval )    // Min rate for Local  file
-                               : Math.max( 3000, interval );   // Min rate for Remote file
+                int n = bLocal ? Math.max(   99, (int) get( KEY_INTERVAL ) )    // Min rate for Local  file
+                               : Math.max( 3000, (int) get( KEY_INTERVAL ) );   // Min rate for Remote file
 
-                interval = setBetween( "interval", n, interval, Integer.MAX_VALUE );
+                setBetween( KEY_INTERVAL, n, (int) get( KEY_INTERVAL ), Integer.MAX_VALUE );
             }
         }
     }
@@ -114,8 +117,8 @@ public final class File
 
         file = new java.io.File( uri );
 
-        if( (future == null) && (interval > -1) )
-            future = UtilSys.executeAtRate( getClass().getName(), interval, interval, () -> read() );
+        if( (future == null) && ((int) get( KEY_INTERVAL ) > -1) )
+            future = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY_INTERVAL ), (int) get( KEY_INTERVAL ), () -> read() );
     }
 
     @Override
@@ -144,7 +147,7 @@ public final class File
                 return;              // Nothing to do: can not throw an Exception because it does not exist until
             }                        // first values are sent to be written. And user can delete it when he wants
 
-            sendReaded( UtilIO.getAsText( uri, charset ) );
+            sendReaded( UtilIO.getAsText( uri, (Charset) get( KEY_CHARSET ) ) );
         }
         catch( IOException ex )
         {
@@ -162,7 +165,7 @@ public final class File
         {
             String s = value.toString();
 
-            if( bAutoNL )
+            if( (Boolean) get( KEY_AUTO_FEED ) )
                 s += UtilStr.sEoL;
 
             try
@@ -171,11 +174,11 @@ public final class File
                 {
                     writer = UtilIO.newFileWriter()
                                    .setFile( file )
-                                   .setCharset( charset );
+                                   .setCharset( (Charset) get( KEY_CHARSET ) );
                 }
 
-                if( bAppend ) writer.append(  s );
-                else          writer.replace( s );
+                if( (Boolean) get( KEY_APEND ) ) writer.append(  s );
+                else                             writer.replace( s );
 
                 sendReaded( value );
             }

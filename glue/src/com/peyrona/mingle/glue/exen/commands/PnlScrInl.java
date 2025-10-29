@@ -14,7 +14,6 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.Lexer;
-import java.awt.BorderLayout;
 
 /**
  *
@@ -24,13 +23,13 @@ import java.awt.BorderLayout;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-final class PnlScript extends PnlCmdBase
+final class PnlScrInl extends PnlCmdBase
 {
     private final UneEditorPane code = UneEditorUnit.newEditor( "" ).setRows( 5 ).hideLineNumbers();
 
     //------------------------------------------------------------------------//
 
-    PnlScript( IScript script, PnlAllCmdsSelector.CommandWise cmdWise )
+    PnlScrInl( IScript script, PnlAllCmdsSelector.CommandWise cmdWise )
     {
         super( cmdWise );
 
@@ -64,7 +63,7 @@ final class PnlScript extends PnlCmdBase
             }
             catch( Exception ioe )
             {
-                JTools.error( ioe, PnlScript.this );
+                JTools.error(ioe, PnlScrInl.this );
             }
         }
     }
@@ -73,8 +72,7 @@ final class PnlScript extends PnlCmdBase
 
     private void initExtra()
     {
-        pnl4Code.setLayout( new BorderLayout( 0,0 ) );
-        pnl4Code.add( code, BorderLayout.CENTER );
+        sp4CodeEditor.setViewportView( code );
 
         JTools.setJTextIsUneName( txtName );
         JTools.setJTextIsUneName( txtCall );
@@ -141,7 +139,7 @@ final class PnlScript extends PnlCmdBase
         radURI = new javax.swing.JRadioButton();
         txtURI = new javax.swing.JTextField();
         radCode = new javax.swing.JRadioButton();
-        pnl4Code = new javax.swing.JPanel();
+        sp4CodeEditor = new javax.swing.JScrollPane();
         jLabel1 = new javax.swing.JLabel();
         cmbLanguage = new javax.swing.JComboBox<>();
         jLabel2 = new javax.swing.JLabel();
@@ -172,17 +170,6 @@ final class PnlScript extends PnlCmdBase
             }
         });
 
-        javax.swing.GroupLayout pnl4CodeLayout = new javax.swing.GroupLayout(pnl4Code);
-        pnl4Code.setLayout(pnl4CodeLayout);
-        pnl4CodeLayout.setHorizontalGroup(
-            pnl4CodeLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 0, Short.MAX_VALUE)
-        );
-        pnl4CodeLayout.setVerticalGroup(
-            pnl4CodeLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 264, Short.MAX_VALUE)
-        );
-
         javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
         jPanel1.setLayout(jPanel1Layout);
         jPanel1Layout.setHorizontalGroup(
@@ -190,7 +177,7 @@ final class PnlScript extends PnlCmdBase
             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(pnl4Code, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(sp4CodeEditor)
                     .addComponent(txtURI, javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel1Layout.createSequentialGroup()
                         .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -204,12 +191,13 @@ final class PnlScript extends PnlCmdBase
             .addGroup(jPanel1Layout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(radURI)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 12, Short.MAX_VALUE)
+                .addGap(12, 12, 12)
                 .addComponent(txtURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(radCode)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(pnl4Code, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(sp4CodeEditor, javax.swing.GroupLayout.DEFAULT_SIZE, 181, Short.MAX_VALUE)
+                .addContainerGap())
         );
 
         jLabel1.setText("LANGUAGE");
@@ -252,7 +240,7 @@ final class PnlScript extends PnlCmdBase
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                                 .addComponent(chkOnStop))
                             .addComponent(txtCall))))
-                .addGap(20, 20, 20))
+                .addContainerGap())
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -272,8 +260,8 @@ final class PnlScript extends PnlCmdBase
                     .addComponent(txtCall, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(jLabel4))
                 .addGap(18, 18, 18)
-                .addComponent(jPanel1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -292,10 +280,10 @@ final class PnlScript extends PnlCmdBase
     private javax.swing.JLabel jLabel2;
     private javax.swing.JLabel jLabel4;
     private javax.swing.JPanel jPanel1;
-    private javax.swing.JPanel pnl4Code;
     private javax.swing.JRadioButton radCode;
     private javax.swing.ButtonGroup radGroupFrom;
     private javax.swing.JRadioButton radURI;
+    private javax.swing.JScrollPane sp4CodeEditor;
     private javax.swing.JTextField txtCall;
     private javax.swing.JTextField txtName;
     private javax.swing.JTextField txtURI;

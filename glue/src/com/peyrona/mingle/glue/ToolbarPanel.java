@@ -40,6 +40,7 @@ final class ToolbarPanel extends javax.swing.JPanel
 {
     private Process procExEn  = null;
     private Process procGum   = null;
+    private GFrame  wndExEn   = null;
     private GFrame  wndGum    = null;
     private GFrame  frmEditor = null;
 
@@ -58,7 +59,7 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     public ToolbarPanel()
     {
-        setLayout( new FlowLayout( FlowLayout.LEFT )  );
+        setLayout( new FlowLayout( FlowLayout.LEFT ) );
 
         initComponents();
         initExtra();
@@ -107,7 +108,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
             .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onRunLocalExEn(),
+            .registerKeyboardAction( (ActionListener) -> onRunStopExEn(),
                                      KeyStroke.getKeyStroke( KeyEvent.VK_F3, 0 ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
@@ -156,7 +157,7 @@ final class ToolbarPanel extends javax.swing.JPanel
         btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn already running [F2]" );
         btnSave = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onSaveCurrentModel() ).setToolTip( "Save current model" );
         btnDel  = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onClearExEn()        ).setToolTip( "Empty current model: delete all rules and devices" );
-        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunLocalExEn()     ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F3]" );
+        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunStopExEn()      ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F3]" );
         btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenUneEditor()    ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F4]" );  // Editor is always enabled
         btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()       ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F5]" );
         btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()             ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
@@ -183,12 +184,18 @@ final class ToolbarPanel extends javax.swing.JPanel
      *
      * @return The process instance or null if any error.
      */
-    private void onRunLocalExEn()
+    private void onRunStopExEn()
     {
         if( procExEn != null )     // The icon now is not a "play" but a "stop"
         {
             if( JTools.confirm( "Internal Stick (ExEn) is running.\nDo you want to stop it?" ) )
             {
+                if( wndExEn != null )
+                {
+                    wndExEn.dispose();
+                    wndExEn = null;
+                }
+
                 Util.killProcess( procExEn );
                 procExEn = null;
 
@@ -209,6 +216,17 @@ final class ToolbarPanel extends javax.swing.JPanel
                 JTools.error( "Unable to start local internal ExEn.\nIt could be there is another instance of ExEn already running." );
                 return;
             }
+
+            wndExEn = new GFrame()
+                          .title( "'Stick (ExEn)' console" )
+                          .closeOnEsc()
+                          .onClose( JFrame.DISPOSE_ON_CLOSE )
+                          .onClose( (frm) -> { if( JTools.confirm( "Stop also Stick?", wndExEn ) ) onRunStopExEn(); } )
+                          .setContent( new ConsolePanel() )
+                          .setVisible()                       // Has to be before to setSize(...)
+                          .size( 800, 500 );
+
+            Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
 
             UtilSys.execute( getClass().getName(),
                              1500,
@@ -248,17 +266,41 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onRunStopGum()
     {
-        if( procGum == null )
+        if( procGum != null )
+        {
+            if( wndGum != null )
+            {
+                wndGum.dispose();
+                wndGum = null;
+            }
+
+            Util.killProcess( procGum );
+            procGum = null;
+
+            // Reset Gum icon to original color when it stops
+            SwingUtilities.invokeLater( () ->
+                {
+                    btnGum.setIcon( IconFontSwing.buildIcon( FontAwesome.CLOUD, 16, JTools.getIconColor() ) );
+                } );
+        }
+        else
         {
             JTools.showWaitFrame( "Starting Gum and default WebBrowser..." );
 
             procGum = Util.runGum();
 
+            if( procGum == null )
+            {
+                JTools.hideWaitFrame();
+                JTools.error( "Unable to start Gum." );
+                return;
+            }
+
             wndGum = new GFrame()
                          .title( "'Gum' console" )
                          .closeOnEsc()
                          .onClose( JFrame.DISPOSE_ON_CLOSE )
-                         .onClose( (frm) -> { if( JTools.confirm( "Stop also Gum?", wndGum ) ) stopGum(); } )
+                         .onClose( (frm) -> { if( JTools.confirm( "Stop also Gum?", wndGum ) ) onRunStopGum(); } )
                          .setContent( new ConsolePanel() )
                          .setVisible()                       // Has to be before to setSize(...)
                          .size( 800, 500 );
@@ -297,10 +339,6 @@ final class ToolbarPanel extends javax.swing.JPanel
                                     }
                                 } );
         }
-        else if( JTools.confirm( "Are you sure you want to stop Gum WebServer?" ) )
-        {
-            stopGum();
-        }
     }
 
     private void onInfo()
@@ -331,43 +369,8 @@ final class ToolbarPanel extends javax.swing.JPanel
 
         if( JTools.confirm( message ) )
         {
-            copyUrlToClipboard( url );
+            JTools.toClipboard( url );
             JTools.info( "URL copied to clipboard!\n\nPaste it in your browser to access Gum WebServer." );
         }
-    }
-
-    private static void copyUrlToClipboard( String url )
-    {
-        try
-        {
-            java.awt.datatransfer.Clipboard clipboard =
-                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
-            java.awt.datatransfer.StringSelection selection =
-                new java.awt.datatransfer.StringSelection( url );
-            clipboard.setContents( selection, null );
-        }
-        catch( Exception ex )
-        {
-            JTools.error( "Failed to copy URL to clipboard: " + ex.getMessage() );
-        }
-    }
-
-    private void stopGum()
-    {
-        if( wndGum != null )
-        {
-            wndGum.dispose();
-            wndGum = null;
-        }
-
-        Util.killProcess( procGum );
-        procGum = null;
-
-        // Reset Gum icon to original color when it stops
-        SwingUtilities.invokeLater( () ->
-            {
-                btnGum.setIcon( IconFontSwing.buildIcon( FontAwesome.CLOUD, 16, JTools.getIconColor() ) );
-                btnGum.setToolTipText( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F5]" );
-            } );
     }
 }

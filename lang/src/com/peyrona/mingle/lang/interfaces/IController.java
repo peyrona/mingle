@@ -51,6 +51,20 @@ public interface IController
     void set( String deviceName, Map<String,Object> deviceInit, IController.Listener listener );
 
     /**
+     * Returns the associated device name.
+     *
+     * @return The associated device name.
+     */
+    String getDeviceName();
+
+    /**
+     * Returns the configuration for the associated device.
+     *
+     * @return The configuration for the associated device.
+     */
+    Map<String,Object> getDeviceConfig();
+
+    /**
      * Reads device's value: Boolean, Number or String (can not be null).
      * <p>
      * Controller has to invoke ::Listener:onChanged(...) method passing device's

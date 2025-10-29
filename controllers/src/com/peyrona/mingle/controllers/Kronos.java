@@ -35,16 +35,17 @@ public class Kronos
         if( deviceInit.isEmpty() )
             sendGenericError( ILogger.Level.SEVERE, "Driver config is empty" );
 
-        pair config = new pair();
+        pair pairConfig = new pair();
 
         for( Map.Entry<String,Object> entry : deviceInit.entrySet() )
-            config.put( entry.getKey(), entry.getValue() );
+            pairConfig.put( entry.getKey(), entry.getValue() );
 
         try
         {
-            cron = new Cron( config );
+            cron = new Cron( pairConfig );
 
             setValid( true );
+            set( deviceInit );
         }
         catch( MingleException me )
         {

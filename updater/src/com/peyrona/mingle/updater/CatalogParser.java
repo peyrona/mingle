@@ -28,17 +28,42 @@ public final class CatalogParser
      */
     public static List<CatalogFileEntry> parseCatalogJson( String catalogContent )
     {
+        if( catalogContent == null || catalogContent.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Catalog content is null or empty" );
+            return new ArrayList<>();
+        }
+        
         List<CatalogFileEntry> entries = new ArrayList<>();
         
-        // Simple JSON parsing (avoiding external dependencies)
-        java.util.regex.Matcher matcher = CATALOG_PATTERN.matcher( catalogContent );
-        
-        while( matcher.find() )
+        try
         {
-            CatalogFileEntry entry = new CatalogFileEntry();
-            entry.path = matcher.group( 1 );
-            entry.hash = matcher.group( 2 );
-            entries.add( entry );
+            // Simple JSON parsing (avoiding external dependencies)
+            java.util.regex.Matcher matcher = CATALOG_PATTERN.matcher( catalogContent );
+            
+            while( matcher.find() )
+            {
+                String path = matcher.group( 1 );
+                String hash = matcher.group( 2 );
+                
+                if( path != null && ! path.trim().isEmpty() && 
+                    hash != null && ! hash.trim().isEmpty() )
+                {
+                    CatalogFileEntry entry = new CatalogFileEntry();
+                    entry.path = path.trim();
+                    entry.hash = hash.trim();
+                    entries.add( entry );
+                }
+                else
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Invalid catalog entry: path=" + path + ", hash=" + hash );
+                }
+            }
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error parsing catalog JSON" );
+            return new ArrayList<>();
         }
         
         UtilSys.getLogger().log( ILogger.Level.INFO, "Parsed " + entries.size() + " file entries from catalog.json" );
@@ -53,11 +78,24 @@ public final class CatalogParser
      */
     public static String parseVersionFromCatalog( String catalogContent )
     {
-        java.util.regex.Matcher matcher = VERSION_REGEX.matcher( catalogContent );
-        
-        if( matcher.find() )
+        if( catalogContent == null || catalogContent.trim().isEmpty() )
         {
-            return matcher.group( 1 );
+            return null;
+        }
+        
+        try
+        {
+            java.util.regex.Matcher matcher = VERSION_REGEX.matcher( catalogContent );
+            
+            if( matcher.find() )
+            {
+                String version = matcher.group( 1 );
+                return (version != null && ! version.trim().isEmpty()) ? version.trim() : null;
+            }
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error parsing version from catalog" );
         }
         
         return null;

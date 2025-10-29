@@ -17,10 +17,7 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.io.IOException;
-import java.net.URL;
 import java.util.function.Consumer;
-import javax.imageio.ImageIO;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
@@ -30,7 +27,7 @@ import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
 /**
- * A TabbePane where each tab contains 4 JList (one per command type) and below a TabbedPane with
+ * A TabbePane where each tab contains 5 JList (one per command type) and below a TabbedPane with
  * tables with information.
  *
  * @author Francisco José Morero Peyrona
@@ -202,38 +199,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE STATIC
-
-    /**
-     * Loads an image from various possible sources (resource, file system, or URL).
-     *
-     * @param imagePath Path to the image
-     * @return The loaded BufferedImage or null if loading fails
-     */
-    private static BufferedImage loadImage( String imagePath ) throws IOException
-    {
-        // Try loading as resource first
-        URL resourceUrl = ExEnsTabbedPane.class.getResource( imagePath );
-
-        if( resourceUrl != null )
-            return ImageIO.read( resourceUrl );
-
-        // Try as file path
-        File file = new File( imagePath );
-
-        if( file.exists() )
-            return ImageIO.read( file );
-
-        // Try as URL
-        try
-        {
-            return ImageIO.read( new URL( imagePath ) );
-        }
-        catch( IOException e )
-        {
-            return null;
-        }
-    }
+    // PRIVATE STATIC SCOPE (related with background image)
 
     /**
      * Creates a transparent version of the image at the specified path.
@@ -243,37 +209,30 @@ public final class ExEnsTabbedPane extends GTabbedPane
      */
     private static BufferedImage createTransparentImage()
     {
+        BufferedImage originalImage = JTools.getImage( "splash.png" );
+
+        if( originalImage == null )
+            return null;
+
+        int width = originalImage.getWidth();
+        int height = originalImage.getHeight();
+
+        BufferedImage transparentImage = new BufferedImage(
+                width, height, BufferedImage.TYPE_INT_ARGB );
+
+        Graphics2D g2d = transparentImage.createGraphics();
         try
         {
-            BufferedImage originalImage = loadImage( "/META-INF/splash.png" );
-
-            if( originalImage == null )
-                return null;
-
-            int width = originalImage.getWidth();
-            int height = originalImage.getHeight();
-
-            BufferedImage transparentImage = new BufferedImage(
-                    width, height, BufferedImage.TYPE_INT_ARGB );
-
-            Graphics2D g2d = transparentImage.createGraphics();
-            try
-            {
-                g2d.setRenderingHint( RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
-                g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, 0.1f ) );
-                g2d.drawImage( originalImage, 0, 0, null );
-            }
-            finally
-            {
-                g2d.dispose();
-            }
-
-            return transparentImage;
+            g2d.setRenderingHint( RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
+            g2d.setComposite( AlphaComposite.getInstance( AlphaComposite.SRC_OVER, 0.1f ) );
+            g2d.drawImage( originalImage, 0, 0, null );
         }
-        catch( IOException e )
+        finally
         {
-            return null;
+            g2d.dispose();
         }
+
+        return transparentImage;
     }
 
     /**
@@ -289,7 +248,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
         if( image == null )
             return null;
 
-        double originalWidth = image.getWidth( null );
+        double originalWidth  = image.getWidth(  null );
         double originalHeight = image.getHeight( null );
 
         if( originalWidth == 0 || originalHeight == 0 )
@@ -298,7 +257,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
         }
 
         double originalAspect = originalWidth / originalHeight;
-        double targetAspect = (double) targetWidth / targetHeight;
+        double targetAspect   = (double) targetWidth / targetHeight;
 
         int scaledWidth;
         int scaledHeight;
@@ -307,15 +266,15 @@ public final class ExEnsTabbedPane extends GTabbedPane
         {
             // Target is wider than original
             scaledHeight = targetHeight;
-            scaledWidth = (int) (scaledHeight * originalAspect);
+            scaledWidth  = (int) (scaledHeight * originalAspect);
         }
         else
         {
             // Target is taller than original
-            scaledWidth = targetWidth;
+            scaledWidth  = targetWidth;
             scaledHeight = (int) (scaledWidth / originalAspect);
         }
 
-        return image.getScaledInstance( scaledWidth, scaledHeight, Image.SCALE_SMOOTH );
+        return image.getScaledInstance( scaledWidth -50, scaledHeight -50, Image.SCALE_SMOOTH );
     }
 }

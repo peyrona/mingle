@@ -88,6 +88,7 @@ public final class   Excel
                 writeHead( book, sheet, UtilColls.toMap( sHeads ) );
 
             setValid( true );
+            set( mapConfig );     // Can be done because mapConfig values are not modified
         }
     }
 

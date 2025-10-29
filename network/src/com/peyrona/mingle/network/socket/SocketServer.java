@@ -1,4 +1,4 @@
-package com.peyrona.mingle.network.plain;
+package com.peyrona.mingle.network.socket;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;

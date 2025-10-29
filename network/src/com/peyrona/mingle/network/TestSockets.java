@@ -3,8 +3,8 @@ package com.peyrona.mingle.network;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
-import com.peyrona.mingle.network.plain.SocketClient;
-import com.peyrona.mingle.network.plain.SocketServer;
+import com.peyrona.mingle.network.socket.SocketClient;
+import com.peyrona.mingle.network.socket.SocketServer;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 

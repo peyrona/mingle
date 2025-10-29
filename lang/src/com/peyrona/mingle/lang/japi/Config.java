@@ -297,8 +297,8 @@ public final class Config implements IConfig
     @Override
     public INetClient getHttpServerNetClient()
     {
-        String   sClass = "com.peyrona.mingle.network.plain.PlainSocketClient";    // Default class
-        String[] asURIs = new String[] { "file://{*home.lib*}network.jar" };       // Default URI
+        String   sClass = "com.peyrona.mingle.network.socket.SocketClient";    // Default class
+        String[] asURIs = new String[] { "file://{*home.lib*}network.jar" };   // Default URI
         UtilJson module = new UtilJson( getModule( "monitoring" ) );
 
         if( module != null )
@@ -497,8 +497,7 @@ public final class Config implements IConfig
 
         if( defClass == String.class )
         {
-            if( value.isString() )
-                return (T) value.asString();
+            return (T) (value.isString() ? value.asString() : value.toString());
         }
         else if( defClass == Integer.class || defClass == int.class )
         {

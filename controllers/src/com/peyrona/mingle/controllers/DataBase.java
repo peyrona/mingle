@@ -12,7 +12,6 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.sql.SQLException;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -28,7 +27,6 @@ import java.util.Map;
 public final class   DataBase
              extends ControllerBase
 {
-    private Map<String,Object>  mapConfig;
     private java.sql.Connection conn;
 
     //------------------------------------------------------------------------//
@@ -41,10 +39,10 @@ public final class   DataBase
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        this.mapConfig = new HashMap<>( mapConfig );
-
         String sJARs = (String) mapConfig.get( "jars" );
         String sJDBC = (String) mapConfig.get( "jdbc" );
+
+        set( mapConfig );   // Can be done because mapConfig values are not modified
 
         try
         {
@@ -164,10 +162,10 @@ public final class   DataBase
             }
         }
 
-        String sURL  = (String) mapConfig.get( "url"     );
-        String sUser = (String) mapConfig.get( "user"    );
-        String sPwd  = (String) mapConfig.get( "pwd"     );
-        String sInit = (String) mapConfig.get( "initial" );   // Initial SQL command(s) to be sent after successfully be connected
+        String sURL  = (String) get( "url"     );
+        String sUser = (String) get( "user"    );
+        String sPwd  = (String) get( "pwd"     );
+        String sInit = (String) get( "initial" );   // Initial SQL command(s) to be sent after successfully be connected
 
         synchronized( this )
         {

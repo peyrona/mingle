@@ -39,6 +39,8 @@ public class GFrame extends JFrame
         setAutoRequestFocus( true );
         getRootPane().setBorder( BorderFactory.createEmptyBorder( 4,7,4,7 ) );
         setLayout( new BorderLayout( 9,7 ) );
+
+        WndBoundsPersist.initialize( this );
     }
 
     public boolean isClosed()
@@ -128,5 +130,13 @@ public class GFrame extends JFrame
         setVisible( true );
         toFront();
         return this;
+    }
+
+    @Override
+    public void pack()
+    {
+        super.pack();
+
+        WndBoundsPersist.handlePack( this );
     }
 }

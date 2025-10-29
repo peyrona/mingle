@@ -62,9 +62,10 @@ import java.util.concurrent.ScheduledFuture;
 public class BitcoinUSDPrice
        extends ControllerBase
 {
+    private static final String KEY = "interval";
+
     private static final String          sURL   = "https://api.coindesk.com/v1/bpi/currentprice.json";
     private              ScheduledFuture future = null;
-    private              int             interval;
 
     //------------------------------------------------------------------------//
 
@@ -74,8 +75,8 @@ public class BitcoinUSDPrice
         setName( deviceName );
         setListener( listener );    // Must be at begining: in case an error happens, Listener is needed
 
-        interval = ((Number) deviceInit.getOrDefault( "interval", 30 * UtilUnit.SECOND )).intValue();
-        interval = setBetween( "interval", 5, interval, UtilUnit.HOUR );
+        int interval = ((Number) deviceInit.getOrDefault( "interval", 30 * UtilUnit.SECOND )).intValue();
+        setBetween( KEY, 5, interval, UtilUnit.HOUR );
 
         setValid( true );
     }
@@ -86,7 +87,7 @@ public class BitcoinUSDPrice
         super.start( rt );
 
         if( future == null )
-            future = UtilSys.executeAtRate( getClass().getName(), interval, interval, () -> read() );
+            future = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY ), (int) get( KEY ), () -> read() );
     }
 
     @Override

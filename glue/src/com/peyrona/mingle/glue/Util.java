@@ -85,14 +85,17 @@ public final class Util
         String sFileModel  = ((fModel  == null) ? null : fModel.getAbsolutePath());
         String sFileConfig = ((fConfig == null) ? null : fConfig.getAbsolutePath());
         File   fJavaHome   = UtilSys.getJavaHome();
-        String javaExecute = UtilSys.isWindows() ? "java.exe" : "java";
-
+        String javaExec    = UtilSys.isWindows() ? "java.exe" : "java";
+               javaExec    = fJavaHome + File.separator + "bin" + File.separator + javaExec;
+        String javaAgent   = "-javaagent:"+ UtilSys.fHomeDir + File.separator +"lib"+ File.separator +"lang.jar";
+        String javaClass   = "stick.jar"+ File.pathSeparator +"lib" + File.separator +"network.jar";
 
         List<String> lstCmd = new ArrayList<>();
-                     lstCmd.add( fJavaHome + File.separator + "bin" + File.separator + javaExecute );
-                     lstCmd.add( "-javaagent:"+ UtilSys.fHomeDir + File.separator +"lib"+ File.separator +"lang.jar" );
-                     lstCmd.add( "-jar" );
-                     lstCmd.add( "stick.jar" );
+                     lstCmd.add( javaExec     );
+                     lstCmd.add( javaAgent    );
+                     lstCmd.add( "-classpath" );
+                     lstCmd.add( javaClass    );
+                     lstCmd.add( "com.peyrona.mingle.stick.Main" );
 
         if( sFileConfig != null )
             lstCmd.add( "-config="+ sFileConfig );

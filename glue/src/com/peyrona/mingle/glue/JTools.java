@@ -29,6 +29,7 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 import javax.imageio.ImageIO;
 import javax.swing.AbstractAction;
+import javax.swing.AbstractButton;
 import javax.swing.Action;
 import javax.swing.ActionMap;
 import javax.swing.BorderFactory;
@@ -40,13 +41,17 @@ import javax.swing.JComponent;
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
 import javax.swing.JLabel;
+import javax.swing.JList;
 import javax.swing.JOptionPane;
 import javax.swing.JProgressBar;
 import javax.swing.JRootPane;
 import javax.swing.JScrollPane;
+import javax.swing.JSlider;
+import javax.swing.JSpinner;
 import javax.swing.JTable;
 import javax.swing.JTextArea;
 import javax.swing.JTextField;
+import javax.swing.JTree;
 import javax.swing.KeyStroke;
 import javax.swing.ListModel;
 import javax.swing.SwingUtilities;
@@ -139,34 +144,40 @@ public final class JTools
 
     public static void error( String msg, Component origin )
     {
-        boolean bMultiLine = (msg.indexOf( '\n' ) > -1) || msg.contains( UtilStr.sEoL );
-        JComponent comp;
+        boolean        bMultiLine = (msg.indexOf( '\n' ) > -1) || msg.contains( UtilStr.sEoL );
+        JComponent     comp;
+        JTextComponent text;
 
         origin = (origin == null) ? Main.frame : origin;
 
         if( bMultiLine )
         {
-            JTextArea ta = new JTextArea( msg );
-                      ta.setColumns( 80 );
-                      ta.setLineWrap( false );
-                      ta.setEditable( false );
+            JTextArea  ta = new JTextArea( msg );
+                       ta.setColumns( 80 );
+                       ta.setLineWrap( false );
+                       ta.setEditable( false );
+
             comp = new JScrollPane( ta );
+            text = ta;
         }
         else
         {
             JTextField txt = new JTextField( msg );
                        txt.setColumns( Math.min( msg.length(), 132 ) );
                        txt.setEditable( false );
+
             comp = txt;
+            text = txt;
         }
 
         hideWaitFrame();    // If the wait frame was open, the Glue freezes
 
-        String[] options = { "Ignore error", "Empty ExEn", "Exit Glue" };
+        String[] options = { "Ignore error", "Empty ExEn", "Exit Glue", "Copy to clipboard" };
         int      result  = JOptionPane.showOptionDialog( origin, comp, "Error", JOptionPane.DEFAULT_OPTION, JOptionPane.ERROR_MESSAGE, null, options, options[0] );
 
              if( result == 1 )  Main.frame.getExEnTabsPane().clear();
         else if( result == 2 )  Main.exit();
+        else if( result == 3 )  JTools.toClipboard( text.getText() );
     }
 
     public static void error( Exception exc )
@@ -255,6 +266,22 @@ public final class JTools
         frmWait.setSize( 240, 80 );
         frmWait.setVisible( true );
         frmWait.toFront();
+    }
+
+    public static void toClipboard( String str )
+    {
+        try
+        {
+            java.awt.datatransfer.Clipboard clipboard =
+                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            java.awt.datatransfer.StringSelection selection =
+                new java.awt.datatransfer.StringSelection( str );
+            clipboard.setContents( selection, null );
+        }
+        catch( Exception ex )
+        {
+            JTools.error( "Failed to copy URL to clipboard: " + ex.getMessage() );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -512,6 +539,41 @@ public final class JTools
         }
 
         return null;
+    }
+
+    /**
+     * Recursively traverses a container and sets its components' editable/enabled state.
+     *
+     * <p>This method distinguishes between:
+     * <ul>
+     * <li><b>JTextComponent</b> (JTextField, JTextArea, etc.): Sets {@code setEditable(editable)}.
+     * This makes the field non-editable but still allows text selection and copying.
+     * <li><b>Other interactive components</b> (JButton, JComboBox, JCheckBox, JSlider, etc.):
+     * Sets {@code setEnabled(editable)}. This typically "grays out" the component,
+     * making it non-interactive.
+     * </ul>
+     * </p>
+     *
+     * @param container The container (e.g., a JPanel) to traverse.
+     * @param editable  {@code true} to make components editable/enabled, {@code false} to
+     * make them non-editable/disabled.
+     */
+    public static void setEditable( Container container, boolean editable )
+    {
+        for( Component comp : container.getComponents() )
+        {
+                 if( comp instanceof JTextComponent )  ((JTextComponent) comp).setEditable( editable );
+            else if( comp instanceof AbstractButton )  comp.setEnabled( editable );
+            else if( comp instanceof JComboBox      )  comp.setEnabled( editable );
+            else if( comp instanceof JList          )  comp.setEnabled( editable );
+            else if( comp instanceof JSlider        )  comp.setEnabled( editable );
+            else if( comp instanceof JSpinner       )  comp.setEnabled( editable );
+            else if( comp instanceof JTree          )  comp.setEnabled( editable );
+            else if( comp instanceof JTable         )  comp.setEnabled( editable );
+
+            if( comp instanceof Container )
+                setEditable( (Container) comp, editable );
+        }
     }
 
     //------------------------------------------------------------------------//

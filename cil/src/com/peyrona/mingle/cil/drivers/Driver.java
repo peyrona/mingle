@@ -252,5 +252,17 @@ public final class      Driver
         {
             return false;
         }
+
+        @Override
+        public String getDeviceName()
+        {
+            return null;
+        }
+
+        @Override
+        public Map<String, Object> getDeviceConfig()
+        {
+            return null;
+        }
     }
 }

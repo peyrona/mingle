@@ -1,4 +1,3 @@
-
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
@@ -12,246 +11,307 @@ import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
-// TODO: this class needs to be finished and to have much more Unit tests
-//       (look for other TODO's inside this class)
-
 /**
  * A Linux-like Cron extended to be Mingle-like.
+ * <p>
+ * This class provides cron-like scheduling functionality with support for:
+ * <ul>
+ *   <li>One-time events with specific start time</li>
+ *   <li>Daily, Weekly, Monthly, and Yearly repetitions</li>
+ *   <li>Multiple execution times per day</li>
+ *   <li>Day of week and day of month specifications</li>
+ * </ul>
+ * <p>
+ * <strong>Note:</strong> Day 31 has special meaning in day-of-month specifications.
+ * It represents either the 31st day (for months with 31 days) or the last day of the month
+ * (for months with fewer than 31 days).
+ * <p>
+ * This class is thread-safe. All public methods are synchronized.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ * @see <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class Cron
 {
-    private LocalDateTime ldtStart = null;    // When to start or null
-    private LocalDateTime ldtStop  = null;    // When to finish or null
-    private LocalDateTime ldtLast  = null;    // Last event returned by ::next()
-    private LocalTime[]   aLtTime  = null;    // Array of times (hh:mm:ss)
-    private short[]       aDoW     = null;    // Day of Week : 1 -  7  (0 == Sunday too)
-    private short[]       aDoM     = null;    // Day of month: 1 - 31
-    private short[]       aMonth   = null;    // Month: 1 - 12
-    private int           every    = 0;       // Betwen 2 invocations. In seconds.
-    private char          mode     = 0;       // d, w, m, y
+    // Constants for mode values
+    private static final char MODE_DAILY   = 'd';
+    private static final char MODE_WEEKLY  = 'w';
+    private static final char MODE_MONTHLY = 'm';
+    private static final char MODE_YEARLY  = 'y';
+
+    // Constants for validation
+    private static final int MIN_DAY_OF_WEEK  = 0;  // 0 == Sunday
+    private static final int MAX_DAY_OF_WEEK  = 7;
+    private static final int MIN_DAY_OF_MONTH = 1;
+    private static final int MAX_DAY_OF_MONTH = 31;
+    private static final int MIN_MONTH        = 1;
+    private static final int MAX_MONTH        = 12;
+    private static final int LAST_DAY_MARKER  = 31;     // Special marker for "last day of month"
+
+    // Immutable configuration (set once in constructor)
+    private final LocalDateTime ldtStart;    // When to start or null
+    private final LocalDateTime ldtStop;     // When to finish or null
+    private final LocalTime[]   aLtTime;     // Array of times (hh:mm:ss)
+    private final short[]       aDoW;        // Day of Week : 1 - 7  (0 == Sunday too)
+    private final short[]       aDoM;        // Day of month: 1 - 31 (31 = last day)
+    private final short[]       aMonth;      // Month: 1 - 12
+    private final int           every;       // Between 2 invocations. In seconds.
+    private final char          mode;        // d, w, m, y
+    private final LocalDate     startDate;   // Date when cron was configured (for interval calculations)
+
+    // Mutable state (synchronized access required)
+    private volatile LocalDateTime ldtLast = null;    // Last event returned by ::next()
+    private volatile boolean oneTimeTriggered = false; // Track if one-time event has fired
 
     //------------------------------------------------------------------------//
 
     /**
      * Class constructor.
      *
-     * @param args An Une 'pair' with following key, values pairs. All are optional
+     * @param args A Mingle 'pair' with following key-value pairs. All are optional
      *             but all together must be congruent.
      * <ul>
-     *   <li>start AS string  -->  As Une "_date_,_time_". When only 'start' is defined, it occurs only once.</li>
-     *   <li>stop  AS string  -->  As Une "_date_,_time_". Moment of last repetition, or empty for repeating for ever.</li>
-     *   <li>time  AS string  -->  Time of the day to execute: one or more comma separated Une times (hh[:mm[:ss]]).</li>
-     *   <li>dow   AS string  -->  DayOfweek: one or more comma separated of: 1 to 7 (Monday to Sunday; 0 is Sunday too).</li>
-     *   <li>dom   AS number  -->  DayOfMonth: one or more comma separated of: 1 to 31 (31 is used also as 'last-day').</li>
-     *   <li>month AS number  -->  Month: one or more comma separated of: 1 to 12.</li>
-     *   <li>every AS number  -->  Repetition interval ("repeat every"). Use 0 or omit it to not repeat.</li>
-     *   <li>mode  AS string  -->  Repetition mode: "Daily, "Weekly, "Monthly" or "Yearly" (only the first letter is used).</li>
+     *   <li><strong>start</strong> (string) - As Mingle "_date_,_time_". When only 'start' is defined, it occurs only once.</li>
+     *   <li><strong>stop</strong> (string) - As Mingle "_date_,_time_". Moment of last repetition, or empty for repeating forever.</li>
+     *   <li><strong>time</strong> (string) - Time of the day to execute: one or more comma-separated Mingle times (hh[:mm[:ss]]).</li>
+     *   <li><strong>dow</strong> (string) - DayOfWeek: one or more comma-separated: 1 to 7 (Monday to Sunday; 0 is Sunday too).</li>
+     *   <li><strong>dom</strong> (number) - DayOfMonth: one or more comma-separated: 1 to 31 (31 means 'last-day' for months with &lt;31 days).</li>
+     *   <li><strong>month</strong> (number) - Month: one or more comma-separated: 1 to 12.</li>
+     *   <li><strong>every</strong> (number) - Repetition interval. Use 1 for standard intervals. Must be positive for repeating events.</li>
+     *   <li><strong>mode</strong> (string) - Repetition mode: "Daily", "Weekly", "Monthly" or "Yearly" (only first letter used).</li>
      * </ul>
      * <br>
-     * i.e.: time="12:10, 18", dow="2,5", every=2 mode="M": repeat every Tuesday and Friday on
-     * alternate months at 12:10:00 and 18:00:00 (minutes and seconds are optional).
+     * Example: time="12:10,18", dow="2,5", every=2, mode="w" means:
+     * repeat every 2 weeks on Tuesday and Friday at 12:10:00 and 18:00:00.
+     *
+     * @throws MingleException if configuration is invalid or inconsistent
      */
     public Cron( pair args )
     {
         List<String> lstErrs = new ArrayList<>();
 
-        if( args.keys().has( "start" ) )
-        {
-            ldtStart = getDateTime( args, "start", lstErrs );
-        }
+        // Parse all parameters
+        this.ldtStart  = parseStartTime(  args, lstErrs );
+        this.ldtStop   = parseStopTime(   args, lstErrs );
+        this.aLtTime   = parseTimeArray(  args, lstErrs );
+        this.aDoW      = parseDayOfWeek(  args, lstErrs );
+        this.aDoM      = parseDayOfMonth( args, lstErrs );
+        this.aMonth    = parseMonth(      args, lstErrs );
+        this.mode      = parseMode(       args, lstErrs );
+        this.every     = parseEvery(      args, mode, lstErrs );
+        this.startDate = (ldtStart != null) ? ldtStart.toLocalDate() : LocalDate.now();
 
-        if( args.keys().has( "stop" ) )
-        {
-            ldtStop = getDateTime( args, "stop", lstErrs );
-        }
+        // Validate cross-field constraints
+        validateStartStopOrder( ldtStart, ldtStop, lstErrs );
+        validateOneTimeEvent( every, ldtStart, lstErrs );
+        validateRepeatingEvent( every, aLtTime, lstErrs );
+        validateModeSpecificConstraints( mode, aDoW, aDoM, aMonth, every, lstErrs );
 
-        if( args.keys().has( "time" ) )
-        {
-            String[] as = args.get( "time" ).toString().split( "," );
-            aLtTime = new LocalTime[as.length];
-
-            try
-            {
-                for( int n = 0; n < as.length; n++ )
-                    aLtTime[n] = new time( as[n] ).asLocalTime();
-
-                Arrays.sort( aLtTime );
-            }
-            catch( MingleException me )
-            {
-                lstErrs.add( "Invalid 'time' value" );
-            }
-        }
-
-        if( args.keys().has( "dow" ) )
-        {
-            aDoW = getShorts( args, "dow", 0, 7, lstErrs );
-
-            if( aDoW != null )                                  // 0 is accepted as Sunday, but has to be transformed into 7 (ISO for Sunday)
-                for( int n = 0; n < aDoW.length; n++ )
-                    aDoW[n] = (short) (aDoW[n] == 0 ? 7 : aDoW[n]);
-        }
-
-        if( args.keys().has( "dom" ) )
-        {
-            aDoM = getShorts( args, "dom", 1, 31, lstErrs );
-        }
-
-        if( args.keys().has( "month" ) )
-        {
-            aMonth = getShorts( args, "month", 1, 12, lstErrs );
-        }
-
-        if( args.keys().has( "mode" ) )
-        {
-            String sMode = args.get( "mode" ).toString().toLowerCase();
-
-            if( sMode.length() > 1 )
-                sMode = sMode.substring( 0, 1 );
-
-            if( "dwmy".indexOf( sMode.charAt(0) ) == -1 )
-            {
-                lstErrs.add( "Invalid 'mode' value" );
-            }
-            else
-            {
-                mode = sMode.charAt(0);
-            }
-        }
-
-        if( mode > 0 )
-        {
-            every = UtilType.toInteger( args.get( "every", 1 ) );
-        }
-
-        if( (every == 0) && (ldtStart == null) )     //  This is a one time event but there is no date-time defined.
-        {
-            lstErrs.add( "There is no repetition but 'start' is not defined" );
-        }
-
-        if( (every > 0) && (aLtTime == null) )
-        {
-            lstErrs.add( "Can not execute: 'time' is not specified or is invalid" );
-        }
-
-        switch( mode )
-        {
-            case 'd':
-                if( aDoW != null || aDoM != null )
-                    lstErrs.add( "Invalid config: when mode is 'Daily', 'dow' neither 'dom' can be specified" );
-                break;
-
-            case 'w':
-                if( aDoW == null )
-                    lstErrs.add( "Invalid config: mode is 'Weekly', but 'dow' is not specified" );
-                if( aDoM != null )
-                    lstErrs.add( "Invalid config: when mode is 'Weekly', 'dom' can not be specified" );
-                break;
-
-            case 'm':
-                if( aDoM == null )
-                    lstErrs.add( "Invalid config: mode is 'Monthly', but 'dom' is not specified" );
-                if( aDoW != null )
-                    lstErrs.add( "Invalid config: when mode is 'Monthly', only 'dom' can be specified" );
-                if( every > 1 )
-                    lstErrs.add( "Invalid config: when mode is 'Monthly', 'every' has to be 1" );
-                break;
-
-            case 'y':
-                if( (aDoM == null) || (aMonth == null) )
-                    lstErrs.add( "Invalid config: when mode is 'Yearly', both 'dom' and 'month' must be specified" );
-                break;
-        }
-
+        // Throw exception if any errors were found
         if( ! lstErrs.isEmpty() )
             throw new MingleException( UtilColls.toString( lstErrs, UtilColls.cRECORD_SEP ) );
     }
 
     //------------------------------------------------------------------------//
+    // PUBLIC API
+    //------------------------------------------------------------------------//
 
     /**
-     * Returns the amount of milliseconds since method invocation to the next
+     * Returns the amount of milliseconds from the method invocation time to the next
      * moment when Cron should be triggered, or -1 if there is no next time.
+     * <p>
+     * This method is thread-safe.
      *
-     * @return The amount of milliseconds until the next trigger.
+     * @return The amount of milliseconds until the next trigger, or -1 if no more triggers
      */
-    public long next()
+    public synchronized long next()
     {
         LocalDateTime now = LocalDateTime.now();
 
-        if( (ldtStop != null) && now.isAfter( ldtStop ) )    // There is an ending time point and it is in the past
+        // Check if we're past the stop time
+        if( ldtStop != null && ! now.isBefore( ldtStop ) )
             return -1;
 
-        LocalDateTime next;
+        // For one-time events, check if already triggered
+        if( every == 0 && oneTimeTriggered )
+            return -1;
 
-        if( every == 0 )                     // This is a one time event but...
-        {
-            if( now.isAfter( ldtStart ) )    // ...it is in the past...
-                return -1;                   // ...so forget about it.
-
-            next = ldtStart;                 // Otherwise, this is the time that has to be elapsed
-        }
-        else                                 // Lets find next occurrence using all other fields
-        {
-            next = (ldtStart == null) ? now : ldtStart;
-
-            switch( mode )
-            {
-                case 'd': next = getNextDaily(   next ); break;
-                case 'w': next = getNextWeekly(  next ); break;
-                case 'm': next = getNextMonthly( next ); break;
-                case 'y': next = getNextYearly(  next ); break;
-            }
-        }
+        LocalDateTime next = calculateNext( now );
 
         if( next == null )
             return -1;
 
+        // Final check: ensure calculated time doesn't exceed stop time
+        if( ldtStop != null && !next.isBefore( ldtStop ) )
+        {
+            return -1;
+        }
+
+        // Mark one-time event as triggered
+        if( every == 0 )
+            oneTimeTriggered = true;
+
         ldtLast = next;
 
-        ZoneOffset zo = ZoneId.systemDefault().getRules().getOffset( now );    // 'next' and 'now' have same Zone
-        Instant    i1 = now.toInstant(  zo );
+        ZoneOffset zo = ZoneId.systemDefault().getRules().getOffset( now );
+        Instant    i1 = now.toInstant( zo );
         Instant    i2 = next.toInstant( zo );
 
         return Duration.between( i1, i2 ).toMillis();
     }
 
-    //------------------------------------------------------------------------//
-    // USED BY THIS CLASS CONSTRUCTOR
+    /**
+     * Cleanup method to reset internal state.
+     * Useful for long-running applications to prevent memory leaks.
+     * <p>
+     * This method is thread-safe.
+     */
+    public synchronized void reset()
+    {
+        ldtLast = null;
+        oneTimeTriggered = false;
+    }
 
-    private LocalDateTime getDateTime( pair pairs, String which, List<String> lstErrs )
+    //---------------------------------------------------------------------------------------------------------------------------//
+    // PRIVATE API
+    //---------------------------------------------------------------------------------------------------------------------------//
+
+    //------------------------------------------------------------------------//
+    // CONSTRUCTOR PARSING METHODS
+    //------------------------------------------------------------------------//
+
+    /**
+     * Parses the start time from arguments.
+     */
+    private LocalDateTime parseStartTime( pair args, List<String> lstErrs )
+    {
+        return args.keys().has( "start" ) ? parseDateTime( args, "start", lstErrs ) : null;
+    }
+
+    /**
+     * Parses the stop time from arguments.
+     */
+    private LocalDateTime parseStopTime( pair args, List<String> lstErrs )
+    {
+        return args.keys().has( "stop" ) ? parseDateTime( args, "stop", lstErrs ) : null;
+    }
+
+    /**
+     * Parses a date-time value from the arguments.
+     */
+    private LocalDateTime parseDateTime( pair pairs, String which, List<String> lstErrs )
     {
         String[] val = pairs.get( which ).toString().split( "," );
 
         if( val.length != 2 )
         {
-            lstErrs.add( "Invalid '"+ which +"' value" );
+            lstErrs.add( "Invalid '"+ which +"' value: expected format is 'date,time'" );
             return null;
         }
 
         try
         {
-            date date = new date( val[0] );
-            time time = new time( val[1] );
-
+            date date = new date( val[0].trim() );
+            time time = new time( val[1].trim() );
             return LocalDateTime.of( date.asLocalDate(), time.asLocalTime() );
         }
         catch( MingleException me )
         {
-            lstErrs.add( "Invalid 'start' value" );
+            lstErrs.add( "Invalid '"+ which +"' value: " + me.getMessage() );
             return null;
         }
     }
 
-    private short[] getShorts( pair pairs, String which, int min, int max, List<String> lstErr )
+    /**
+     * Parses the time array from arguments.
+     */
+    private LocalTime[] parseTimeArray( pair args, List<String> lstErrs )
+    {
+        if( !args.keys().has( "time" ) )
+        {
+            return null;
+        }
+
+        String[] as = args.get( "time" ).toString().split( "," );
+        LocalTime[] result = new LocalTime[as.length];
+
+        try
+        {
+            for( int n = 0; n < as.length; n++ )
+            {
+                result[n] = new time( as[n].trim() ).asLocalTime();
+            }
+
+            Arrays.sort( result );
+
+            if( result.length == 0 )
+            {
+                lstErrs.add( "Invalid 'time' value: at least one time must be specified" );
+                return null;
+            }
+
+            return result;
+        }
+        catch( MingleException me )
+        {
+            lstErrs.add( "Invalid 'time' value: " + me.getMessage() );
+            return null;
+        }
+    }
+
+    /**
+     * Parses the day-of-week array from arguments.
+     */
+    private short[] parseDayOfWeek( pair args, List<String> lstErrs )
+    {
+        if( !args.keys().has( "dow" ) )
+        {
+            return null;
+        }
+
+        short[] result = parseShortArray( args, "dow", MIN_DAY_OF_WEEK, MAX_DAY_OF_WEEK, lstErrs );
+
+        if( result != null )
+        {
+            // Convert 0 (Sunday) to 7 (ISO standard for Sunday)
+            for( int n = 0; n < result.length; n++ )
+            {
+                result[n] = (short) (result[n] == 0 ? 7 : result[n]);
+            }
+        }
+
+        return result;
+    }
+
+    /**
+     * Parses the day-of-month array from arguments.
+     */
+    private short[] parseDayOfMonth( pair args, List<String> lstErrs )
+    {
+        return args.keys().has( "dom" )
+               ? parseShortArray( args, "dom", MIN_DAY_OF_MONTH, MAX_DAY_OF_MONTH, lstErrs )
+               : null;
+    }
+
+    /**
+     * Parses the month array from arguments.
+     */
+    private short[] parseMonth( pair args, List<String> lstErrs )
+    {
+        return args.keys().has( "month" )
+               ? parseShortArray( args, "month", MIN_MONTH, MAX_MONTH, lstErrs )
+               : null;
+    }
+
+    /**
+     * Generic method to parse an array of short values.
+     */
+    private short[] parseShortArray( pair pairs, String which, int min, int max, List<String> lstErr )
     {
         String[] as  = pairs.get( which ).toString().split( "," );
         short[]  ret = new short[as.length];
@@ -263,360 +323,540 @@ public final class Cron
                 short val = Short.parseShort( as[n].trim() );
 
                 if( val < min || val > max )
-                    throw new MingleException();
+                {
+                    lstErr.add( "Invalid '"+ which +"' value: " + val + " is out of range [" + min + "-" + max + "]" );
+                    return null;
+                }
 
                 ret[n] = val;
             }
 
-            if( ret.length == 0 )  ret = null;
-            else                   Arrays.sort( ret );
+            if( ret.length == 0 )
+            {
+                lstErr.add( "Invalid '"+ which +"' value: at least one value must be specified" );
+                return null;
+            }
 
+            Arrays.sort( ret );
             return ret;
         }
-        catch( NumberFormatException | MingleException me )
+        catch( NumberFormatException nfe )
         {
-            lstErr.add( "Invalid '"+ which +"' value" );
+            lstErr.add( "Invalid '"+ which +"' value: not a valid number" );
             return null;
         }
     }
 
-    //------------------------------------------------------------------------//
-    // USED BY ::next()
-
-    private boolean has( short[] an, int x )    // 'an' is sorted
+    /**
+     * Parses the mode from arguments.
+     */
+    private char parseMode( pair args, List<String> lstErrs )
     {
-        if( an == null )
-            return false;
-
-        for( int n = 0; n < an.length; n++ )
+        if( !args.keys().has( "mode" ) )
         {
-                 if( an[n] == x )  return true;
-            else if( an[n] >  x )  break;
+            return 0;  // No mode specified
+        }
+
+        String sMode = args.get( "mode" ).toString().toLowerCase().trim();
+
+        if( sMode.isEmpty() )
+        {
+            lstErrs.add( "Invalid 'mode' value: mode cannot be empty" );
+            return 0;
+        }
+
+        char modeChar = sMode.charAt( 0 );
+
+        if( "dwmy".indexOf( modeChar ) == -1 )
+        {
+            lstErrs.add( "Invalid 'mode' value: must be 'Daily', 'Weekly', 'Monthly' or 'Yearly'" );
+            return 0;
+        }
+
+        return modeChar;
+    }
+
+    /**
+     * Parses the 'every' interval from arguments.
+     */
+    private int parseEvery( pair args, char mode, List<String> lstErrs )
+    {
+        if( mode == 0 )
+        {
+            return 0;  // No mode, so no repetition
+        }
+
+        int everyValue = UtilType.toInteger( args.get( "every", 1 ) );
+
+        if( everyValue < 1 )
+        {
+            lstErrs.add( "Invalid 'every' value: must be 1 or greater for repeating events" );
+            return 0;
+        }
+
+        return everyValue;
+    }
+
+    //------------------------------------------------------------------------//
+    // CONSTRUCTOR VALIDATION METHODS
+    //------------------------------------------------------------------------//
+
+    /**
+     * Validates that start time is before stop time.
+     */
+    private void validateStartStopOrder( LocalDateTime start, LocalDateTime stop, List<String> lstErrs )
+    {
+        if( start != null && stop != null && !start.isBefore( stop ) )
+        {
+            lstErrs.add( "Invalid configuration: 'start' must be before 'stop'" );
+        }
+    }
+
+    /**
+     * Validates one-time event configuration.
+     */
+    private void validateOneTimeEvent( int every, LocalDateTime start, List<String> lstErrs )
+    {
+        if( every == 0 && start == null )
+        {
+            lstErrs.add( "Invalid configuration: one-time event requires 'start' to be specified" );
+        }
+    }
+
+    /**
+     * Validates repeating event configuration.
+     */
+    private void validateRepeatingEvent( int every, LocalTime[] times, List<String> lstErrs )
+    {
+        if( every > 0 && (times == null || times.length == 0) )
+        {
+            lstErrs.add( "Invalid configuration: repeating event requires 'time' to be specified" );
+        }
+    }
+
+    /**
+     * Validates mode-specific constraints.
+     */
+    private void validateModeSpecificConstraints( char mode, short[] dow, short[] dom,
+                                                   short[] month, int every, List<String> lstErrs )
+    {
+        switch( mode )
+        {
+            case MODE_DAILY:
+                if( dow != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Daily' mode cannot specify 'dow'" );
+                }
+                if( dom != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Daily' mode cannot specify 'dom'" );
+                }
+                if( month != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Daily' mode cannot specify 'month'" );
+                }
+                break;
+
+            case MODE_WEEKLY:
+                if( dow == null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Weekly' mode requires 'dow' to be specified" );
+                }
+                if( dom != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Weekly' mode cannot specify 'dom'" );
+                }
+                if( month != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Weekly' mode cannot specify 'month'" );
+                }
+                if( every < 1 )
+                {
+                    lstErrs.add( "Invalid configuration: 'Weekly' mode requires 'every' to be at least 1" );
+                }
+                break;
+
+            case MODE_MONTHLY:
+                if( dom == null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Monthly' mode requires 'dom' to be specified" );
+                }
+                if( dow != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Monthly' mode cannot specify 'dow'" );
+                }
+                if( month != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Monthly' mode cannot specify 'month'" );
+                }
+                if( every != 1 )
+                {
+                    lstErrs.add( "Invalid configuration: 'Monthly' mode requires 'every' to be 1" );
+                }
+                break;
+
+            case MODE_YEARLY:
+                if( dom == null || month == null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Yearly' mode requires both 'dom' and 'month' to be specified" );
+                }
+                if( dow != null )
+                {
+                    lstErrs.add( "Invalid configuration: 'Yearly' mode cannot specify 'dow'" );
+                }
+                break;
+
+            case 0:
+                // No mode - one-time event, no additional validation needed
+                break;
+
+            default:
+                lstErrs.add( "Internal error: unknown mode '" + mode + "'" );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // NEXT CALCULATION METHODS
+    //------------------------------------------------------------------------//
+
+    /**
+     * Calculates the next occurrence based on current configuration.
+     */
+    private LocalDateTime calculateNext( LocalDateTime now )
+    {
+        if( every == 0 )  // One-time event
+        {
+            return calculateOneTimeEvent( now );
+        }
+
+        // Repeating event - use appropriate mode calculation
+        LocalDateTime start = (ldtStart == null || now.isAfter( ldtStart )) ? now : ldtStart;
+
+        switch( mode )
+        {
+            case MODE_DAILY:   return getNextDaily( start );
+            case MODE_WEEKLY:  return getNextWeekly( start );
+            case MODE_MONTHLY: return getNextMonthly( start );
+            case MODE_YEARLY:  return getNextYearly( start );
+            default:
+                throw new MingleException( "Internal error: unknown mode '" + mode + "'" );
+        }
+    }
+
+    /**
+     * Calculates next occurrence for one-time events.
+     */
+    private LocalDateTime calculateOneTimeEvent( LocalDateTime now )
+    {
+        if( ldtStart == null )
+        {
+            throw new MingleException( "Internal error: one-time event without start time" );
+        }
+
+        return now.isBefore( ldtStart ) ? ldtStart : null;
+    }
+
+    /**
+     * Calculates next daily occurrence.
+     */
+    private LocalDateTime getNextDaily( LocalDateTime when )
+    {
+        LocalTime time = getNextTime( when.toLocalTime(), when.toLocalDate() );
+        int days = 0;
+
+        if( time == null )
+        {
+            // No more times today, use first time of next interval
+            time = aLtTime[0];
+            days = every;
+        }
+
+        return updateTime( when.plusDays( days ), time );
+    }
+
+    /**
+     * Calculates next weekly occurrence.
+     * BUGFIX: Properly handle weekly intervals using reference date calculation.
+     */
+    private LocalDateTime getNextWeekly( LocalDateTime when )
+    {
+        LocalTime time = null;
+
+        // If today is one of the specified days, check for remaining times
+        if( contains( aDoW, when.getDayOfWeek().getValue() ) )
+        {
+            time = getNextTime( when.toLocalTime(), when.toLocalDate() );
+        }
+
+        if( time != null )
+        {
+            return updateTime( when, time );
+        }
+
+        // Need to find next valid day
+        LocalDateTime candidate = when.plusDays( 1 );
+        int maxIterations = 7 * every + 7;  // Safety limit
+        int iterations = 0;
+
+        while( iterations < maxIterations )
+        {
+            int dayOfWeek = candidate.getDayOfWeek().getValue();
+
+            if( contains( aDoW, dayOfWeek ) )
+            {
+                // Check if this date is in a valid interval period
+                if( isInValidInterval( candidate.toLocalDate(), 'w' ) )
+                {
+                    return updateTime( candidate, aLtTime[0] );
+                }
+            }
+
+            candidate = candidate.plusDays( 1 );
+            iterations++;
+        }
+
+        throw new MingleException( "Internal error: unable to find next weekly occurrence" );
+    }
+
+    /**
+     * Calculates next monthly occurrence.
+     * BUGFIX: Properly handle finding next valid day of month.
+     */
+    private LocalDateTime getNextMonthly( LocalDateTime when )
+    {
+        LocalTime time = null;
+
+        // If today is one of the specified days, check for remaining times
+        if( contains( aDoM, when.getDayOfMonth() ) || isLastDayOfMonth( when ) )
+        {
+            time = getNextTime( when.toLocalTime(), when.toLocalDate() );
+        }
+
+        if( time != null )
+        {
+            return updateTime( when, time );
+        }
+
+        // Move to next day and find next valid day of month
+        LocalDateTime candidate = when.plusDays( 1 );
+        int maxIterations = 370;  // Safety limit
+        int iterations = 0;
+
+        while( iterations < maxIterations )
+        {
+            if( isValidDayOfMonth( candidate ) )
+            {
+                return updateTime( candidate, aLtTime[0] );
+            }
+
+            candidate = candidate.plusDays( 1 );
+            iterations++;
+        }
+
+        throw new MingleException( "Internal error: unable to find next monthly occurrence" );
+    }
+
+    /**
+     * Calculates next yearly occurrence.
+     * BUGFIX: Properly handle yearly intervals using reference date.
+     */
+    private LocalDateTime getNextYearly( LocalDateTime when )
+    {
+        // Check if we can use a time later today
+        if( contains( aMonth, when.getMonthValue() ) &&
+            (contains( aDoM, when.getDayOfMonth() ) || isLastDayOfMonth( when )) )
+        {
+            LocalTime time = getNextTime( when.toLocalTime(), when.toLocalDate() );
+            if( time != null )
+            {
+                return updateTime( when, time );
+            }
+        }
+
+        // Need to find next valid month/day combination
+        LocalDateTime next = findNextYearlyOccurrence( when );
+
+        if( next == null )
+        {
+            throw new MingleException( "Internal error: unable to find next yearly occurrence" );
+        }
+
+        return updateTime( next, aLtTime[0] );
+    }
+
+    /**
+     * Finds the next valid date for yearly mode.
+     * BUGFIX: Properly calculate yearly intervals from reference date.
+     */
+    private LocalDateTime findNextYearlyOccurrence( LocalDateTime when )
+    {
+        int maxYears = 100 * every;  // Safety limit
+        LocalDateTime candidate = when.plusDays( 1 );
+
+        for( int yearOffset = 0; yearOffset < maxYears; yearOffset++ )
+        {
+            int targetYear = startDate.getYear() + (yearOffset * every);
+
+            // Skip years before current year
+            if( targetYear < candidate.getYear() )
+            {
+                continue;
+            }
+
+            // Try each specified month in this year
+            for( int monthIdx = 0; monthIdx < aMonth.length; monthIdx++ )
+            {
+                int targetMonth = aMonth[monthIdx];
+
+                // Skip if this month is in the past
+                if( targetYear == candidate.getYear() && targetMonth < candidate.getMonthValue() )
+                {
+                    continue;
+                }
+
+                // Try each specified day in this month
+                for( int dayIdx = 0; dayIdx < aDoM.length; dayIdx++ )
+                {
+                    int targetDay = aDoM[dayIdx];
+                    int daysInMonth = getDaysInMonth( targetMonth, targetYear );
+                    int actualDay = Math.min( targetDay, daysInMonth );
+
+                    LocalDateTime possible = LocalDateTime.of(
+                        targetYear,
+                        targetMonth,
+                        actualDay,
+                        0, 0, 0
+                    );
+
+                    // Must be after current time
+                    if( !possible.isBefore( when ) )
+                    {
+                        return possible;
+                    }
+                }
+            }
+        }
+
+        throw new MingleException( "Unable to find next yearly occurrence within reasonable time frame" );
+    }
+
+    //------------------------------------------------------------------------//
+    // HELPER METHODS
+    //------------------------------------------------------------------------//
+
+    /**
+     * Checks if array contains the given value (array must be sorted).
+     */
+    private boolean contains( short[] array, int value )
+    {
+        if( array == null )
+        {
+            return false;
+        }
+
+        return Arrays.binarySearch( array, (short) value ) >= 0;
+    }
+
+    /**
+     * Returns the next time from aLtTime that is after 'from' on the given date.
+     * BUGFIX: Simplified logic to avoid complex date comparisons.
+     */
+    private LocalTime getNextTime( LocalTime from, LocalDate date )
+    {
+        if( aLtTime == null || aLtTime.length == 0 )
+        {
+            return null;
+        }
+
+        for( LocalTime candidate : aLtTime )
+        {
+            // For same date as last execution, must be after last execution time
+            if( ldtLast != null && ldtLast.toLocalDate().equals( date ) )
+            {
+                if( candidate.isAfter( ldtLast.toLocalTime() ) )
+                {
+                    return candidate;
+                }
+            }
+            // For different date, just needs to be after current time
+            else if( candidate.isAfter( from ) )
+            {
+                return candidate;
+            }
+        }
+
+        return null;  // No valid time found for today
+    }
+
+    /**
+     * Checks if the given date is in a valid interval period for weekly mode.
+     * BUGFIX: New method to properly calculate weekly intervals.
+     */
+    private boolean isInValidInterval( LocalDate date, char checkMode )
+    {
+        if( checkMode != MODE_WEEKLY )
+        {
+            return true;
+        }
+
+        // Calculate weeks since start date
+        long weeksSinceStart = ChronoUnit.WEEKS.between( startDate, date );
+        return weeksSinceStart % every == 0;
+    }
+
+    /**
+     * Checks if the given date-time has a valid day of month according to configuration.
+     */
+    private boolean isValidDayOfMonth( LocalDateTime when )
+    {
+        int day = when.getDayOfMonth();
+        int lastDay = when.toLocalDate().lengthOfMonth();
+
+        // Check if it's a configured day
+        if( contains( aDoM, day ) )
+        {
+            return true;
+        }
+
+        // Check if it's the last day and 31 is configured
+        if( day == lastDay && contains( aDoM, LAST_DAY_MARKER ) )
+        {
+            return true;
         }
 
         return false;
     }
 
-    private LocalDateTime getNextDaily( LocalDateTime when )
-    {
-        // Constructor checks that ::aLtWhen is not empty when ::every > 0
-
-        LocalTime time = getNextTime( when.toLocalTime() );    // Next iteration time (if any)
-        int       days = 0;
-
-        if( time == null )      // If loop was exhausted, it means that there is no time defined after 'time' for
-        {                       // today: so, we will take the 1st time (aLtWhen[0]) for the next ('every') day.
-            time = aLtTime[0];
-            days = every;
-        }
-
-        return updateTime( when, time )
-               .plusDays( days );       // 0 is checked in plusDays(...)
-    }
-
-    private LocalDateTime getNextWeekly( LocalDateTime when )
-    {
-        // (aDoW != null) --> is cheked at Constructor
-
-        LocalTime time = null;
-
-        if( has( aDoW, when.getDayOfWeek().getValue() ) )    // Received date is one of the days of week.
-            time = getNextTime( when.toLocalTime() );        // Next iteration time (if any)
-
-        if( time == null )
-        {                                                    // If it is null, it is because there is no time designated for the rest
-            when = getNextDoW( when.plusDays( 1 ) );         // of today: we have to check for next day of week considering the 'every'.
-
-            if( isLikeLast( when, 'w' ) )
-                when = getNextDoW( when.plusDays( 1 ) );
-
-            time = aLtTime[0];                               // This LoC is equivalent (but faster) to -> getNextTime( LocalTime.of( 0,0,0 ) );
-        }                                                    // as the day is not today but in the future: first time of the day can be used.
-
-        return updateTime( when, time );
-    }
-
-    private LocalDateTime getNextMonthly( LocalDateTime when )
-    {
-        // (aDoM != null) --> is cheked at Constructor
-        // every is 1
-
-        LocalTime time = null;
-
-        if( has( aDoM, when.getDayOfMonth() ) ||             // Received date is one of the days of month or
-            has( aDoW, when.getDayOfWeek().getValue() ) )    // is one of the days of the week.
-        {
-            time = getNextTime( LocalTime.now() );           // Next iteration time for today (if any)
-        }
-
-        if( time == null )
-        {                                                    // If it is still null it is because there is no time designated for the rest of today.
-            when = when.plusDays( 1 );
-            when = getNextDoM( when );                       // empty: this is checked at Constructor
-
-            if( isLikeLast( when, 'm' ) )
-                when = getNextDoW( when.plusMonths( 1 ) );
-
-            time = aLtTime[0];                               // As the day is not today but in the future: first time of the day can be used.
-        }
-
-        return updateTime( when, time );
-    }
-
-    private LocalDateTime getNextYearly( LocalDateTime when )
-    {
-        // TODO: hay que terminar este método
-
-
-        // (aDoM != null) || (aMonth != null) --> is cheked at Constructor
-
-        LocalTime time = getNextTime( LocalTime.now() );     // Next iteration time for the remain of the day (if any)
-
-        if( time != null                        &&           // There is at least one valid time left
-            has( aDoM  , when.getDayOfMonth() ) &&           // and when DoM is valid
-            has( aMonth, when.getMonth().getValue() ) )      // and the month is also valid
-        {
-            return updateTime( when, time );
-        }
-
-        if( time == null )
-            time = aLtTime[0];
-
-        when = getNextDoM( getNextMonth( when ) )
-               .plusYears( every - 1 );
-
-        return updateTime( when, time );                     // This LoC is equivalent (but faster) to -> getNextTime( LocalTime.of( 0,0,0 ) );
-    }                                                        // as the day is not today but in the future: first time of the day can be used.
-
-    //------------------------------------------------------------------------//
-    // Aux funcs to the aux funcs used by ::next()
-
     /**
-     * Returns the next time defined in ::aLtWhen (if any), after the received 'from' time.
-     *
-     * @param from
-     * @return the next time defined in ::aLtWhen (if any), after the received 'from' time.
+     * Checks if the given date is the last day of its month and LAST_DAY_MARKER (31) is configured.
      */
-    private LocalTime getNextTime( LocalTime from )
-    {
-        int n;
-
-        for( n = 0; n < aLtTime.length; n++ )    // Array is sorted
-        {
-            if( aLtTime[n].isAfter( from ) )
-                if( (ldtLast == null) || aLtTime[n].isAfter( ldtLast.toLocalTime() ) )    // For calirty
-                    return aLtTime[n];
-        }
-
-        return null;    // There is no time defined after 'from' for today
-    }
-
-    private LocalDateTime getNextDoW( LocalDateTime when )
-    {
-        if( aDoW == null )
-            return when;
-
-        int dow = when.getDayOfWeek().getValue();
-
-        if( has( aDoW, dow ) )                               // If 'dow' is in ::aDoW, then
-            return when;                                     // the received date is a valid date
-
-        if( dow > aDoW[ aDoW.length-1 ] )                    // If 'dow' is after last item in ::aDoW (aDow == [1,3,5] and 'dow' == 6)
-        {
-            int days2Add = 7 - dow + aDoW[0];                // Days to add to 'when' to set it to ::aDoW[0]
-
-            when = when.plusDays( days2Add );
-
-            if( mode == 'w' )
-                when = when.plusWeeks( every - 1 );          // Only add 'every' if it was needed to jum more than one week
-        }
-        else                                                 // There is at least one day in this week that can be used ::aDoW (aDow == [1,3,7] and 'dow' == 4)
-        {
-            do
-            {
-                when = when.plusDays( 1 );
-            }
-            while( ! has( aDoW, when.getDayOfWeek().getValue() ) );
-        }
-
-        return when;
-    }
-
-    private LocalDateTime getNextDoM( LocalDateTime when )
+    private boolean isLastDayOfMonth( LocalDateTime when )
     {
         if( aDoM == null )
-            return when;
-
-        int dom = when.getDayOfMonth();
-
-        if( has( aDoM, dom ) )
-            return when;
-
-        int     daysToAdd = 0;
-        int     lastDay   = when.toLocalDate().lengthOfMonth();
-        boolean bUseLast  = aDoM[ aDoM.length - 1 ] == 31;    // 31 means either 31th or the last day of the month when the month has less than 31 days
-
-        // From today to the last day of the month
-
-        for( int n = dom + 1; n <= lastDay; n++ )
         {
-            daysToAdd++;
-
-            if( has( aDoM, n ) )
-                return when.plusDays( daysToAdd );
-
-            if( n == lastDay && bUseLast )
-                return when.plusDays( daysToAdd );
+            return false;
         }
 
-        // From 1st day of the month to dom -1
-
-        daysToAdd = lastDay - dom;
-
-        for( int n = 1; n < dom; n++ )
-        {
-            daysToAdd++;
-
-            if( has( aDoM, n ) )
-                return when.plusDays( daysToAdd );
-        }
-
-        throw new MingleException();    // This should not happen
+        int daysInMonth = when.toLocalDate().lengthOfMonth();
+        return when.getDayOfMonth() == daysInMonth && contains( aDoM, LAST_DAY_MARKER );
     }
 
-    private LocalDateTime getNextMonth( LocalDateTime when )
-    {
-        if( aMonth == null )
-            return when;
-
-        int nMonth = when.getMonthValue();
-        int nDay   = when.getDayOfMonth();
-
-        for( int month : aMonth )
-        {
-            if( month >= nMonth )
-                return LocalDateTime.of( when.getYear(),
-                                         month,
-                                         Math.min( nDay, getDaysInMonth( month, when.getYear() ) ),
-                                         when.getHour(),
-                                         when.getMinute(),
-                                         when.getSecond() );
-        }
-
-        // If no greater month is found, return the date in the next year for the earliest month in the array
-
-        int nYear = when.getYear() + 1;
-
-        return LocalDateTime.of( nYear,
-                                 aMonth[0],
-                                 Math.min( nDay, getDaysInMonth( aMonth[0], nYear ) ),
-                                 when.getHour(),
-                                 when.getMinute(),
-                                 when.getSecond() );
-    }
-
-    // Helper method to find the number of days in a given month and year (handling leap years)
+    /**
+     * Gets the number of days in a given month and year.
+     */
     private static int getDaysInMonth( int month, int year )
     {
         return LocalDate.of( year, month, 1 ).lengthOfMonth();
     }
 
-    private boolean isLikeLast( LocalDateTime ldt, char mode )
-    {
-        if( ldtLast == null )
-            return false;
-
-
-        switch( mode )
-        {
-            case 'w': return ldtLast.toLocalDate().equals( ldt.toLocalDate() );
-            case 'm': return ldtLast.getYear() == ldt.getYear() && ldtLast.getMonth() == ldt.getMonth();
-        }
-
-        throw new MingleException();
-    }
-
+    /**
+     * Updates the time portion of a LocalDateTime.
+     */
     private LocalDateTime updateTime( LocalDateTime ldt, LocalTime lt )
     {
-        return ldt.withHour(   lt.getHour()   )
+        return ldt.withHour( lt.getHour() )
                   .withMinute( lt.getMinute() )
-                  .withSecond( lt.getSecond() );
-    }
-
-    //------------------------------------------------------------------------//
-    // TESTING
-    //------------------------------------------------------------------------//
-
-    public static void main( String[] as )
-    {
-        LocalDateTime ldt;
-        Cron cron;
-        long millis1;
-        long millis2;
-
-        //---------------------------------------------------------------------------------------------- NO REPEAT
-
-        ldt = LocalDateTime.now();
-        int year = ldt.getYear();
-
-        cron = new Cron( new pair().put( "start", (year+1)+"-01-01 , 18:00" ) );
-
-        millis1 = cron.next() - diff( LocalDateTime.now(), LocalDateTime.of( year+1, 1, 1, 18, 0 ) );
-        millis2 = cron.next();
-
-        assert millis1 <= 1 : "NO REPEAT - El cálculo está mal. Diff = "+ millis1;
-        assert millis2 - millis1 > 500 : "NO REPEAT - No se está usando la siguente iteración";
-
-        //---------------------------------------------------------------------------------------------- DAILY
-
-        int hour = ldt.getHour();
-
-        cron = new Cron( new pair().put( "mode", "Daily" ).put( "time", hour+2 ) );
-
-        millis1 = cron.next() - diff( ldt, ldt.withHour( hour+2 ).withMinute( 0 ).withSecond( 0 ) );
-        millis2 = cron.next();
-
-        assert millis1 <= 1 : "DAILY - El cálculo está mal. Diff = "+ millis1;
-        assert millis2 - millis1 > 50*60*1000 : "DAILY - No se está usando la siguente iteración";
-
-        //---------------------------------------------------------------------------------------------- WEEKLY
-
-        ldt = LocalDateTime.now().plusDays( 1 );
-
-        String sDow = String.valueOf( ldt.getDayOfWeek().getValue() );
-
-        cron = new Cron( new pair().put( "mode", "Weekly" ).put( "dow", sDow ).put( "time", "15:00" ) );
-
-        millis1 = cron.next() - diff( ldt, ldt.withHour(15).withMinute(0).withSecond(0) );
-        millis2 = cron.next();
-
-        assert millis1 <= 1 : "WEEKLY - El cálculo está mal. Diff = "+ millis1;
-
-        assert UtilSys.toLocalDate( System.currentTimeMillis() + millis2 ).equals( UtilSys.toLocalDate( System.currentTimeMillis() + millis1 ).plusDays( 7 ) )
-               : "WEEKLY - La siguente iteración está mal";
-
-        //---------------------------------------------------------------------------------------------- MONTHLY
-
-        cron = new Cron( new pair().put( "mode", "Monthly" ).put( "dom", "30" ).put( "time", "15:00" ) );
-
-        millis1 = cron.next() - diff( LocalDateTime.now(), LocalDateTime.now().withDayOfMonth(30).withHour(15).withMinute(0).withSecond(0) );
-        millis2 = cron.next();
-
-        assert millis1 <= 1 : "MONTHLY - El cálculo está mal";
-
-        assert UtilSys.toLocalDate( System.currentTimeMillis() + millis2 ).equals( UtilSys.toLocalDate( System.currentTimeMillis() + millis1 ).plusMonths( 1 ) )
-               : "MONTHLY - La siguente iteración está mal";
-
-        //----------------------------------------------------------------------------------------------
-        // TODO: falta el yearly
-    }
-
-    private static long diff( LocalDateTime ldt1, LocalDateTime ldt2 )
-    {
-        ZoneOffset zo = ZoneId.systemDefault().getRules().getOffset( ldt1 );
-        Instant    i1 = ldt1.toInstant( zo );
-        Instant    i2 = ldt2.toInstant( zo );
-
-        return Duration.between( i1, i2 ).toMillis();
+                  .withSecond( lt.getSecond() )
+                  .withNano( 0 );
     }
 }

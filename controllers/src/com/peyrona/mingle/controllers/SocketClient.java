@@ -20,10 +20,11 @@ import java.util.Map;
 public final class SocketClient
        extends ControllerBase
 {
+    private static final String KEY_HOST   = "host";
+    private static final String KEY_PORT   = "port";
+    private static final String KEY_USE_WS = "websocket";
+
     private INetClient client = null;
-    private boolean    bWS;
-    private String     sHost;
-    private int        nPort;
 
     //------------------------------------------------------------------------//
 
@@ -35,9 +36,8 @@ public final class SocketClient
 
         boolean bOK   = true;
         String  sURL  = (String) deviceInit.get( "url" );    // This is REQUIRED
-
-        sHost = UtilComm.getHost( sURL );
-        nPort = UtilComm.getPort( sURL, UtilComm.MINGLE_DEFAULT_SOCKET_PORT );
+        String  sHost = UtilComm.getHost( sURL );
+        int     nPort = UtilComm.getPort( sURL, UtilComm.MINGLE_DEFAULT_SOCKET_PORT );
 
         if( UtilStr.isEmpty( sHost ) )
         {
@@ -45,21 +45,25 @@ public final class SocketClient
             bOK = false;
         }
 
-        if( nPort < 1 || nPort > 65535 )
+        if( nPort < UtilComm.TCP_PORT_MIN_ALLOWED || nPort > UtilComm.TCP_PORT_MAX_ALLOWED )
         {
             sendIsInvalid( "Invalid port = "+ nPort );
             bOK = false;
         }
 
-        if( nPort <= 1024 )
-            sendGenericError( ILogger.Level.WARNING, "It is not recommeded to use a port <= 1024. Using: "+ nPort );
+        if( nPort < UtilComm.PORT_USER_MIN_ALLOWED )
+            sendGenericError( ILogger.Level.WARNING, "It is not recommeded to use a port <= "+ UtilComm.PORT_USER_MIN_ALLOWED +". Using: "+ nPort );
 
         if( ! bOK )
             return;
 
         setValid( true );
 
-        bWS = deviceInit.getOrDefault( "websocket", "false" ).equals( "true" );
+        Boolean bWS = deviceInit.getOrDefault( "websocket", "false" ).equals( "true" );
+
+        set( KEY_HOST  , sHost );
+        set( KEY_PORT  , nPort );
+        set( KEY_USE_WS, bWS   );
     }
 
     @Override
@@ -70,9 +74,9 @@ public final class SocketClient
 
         super.start( rt );
 
-        if( bWS )
+        if( (Boolean) get( KEY_USE_WS ) )
         {
-            // TODO: implementar los WebSockets con la lib Undertow
+            // FIXME: implementar los WebSockets con la lib Undertow
 
 //            NettyWebSocketClient wsc = new NettyWebSocketClient();
 //                                 wsc.add( new MyListener() );
@@ -83,9 +87,9 @@ public final class SocketClient
         }
         else
         {
-            com.peyrona.mingle.network.plain.SocketClient psc = new com.peyrona.mingle.network.plain.SocketClient();
-                              psc.add( new MyListener() );
-                              psc.connect( "{\"host\":"+ sHost +", \"port\":"+ nPort +'}' );
+            com.peyrona.mingle.network.socket.SocketClient psc = new com.peyrona.mingle.network.socket.SocketClient();
+                                                           psc.add( new MyListener() );
+                                                           psc.connect( "{\"host\":"+ (String) get( KEY_HOST ) +", \"port\":"+ (int) get( KEY_PORT ) +'}' );
             client = psc;
         }
     }

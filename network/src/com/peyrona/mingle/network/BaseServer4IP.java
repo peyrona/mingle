@@ -20,6 +20,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public abstract class   BaseServer4IP
                 extends BaseServer
 {
+    public static String KEY_HOST      = "host";
+    public static String KEY_PORT      = "port";
+    public static String KEY_CERT_FILE = "certFile";
+    public static String KEY_KEY_FILE  = "keyFile";
+    public static String KEY_PASSWORD  = "password";
+
+    //------------------------------------------------------------------------//
+
     private       String        sHost;
     private       int           nPort;
     private       int           nTimeout;
@@ -27,6 +35,7 @@ public abstract class   BaseServer4IP
     private       short         nAllow;
     private       File          fCert;    // File containing SSL certificate
     private       File          fKey;     // File containing SSL key
+    private       char[]        acPass;   // SSL Certificate password
     private final AtomicBoolean isRunning = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
@@ -60,6 +69,11 @@ public abstract class   BaseServer4IP
     public File getSSLKey()
     {
         return fKey;
+    }
+
+    public char[] getSSLPassword()
+    {
+        return acPass;
     }
 
     @Override
@@ -111,8 +125,8 @@ public abstract class   BaseServer4IP
 
         final UtilJson uj = new UtilJson( (UtilStr.isEmpty( sCfgAsJSON ) ? "{}" : sCfgAsJSON) );
 
-        sHost  = UtilComm.getHost( uj.getString( "host", null ) );
-        nPort  = uj.getInt( "port", -1 );
+        sHost  = UtilComm.getHost( uj.getString( KEY_HOST, null ) );
+        nPort  = uj.getInt( KEY_PORT, -1 );
         nAllow = UtilComm.clientScope( uj.getString( "allow", "intranet" ), null );
 
         if( sHost == null )
@@ -148,7 +162,7 @@ public abstract class   BaseServer4IP
 
         if( nPort < 0 )      // Then has to be like this: {"host":"localhost", "port": 65534, ... }
         {
-            nPort = UtilComm.getPort( uj.getString( "host", null ), -1 );
+            nPort = UtilComm.getPort( sHost, -1 );
 
             if( nPort < 0 )
                 nPort = nDefPort;
@@ -158,11 +172,13 @@ public abstract class   BaseServer4IP
             throw new IllegalArgumentException( "Invalid port: "+ nPort );
 
         // SSL related --------------------------------------------
-        String sCertFile = uj.getString( "certFile", null );
-        String sKeyFile  = uj.getString( "keyFile" , null );
+        String sCertFile  = uj.getAsString( KEY_CERT_FILE, null );
+        String sKeyFile   = uj.getAsString( KEY_KEY_FILE , null );
+        String sPassword  = uj.getAsString( KEY_PASSWORD , null );
 
-        fCert = (sCertFile == null) ? null : new File( sCertFile );
-        fKey  = (sKeyFile  == null) ? null : new File( sKeyFile  );
+        fCert  = (sCertFile == null) ? null : new File( sCertFile );
+        fKey   = (sKeyFile  == null) ? null : new File( sKeyFile  );
+        acPass = (sPassword == null) ? null : sPassword.toCharArray();
 
         // Only validate SSL files if they are provided
         if( fCert != null || fKey != null )

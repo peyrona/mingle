@@ -70,10 +70,11 @@ public final class   RPiGpioPin
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
         setListener( listener );    // Must be at begining: in case an error happens, Listener is needed
-        setName( deviceName );      // Must be second line to have the name of the device in case of error
+        setName( deviceName );      // Must be second line to have name of device in case of error
         setValid( true );           // So far this is valid, but start() can change it
 
         mapCfg = mapConfig;
+        set( mapConfig );
     }
 
     @Override

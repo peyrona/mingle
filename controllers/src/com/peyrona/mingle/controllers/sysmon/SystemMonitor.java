@@ -18,11 +18,12 @@ import java.util.concurrent.ScheduledFuture;
 public final class SystemMonitor
              extends ControllerBase
 {
+    private static final String KEY_INTERVAL = "interval";
+    private static final String KEY_METRIC   = "metric";
+    private static final String KEY_MEASURE  = "measure";
+
     private static final File file = new File( "." );
 
-    private String          sMetric;
-    private String          sMeasure;
-    private int             interval;
     private ScheduledFuture timer;
 
     //------------------------------------------------------------------------//
@@ -33,26 +34,26 @@ public final class SystemMonitor
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        sMetric = ((String) mapConfig.getOrDefault( "metric", "cpu" )).toLowerCase();
+        set( KEY_METRIC, ((String) mapConfig.getOrDefault( KEY_METRIC, "cpu" )).toLowerCase() );
 
-        if( ! "speed,pending,cpu,jvmram,disk".contains( sMetric ) )
+        if( ! "speed,pending,cpu,jvmram,disk".contains( (String) get( KEY_METRIC ) ) )
         {
-            sendIsInvalid( sMetric +" is invalid. Valids: speed, pending, cpu, jvmram, disk" );
-            sMetric = null;
+            sendIsInvalid( get( KEY_METRIC ) +" is invalid. Valids: speed, pending, cpu, jvmram, disk" );
+            set( KEY_METRIC, null );
         }
 
-        sMeasure = ((String) mapConfig.getOrDefault( "measure", "used%" )).toLowerCase();
+        set( KEY_MEASURE, ((String) mapConfig.getOrDefault( KEY_MEASURE, "used%" )).toLowerCase() );
 
-        if( ! "used,used%,free,free%".contains( sMeasure ) )
+        if( ! "used,used%,free,free%".contains( (String) get( KEY_MEASURE ) ) )
         {
-            sendIsInvalid( sMeasure +" is invalid. Valids: used, used%, free, free%" );
-            sMeasure = null;
+            sendIsInvalid( get( KEY_MEASURE ) +" is invalid. Valids: used, used%, free, free%" );
+            set( KEY_MEASURE, null );
         }
 
-        interval = ((Number) mapConfig.getOrDefault( "interval", 1000f )).intValue();
-        interval = setBetween( "interval", 500, interval, Integer.MAX_VALUE );
+        int interval = ((Number) mapConfig.getOrDefault( KEY_INTERVAL, 1000f )).intValue();
+        setBetween( KEY_INTERVAL, 500, interval, Integer.MAX_VALUE );
 
-        setValid( sMetric != null && sMeasure != null );
+        setValid( get( KEY_METRIC ) != null && get( KEY_MEASURE ) != null );
     }
 
     @Override
@@ -61,7 +62,7 @@ public final class SystemMonitor
         super.start( rt );
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), 5000, interval, () -> read() );
+            timer = UtilSys.executeAtRate( getClass().getName(), 5000, (int) get( KEY_INTERVAL ), () -> read() );
     }
 
     @Override
@@ -77,7 +78,7 @@ public final class SystemMonitor
         if( isInvalid() )      // bFaked is ignored by this Controller
             return;
 
-        switch( sMetric )
+        switch( (String) get( KEY_METRIC ) )
         {
             case "speed" :     // Amount of messages dispatched per minute
                 sendReaded( getRuntime().bus().getSpeed() );
@@ -91,8 +92,8 @@ public final class SystemMonitor
             case "cpu%":
                 float fUsed = SystemMetrics.getCpuLoad() * 100;
 
-                if( sMeasure.startsWith( "used" ) ) sendReaded(        fUsed );     // "used" and "used%"
-                else                                sendReaded( 100f - fUsed );
+                if( ((String) get( KEY_MEASURE )).startsWith( "used" ) ) sendReaded(        fUsed );     // "used" and "used%"
+                else                                                     sendReaded( 100f - fUsed );
 
                 break;
 
@@ -101,7 +102,7 @@ public final class SystemMonitor
                 long total = SystemMetrics.getJvmTotalMemory();
                 long used  = total - free;
 
-                switch( sMeasure )
+                switch( ((String) get( KEY_MEASURE )) )
                 {
                     case "used" : sendReaded( used ); break;
                     case "free" : sendReaded( free ); break;
@@ -116,7 +117,7 @@ public final class SystemMonitor
                 long total_ = file.getTotalSpace();
                 long used_  = total_ - free_;
 
-                switch( sMeasure )
+                switch( ((String) get( KEY_MEASURE )) )
                 {
                     case "used" : sendReaded( used_ ); break;
                     case "free" : sendReaded( free_ ); break;

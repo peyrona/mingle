@@ -7,6 +7,7 @@ import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GList;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
+import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -90,15 +91,16 @@ final class DlgConnect extends GDialog
 
     INetClient createNetworkClient()
     {
-        JsonObject channelConfig = ltbChannels.getSelected();
+        JsonObject joConfig = ltbChannels.getSelected();
 
         if( useSSL() && fileCert != null && fileKey != null )
         {
-            channelConfig.set( "certFile", fileCert.getAbsolutePath() );   // TODO: creo q esta prop (certFile) y la siguiente (keyFile) no tienen
-            channelConfig.set( "keyFile",  fileKey.getAbsolutePath() );    //       el nombre apropiado para que las lea el SocketClient
+            joConfig.set( "certFile", fileCert.getAbsolutePath() );
+            joConfig.set( "keyFile",  fileKey.getAbsolutePath() );
+            joConfig.set( "", "" );
         }
 
-        return NetworkBuilder.buildClient( channelConfig.toString() );    // This JSON contains only one client defintion
+        return NetworkBuilder.buildClient( joConfig.toString() );    // This JSON contains only one client defintion
     }
 
     public String getHost()
@@ -126,6 +128,11 @@ final class DlgConnect extends GDialog
         return fileKey;
     }
 
+    public String getPassword()
+    {
+        return txtConnName.getText();
+    }
+
     //------------------------------------------------------------------------//
 
     private void loadSavedConnectionDefinition( File file )
@@ -144,8 +151,11 @@ final class DlgConnect extends GDialog
             chkUseSSL.setSelected(  bSSL );
             btnFileCert.setEnabled( bSSL );
             btnFileKey.setEnabled(  bSSL );
+            lblSSLPass.setEnabled(  bSSL );
+            txtSSLPass.setEnabled(  bSSL );
 
             String sCertFile = props.getProperty( "certFile" );
+
             if( ! UtilStr.isEmpty( sCertFile ) )
             {
                 fileCert = new File( sCertFile );
@@ -154,6 +164,7 @@ final class DlgConnect extends GDialog
             }
 
             String sKeyFile = props.getProperty( "keyFile" );
+
             if( ! UtilStr.isEmpty( sKeyFile ) )
             {
                 fileKey = new File( sKeyFile );
@@ -164,6 +175,8 @@ final class DlgConnect extends GDialog
             String sChannel = props.getProperty( "channel" );
 
             ltbChannels.setSelected( (jo) -> { return sChannel.equals( jo.getString( "name", "" ) ); } );
+
+            txtSSLPass.setText( props.getProperty( "password" ) );
         }
         catch( IOException ioe )
         {
@@ -179,21 +192,20 @@ final class DlgConnect extends GDialog
         btnFileCert.setIcon( IconFontSwing.buildIcon( FontAwesome.FOLDER  , 16, JTools.getIconColor() ) );
         btnFileKey.setIcon(  IconFontSwing.buildIcon( FontAwesome.FOLDER  , 16, JTools.getIconColor() ) );
 
-        chkUseSSL.addActionListener( (ActionEvent e) -> {
-            boolean sslEnabled = chkUseSSL.isSelected();
-            btnFileCert.setEnabled( sslEnabled );
-            btnFileKey.setEnabled( sslEnabled );
-
-            if( ! sslEnabled )
+        chkUseSSL.addActionListener( (ActionEvent e) ->
             {
-                fileCert = null;
-                fileKey  = null;
-                btnFileCert.setText( "Certific." );
-                btnFileCert.setToolTipText( "SSL Certificate file" );
-                btnFileKey.setText( "Key" );
-                btnFileKey.setToolTipText( "SSL Key file" );
-            }
-        } );
+                boolean sslEnabled = chkUseSSL.isSelected();
+                btnFileCert.setEnabled( sslEnabled );
+                btnFileKey.setEnabled(  sslEnabled );
+                txtSSLPass.setEnabled(  sslEnabled );
+
+                if( ! sslEnabled )
+                {
+                    fileCert = null;
+                    fileKey  = null;
+                    txtSSLPass.setText( "" );
+                }
+            } );
 
         String sJSON = UtilSys.getConfig().getNetworkClientsOutline();
 
@@ -205,7 +217,7 @@ final class DlgConnect extends GDialog
         }
 
         txtLocation.setText( "localhost" );
-        spnPort.setModel( new SpinnerNumberModel( 55886, 1025, 65535, 1 ) );
+        spnPort.setModel( new SpinnerNumberModel( 55886, UtilComm.PORT_USER_MIN_ALLOWED, UtilComm.TCP_PORT_MAX_ALLOWED, 1 ) );
 
         if( ltbChannels.model.size() > 0 )
             lstChannels.setSelectedIndex( 0 );
@@ -237,6 +249,8 @@ final class DlgConnect extends GDialog
         btnFileCert = new javax.swing.JButton();
         btnFileKey = new javax.swing.JButton();
         chkUseSSL = new javax.swing.JCheckBox();
+        txtSSLPass = new javax.swing.JTextField();
+        lblSSLPass = new javax.swing.JLabel();
         jLabel4 = new javax.swing.JLabel();
         jScrollPane1 = new javax.swing.JScrollPane();
         lstChannels = new javax.swing.JList<>();
@@ -254,6 +268,9 @@ final class DlgConnect extends GDialog
 
         jLabel3.setText("Label");
 
+        txtConnName.setToolTipText("Connection definition title (used when this connection is going to be saved)");
+
+        btnLoad.setToolTipText("Open a previously saved connection definition");
         btnLoad.addActionListener(new java.awt.event.ActionListener()
         {
             public void actionPerformed(java.awt.event.ActionEvent evt)
@@ -274,25 +291,26 @@ final class DlgConnect extends GDialog
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(jPanel2Layout.createSequentialGroup()
+                        .addComponent(txtLocation, javax.swing.GroupLayout.PREFERRED_SIZE, 1, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(btnLoad))
+                    .addGroup(jPanel2Layout.createSequentialGroup()
                         .addComponent(spnPort, javax.swing.GroupLayout.PREFERRED_SIZE, 87, javax.swing.GroupLayout.PREFERRED_SIZE)
                         .addGap(18, 18, 18)
                         .addComponent(jLabel3)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(txtConnName, javax.swing.GroupLayout.DEFAULT_SIZE, 177, Short.MAX_VALUE))
-                    .addGroup(jPanel2Layout.createSequentialGroup()
-                        .addComponent(txtLocation, javax.swing.GroupLayout.PREFERRED_SIZE, 1, Short.MAX_VALUE)
-                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(btnLoad)))
+                        .addComponent(txtConnName)))
                 .addContainerGap())
         );
         jPanel2Layout.setVerticalGroup(
             jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(jPanel2Layout.createSequentialGroup()
                 .addContainerGap()
-                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(txtLocation, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                    .addComponent(jLabel1)
-                    .addComponent(btnLoad))
+                .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(btnLoad)
+                    .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(txtLocation, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(jLabel1)))
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
                 .addGroup(jPanel2Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(jLabel2)
@@ -305,6 +323,7 @@ final class DlgConnect extends GDialog
         jPanel2Layout.linkSize(javax.swing.SwingConstants.VERTICAL, new java.awt.Component[] {btnLoad, txtLocation});
 
         btnConnect.setText("Connect");
+        btnConnect.setToolTipText("Connect with the ExEn");
         btnConnect.setSelected(true);
         btnConnect.addActionListener(new java.awt.event.ActionListener()
         {
@@ -316,7 +335,7 @@ final class DlgConnect extends GDialog
 
         jPanel3.setBorder(javax.swing.BorderFactory.createTitledBorder("Security"));
 
-        btnFileCert.setText("Certific.");
+        btnFileCert.setText("Certificate file");
         btnFileCert.setToolTipText("SSL Certificate file");
         btnFileCert.setEnabled(false);
         btnFileCert.setHorizontalAlignment(javax.swing.SwingConstants.LEADING);
@@ -328,7 +347,7 @@ final class DlgConnect extends GDialog
             }
         });
 
-        btnFileKey.setText("Key");
+        btnFileKey.setText("Key file");
         btnFileKey.setToolTipText("SSL Key file");
         btnFileKey.setEnabled(false);
         btnFileKey.setHorizontalAlignment(javax.swing.SwingConstants.LEADING);
@@ -342,6 +361,12 @@ final class DlgConnect extends GDialog
 
         chkUseSSL.setText("Use SSL");
 
+        txtSSLPass.setToolTipText("SSL certificate file password");
+        txtSSLPass.setEnabled(false);
+
+        lblSSLPass.setText("SSL password");
+        lblSSLPass.setEnabled(false);
+
         javax.swing.GroupLayout jPanel3Layout = new javax.swing.GroupLayout(jPanel3);
         jPanel3.setLayout(jPanel3Layout);
         jPanel3Layout.setHorizontalGroup(
@@ -349,10 +374,13 @@ final class DlgConnect extends GDialog
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(btnFileCert, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(btnFileCert, javax.swing.GroupLayout.DEFAULT_SIZE, 108, Short.MAX_VALUE)
                     .addComponent(btnFileKey, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(txtSSLPass)
                     .addGroup(jPanel3Layout.createSequentialGroup()
-                        .addComponent(chkUseSSL)
+                        .addGroup(jPanel3Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(chkUseSSL)
+                            .addComponent(lblSSLPass))
                         .addGap(0, 0, Short.MAX_VALUE)))
                 .addContainerGap())
         );
@@ -361,11 +389,15 @@ final class DlgConnect extends GDialog
             .addGroup(jPanel3Layout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(chkUseSSL)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 18, Short.MAX_VALUE)
+                .addGap(18, 18, 18)
                 .addComponent(btnFileCert, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(btnFileKey, javax.swing.GroupLayout.PREFERRED_SIZE, 27, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap())
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(lblSSLPass)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(txtSSLPass, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
         );
 
         jLabel4.setText("Transport channel");
@@ -391,21 +423,21 @@ final class DlgConnect extends GDialog
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jPanel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                        .addGap(0, 0, Short.MAX_VALUE)
+                        .addComponent(btnSave)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                        .addComponent(btnConnect))
                     .addGroup(layout.createSequentialGroup()
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                             .addGroup(layout.createSequentialGroup()
                                 .addComponent(jLabel4)
-                                .addGap(0, 160, Short.MAX_VALUE))
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                             .addGroup(layout.createSequentialGroup()
-                                .addGap(12, 12, 12)
-                                .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE)))
-                        .addGap(29, 29, 29)
-                        .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                    .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                        .addGap(0, 0, Short.MAX_VALUE)
-                        .addComponent(btnSave)
-                        .addGap(18, 18, 18)
-                        .addComponent(btnConnect)))
+                                .addGap(6, 6, 6)
+                                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 284, Short.MAX_VALUE)
+                                .addGap(19, 19, 19)))
+                        .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -414,17 +446,17 @@ final class DlgConnect extends GDialog
                 .addContainerGap()
                 .addComponent(jPanel2, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
-                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jLabel4)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, 0, Short.MAX_VALUE))
-                    .addComponent(jPanel3, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                        .addComponent(jScrollPane1))
+                    .addComponent(jPanel3, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
                 .addGap(18, 18, 18)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                    .addComponent(btnConnect)
-                    .addComponent(btnSave))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(btnSave)
+                    .addComponent(btnConnect))
+                .addContainerGap())
         );
 
         pack();
@@ -467,6 +499,7 @@ final class DlgConnect extends GDialog
 
         String sFileName = UtilIO.addExtension( getConnName(), sCONN_DEF_EXT );
         String sChannel  = ltbChannels.getSelected().getString( "name", null );
+        String sPassword = txtSSLPass.getText();
 
         Properties props = new Properties();
                    props.setProperty( "label"   , getConnName() );
@@ -474,8 +507,9 @@ final class DlgConnect extends GDialog
                    props.setProperty( "port"    , String.valueOf( getPort() ) );
                    props.setProperty( "ssl"     , String.valueOf( useSSL()  ) );
                    props.setProperty( "channel" , sChannel );
-                   props.setProperty( "certFile", (fileCert != null) ? fileCert.getAbsolutePath() : "" );
-                   props.setProperty( "keyFile" , (fileKey  != null) ? fileKey.getAbsolutePath()  : "" );
+                   props.setProperty( "certFile", (fileCert  != null) ? fileCert.getAbsolutePath() : "" );
+                   props.setProperty( "keyFile" , (fileKey   != null) ? fileKey.getAbsolutePath()  : "" );
+                   props.setProperty( "password", (sPassword != null) ? sPassword                  : "" );
 
         try( OutputStream os = new ByteArrayOutputStream() )
         {
@@ -570,10 +604,12 @@ final class DlgConnect extends GDialog
     private javax.swing.JPanel jPanel2;
     private javax.swing.JPanel jPanel3;
     private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JLabel lblSSLPass;
     private javax.swing.JList<JsonObject> lstChannels;
     private javax.swing.ButtonGroup radGroupSecurity;
     private javax.swing.JSpinner spnPort;
     private javax.swing.JTextField txtConnName;
     private javax.swing.JTextField txtLocation;
+    private javax.swing.JTextField txtSSLPass;
     // End of variables declaration//GEN-END:variables
 }

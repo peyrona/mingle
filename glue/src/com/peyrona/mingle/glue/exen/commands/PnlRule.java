@@ -6,7 +6,6 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.candi.unec.parser.ParseRule;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.Util;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
@@ -133,12 +132,10 @@ final class PnlRule extends PnlCmdBase
         btnThenAdd.setIcon(  IconFontSwing.buildIcon( FontAwesome.PLUS , 16, JTools.getIconColor() ) );
         btnThenDel.setIcon(  IconFontSwing.buildIcon( FontAwesome.TRASH, 16, JTools.getIconColor() ) );
 
-        pnl4EditorWhen.setLayout( new BorderLayout(0,0) );
-        pnl4EditorIf.setLayout(   new BorderLayout(0,0) );
-        pnl4EditorWhen.add( codeWhen, BorderLayout.CENTER );
-        pnl4EditorIf.add(   codeIf  , BorderLayout.CENTER );
+        sp4EditorWhen.setViewportView( codeWhen );
+        sp4EditorIf.setViewportView(   codeIf   );
 
-        for( IScript scp : cmdWise.getScripts() )
+        for( IScript scp : cmdWise.getScrInl() )
             cmbThenScriptOrRule.addItem( scp.name() );
 
         for( IRule rul : cmdWise.getRules() )
@@ -154,10 +151,8 @@ final class PnlRule extends PnlCmdBase
             cmbThenActionActuatorName.addItem( sGroupName + sGROUP_SUFFIX );
 
         cmbAfterTimeUnit.setSelectedIndex( 0 );    // Millis
-        spnAfterAmount.setModel( new SpinnerNumberModel( 0,              // initial value
-                                                         0,              // min
-                                                         Long.MAX_VALUE, // max
-                                                         1 ) );          // step;
+        ((SpinnerNumberModel) spnAfterAmount.getModel()).setMaximum( (Long) (Long.MAX_VALUE / 1000) );    // Div by 1000 because the value can be converted into millis
+
         radGroupThen.add( radThenScript );
         radGroupThen.add( radThenAction );
         radThenAction.setSelected( true );
@@ -258,7 +253,7 @@ final class PnlRule extends PnlCmdBase
         jLabel2 = new javax.swing.JLabel();
         txtName = new javax.swing.JTextField();
         pnlWHEN = new javax.swing.JPanel();
-        pnl4EditorWhen = new javax.swing.JPanel();
+        sp4EditorWhen = new javax.swing.JScrollPane();
         pnlTHEN = new javax.swing.JPanel();
         radThenScript = new javax.swing.JRadioButton();
         cmbThenScriptOrRule = new javax.swing.JComboBox<>();
@@ -276,7 +271,7 @@ final class PnlRule extends PnlCmdBase
         radThenExpr = new javax.swing.JRadioButton();
         txtThenExpr = new javax.swing.JTextField();
         pnlIF = new javax.swing.JPanel();
-        pnl4EditorIf = new javax.swing.JPanel();
+        sp4EditorIf = new javax.swing.JScrollPane();
         btnNAXE = new javax.swing.JButton();
         pnlIF1 = new javax.swing.JPanel();
         jLabel3 = new javax.swing.JLabel();
@@ -292,23 +287,12 @@ final class PnlRule extends PnlCmdBase
             .addGap(0, 100, Short.MAX_VALUE)
         );
 
-        jLabel2.setText("RULE");
+        jLabel2.setText("Name");
 
         txtName.setColumns(24);
         txtName.setName("ControlName"); // NOI18N
 
         pnlWHEN.setBorder(javax.swing.BorderFactory.createTitledBorder(" WHEN "));
-
-        javax.swing.GroupLayout pnl4EditorWhenLayout = new javax.swing.GroupLayout(pnl4EditorWhen);
-        pnl4EditorWhen.setLayout(pnl4EditorWhenLayout);
-        pnl4EditorWhenLayout.setHorizontalGroup(
-            pnl4EditorWhenLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 0, Short.MAX_VALUE)
-        );
-        pnl4EditorWhenLayout.setVerticalGroup(
-            pnl4EditorWhenLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 83, Short.MAX_VALUE)
-        );
 
         javax.swing.GroupLayout pnlWHENLayout = new javax.swing.GroupLayout(pnlWHEN);
         pnlWHEN.setLayout(pnlWHENLayout);
@@ -316,14 +300,15 @@ final class PnlRule extends PnlCmdBase
             pnlWHENLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlWHENLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(pnl4EditorWhen, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(sp4EditorWhen)
                 .addContainerGap())
         );
         pnlWHENLayout.setVerticalGroup(
             pnlWHENLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlWHENLayout.createSequentialGroup()
-                .addComponent(pnl4EditorWhen, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap()
+                .addComponent(sp4EditorWhen, javax.swing.GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
+                .addContainerGap())
         );
 
         pnlTHEN.setBorder(javax.swing.BorderFactory.createTitledBorder(" THEN "));
@@ -438,7 +423,7 @@ final class PnlRule extends PnlCmdBase
                                 .addGap(18, 18, 18)
                                 .addComponent(jLabel1)
                                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                                .addComponent(txtThenActionActuatorValue, javax.swing.GroupLayout.DEFAULT_SIZE, 228, Short.MAX_VALUE))
+                                .addComponent(txtThenActionActuatorValue, javax.swing.GroupLayout.DEFAULT_SIZE, 248, Short.MAX_VALUE))
                             .addComponent(cmbThenScriptOrRule, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
                     .addGroup(pnlTHENLayout.createSequentialGroup()
                         .addComponent(jScrollPane1)
@@ -490,24 +475,13 @@ final class PnlRule extends PnlCmdBase
                         .addComponent(btnThenAdd)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(btnThenDel))
-                    .addComponent(jScrollPane1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE))
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 119, Short.MAX_VALUE))
+                .addContainerGap())
         );
 
         pnlTHENLayout.linkSize(javax.swing.SwingConstants.VERTICAL, new java.awt.Component[] {btnThenAdd, btnThenDel});
 
         pnlIF.setBorder(javax.swing.BorderFactory.createTitledBorder(" IF "));
-
-        javax.swing.GroupLayout pnl4EditorIfLayout = new javax.swing.GroupLayout(pnl4EditorIf);
-        pnl4EditorIf.setLayout(pnl4EditorIfLayout);
-        pnl4EditorIfLayout.setHorizontalGroup(
-            pnl4EditorIfLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 0, Short.MAX_VALUE)
-        );
-        pnl4EditorIfLayout.setVerticalGroup(
-            pnl4EditorIfLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 89, Short.MAX_VALUE)
-        );
 
         javax.swing.GroupLayout pnlIFLayout = new javax.swing.GroupLayout(pnlIF);
         pnlIF.setLayout(pnlIFLayout);
@@ -515,14 +489,14 @@ final class PnlRule extends PnlCmdBase
             pnlIFLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(pnlIFLayout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(pnl4EditorIf, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addComponent(sp4EditorIf)
                 .addContainerGap())
         );
         pnlIFLayout.setVerticalGroup(
             pnlIFLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlIFLayout.createSequentialGroup()
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                .addComponent(pnl4EditorIf, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+            .addGroup(pnlIFLayout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(sp4EditorIf, javax.swing.GroupLayout.DEFAULT_SIZE, 100, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -553,12 +527,12 @@ final class PnlRule extends PnlCmdBase
         );
         pnlIF1Layout.setVerticalGroup(
             pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 113, Short.MAX_VALUE)
+            .addGap(0, 81, Short.MAX_VALUE)
             .addGroup(pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                 .addGroup(pnlIF1Layout.createSequentialGroup()
-                    .addGap(0, 0, Short.MAX_VALUE)
+                    .addGap(0, 33, Short.MAX_VALUE)
                     .addComponent(jLabel3)
-                    .addGap(0, 0, Short.MAX_VALUE)))
+                    .addGap(0, 34, Short.MAX_VALUE)))
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
@@ -568,16 +542,15 @@ final class PnlRule extends PnlCmdBase
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(pnlIF, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(pnlWHEN, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(pnlTHEN, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addGroup(layout.createSequentialGroup()
                         .addComponent(jLabel2)
-                        .addGap(0, 0, Short.MAX_VALUE))
-                    .addGroup(layout.createSequentialGroup()
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                         .addComponent(txtName)
                         .addGap(18, 18, 18)
                         .addComponent(btnNAXE))
+                    .addComponent(pnlIF, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(pnlWHEN, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(pnlTHEN, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(pnlIF1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
@@ -585,20 +558,19 @@ final class PnlRule extends PnlCmdBase
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
             .addGroup(layout.createSequentialGroup()
                 .addContainerGap()
-                .addComponent(jLabel2)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(jLabel2)
                     .addComponent(txtName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addComponent(btnNAXE))
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(pnlWHEN, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
-                .addComponent(pnlTHEN, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(pnlWHEN, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGap(18, 18, 18)
-                .addComponent(pnlIF, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(pnlTHEN, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGap(18, 18, 18)
+                .addComponent(pnlIF, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGap(18, 18, 18)
                 .addComponent(pnlIF1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
 
@@ -690,8 +662,6 @@ final class PnlRule extends PnlCmdBase
     private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;
     private javax.swing.JList<String> lstThen;
-    private javax.swing.JPanel pnl4EditorIf;
-    private javax.swing.JPanel pnl4EditorWhen;
     private javax.swing.JPanel pnlIF;
     private javax.swing.JPanel pnlIF1;
     private javax.swing.JPanel pnlTHEN;
@@ -700,6 +670,8 @@ final class PnlRule extends PnlCmdBase
     private javax.swing.JRadioButton radThenAction;
     private javax.swing.JRadioButton radThenExpr;
     private javax.swing.JRadioButton radThenScript;
+    private javax.swing.JScrollPane sp4EditorIf;
+    private javax.swing.JScrollPane sp4EditorWhen;
     private javax.swing.JSpinner spnAfterAmount;
     private javax.swing.JTextField txtName;
     private javax.swing.JTextField txtThenActionActuatorValue;

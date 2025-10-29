@@ -46,18 +46,20 @@ final class Dlg4Cmd extends GDialog
 
     //------------------------------------------------------------------------//
 
-    public Dlg4Cmd( String title, JPanel pnlCentral, ActionListener onOK )
+    public Dlg4Cmd( String title, JPanel pnlCentral, ActionListener onApplyChanges )
     {
         super( title, ModalityType.DOCUMENT_MODAL );
 
         pnlEditor.setVisible( false );
 
-        setActionOnOk( onOK );
+        if( onApplyChanges != null )
+            // FIXME: ---> setActionOnOk( onApplyChanges );
+            setActionOnOk( (ae) -> JTools.alert( "Option not yet implemented" ) );
 
         prepareOnControlsChanged( pnlCentral );
 
-        add( pnlCentral     , BorderLayout.CENTER );
-        add( getSouthPanel(), BorderLayout.SOUTH  );
+        add( pnlCentral, BorderLayout.CENTER );
+        add( getSouthPanel( (onApplyChanges != null) ), BorderLayout.SOUTH  );
 
         SwingUtilities.invokeLater( () -> JTools.getByName( pnlCentral, "ControlName" ).requestFocus() );    // All commands have the same name: "ControlName"
         SwingUtilities.invokeLater( () -> updateTxtCommand( pnlCentral ) );
@@ -78,18 +80,22 @@ final class Dlg4Cmd extends GDialog
             pnlEditor.grabFocus();
     }
 
-    private JPanel getSouthPanel()
+    private JPanel getSouthPanel( boolean bShowChangesBtn )
     {
-        JButton btnOK = new JButton( "OK" );
+        JButton btnOK = new JButton( "Apply changes" );
+                btnOK.setToolTipText( "Add or replace this command to the associated ExEn" );
                 btnOK.addActionListener( getActionOnOk() );
 
         JToggleButton btnHideShow = new JToggleButton( "Command" );
+                      btnHideShow.setToolTipText( "Hide/Show the Une source code that represents this command" );
                       btnHideShow.setIcon( IconFontSwing.buildIcon( FontAwesome.CARET_DOWN, 16, JTools.getIconColor() ) );
                       btnHideShow.setHorizontalTextPosition( SwingConstants.LEADING );
                       btnHideShow.addActionListener( (ActionEvent evt) -> onShowHideSourceClicked( evt ) );
 
         JPanel pnlButtons = new JPanel( new FlowLayout( FlowLayout.TRAILING ) );
                pnlButtons.add( btnHideShow );
+
+        if( bShowChangesBtn )
                pnlButtons.add( btnOK );
 
         JPanel pnlSouth = new JPanel( new BorderLayout() );

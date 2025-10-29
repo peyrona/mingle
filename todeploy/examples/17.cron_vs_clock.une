@@ -2,11 +2,11 @@
 # This script shows how to use Cron-Driver and its differences with similar cases using Clock-Driver.
 # Goal: to write a message in a log file every Monday, Wednesday and Friday at 10 and 18 hours.
 #
-# Note: Cron is much more efficent in terms of CPU that its Clock equivalent, but Clock is more flexible.
+# Note: Cron is much more efficent in terms of CPU than its Clock equivalent, but Clock is easier to used and more flexible.
 #
 # DRIVER CronDriver
 #    SCRIPT KronosController
-#    CONFIG                   # None of the following fileds is REQUIRED, but consistent values have to be provided.
+#    CONFIG                   # None of the following fields is REQUIRED, but consistent values have to be provided.
 #        start AS string      # As Une "<date>,<time>". When only 'start' is defined, it occurs only once.
 #        stop  AS string      # As Une "<date>,<time>". Moment of last repetition, or empty for repeating for ever.
 #        time  AS string      # Time of the day to execute: one or more comma separated Une times (hh[:mm[:ss]]).
@@ -23,19 +23,14 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
-# ************************************************************************************************
-# DRIVER 'CronDriver' IS _ALMOST_ FINISHED, BUT NEEDS HEAVY TESTING - USE IT AT YOUR OWN RISK
-# The recommendation (until Cron is finished) is to use 'ClockDriver'
-# ************************************************************************************************
-
 # Using ClockDriver ---------------------------------------------------------------------------------------------------------------
 
 DEVICE clock
     DRIVER ClockDriver
         CONFIG
             interval SET 59m   # We can be sure that the event will occur at some moment in time between 11:00 and 11:59
-                               # If we SET to 1m, the event will occur at some moment in time between 11:00 and 11:01
-                               # (same with 18 hours)
+                               # If we SET to 1m, the event will occur at some moment in time between 11:00 and 11:01 (same at 18)
+
 DEVICE log
     DRIVER FileDriver
         CONFIG

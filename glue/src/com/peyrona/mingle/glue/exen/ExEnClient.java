@@ -12,6 +12,7 @@ import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
+import com.peyrona.mingle.network.BaseServer4IP;
 import java.net.ConnectException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -85,11 +86,18 @@ public final class ExEnClient
                                             lstPendingListeners.clear();
                                             // ------------------------------------------------
 
-                                            netClient.connect( Json.object()
-                                                                   .add( "host", dlgConn.getHost() )
-                                                                   .add( "port", dlgConn.getPort() )
-                                                                   .add( "ssl" , dlgConn.useSSL()  )
-                                                                   .toString() );
+                                            JsonObject jo = Json.object()
+                                                                .add( BaseServer4IP.KEY_HOST, dlgConn.getHost() )
+                                                                .add( BaseServer4IP.KEY_PORT, dlgConn.getPort() );
+
+                                            if( dlgConn.useSSL() )
+                                            {
+                                                jo.add( BaseServer4IP.KEY_CERT_FILE, dlgConn.getCertFile().getAbsolutePath() );
+                                                jo.add( BaseServer4IP.KEY_KEY_FILE , dlgConn.getKeyFile().getAbsolutePath() );
+                                                jo.add( BaseServer4IP.KEY_PASSWORD , dlgConn.getPassword() );
+                                            }
+
+                                            netClient.connect( jo.toString() );
 
                                             // JTools.hideWaitFrame(); Will be executed at: INetClient.IListener:onConnected() --> see at the end of this file
                                         }

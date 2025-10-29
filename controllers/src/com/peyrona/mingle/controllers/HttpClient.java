@@ -1,7 +1,7 @@
 package com.peyrona.mingle.controllers;
 
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.net.URI;
 import java.util.Map;
@@ -14,9 +14,9 @@ import java.util.Map;
 public final class HttpClient
         extends ControllerBase
 {
-    private static final java.net.http.HttpClient  client = java.net.http.HttpClient.newHttpClient();    // Only one instance is needed
-    private              java.net.http.HttpRequest request;
-    private              Map<String, Object>       config;
+    private static final String KEY_URI = "uri";
+
+    private static final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();    // Only one instance is needed
 
     //------------------------------------------------------------------------//
 
@@ -26,42 +26,17 @@ public final class HttpClient
         setName( deviceName );       // Must be 1st
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        config = deviceConf;
-
         setValid( true );
 
-        if( ! new list( "GET","PUT","POST","DELETE" ).has( method() ) )
-            sendIsInvalid( method() +": method not valid." );
+        String uri = deviceConf.get( KEY_URI ).toString();
 
-        if( headers() != null && headers().isEmpty() )
-            sendIsInvalid( headers() +": headers not valid." );
+        set( KEY_URI, URI.create( uri ) );
     }
 
     @Override
     public void start( IRuntime rt )
     {
         super.start( rt );
-
-        java.net.http.HttpRequest.Builder builder = java.net.http.HttpRequest.newBuilder()
-                                                                             .uri( uri() );
-
-        switch( method() )
-        {
-            case "GET"    : builder = builder.GET()   ; break;
-//          case "PUT"    : builder = builder.PUT()   ; break;
-//          case "POST"   : builder = builder.POST()  ; break;
-            case "DELETE" : builder = builder.DELETE(); break;
-        }
-
-        if( headers() != null )
-        {
-            pair headers = headers();
-
-            for( Object key : headers.keys() )
-                builder.header( key.toString(), headers.get( key ).toString() );
-        }
-
-        request = builder.build();
     }
 
     @Override
@@ -70,9 +45,14 @@ public final class HttpClient
         if( isInvalid() )
             return;
 
-        client.sendAsync( request, java.net.http.HttpResponse.BodyHandlers.ofString() )
-           .thenApply( java.net.http.HttpResponse::body )
-           .thenAccept(this::sendReaded );
+        java.net.http.HttpRequest request =
+        java.net.http.HttpRequest.newBuilder()
+                                 .uri( (URI) get( KEY_URI ) )
+                                 .GET()
+                                 .header( "Accept", "application/json" ) // Add appropriate headers
+                                 .build();
+
+        executeRequestAsync( request );
     }
 
     @Override
@@ -80,45 +60,66 @@ public final class HttpClient
     {
         if( isInvalid() )
             return;
+
+        try
+        {
+            pair data = (pair) newValue;    // Can throw a ClassCastException
+
+            String method = (String) data.get( "method" );    // Returns "" if not found
+            String body   = (String) data.get( "body"   );    // Returns "" if not found
+            java.net.http.HttpRequest request = null;
+
+            switch( method )
+            {
+                case "PUT":
+                    request = java.net.http.HttpRequest.newBuilder()
+                                    .uri( (URI) get( KEY_URI ) )
+                                    .header( "Content-Type", "application/json" )
+                                    .PUT( java.net.http.HttpRequest.BodyPublishers.ofString( body ) )
+                                    .build();
+                    break;
+
+                case "POST":
+                    request = java.net.http.HttpRequest.newBuilder()
+                                    .uri( (URI) get( KEY_URI ) )
+                                    .header( "Content-Type", "application/json" )
+                                    .POST( java.net.http.HttpRequest.BodyPublishers.ofString( body ) )
+                                    .build();
+
+                    break;
+
+                case "DELETE":
+                    request = java.net.http.HttpRequest.newBuilder()
+                                    .uri( (URI) get( KEY_URI ) )
+                                    .DELETE()
+                                    .build();
+                    break;
+
+                default:
+                    sendWriteError( method, new MingleException( "Invalid method" ) );
+            }
+
+            if( request != null )
+                executeRequestAsync( request );
+        }
+        catch( ClassCastException cce )
+        {
+            sendWriteError( newValue, new MingleException( "Must be an instance of 'pair'" ) );
+        }
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
     /**
-     * "url" is granted to exist because it is REQUIRED and therefore the Transpiler checks it
-     * @return
-     */
-    private URI uri()
+ * Executes an HTTP request asynchronously and handles the response
+ * @param request The HttpRequest to execute
+ */
+    private void executeRequestAsync( java.net.http.HttpRequest request )
     {
-        return URI.create( config.get( "uri" ).toString() );
-    }
-
-    /**
-     * "method" is granted to exist because it is REQUIRED and therefore the Transpiler checks it
-     * @return
-     */
-    private String method()
-    {
-        return config.getOrDefault( "method", "GET" )
-                     .toString()
-                     .toUpperCase();
-    }
-
-    public pair headers()
-    {// TODO: para que las headers funcione hay que hacer que el value de un DRIVER permita instancias de mi clase "pair"
-//        if( conf.containsKey( "headers" ) )
-//        {
-//            try
-//            {
-//                return new pair( conf.get( "headers" ).toString() );
-//            }
-//            catch( MingleException me )
-//            {
-//                return new pair();
-//            }
-//        }
-
-        return null;
+        client.sendAsync( request, java.net.http.HttpResponse.BodyHandlers.ofString() )
+              .thenApply( java.net.http.HttpResponse::body )
+              .thenAccept( this::sendReaded )
+              .exceptionally( ex -> { sendReadError( (Exception) ex ); return null; } );
     }
 }

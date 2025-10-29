@@ -31,10 +31,11 @@ import java.util.function.Consumer;
 public final class   CellSet
              extends ControllerBase
 {
+    private static final String KEY = "value";
+
     private static final Map<String,CellValue>        map = new ConcurrentHashMap<>();
     private static       Dispatcher<MsgDeviceChanged> dis = null;    // Needed to recalculate new values for all affected cells every time a device changes its value
     private static       IEventBus.Listener           ebl = null;
-    private              Object                       val = null;    // Initial value passed in deviceConf (temporal: used at ::start(...))
 
     //------------------------------------------------------------------------//
     // This controller is always valid
@@ -42,10 +43,11 @@ public final class   CellSet
     @Override
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        setName( deviceName );              // Must be 1st
-        setListener( listener );            // Must be at begining: in case an error happens, Listener is needed
-        val = deviceConf.get( "value" );    // "value" is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
+        setName( deviceName );                  // Must be 1st
+        setListener( listener );                // Must be at begining: in case an error happens, Listener is needed
+        set( KEY, deviceConf.get( "value" ) );  // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
         setValid( true );
+        set( deviceConf );
     }
 
     @Override
@@ -53,14 +55,14 @@ public final class   CellSet
     {
         super.start( rt );
 
-        CellValue cv = new CellValue( val );    // Previously saved (at ::set(...)) for this CellSet instance
+        CellValue cv = new CellValue( get(  KEY ) );    // Previously saved (at ::set(...)) for this CellSet instance
 
         // Can not make: 'val = null;'  because start() could be invoked again
 
              if( cv.hasErrors() )          sendIsInvalid( "Formula has errors: unusable device" );
-        else if( ! hasCircularRef( cv ) )  map.put( getName(), cv );
+        else if( ! hasCircularRef( cv ) )  map.put( getDeviceName(), cv );
 
-        setValid( map.containsKey( getName() ) );
+        setValid( map.containsKey( getDeviceName() ) );
 
         if( isInvalid() )
             return;
@@ -121,7 +123,7 @@ public final class   CellSet
             return;
 
         Object    value;
-        CellValue cellValue = map.get( getName() );
+        CellValue cellValue = map.get( getDeviceName() );
 
         if( cellValue == null )
             return;
@@ -138,7 +140,7 @@ public final class   CellSet
         if( isInvalid() )
             return;
 
-        CellValue cv = map.get( getName() );
+        CellValue cv = map.get( getDeviceName() );
 
         if( cv != null && ! Objects.equals( cv.read(), newVal ) )
         {
@@ -170,7 +172,7 @@ public final class   CellSet
             {
                 for( String var2 : map.get( var1 ).xpreval.getVars().keySet() )     // So we have to find if the vars contained in this xpr references the other cell
                 {
-                    if( var2.equals( getName() ) )
+                    if( var2.equals( getDeviceName() ) )
                     {
                         sendIsInvalid( "Circular reference in: "+ cv.xpreval +" on variable: "+ var2 );
                         return true;              // 'sendIsInvalid(...)' sets this Controller instance to 'inval
