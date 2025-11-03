@@ -1,10 +1,9 @@
 
-package com.peyrona.mingle.glue.exen;
+package com.peyrona.mingle.glue;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.Tip;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
@@ -12,7 +11,7 @@ import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
-import com.peyrona.mingle.network.BaseServer4IP;
+import com.peyrona.mingle.network.NetworkBuilder;
 import java.net.ConnectException;
 import java.util.Collections;
 import java.util.HashSet;
@@ -28,95 +27,51 @@ import java.util.Set;
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class ExEnClient
 {
-    private          DlgConnect dlgConn   = null;    // Can not be static, neither final
+    private final    JsonObject joConnDef;
+    private final    String     sConnName;
     private volatile INetClient netClient = null;
     private final    Set<INetClient.IListener> lstPendingListeners = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because listeners are only added, never removed
 
     //------------------------------------------------------------------------//
+    // CONSTRUCTOR
 
-    public String getName()
+    public ExEnClient( JsonObject joConnDef, String sConnName )
     {
-        return (dlgConn == null) ? "..." : dlgConn.getConnName();
+        if( joConnDef.get("init") == null || ! joConnDef.get("init").isObject() )
+            throw new MingleException( "Invalid or not existing 'init'" );
+
+        this.joConnDef = joConnDef;
+        this.sConnName = sConnName;
     }
 
-    public void connect()
+    //------------------------------------------------------------------------//
+
+    public synchronized void connect() throws MingleException
     {
-        Tip.show( "You can save your favorite connections:\n"+
-                  "     1. Fulfill the information shown in the dialog\n"+
-                  "     2. Click the 'disk' icon button\n\n"+
-                  "You can reload these definitions later:\n"+
-                  "     1. Click the 'folder' icon button\n"+
-                  "     2. Select the definition (double click)\n"+
-                  "     3. Change something if you want\n"+
-                  "     4. Click the connect button ('plug' icon)\n\n"+
-                  "To close this dialog (as any other), click window close button or press Esc");
+        if( netClient != null && netClient.isConnected() )
+            return;
 
-        if( dlgConn == null )
-            dlgConn = new DlgConnect();
+        netClient = NetworkBuilder.buildClient( joConnDef.toString() );
 
-        dlgConn.setVisible( true );    // Blocking method
+        // Needed prior to connect ------------------------
+        netClient.add( new ClientListener() );
 
-        if( ! dlgConn.isCancelled() )
-        {
-            JTools.showWaitFrame( "Connecting with: "+ getName() );
+        for( INetClient.IListener l : lstPendingListeners )
+            netClient.add( l );
 
-            UtilSys.execute( getClass().getName(),
-                             () ->
-                                {
-                                    try
-                                    {
-                                        synchronized( this )
-                                        {
-                                            netClient = dlgConn.createNetworkClient();
+        lstPendingListeners.clear();
+        // ------------------------------------------------
 
-                                            // Needed prior to connect ------------------------
-                                            netClient.add( new ClientListener() );
-
-                                            synchronized( lstPendingListeners )
-                                            {
-                                                for( INetClient.IListener l : lstPendingListeners )
-                                                    netClient.add( l );
-                                            }
-
-                                            lstPendingListeners.clear();
-                                            // ------------------------------------------------
-
-                                            JsonObject jo = Json.object()
-                                                                .add( BaseServer4IP.KEY_HOST, dlgConn.getHost() )
-                                                                .add( BaseServer4IP.KEY_PORT, dlgConn.getPort() );
-
-                                            if( dlgConn.useSSL() )
-                                            {
-                                                jo.add( BaseServer4IP.KEY_CERT_FILE, dlgConn.getCertFile().getAbsolutePath() );
-                                                jo.add( BaseServer4IP.KEY_KEY_FILE , dlgConn.getKeyFile().getAbsolutePath() );
-                                                jo.add( BaseServer4IP.KEY_PASSWORD , dlgConn.getPassword() );
-                                            }
-
-                                            netClient.connect( jo.toString() );
-
-                                            // JTools.hideWaitFrame(); Will be executed at: INetClient.IListener:onConnected() --> see at the end of this file
-                                        }
-                                    }
-                                    catch( Exception exc )
-                                    {
-                                        UtilSys.getLogger().log( ILogger.Level.WARNING, exc );
-                                        JTools.hideWaitFrame();
-                                        JTools.error( exc );
-                                    }
-                                } );
-        }
+        netClient.connect( joConnDef.get("init").asObject().toString() );
     }
 
     public void disconnect()
     {
         if( netClient != null )
         {
-            netClient.send( new ExEnComm( ExEnComm.Request.List, (String) null ).toString() );    // null to broadcast only DeviceChanged messages
             netClient.disconnect();
             netClient = null;
         }
@@ -144,7 +99,7 @@ public final class ExEnClient
         {
             if( netClient.isConnected() )
             {
-                netClient.send( new ExEnComm( ExEnComm.Request.List, "true" ).toString() );    // "true" (any not null valid JSON ) to force to broadcast all msgs: see ExEnComm class constructor
+                netClient.send( new ExEnComm( ExEnComm.Request.List, "true" ).toString() );    // "true" (any not null valid JSON) to force to broadcast all msgs: see ExEnComm class constructor
             }
             else
             {
@@ -265,7 +220,7 @@ public final class ExEnClient
 
             ExEnClient.this.sendList();
 
-            UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" connected to "+ getName() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" connected to "+ sConnName );
 
             JTools.hideWaitFrame();
         }
@@ -273,7 +228,7 @@ public final class ExEnClient
         @Override
         public void onDisconnected( INetClient origin )
         {
-            UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" disconnected from "+ getName() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" disconnected from "+ sConnName );
             JTools.hideWaitFrame();     // No harm if it was already closed
         }
 

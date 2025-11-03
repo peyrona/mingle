@@ -22,12 +22,13 @@ public final class GTextField extends JTextField implements FocusListener
     private String ph;
 
     //------------------------------------------------------------------------//
+
     public GTextField()
     {
         ph = null;
     }
 
-    public GTextField(String s)
+    public GTextField( String s )
     {
         super( s );
 
@@ -66,19 +67,4 @@ public final class GTextField extends JTextField implements FocusListener
     {
         repaint();
     }
-
-//    @Override
-//    public void paintComponent(Graphics g)
-//    {
-//        super.paintComponent( g );
-//
-//        if( getText().isEmpty() && (ph != null) )
-//        {
-//            Graphics2D g2 = (Graphics2D) g;
-//
-//            g2.setRenderingHint( RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON );
-//            g2.setColor( super.getDisabledTextColor() );
-//            g2.drawString( ph, getInsets().left, g.getFontMetrics().getMaxAscent() + getInsets().top );
-//        }
-//    }
 }

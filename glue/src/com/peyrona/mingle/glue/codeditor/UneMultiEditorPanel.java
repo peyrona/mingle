@@ -1,20 +1,18 @@
 
 package com.peyrona.mingle.glue.codeditor;
 
-import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
-import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
+import com.peyrona.mingle.glue.ConfigManager;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.Tip;
+import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilColls;
-import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
@@ -58,7 +56,6 @@ public final class UneMultiEditorPanel extends JPanel
 {
     private final UneEditorToolBar toolBar     = new UneEditorToolBar();
     private final GTabbedPane      tabbedPane  = new GTabbedPane();
-    private final File             fLastDirTxt = new File( UtilSys.getEtcDir(), "glue_editor_last_used_dir.txt" );    // File containing last used dir
     private final AtomicReference<ScheduledFuture> futureSave = new AtomicReference<>();
 
     //------------------------------------------------------------------------//
@@ -224,7 +221,7 @@ public final class UneMultiEditorPanel extends JPanel
 
     private void onOpen()
     {
-        Tip.show( "These are the files that are syntax highlighted:\n"+
+        GTip.show( "These are the files that are syntax highlighted:\n"+
                   "   a) Une source code (*.une)\n"+
                   "   b) Une transpiled code (*.model)\n"+
                   "   c) JSON configuration (*.json)\n"+
@@ -311,14 +308,14 @@ public final class UneMultiEditorPanel extends JPanel
         {
             if( onTranspile() )     // isEmpty() == no errors
             {
-                Tip.show( "This option runs the script in focused editor inside a tailored ExEn\n\n"+
+                GTip.show( "This option runs the script in focused editor inside a tailored ExEn\n\n"+
                           "In this ExEn:\n"+
                           "    a) Only plain old Sockets can be used.\n"+
                           "    b) An unique port number is assigned to it: check it.\n"+
                           "    c) When 'Fake-drivers' is checked, some examples will not work.");
 
                 if( toolBar.chkFaked.isSelected() )
-                    Tip.show( "Take into consideration that you are using 'Fake-drivers'" );
+                    GTip.show( "Take into consideration that you are using 'Fake-drivers'" );
 
                 if( getFocusedUnit().run( toolBar.chkFaked.isSelected(), toolBar.getLogLevel() ) )
                     toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
@@ -353,7 +350,7 @@ public final class UneMultiEditorPanel extends JPanel
             URL         url = getClass().getResource( "UneEditorHelp.html" );
             JEditorPane edt = new JEditorPane( url );
 
-            GFrame.make()
+            new GFrame()
                   .title( "Une Script Code Editor Help" )
                   .icon( "editor.png" )
                   .onClose( JFrame.DISPOSE_ON_CLOSE )
@@ -537,28 +534,8 @@ public final class UneMultiEditorPanel extends JPanel
 
     File getLastUsedDir()
     {
-        File fDefault = new File( UtilSys.fHomeDir, "examples" );
-
-        if( ! fLastDirTxt.exists() )
-            return fDefault;
-
-        try
-        {
-            String sLastDir = UtilIO.getAsText( fLastDirTxt );
-
-            if( UtilStr.isMeaningless( sLastDir ) )
-                return fDefault;
-
-            File fLast = new File( sLastDir );
-
-            return (fLast.exists() ? fLast : fDefault);
-        }
-        catch( IOException ioe )
-        {
-            // Nothing to do
-        }
-
-        return fDefault;
+        String lastDirPath = ConfigManager.getLastUsedDir();
+        return new File( lastDirPath );
     }
 
     void setLastUsedDir( File fNewLastDir )
@@ -567,17 +544,7 @@ public final class UneMultiEditorPanel extends JPanel
             return;
 
         fNewLastDir = fNewLastDir.isDirectory() ? fNewLastDir : fNewLastDir.getParentFile();
-
-        try
-        {
-            UtilIO.newFileWriter()
-                  .setFile( fLastDirTxt )
-                  .replace( fNewLastDir.getAbsolutePath() );
-        }
-        catch( IOException ex )
-        {
-            // Nothing to do
-        }
+        ConfigManager.setLastUsedDir( fNewLastDir.getAbsolutePath() );
     }
 
     private boolean isOpen( File file )
@@ -609,58 +576,26 @@ public final class UneMultiEditorPanel extends JPanel
             }
         }
 
-        if( jaEdit.isEmpty() )
-        {
-            getOpenedFiles().delete();
-        }
-        else
-        {
-            try
-            {
-                UtilIO.newFileWriter()
-                      .setFile( getOpenedFiles() )
-                      .replace( jaEdit.toString() );
-            }
-            catch( IOException ioe )
-            {
-                /* Nothing to do */
-            }
-        }
+        ConfigManager.setEditorFiles( jaEdit );
     }
 
     private void restoreOpenedFiles()
     {
-        try
-        {
-            String sJSON = UtilIO.getAsText( getOpenedFiles() );
+        JsonArray editorFiles = ConfigManager.getEditorFiles();
 
-            Json.parse( sJSON )
-                .asArray()
-                .forEach( (JsonValue jv) -> {
-                                                String s = jv.asObject().getString( "file", null );
-                                                File   f = (s == null) ? null : new File( s );
+        editorFiles.forEach( (JsonValue jv) -> {
+                                        String s = jv.asObject().getString( "file", null );
+                                        File   f = (s == null) ? null : new File( s );
 
-                                                if( (f != null) && f.exists() )
-                                                    newTab( f ).setCaretOffset( jv.asObject().getInt( "caret", 0 ) );
-                                            } );
+                                        if( (f != null) && f.exists() )
+                                            newTab( f ).setCaretOffset( jv.asObject().getInt( "caret", 0 ) );
+                                    } );
 
-            if( tabbedPane.getTabCount() > 0 )
-                tabbedPane.setSelectedIndex( 0 );
-        }
-        catch( IOException ioe )
-        {
-            /* Nothing to do */
-        }
-        catch( ParseException exc )
-        {
-            JTools.alert( "File "+ getOpenedFiles() +" contains invalid information" );
-        }
+        if( tabbedPane.getTabCount() > 0 )
+            tabbedPane.setSelectedIndex( 0 );
     }
 
-    private File getOpenedFiles()
-    {
-        return new File( UtilSys.getEtcDir(), "glue_editor_editing_files.json" );
-    }
+
 
     // It does not worth it to have two methods: one to update the focused editor and another one to update all editors
     private void updateAllTabTitles()   // It is important to invoke here after updating toolbar (not before)

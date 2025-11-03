@@ -1,7 +1,9 @@
 
 package com.peyrona.mingle.stick;
 
+import com.eclipsesource.json.JsonArray;
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.ExEnComm;
@@ -62,14 +64,11 @@ final class NetworkManager
     /**
      * Creates all protocols defined in configuration file.
      */
-    synchronized void start( INetServer.IListener listener, String sChannelsJSON )
+    synchronized void start( INetServer.IListener listener, IConfig config )
     {
-        if( sChannelsJSON == null )
-            return;
-
         try
         {
-            Map<INetServer,String> map = NetworkBuilder.buildAllServers( sChannelsJSON );
+            Map<INetServer,String> map = NetworkBuilder.buildAllServers( config.get( "network", "servers", new JsonArray() ).toString() );
 
             if( ! map.isEmpty() )
             {

@@ -181,6 +181,9 @@ public final class Stick
      */
     public Stick start( String sModelName )
     {
+        UtilSys.getLogger().say( "Stick: An 'Execution Environment' (ExEn) for the 'Mingle Standard Platform' (MSP).\n" +
+                                 "       Version "+ UtilSys.getVersion( getClass() ) );   // Do not move this: for clarity, the best is to start with this message
+
         if( UtilStr.isMeaningless( sModelName ) )
             sModelName = deviMgr.isEmpty() ? "None" : "Unknown";    // "None" means that no model was provided. "Unknown" means that a model was provided but its name is unknown
         else
@@ -224,7 +227,7 @@ public final class Stick
 
         try
         {
-            netwMgr.start( new ServerListener(), config.getNetworkServersOutline() );
+            netwMgr.start( new ServerListener(), config );
 
             // If NetworkManager is not empty (even if transpiled code is empty) we can not exit because
             // NetworkManager can receive requests to create Scripts, Drivers, Devices and Rules.
@@ -253,8 +256,6 @@ public final class Stick
 
         String sInfo = new StringBuilder()
                 .append( '\n' )
-                .append( "Stick: An 'Execution Environment' (ExEn) for the 'Mingle Standard Platform' (MSP).\n" )
-                .append( "       Version "    ).append( UtilSys.getVersion( getClass() ) ).append( '\n' ).append( '\n' )
                 .append( "Model   = "         ).append( sModelName ).append( '\n' )
                 .append( "Config  = "         ).append( config.getURI() ).append( '\n' )
                 .append( "Home    = "         ).append( UtilSys.fHomeDir ).append( '\n' )
@@ -816,12 +817,12 @@ public final class Stick
 
             if( driver == null )
             {
-                driver = drvrMgr.first( cmd -> cmd.has( name ) );
+                driver = drvrMgr.first( drv -> drv.has( name ) );
 
                 if( driver != null )
                     driver4device.put( name, driver );
                 else
-                    Stick.this.failed( new MingleException(), "No driver for "+ name );
+                    Stick.this.failed( new MingleException(), "No driver for device '"+ name +"'\nCheck Stick log file." );
             }
 
             return driver;

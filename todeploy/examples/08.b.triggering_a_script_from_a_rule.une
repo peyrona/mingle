@@ -40,13 +40,14 @@ DEVICE console
 
 
 SCRIPT I_am_a_script
+   ONSTART
    LANGUAGE java
    FROM {
-           System.out.println( "At least one metric is above 80% (using script invocation)" );
+           System.out.println( "At least one metric is above 20% (using script invocation)" );
         }
 
 
-WHEN ANY metric ABOVE 80   # Use a number of your choice
+WHEN ANY metric ABOVE 20   # Use a number of your choice
 THEN I_am_a_script         # This will trigger the script
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

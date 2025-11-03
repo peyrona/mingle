@@ -209,6 +209,12 @@ final class EvalByAST
         return true;
     }
 
+    void shutdown()
+    {
+        if( executor != null )
+            executor.shutdownExecutor();
+    }
+
     Object eval()
     {
      // This is not needed because it is cheked by NAXE.java -->
@@ -251,7 +257,9 @@ final class EvalByAST
 
                 if( result != null )
                 {
-                    reset();
+                    if( executor != null )
+                        executor.cancelAllTasks();
+
                     onSolved.accept( result );
                 }
             }
@@ -262,8 +270,7 @@ final class EvalByAST
 
     void reset()
     {
-        if( executor != null )
-            executor.cancelAllTasks();
+        shutdown();
 
         root.reset();
 
@@ -678,10 +685,30 @@ final class EvalByAST
             runningThreads.clear();
         }
 
+
+        void cancelAllTasks()
+        {
+            if( isShuttingDown )
+                return;    // Already shutting down
+
+            // Create a snapshot of currently running threads
+            Set<Thread> threadsToInterrupt = new HashSet<>( runningThreads );
+
+            // Clear the queue first to prevent new tasks from starting
+            getQueue().clear();
+
+            // Interrupt all running threads
+            for( Thread thread : threadsToInterrupt )
+            {
+                if( thread != null && thread.isAlive() )
+                    thread.interrupt();
+            }
+        }
+
         /**
          * Cancels all running tasks and initiates shutdown. This method is thread-safe and can be called multiple times.
          */
-        void cancelAllTasks()
+        void shutdownExecutor()
         {
             if( isShuttingDown )
                 return;    // Already shutting down

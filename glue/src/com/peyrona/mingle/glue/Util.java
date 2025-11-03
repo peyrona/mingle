@@ -130,74 +130,88 @@ public final class Util
         return null;
     }
 
-    public static void catchOutput( Process process, Consumer<Character> onOutput )
+    public static void catchOutput(Process process, Consumer<Character> onOutput)
     {
         if( process == null || onOutput == null )
             return;
 
-        Thread t1 = new Thread( () ->
-                                {
-                                    try( BufferedReader brIn1 = new BufferedReader( new InputStreamReader( process.getInputStream(), StandardCharsets.UTF_8 ) ) )
-                                    {
-                                        String line;
-                                        while( ! Thread.currentThread().isInterrupted() && (line = brIn1.readLine()) != null )
-                                        {
-                                            // Process characters efficiently without creating temporary arrays
-                                            for( int i = 0; i < line.length(); i++ )
-                                                onOutput.accept( line.charAt( i ) );
+        // Cache the line separator to avoid repeated System.lineSeparator() calls
+        final String lineSeparator = System.lineSeparator();
+        final char[] separatorChars = lineSeparator.toCharArray();
 
-                                            onOutput.accept( System.lineSeparator().charAt( 0 ) );  // Preserve line endings
-                                        }
-                                    }
-                                    catch( IOException ex )
-                                    {
-                                        // Stream closed or error - normal termination
-                                    }
-                                } );
+        Thread t1 = new Thread( () ->
+        {
+            try( BufferedReader brIn1 = new BufferedReader( new InputStreamReader( process.getInputStream(), StandardCharsets.UTF_8 ) ) )
+            {
+                String line;
+
+                while( !Thread.currentThread().isInterrupted() && (line = brIn1.readLine()) != null )
+                {
+                    // Process characters efficiently without creating temporary arrays
+                    for( int i = 0; i < line.length(); i++ )
+                    {
+                        onOutput.accept( line.charAt( i ) );
+                    }
+
+                    // Send all line separator characters to preserve line endings correctly on all platforms
+                    for( char separatorChar : separatorChars )
+                    {
+                        onOutput.accept( separatorChar );
+                    }
+                }
+            }
+            catch( IOException ex )
+            {
+                // Stream closed or error - normal termination
+            }
+        } );
 
         Thread t2 = new Thread( () ->
-                                {
-                                    try( BufferedReader brIn2 = new BufferedReader( new InputStreamReader( process.getErrorStream(), StandardCharsets.UTF_8 ) ) )
-                                    {
-                                        String line;
-                                        while( ! Thread.currentThread().isInterrupted() && (line = brIn2.readLine()) != null )
-                                        {
-                                            // Process characters efficiently without creating temporary arrays
-                                            for( int i = 0; i < line.length(); i++ )
-                                                onOutput.accept( line.charAt( i ) );
+        {
+            try( BufferedReader brIn2 = new BufferedReader( new InputStreamReader( process.getErrorStream(), StandardCharsets.UTF_8 ) ) )
+            {
+                String line;
 
-                                            onOutput.accept( System.lineSeparator().charAt( 0 ) );  // Preserve line endings
-                                        }
-                                    }
-                                    catch( IOException ex )
-                                    {
-                                        // Stream closed or error - normal termination
-                                    }
-                                } );
+                while( ! Thread.currentThread().isInterrupted() && (line = brIn2.readLine()) != null )
+                {
+                    // Process characters efficiently without creating temporary arrays
+                    for( int i = 0; i < line.length(); i++ )
+                        onOutput.accept( line.charAt( i ) );
+
+                    // Send all line separator characters to preserve line endings correctly on all platforms
+                    for( char separatorChar : separatorChars )
+                        onOutput.accept( separatorChar );
+                }
+            }
+            catch( IOException ex )
+            {
+                // Stream closed or error - normal termination
+            }
+        } );
 
         UtilSys.execute( Util.class.getName(),
-                         () ->
-                            {
-                                try
-                                {
-                                    t1.start();
-                                    t2.start();
+                        () ->
+                           {
+                               try
+                               {
+                                   t1.start();
+                                   t2.start();
 
-                                    // Wait for process to complete (indefinitely for long-running processes)
-                                    process.waitFor();
+                                   // Wait for process to complete (indefinitely for long-running processes)
+                                   process.waitFor();
 
-                                    // After process completes, give streams reasonable time to flush remaining output
-                                    t1.join( 5000 );  // 5 seconds timeout for stdout
-                                    t2.join( 5000 );  // 5 seconds timeout for stderr
-                                }
-                                catch( InterruptedException ex )
-                                {
-                                    // Restore interrupted status and interrupt stream threads
-                                    Thread.currentThread().interrupt();
-                                    t1.interrupt();
-                                    t2.interrupt();
-                                }
-                            } );
+                                   // After process completes, give streams reasonable time to flush remaining output
+                                   t1.join( 5000 );  // 5 seconds timeout for stdout
+                                   t2.join( 5000 );  // 5 seconds timeout for stderr
+                               }
+                               catch( InterruptedException ex )
+                               {
+                                   // Restore interrupted status and interrupt stream threads
+                                   Thread.currentThread().interrupt();
+                                   t1.interrupt();
+                                   t2.interrupt();
+                               }
+                           } );
     }
 
     public static void killProcess( Process proc )

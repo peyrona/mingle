@@ -11,6 +11,7 @@ import com.peyrona.mingle.lang.japi.UtilSys;
 import io.undertow.websockets.WebSocketConnectionCallback;
 import io.undertow.websockets.core.*;
 import io.undertow.websockets.spi.WebSocketHttpExchange;
+import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.util.*;
@@ -158,7 +159,7 @@ public final class CommBridge implements WebSocketConnectionCallback
 
         if( path != null && path.contains( "/bridge/" ) )
         {
-            String exenHash = path.substring( path.lastIndexOf( "/" ) + 1 );
+            String exenHash = path.substring( path.lastIndexOf( File.separator ) + 1 );
 
             if( !exenHash.isEmpty() && !exenHash.equals( "bridge" ) )
             {

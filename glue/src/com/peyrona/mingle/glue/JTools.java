@@ -11,7 +11,9 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
 import java.awt.Dimension;
+import java.awt.HeadlessException;
 import java.awt.Image;
+import java.awt.KeyboardFocusManager;
 import java.awt.Toolkit;
 import java.awt.Window;
 import java.awt.event.ActionEvent;
@@ -83,7 +85,7 @@ public final class JTools
 
     public static void info( String msg )
     {
-        info( msg, Main.frame );
+        info( msg, getFocusedWindow() );
     }
 
     public static void info( String msg, Component origin )
@@ -102,7 +104,7 @@ public final class JTools
 
     public static void alert( String msg )
     {
-        alert( msg, Main.frame );
+        alert( msg, getFocusedWindow() );
     }
 
     public static void alert( String msg, Component origin )
@@ -126,7 +128,7 @@ public final class JTools
 
     public static boolean confirm( String msg, Component origin )
     {
-        origin = (origin == null) ? Main.frame : origin;
+        origin = (origin == null) ? getFocusedWindow() : origin;
 
         int result = JOptionPane.showConfirmDialog( origin,
                                                     msg,
@@ -148,7 +150,7 @@ public final class JTools
         JComponent     comp;
         JTextComponent text;
 
-        origin = (origin == null) ? Main.frame : origin;
+        origin = (origin == null) ? getFocusedWindow() : origin;
 
         if( bMultiLine )
         {
@@ -175,9 +177,12 @@ public final class JTools
         String[] options = { "Ignore error", "Empty ExEn", "Exit Glue", "Copy to clipboard" };
         int      result  = JOptionPane.showOptionDialog( origin, comp, "Error", JOptionPane.DEFAULT_OPTION, JOptionPane.ERROR_MESSAGE, null, options, options[0] );
 
-             if( result == 1 )  Main.frame.getExEnTabsPane().clear();
-        else if( result == 2 )  Main.exit();
-        else if( result == 3 )  JTools.toClipboard( text.getText() );
+        switch( result )
+        {
+            case 1: Main.frame.getExEnsTabPane().clear(); break;
+            case 2: Main.exit();                          break;
+            case 3: JTools.toClipboard( text.getText() ); break;
+        }
     }
 
     public static void error( Exception exc )
@@ -213,7 +218,7 @@ public final class JTools
         msg   = (msg   == null) ? "Provide"            : msg;
         title = (title == null) ? "Please, provide..." : title;
 
-        String s = (String) JOptionPane.showInputDialog( Main.frame, msg, title, JOptionPane.PLAIN_MESSAGE );
+        String s = (String) JOptionPane.showInputDialog( getFocusedWindow(), msg, title, JOptionPane.PLAIN_MESSAGE );
 
         return UtilStr.isEmpty( s ) ? null : s;
     }
@@ -256,7 +261,7 @@ public final class JTools
         frmWait.add( new JLabel( (message == null ? "Please, wait..." : message) ), BorderLayout.NORTH );
         frmWait.add( bar, BorderLayout.CENTER );
         frmWait.setDefaultCloseOperation( JFrame.DISPOSE_ON_CLOSE );
-        frmWait.setLocationRelativeTo( Main.frame );
+        frmWait.setLocationRelativeTo( getFocusedWindow() );
         frmWait.setAutoRequestFocus( true );
         frmWait.setAlwaysOnTop( true );
         frmWait.setUndecorated( true );
@@ -268,17 +273,27 @@ public final class JTools
         frmWait.toFront();
     }
 
+    public static Window getFocusedWindow()
+    {
+        Window focusedWindow = KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusedWindow();
+
+        if( focusedWindow == null )
+            return getFocusedWindow();
+
+        return focusedWindow;
+    }
+
     public static void toClipboard( String str )
     {
         try
         {
-            java.awt.datatransfer.Clipboard clipboard =
-                java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
-            java.awt.datatransfer.StringSelection selection =
-                new java.awt.datatransfer.StringSelection( str );
-            clipboard.setContents( selection, null );
+            java.awt.datatransfer.Clipboard       clipboard = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard();
+            java.awt.datatransfer.StringSelection selection = new java.awt.datatransfer.StringSelection( str );
+
+            if( clipboard != null && selection != null )
+                clipboard.setContents( selection, null );
         }
-        catch( Exception ex )
+        catch( HeadlessException ex )
         {
             JTools.error( "Failed to copy URL to clipboard: " + ex.getMessage() );
         }
@@ -644,7 +659,7 @@ public final class JTools
             jfc.setCurrentDirectory( UtilSys.fHomeDir );
             jfc.setPreferredSize( new Dimension( 800, 800 ) );
 
-            int option = jfc.showSaveDialog( Main.frame );
+            int option = jfc.showSaveDialog( getFocusedWindow() );
 
             if( option == JFileChooser.APPROVE_OPTION )
             {

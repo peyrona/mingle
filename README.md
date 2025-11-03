@@ -27,33 +27,31 @@
 
  **How to install Mingle?**
 
-> 1. Download lastest release (at the right side of this web page).
-> 2. Create a folder in you PC named "Mingle" (or whatever you like).
-> 3. Unzip the downloaded file inside your local "Mingle" folder.
-> 4. Either:<br>
->    a) Install Java 11 or above in your local machine.<br>
->    b) Make a folder inside your 'Mingle' folder and make sure the name contains the word "jdk" (e.g. "jdk.11.linux") and place inside this folder all JDK files. You can download JDK from here: [Adoptium](https://adoptium.net)
-
+> 1. Download lastest release and unzip it inside a folder (e.g. create a folder named 'Mingle').
+>
+> 2. If you have Java 11 or above installed in your PC, you are done.<br>
+>    Otherwise, execute the appropriate 'get-java-*' script.<br>
+>    Note: if need, change the script permissions to make it executable (chmod +x get_java* or similar).
 
  **What is the easiest way to start?**
 
 > All needed tools are integrated in the IDE (Integrated Development Environment). So, beginners only need to know about the IDE.
->
->
-> "Glue" is the name for the IDE, it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
+> "Glue" is the IDE's name, it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
 >
 > So, our recommendation is:
-> 1.  Start **Glue**: for Linux, use "menu.sh"; for other OOSS use "run-win.ps1" or "run-mac.sh" file.
+> 1.  Start **Glue**: for Linux, use "menu.sh"; for Windows "run-win.ps1", for MacOS "run-mac.sh" file.
 > 2.  Open the editor (click the pencil icon at toolbar).
 > 3.  Open an example (under 'examples' folder): they are numbered from easiest to smartest.
 > 4.  Read, understand and test (play with it).
 > 5.  Modify the _Une_ source code and re-test.
 > 6.  Go to #3
 
+ **I am an experienced Linux user or a developer**
+> Have a look at the script 'run.sh' for lots of information about how to use all the tools that form MSP.
 
- **What licence has Mingle?**
+ **What license has Mingle?**
 
-> Everything is Open Source (Apache License 2.0): the language itself, the MSP specifications, all the source code and even the documentation. So everyone can use and distribute everything for free (no charges, never, for nothing).
+> Everything is Open Source under the Apache License 2.0, including the language itself, the MSP specifications, all the source code and even the documentation.
 >
 > The books (licensed as Creative Commons) are under "todeploy/docs" folder:
 > * Une_language.pdf
@@ -62,6 +60,6 @@
 
  **What about the logo?**
 
-> Following the tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
+> Following the Open Source tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
 
 ![Une language logo](https://github.com/peyrona/mingle/blob/main/todeploy/docs/images/mingle-logo-64x64.png)

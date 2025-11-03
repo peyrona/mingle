@@ -3,6 +3,7 @@ package com.peyrona.mingle.glue.gswing;
 
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.event.ActionEvent;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -12,11 +13,18 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 import java.util.function.Function;
+import javax.swing.AbstractAction;
+import javax.swing.ActionMap;
 import javax.swing.DefaultListModel;
+import javax.swing.InputMap;
+import javax.swing.JComponent;
 import javax.swing.JLabel;
 import javax.swing.JList;
+import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 
 /**
  *
@@ -330,13 +338,32 @@ public class GList<T>
         return this;
     }
 
-    /**
-     * Action top be executed when used double-clicks or press Enter on an item.
+     /**
+     * Action top be executed when the highlighted (selection) changes.
      *
      * @param action
      * @return Itself.
      */
-    public GList<T> onPicked( final Consumer<T> action )
+    public GList<T> onHighlighted( final Consumer<GList<T>> action )
+    {
+        list.addListSelectionListener( new ListSelectionListener()
+                                            {
+                                                @Override
+                                                public void valueChanged( ListSelectionEvent lse )
+                                                {
+                                                    action.accept( GList.this );
+                                                }
+                                            } );
+        return this;
+    }
+
+    /**
+     * Action top be executed when the user double-clicks or press Enter on an item.
+     *
+     * @param action
+     * @return Itself.
+     */
+    public GList<T> onPicked( final Consumer<GList<T>> action )
     {
         list.addMouseListener( new MouseAdapter()
                                 {
@@ -344,7 +371,7 @@ public class GList<T>
                                     public void mouseClicked( MouseEvent me )
                                     {
                                         if( me.getClickCount() == 2 )
-                                            action.accept( getSelected() );
+                                            action.accept( GList.this );
                                     }
                                 } );
 
@@ -354,9 +381,27 @@ public class GList<T>
                                     public void keyPressed( KeyEvent ke )
                                     {
                                         if( ke.getKeyCode() == KeyEvent.VK_ENTER )
-                                            action.accept( getSelected() );
+                                            action.accept( GList.this );
                                     }
                                } );
+        return this;
+    }
+
+    public GList setKey( final KeyStroke ks, final Consumer<GList<T>> action )
+    {
+        InputMap  inputMap  = list.getInputMap( JComponent.WHEN_FOCUSED );
+        ActionMap actionMap = list.getActionMap();
+
+        inputMap.put( ks, ks.toString() );
+        actionMap.put( ks.toString(),
+                       new AbstractAction()
+                        {
+                            @Override
+                            public void actionPerformed( ActionEvent ae )
+                            {
+                                action.accept( GList.this );
+                            }
+                        } );
         return this;
     }
 

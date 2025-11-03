@@ -72,27 +72,32 @@
     {
         "module": "network",
 
+        # Network grid: to send changes and requests that happen in this ExEn to other ExEns in the grid.
+        "grid": { },
+
         # Servers: transport channels to receive requests sent by other ExEns and tools (e.g. Glue)
 
         "servers": [
                       {
-                          "name"   : "Plain Socket Server",
-                          "init"   : { "port"  : 55886,                                      # By default, 55886 for plain sockets and 55888 for websockets
-                                       "allow" : "intranet" },                               # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-                          "builder": "com.peyrona.mingle.network.socket.PlainSocketServer",  # How to create the server that accept connections
-                          "uris"   : ["file://{*home.lib*}network.jar"]
+                          "name"       : "Plain Socket Server",                                  # Mandatory
+                          "description": "TCP socket connection without encryption",             # Optional but recommened
+                          "init"       : { "port"  : 55886,                                      # By default, 55886 for plain sockets and 55888 for websockets
+                                           "allow" : "intranet" },                               # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                          "builder"    : "com.peyrona.mingle.network.socket.PlainSocketServer",  # How to create the server that accept connections
+                          "uris"       : ["file://{*home.lib*}network.jar"]
                       }
-        # As example: ,
-        #             {
-        #                 "name"   : "SSL Socket Server",
-        #                 "init"   : { "port"    : 55888,                                    # By default, 55886 for plain sockets and 55888 for websockets
-        #                              "certFile": "./certificate.p12",                      # SSL Certificate file
-        #                              "keyFile" : "./private.key",                          # Private Key File
-        #                              "password": "mypass",                                 # Certificate password
-        #                              "allow"   : "any" },                                  # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-        #                 "builder": "com.peyrona.mingle.network.socket.SSLSocketServer",    # How to create the server that accept connections
-        #                 "uris"   : ["file://{*home.lib*}network.jar"]
-        #              }
+                      ,
+                      {
+                          "name"       : "SSL Socket Server",                                    # Mandatory
+                          "description": "TCP socket connection with TLS encryption",            # Optional but recommened
+                          "init"       : { "port"    : 55888,                                    # By default, 55886 for plain sockets and 55888 for websockets
+                                           "certFile": "./certificate.p12",                      # SSL Certificate file
+                                           "keyFile" : "./private.key",                          # Private Key File
+                                           "password": "mypass",                                 # Certificate password
+                                           "allow"   : "any" },                                  # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                          "builder"    : "com.peyrona.mingle.network.socket.SSLSocketServer",    # How to create the server that accept connections
+                          "uris"       : ["file://{*home.lib*}network.jar"]
+                       }
                   ],
 
         # Transport channels to create clients that will send requests to servers (mainly used by Gum).
@@ -100,15 +105,134 @@
 
         "clients": [
                       {
-                          "name"   : "Plain Sockets Client",
-                          "init"   : { "port"    : 55886,                               # By default, 55886 for plain sockets and 55888 for websockets
-                                       "timeout" : 30 },                                # Seconds to wait to stablish the connection. By default 0 (wait forever)
-                          "builder": "com.peyrona.mingle.network.socket.SocketClient",  # How to create the client
-                          "uris"   : ["file://{*home.lib*}network.jar"]
-                      }
-                  ],
+                          "name"       : "Plain Sockets Client",                            # Mandatory
+                          "description": "TCP socket connection without encryption",        # Optional but recommened
+                          "init"       : { "host"    : null,                                # By default 'localhost'
+                                           "port"    : 55886,                               # By default, 55886 for plain sockets and 55888 for websockets
+                                           "timeout" : 30 },                                # Seconds to wait to stablish the connection. By default 0 (wait forever)
+                          "builder"    : "com.peyrona.mingle.network.socket.SocketClient",  # How to create the client
+                          "uris"       : ["file://{*home.lib*}network.jar"],
+                          "ui"         :
+                                         [
+                                            {
+                                              "key": "host",
+                                              "type": "string",
+                                              "label": "Host",
+                                              "tooltip": "",
+                                              "default": "localhost",
+                                              "required": true,
+                                              "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
+                                            },
+                                            {
+                                              "key": "port",
+                                              "type": "integer",
+                                              "label": "Port",
+                                              "tooltip": "",
+                                              "default": 55886,
+                                              "required": true,
+                                              "validation": {"min": 1024, "max": 65535}
+                                            },
+                                            {
+                                              "key": "timeout",
+                                              "type": "integer",
+                                              "label": "Timeout (seconds)",
+                                              "tooltip": "",
+                                              "default": 30,
+                                              "required": false,
+                                              "validation": {"min": 1, "max": 300}
+                                            }
+                                        ]
+                      },
+                      {
+                          "name"       : "SSL Socket Client",                                  # Mandatory
+                          "description": "TCP socket connection with TLS encryption",          # Optional but recommened
+                          "init"       : { "host"    : null,                                   # By default 'localhost'
+                                           "port"    : 55886,                                  # By default, 55886 for plain sockets and 55888 for websockets
+                                           "timeout" : 30 },                                   # Seconds to wait to stablish the connection. By default 0 (wait forever)
+                          "builder"    : "com.peyrona.mingle.network.socket.SSLSocketClient",  # How to create the client
+                          "uris"       : ["file://{*home.lib*}network.jar"],
+                          "ui"         :
+                                         [
+                                            {
+                                              "key": "host",
+                                              "type": "string",
+                                              "label": "Host",
+                                              "tooltip": "",
+                                              "default": "localhost",
+                                              "required": true,
+                                              "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
+                                            },
+                                            {
+                                              "key": "port",
+                                              "type": "integer",
+                                              "label": "Port",
+                                              "tooltip": "",
+                                              "default": 55886,
+                                              "required": true,
+                                              "validation": {"min": 1024, "max": 65535}
+                                            },
+                                            {
+                                              "key": "timeout",
+                                              "type": "integer",
+                                              "label": "Timeout (seconds)",
+                                              "tooltip": "",
+                                              "default": 30,
+                                              "required": false,
+                                              "validation": {"min": 1, "max": 300}
+                                            },
+                                            {
+                                              "key": "cert_file",
+                                              "type": "file",
+                                              "label": "Certificate File",
+                                              "tooltip": "",
+                                              "required": true,
+                                              "accept": [".pem", ".crt", ".cer"]
+                                            },
+                                            {
+                                              "key": "key_file",
+                                              "type": "file",
+                                              "label": "Key File",
+                                              "tooltip": "",
+                                              "required": true,
+                                              "accept": [".key", ".pem"]
+                                            },
+                                            {
+                                              "key": "password",
+                                              "type": "password",
+                                              "label": "Certificate Password",
+                                              "tooltip": "",
+                                              "required": false
+                                            }
+                                        ]
+                      },
+                      {
+                        "name"       : "WebSocket",
+                        "description": "WebSocket connection for real-time web communication",
+                        "init"       : { "host"    : null,                                   # By default: "ws://localhost:8080/ws"
+                                         "headers" : null },                                 # By default, null
+                        "builder"    : "com.peyrona.mingle.network.websocket.WebSocketClient",
+                        "uris"       : ["file://{*home.lib*}network.jar", "file://{*home.lib*}websocket.jar"],
+                        "ui"         :
+                                       [
+                                          {
+                                            "key": "url",
+                                            "type": "url",
+                                            "label": "WebSocket URL",
+                                            "tooltip": "",
+                                            "default": "ws://localhost:8080/ws",
+                                            "required": true,
+                                            "validation": {"pattern": "^wss?://.+"}
+                                          },
+                                          {
+                                            "key": "headers",
+                                            "type": "keyvalue",
+                                            "label": "Custom Headers",
+                                            "tooltip": "",
+                                            "required": false
+                                          }
+                                        ]
+                        }
 
-        # Network grid: to send changes and requests that happen in this ExEn to other ExEns in the grid.
-        "grid": { }
+                  ]
     }
 ]

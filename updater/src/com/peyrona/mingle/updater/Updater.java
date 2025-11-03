@@ -1,4 +1,3 @@
-
 package com.peyrona.mingle.updater;
 
 import com.peyrona.mingle.lang.interfaces.ILogger;
@@ -101,6 +100,7 @@ public final class Updater
             return;
         }
 
+        File tempRemoteCatalog = null;
         try
         {
             UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions" );
@@ -110,7 +110,7 @@ public final class Updater
             File localCatalogFile = new File( fMingleDir, "catalog.json" );
             String localVersion = null;
 
-            if( localCatalogFile != null && localCatalogFile.exists() && localCatalogFile.isFile() )
+            if( localCatalogFile.exists() && localCatalogFile.isFile() )
             {
                 try
                 {
@@ -137,45 +137,26 @@ public final class Updater
 
             // Get remote catalog version
             String remoteVersion = null;
-            File   tempRemoteCatalog = null;
+            
+            tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
 
-            try
+            if( GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempRemoteCatalog.toPath() ) )
             {
-                tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
-                if( tempRemoteCatalog != null )
-                    tempRemoteCatalog.deleteOnExit();
-
-                if( GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempRemoteCatalog.toPath() ) )
+                String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
+                if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
                 {
-                    String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
-                    if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
-                    {
-                        remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
-                        UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
-                    }
-                    else
-                    {
-                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Remote catalog.json is empty" );
-                    }
+                    remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
+                    UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
                 }
                 else
                 {
-                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download remote catalog.json" );
-                    return;
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Remote catalog.json is empty" );
                 }
             }
-            catch( IOException e )
+            else
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Error downloading remote catalog.json: " + e.getMessage() );
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download remote catalog.json" );
                 return;
-            }
-            finally
-            {
-                // Clean up temp file
-                if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
-                {
-                    tempRemoteCatalog.delete();
-                }
             }
 
             // Compare versions
@@ -192,12 +173,20 @@ public final class Updater
                 UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
 
                 if( fnExcuteUpdate.get() )
-                    update( fMingleDir, bDryRun );
+                    update( fMingleDir, bDryRun, tempRemoteCatalog );
             }
         }
         catch( Exception e )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error during version check: " + e.getMessage() );
+        }
+        finally
+        {
+            // Clean up temp file
+            if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
+            {
+                tempRemoteCatalog.delete();
+            }
         }
     }
 
@@ -206,9 +195,10 @@ public final class Updater
      *
      * @param fMingleDir Base directory path to check
      * @param bDryRun If true, simulate updates without modifying files
+     * @param catalogFile The catalog file to use for the update.
      * @return true if update process completed successfully, false otherwise
      */
-    public static boolean update( File fMingleDir, boolean bDryRun )
+    public static boolean update( File fMingleDir, boolean bDryRun, File catalogFile )
     {
         // Input validation
         if( fMingleDir == null )
@@ -236,7 +226,7 @@ public final class Updater
             UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
 
             GitHubFileUpdater updater = new GitHubFileUpdater( fMingleDir, bDryRun );
-            updater.checkAndUpdateFiles();
+            updater.checkAndUpdateFiles(catalogFile);
 
             UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
 

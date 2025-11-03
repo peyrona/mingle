@@ -11,13 +11,11 @@ import java.util.Map;
 /**
  * This class provides basic information about usage in: RAM, Disks and CPU.
  * <p>
- * Note: The number of Root FSs and their total space is readed only once: when
- * the number od them or capacity changes, the appliaction that calls here must
+ * Note: The number of Root FSs and their total space is read only once: when
+ * the number od them or capacity changes, the application that calls here must
  * be rebooted.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */

@@ -48,31 +48,18 @@ public class GitHubFileUpdater
     /**
      * Checks and updates files in the base directory.
      */
-    public void checkAndUpdateFiles()
+    public void checkAndUpdateFiles(File catalogFile)
     {
         UtilSys.getLogger().log( ILogger.Level.INFO, "Starting file check and update process" );
 
         try
         {
-            File catalogFile = downloadCatalogFromGitHub();
-
-            if( catalogFile == null )
-            {
-                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Failed to download catalog.json from GitHub - this should not happen" );
+            if (catalogFile == null || !catalogFile.exists()) {
+                UtilSys.getLogger().log(ILogger.Level.SEVERE, "Catalog file not provided or does not exist.");
                 errors++;
                 return;
             }
-
-            try
-            {
-                processFiles( catalogFile, new HashFileComparator(), true );
-            }
-            finally
-            {
-                if( catalogFile.exists() )
-                    catalogFile.delete();
-            }
-
+            processFiles( catalogFile, new HashFileComparator(), true );
         }
         catch( Exception e )
         {
@@ -91,7 +78,7 @@ public class GitHubFileUpdater
      *
      * @return Number of files that need updates
      */
-    public int checkFilesOnly()
+    public int checkFilesOnly(File catalogFile)
     {
         filesChecked = 0;
         filesWouldUpdate = 0;
@@ -101,26 +88,12 @@ public class GitHubFileUpdater
 
         try
         {
-            File catalogFile = downloadCatalogFromGitHub();
-            if( catalogFile == null )
-            {
-                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Failed to download catalog.json from GitHub - this should not happen" );
+            if (catalogFile == null || !catalogFile.exists()) {
+                UtilSys.getLogger().log(ILogger.Level.SEVERE, "Catalog file not provided or does not exist.");
                 errors++;
                 return filesWouldUpdate;
             }
-
-            try
-            {
-                processFiles( catalogFile, new HybridFileComparator(), false );
-            }
-            finally
-            {
-                if( catalogFile.exists() )
-                {
-                    catalogFile.delete();
-                }
-            }
-
+            processFiles( catalogFile, new HashFileComparator(), false );
         }
         catch( Exception e )
         {
@@ -144,62 +117,6 @@ public class GitHubFileUpdater
     //------------------------------------------------------------------------//
     // PRIVATE METHODS
     //------------------------------------------------------------------------//
-
-    /**
-     * Downloads catalog.json from GitHub todeploy directory.
-     */
-    private File downloadCatalogFromGitHub()
-    {
-        File tempCatalog = null;
-        try
-        {
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Downloading catalog.json from GitHub todeploy directory" );
-
-            tempCatalog = File.createTempFile( "catalog", ".json" );
-            tempCatalog.deleteOnExit();
-
-            boolean success = GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempCatalog.toPath() );
-
-            if( success )
-            {
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded catalog.json from GitHub todeploy directory" );
-                return tempCatalog;
-            }
-            else
-            {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download catalog.json from GitHub todeploy directory" );
-                cleanupTempFile( tempCatalog );
-                return null;
-            }
-        }
-        catch( IOException e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error creating temporary file for catalog.json" );
-            cleanupTempFile( tempCatalog );
-            return null;
-        }
-        catch( RuntimeException e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error downloading catalog.json" );
-            cleanupTempFile( tempCatalog );
-            throw e;
-        }
-    }
-    
-    private void cleanupTempFile( File tempFile )
-    {
-        if( tempFile != null && tempFile.exists() )
-        {
-            try
-            {
-                tempFile.delete();
-            }
-            catch( SecurityException e )
-            {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Could not delete temporary file: " + tempFile.getAbsolutePath() );
-            }
-        }
-    }
 
     /**
      * Processes files using the specified discovery strategy and comparator.
@@ -230,7 +147,7 @@ public class GitHubFileUpdater
                 if( ! entries.isEmpty() )
                 {
                     UtilSys.getLogger().log( ILogger.Level.INFO, "Using catalog.json for file verification" );
-                    return new CatalogFileDiscoveryStrategy( catalogFile );
+                    return new CatalogFileDiscoveryStrategy( catalogContent );
                 }
             }
             catch( IOException e )
@@ -296,7 +213,7 @@ public class GitHubFileUpdater
                 return;
             }
 
-            if( result.needsUpdate )  handleFileNeedsUpdate( entry, result, performUpdates );
+            if( result.needsUpdate )  handleFileNeedsUpdate( entry, result, githubInfo, performUpdates );
             else                      UtilSys.getLogger().log( ILogger.Level.INFO, "File is up to date: " + entry.path + " (" + result.reason + ")" );
         }
         catch( RuntimeException e )
@@ -338,7 +255,7 @@ public class GitHubFileUpdater
     /**
      * Handles files that need updates.
      */
-    private void handleFileNeedsUpdate( FileDiscoveryStrategy.FileEntry entry, FileComparator.ComparisonResult result, boolean performUpdates )
+    private void handleFileNeedsUpdate( FileDiscoveryStrategy.FileEntry entry, FileComparator.ComparisonResult result, GitHubApiClient.GitHubFileResponse githubInfo, boolean performUpdates )
     {
         String logPrefix = dryRun ? "DRY-RUN: " : "";
 
@@ -354,7 +271,6 @@ public class GitHubFileUpdater
         else if( performUpdates )
         {
             File localFile = new File( baseDir, entry.path );
-            GitHubApiClient.GitHubFileResponse githubInfo = getGitHubFileInfo( entry );
 
             FileUpdateOperation updateOp = new FileUpdateOperation( backupMgr, entry.path, localFile, githubInfo );
 

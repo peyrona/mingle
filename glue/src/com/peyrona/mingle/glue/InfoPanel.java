@@ -1,8 +1,8 @@
 
-package com.peyrona.mingle.glue.images;
+package com.peyrona.mingle.glue;
 
-import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.Tip;
+import com.peyrona.mingle.glue.gswing.GTip;
+import com.peyrona.mingle.glue.gswing.WndBoundsPersist;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import javax.swing.SwingUtilities;
 
@@ -12,12 +12,12 @@ import javax.swing.SwingUtilities;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class pnlInfo extends javax.swing.JPanel
+public class InfoPanel extends javax.swing.JPanel
 {
     /**
      * Creates new form pnlInfo
      */
-    public pnlInfo()
+    public InfoPanel()
     {
         initComponents();
 
@@ -42,6 +42,7 @@ public class pnlInfo extends javax.swing.JPanel
         lblIcon = new javax.swing.JLabel();
         btnResetTips = new javax.swing.JButton();
         jTextArea1 = new javax.swing.JTextArea();
+        btnResetBounds = new javax.swing.JButton();
 
         jLabel1.setFont(new java.awt.Font("Ubuntu", 0, 48)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -61,6 +62,7 @@ public class pnlInfo extends javax.swing.JPanel
         lblVersion.setText("???");
 
         btnResetTips.setText("Reset Tips");
+        btnResetTips.setToolTipText("After clearing, all tips will be shown");
         btnResetTips.addActionListener(new java.awt.event.ActionListener()
         {
             public void actionPerformed(java.awt.event.ActionEvent evt)
@@ -82,6 +84,16 @@ public class pnlInfo extends javax.swing.JPanel
         jTextArea1.setOpaque(false);
         jTextArea1.setRequestFocusEnabled(false);
 
+        btnResetBounds.setText("Reset bounds");
+        btnResetBounds.setToolTipText("Reset windows and dialogs positions and sizes");
+        btnResetBounds.addActionListener(new java.awt.event.ActionListener()
+        {
+            public void actionPerformed(java.awt.event.ActionEvent evt)
+            {
+                btnResetBoundsActionPerformed(evt);
+            }
+        });
+
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
         this.setLayout(layout);
         layout.setHorizontalGroup(
@@ -90,25 +102,25 @@ public class pnlInfo extends javax.swing.JPanel
                 .addContainerGap()
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
                     .addComponent(jLabel2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(lblVersion, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jLabel4, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(jLabel3, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(lblVersion, javax.swing.GroupLayout.PREFERRED_SIZE, 311, javax.swing.GroupLayout.PREFERRED_SIZE)
                     .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                        .addGap(0, 0, Short.MAX_VALUE)
+                        .addGap(6, 6, 6)
                         .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                .addComponent(jTextArea1, javax.swing.GroupLayout.PREFERRED_SIZE, 305, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                .addContainerGap())
+                            .addComponent(jTextArea1, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.PREFERRED_SIZE, 305, javax.swing.GroupLayout.PREFERRED_SIZE)
                             .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
                                 .addComponent(btnResetTips)
-                                .addGap(119, 119, 119))
-                            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                                .addGroup(layout.createSequentialGroup()
-                                    .addComponent(lblIcon, javax.swing.GroupLayout.PREFERRED_SIZE, 100, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addContainerGap())
-                                .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
-                                    .addComponent(jLabel1)
-                                    .addGap(114, 114, 114)))))))
+                                .addGap(46, 46, 46)
+                                .addComponent(btnResetBounds)
+                                .addGap(29, 29, 29)))))
+                .addContainerGap())
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, layout.createSequentialGroup()
+                .addContainerGap(javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING, false)
+                    .addComponent(jLabel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(lblIcon, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                .addGap(114, 114, 114))
         );
         layout.setVerticalGroup(
             layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
@@ -116,30 +128,41 @@ public class pnlInfo extends javax.swing.JPanel
                 .addContainerGap()
                 .addComponent(jLabel1)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(lblIcon, javax.swing.GroupLayout.PREFERRED_SIZE, 53, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(lblIcon, javax.swing.GroupLayout.PREFERRED_SIZE, 65, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addGap(18, 18, 18)
                 .addComponent(jLabel2)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED, 24, Short.MAX_VALUE)
+                .addGap(18, 18, 18)
                 .addComponent(jTextArea1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addGap(39, 39, 39)
+                .addGap(18, 18, 18)
                 .addComponent(jLabel3)
                 .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
                 .addComponent(jLabel4)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addGap(18, 18, 18)
                 .addComponent(lblVersion)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                .addComponent(btnResetTips)
-                .addGap(5, 5, 5))
+                .addGap(18, 18, 18)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(btnResetTips)
+                    .addComponent(btnResetBounds))
+                .addContainerGap(30, Short.MAX_VALUE))
         );
     }// </editor-fold>//GEN-END:initComponents
 
     private void btnResetTipsActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnResetTipsActionPerformed
     {//GEN-HEADEREND:event_btnResetTipsActionPerformed
-        Tip.reset();
+        GTip.reset();
         btnResetTips.setEnabled( false );
     }//GEN-LAST:event_btnResetTipsActionPerformed
 
+    private void btnResetBoundsActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnResetBoundsActionPerformed
+    {//GEN-HEADEREND:event_btnResetBoundsActionPerformed
+        WndBoundsPersist.reset();
+        btnResetBounds.setEnabled( false );
+
+        JTools.info( "Next time Glue will be started, all windows\nand dialogs will have their default size and position" );
+    }//GEN-LAST:event_btnResetBoundsActionPerformed
+
     // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JButton btnResetBounds;
     private javax.swing.JButton btnResetTips;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;

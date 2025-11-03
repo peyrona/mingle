@@ -313,7 +313,8 @@ public final class StdXprFns
         {
             for( Method method : c.getMethods() )    // getMethods() returns only public methods
             {
-                if( method.getName().equalsIgnoreCase( sFn ) )
+                if( ! method.getDeclaringClass().equals( Object.class ) &&     // Method is not declared in Object class (wait, notify, etc), although if
+                    method.getName().equalsIgnoreCase( sFn ) )                 // it is overwritten by my classes (date, time, etc) it will be included.
                 {
                     if( nArgs < 0 )
                         return method;

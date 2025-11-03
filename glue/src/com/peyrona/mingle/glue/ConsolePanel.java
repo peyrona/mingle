@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.glue;
 
+import com.peyrona.mingle.glue.gswing.GTextPane;
 import com.peyrona.mingle.lang.japi.UtilANSI;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.awt.BorderLayout;
@@ -8,7 +9,6 @@ import java.awt.Color;
 import java.awt.Font;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
-import javax.swing.JTextPane;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.DefaultCaret;
 import javax.swing.text.Style;
@@ -32,7 +32,7 @@ public final class ConsolePanel extends JPanel
 
     //------------------------------------------------------------------------//
 
-    private final JTextPane      txt;
+    private final GTextPane      txt;
     private final StyledDocument doc;
     private final Style          style;
     private final StringBuilder  buffer = new StringBuilder( 2048 );
@@ -41,7 +41,7 @@ public final class ConsolePanel extends JPanel
 
     public ConsolePanel()
     {
-        txt = new JTextPane();
+        txt = new GTextPane();
         txt.setEditable( false );
         txt.setFont( new Font( "Monospaced", Font.PLAIN, 12 ) );
         txt.setOpaque( false );

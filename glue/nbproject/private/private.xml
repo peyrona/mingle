@@ -4,9 +4,10 @@
     <open-files xmlns="http://www.netbeans.org/ns/projectui-open-files/2">
         <group>
             <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/Main.java</file>
-            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/exen/commands/PnlRule.java</file>
-            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/exen/commands/PnlAllCmdsSelector.java</file>
-            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/exen/commands/Dlg4Cmd.java</file>
+            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/ToolbarPanel.java</file>
+            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/exen/exen/Pnl4ExEn.java</file>
+            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/ExEnClient.java</file>
+            <file>file:/home/francisco/proyectos/mingle/glue/src/com/peyrona/mingle/glue/ConnectDlg.java</file>
         </group>
     </open-files>
 </project-private>

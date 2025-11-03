@@ -44,10 +44,10 @@ DEVICE console
 
 RULE I_am_a_rule
      WHEN CPU > 0
-     THEN console SET "At least one metric is above 80% (using indirect invocation)"
+     THEN console SET "At least one metric is above 20% (using indirect invocation)"
 
 
-WHEN ANY metric ABOVE 80
+WHEN ANY metric ABOVE 20
 THEN I_am_a_rule         # This evaluate the RULE "I_am_a_rule" and trigger its actions if it is the case
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

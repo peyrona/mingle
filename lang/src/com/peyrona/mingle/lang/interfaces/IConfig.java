@@ -16,6 +16,8 @@ import java.util.List;
  */
 public interface IConfig
 {
+    IConfig load(String sUri) throws IOException;
+
     /**
      * Returns the Java value for 'varName' (case is ignored), or 'defValue' if 'varName' was not found.<br>
      * <br>
@@ -36,19 +38,19 @@ public interface IConfig
      */
     <T> T get(String module, String varName, T defValue);
 
-    //------------------------------------------------------------------------//
-    // GRID RELATED METHODS
-
     /**
-     * Returns the number of nodes in the section "grid" or null if the section does
-     * not exists or if the section is empty.
+     * Replaces an existing value for an existing variable in an existing module by a new value.<br>
+     * If the variable does not exists, it will be appended to the module.<br>
+     * If new value is a string, it must be enclosed by double quotes ("").<br>
+     * If the module does not exists, an exception is thrown.
      *
-     * @return the number of nodes in the section "grid" or null if the section does
-     *         not exists or if the section is empty.
+     * @param module
+     * @param varName
+     * @param  newValue
+     * @return Itself.
+     * @throws MingleException
      */
-    List<GridNode> getGridNodes();
-
-    int getGridReconectInterval();
+    IConfig set(String module, String varName, Object newValue) throws MingleException;
 
     /**
      * Used by Gum to decide the type of Comm Client to use.
@@ -58,31 +60,10 @@ public interface IConfig
     INetClient getHttpServerNetClient();
 
     /**
-     * Returns the JSON code representing an array with all defined "clients" inside "network" module,
-     * or null if the module does not exist or it does not contains a JSON array.
-     *
-     * @return A JSON code with all defined "clients" inside "network" module (or null).
-     */
-    String getNetworkClientsOutline();
-
-    /**
-     * Returns the JSON code representing an array with all defined "servers" inside "network" module,
-     * or null if the module does not exist or it does not contains a JSON array.
-     *
-     * @return A JSON code with all defined "servers" inside "network" module (or null).
-     */
-    String getNetworkServersOutline();
-
-    /**
      * Returns the location of the configuration file.
      * @return The location of the configuration file
      */
     String getURI();
-
-    boolean isGridDeaf();
-
-    //------------------------------------------------------------------------//
-    IConfig load(String sUri) throws IOException;
 
     /**
      * Returns a new instance of ICmdEncDecLib.<br>
@@ -113,24 +94,26 @@ public interface IConfig
      */
     IXprEval newXprEval();
 
-    /**
-     * Replaces an existing value for an existing variable in an existing module by a new value.<br>
-     * If the variable does not exists, it will be appended to the module.<br>
-     * If new value is a string, it must be enclosed by double quotes ("").<br>
-     * If the module does not exists, an exception is thrown.
-     *
-     * @param module
-     * @param varName
-     * @param  newValue
-     * @return Itself.
-     * @throws MingleException
-     */
-    IConfig set(String module, String varName, Object newValue) throws MingleException;
-
     IConfig setCliArgs( String[] as );
 
     String toStrJSON();
 
     @Override
     String toString();
+
+    //------------------------------------------------------------------------//
+    // GRID RELATED METHODS
+
+    /**
+     * Returns the number of nodes in the section "grid" or null if the section does
+     * not exists or if the section is empty.
+     *
+     * @return the number of nodes in the section "grid" or null if the section does
+     *         not exists or if the section is empty.
+     */
+    List<GridNode> getGridNodes();
+
+    boolean isGridDeaf();
+
+    int getGridReconectInterval();
 }

@@ -71,7 +71,16 @@ public class FileUpdateOperation
         }
 
         // Download new version
-        boolean downloadSuccess = GitHubApiClient.downloadFile( relativePath, localFile.toPath() );
+        boolean downloadSuccess;
+        if( githubInfo.downloadUrl != null )
+        {
+            downloadSuccess = GitHubApiClient.downloadFileFromUrl( githubInfo.downloadUrl, relativePath, localFile.toPath() );
+        }
+        else
+        {
+            UtilSys.getLogger().log( ILogger.Level.INFO, "download_url not available, falling back to constructing download URL for: " + relativePath );
+            downloadSuccess = GitHubApiClient.downloadFile( relativePath, localFile.toPath() );
+        }
 
         if( ! downloadSuccess )
         {

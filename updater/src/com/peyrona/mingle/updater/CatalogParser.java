@@ -1,5 +1,9 @@
 package com.peyrona.mingle.updater;
 
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.util.ArrayList;
@@ -14,12 +18,6 @@ import java.util.List;
  */
 public final class CatalogParser
 {
-    private static final String CATALOG_FILE_PATTERN = "\\{\\s*\"path\"\\s*:\\s*\"([^\"]+)\"\\s*,\\s*\"hash\"\\s*:\\s*\"([a-fA-F0-9]{40}|[a-fA-F0-9]{64})\"\\s*\\}";
-    private static final java.util.regex.Pattern CATALOG_PATTERN = java.util.regex.Pattern.compile( CATALOG_FILE_PATTERN, java.util.regex.Pattern.CASE_INSENSITIVE );
-    
-    private static final String VERSION_PATTERN = "\"version\"\\s*:\\s*\"([^\"]+)\"";
-    private static final java.util.regex.Pattern VERSION_REGEX = java.util.regex.Pattern.compile( VERSION_PATTERN );
-    
     /**
      * Parses catalog.json content to extract file entries.
      *
@@ -38,14 +36,14 @@ public final class CatalogParser
         
         try
         {
-            // Simple JSON parsing (avoiding external dependencies)
-            java.util.regex.Matcher matcher = CATALOG_PATTERN.matcher( catalogContent );
-            
-            while( matcher.find() )
-            {
-                String path = matcher.group( 1 );
-                String hash = matcher.group( 2 );
-                
+            JsonObject catalog = Json.parse(catalogContent).asObject();
+            JsonArray files = catalog.get("files").asArray();
+
+            for (JsonValue fileValue : files) {
+                JsonObject fileObject = fileValue.asObject();
+                String path = fileObject.getString("path", null);
+                String hash = fileObject.getString("hash", null);
+
                 if( path != null && ! path.trim().isEmpty() && 
                     hash != null && ! hash.trim().isEmpty() )
                 {
@@ -85,13 +83,9 @@ public final class CatalogParser
         
         try
         {
-            java.util.regex.Matcher matcher = VERSION_REGEX.matcher( catalogContent );
-            
-            if( matcher.find() )
-            {
-                String version = matcher.group( 1 );
-                return (version != null && ! version.trim().isEmpty()) ? version.trim() : null;
-            }
+            JsonObject catalog = Json.parse(catalogContent).asObject();
+            String version = catalog.getString("version", null);
+            return (version != null && ! version.trim().isEmpty()) ? version.trim() : null;
         }
         catch( Exception e )
         {

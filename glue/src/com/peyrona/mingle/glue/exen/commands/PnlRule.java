@@ -632,7 +632,7 @@ final class PnlRule extends PnlCmdBase
 
     private void btnNAXEActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnNAXEActionPerformed
     {//GEN-HEADEREND:event_btnNAXEActionPerformed
-        GFrame.make()  // I prefer a Frame over a Dialog
+        new GFrame()  // I prefer a Frame over a Dialog
               .title( "Expression Evaluator" )
               .icon( "xpr_eval.png" )
               .onClose( JFrame.DISPOSE_ON_CLOSE )

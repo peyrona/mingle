@@ -18,12 +18,20 @@ import java.util.List;
 public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
 {
     private final File catalogFile;
+    private final String catalogContent;
 
     //------------------------------------------------------------------------//
 
     public CatalogFileDiscoveryStrategy( File catalogFile )
     {
         this.catalogFile = catalogFile;
+        this.catalogContent = null;
+    }
+
+    public CatalogFileDiscoveryStrategy( String catalogContent )
+    {
+        this.catalogFile = null;
+        this.catalogContent = catalogContent;
     }
 
     @Override
@@ -34,20 +42,12 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
 
         try
         {
-            String catalogContent;
-            // Use buffered reading for large files
-            try( java.io.BufferedReader reader = java.nio.file.Files.newBufferedReader( catalogFile.toPath() ) )
+            String content = this.catalogContent;
+            if( content == null )
             {
-                StringBuilder content = new StringBuilder();
-                char[] buffer = new char[8192]; // 8KB buffer
-                int bytesRead;
-                while( (bytesRead = reader.read( buffer )) != -1 )
-                {
-                    content.append( buffer, 0, bytesRead );
-                }
-                catalogContent = content.toString();
+                content = Files.readString( catalogFile.toPath() );
             }
-            List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( catalogContent );
+            List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( content );
 
             for( CatalogParser.CatalogFileEntry entry : catalogFileEntries )
             {
