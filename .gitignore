@@ -34,6 +34,7 @@ Thumbs.db
 *.odg
 *.zip
 *.model
+GEMINI.md
 count_lines.sh
 release.sh
 !/todeploy/**/*.jar
