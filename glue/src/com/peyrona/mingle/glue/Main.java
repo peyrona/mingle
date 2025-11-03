@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.glue;
 
+import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
@@ -15,7 +16,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
 import java.util.function.Supplier;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
@@ -57,19 +57,19 @@ public class Main
         {
             IconFontSwing.register( FontAwesome.getIconFont() );
 
-            SwingUtilities.invokeLater( () ->
+            SwingUtilities.invokeLater(() ->
                 {
                     try { UIManager.setLookAndFeel( UIManager.getSystemLookAndFeelClassName() ); }
                     catch( ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ex ) { /* Nothing to log */ }
 
                     frame.showIt();
 
-                    Tip.show( "Welcome to Glue - The Mingle Swiss-knife tool\n\n"+
+                    GTip.show( "Welcome to Glue - The Mingle Swiss-knife tool\n\n"+
                               "Please read the Mingle Standard Platform manual to get familiar with Glue.\n\n"+
                               "Suggested actions:\n"+
-                              "     a) Connect with a running ExEn ('+' icon)\n"+
+                              "     a) Connect with a running ExEn ('plug' icon or F2)\n"+
                               "     b) Start a local ExEn ('play' icon or F5)\n"+
-                              "     c) Open the Script-Editor ('pencil' icon or F2)." );
+                              "     c) Open the Script-Editor ('pencil' icon or F4)." );
 
                     if( shouldCheckForUpdates() )
                     {
@@ -101,30 +101,14 @@ public class Main
         if( UtilSys.isDevEnv )
             return false;
 
-        File file = new File( UtilSys.getEtcDir(), "glue_last_update_check.txt" );
+        String lastCheckDate = ConfigManager.getLastUpdateCheck();
+        String todayDate     = LocalDate.now().format( java.time.format.DateTimeFormatter.ISO_LOCAL_DATE );
 
-        try
-        {
-            String todayDate     = LocalDate.now().format( DateTimeFormatter.ISO_LOCAL_DATE );
-            String lastCheckDate = null;
+        if( todayDate.equals( lastCheckDate ) )
+            return false;
 
-            if( file.exists() )
-                lastCheckDate = UtilIO.getAsText( file ).trim();
-
-            if( todayDate.equals( lastCheckDate ) )
-                return false;
-
-            UtilIO.newFileWriter()
-                  .setFile( file )
-                  .append( todayDate );
-
-            return true;
-        }
-        catch( IOException ex )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, ex, "Error managing update check file" );
-            return true;  // If we can't manage the file, check for updates
-        }
+        ConfigManager.setLastUpdateCheckToToday();
+        return true;
     }
 
     //------------------------------------------------------------------------//
@@ -133,7 +117,7 @@ public class Main
     //------------------------------------------------------------------------//
     public static final class MainFrame extends JFrame
     {
-        private ExEnsTabbedPane tabExEn;
+        private AllExEnsTabPane tabExEn;
         private ToolbarPanel    toolBar;
 
         //------------------------------------------------------------------------//
@@ -148,7 +132,7 @@ public class Main
 
         //------------------------------------------------------------------------//
 
-        public ExEnsTabbedPane getExEnTabsPane()
+        public AllExEnsTabPane getExEnsTabPane()
         {
             return tabExEn;
         }
@@ -170,7 +154,7 @@ public class Main
                 }
             } );
 
-            tabExEn = new ExEnsTabbedPane();
+            tabExEn = new AllExEnsTabPane();
             toolBar = new ToolbarPanel();
 
             ((BorderLayout) getLayout()).setVgap( 0 );

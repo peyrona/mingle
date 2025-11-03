@@ -241,7 +241,7 @@ public abstract class      ControllerBase
 
         if( listener != null )
         {
-            listener.onError(level, msg, devName );
+            listener.onError( level, msg, devName );
         }
         else
         {

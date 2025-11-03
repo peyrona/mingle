@@ -22,6 +22,7 @@ import java.util.Set;
  *
  * @author Francisco José Morero Peyrona
  *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class NetworkBuilder
 {
@@ -91,7 +92,7 @@ public final class NetworkBuilder
      * Builds a single client from the given JSON string.
      *
      * @param sJSON the JSON string containing the client configuration
-     * @return the built client
+     * @return the built client or null if building failed.
      */
     public static INetClient buildClient( String sJSON )
     {

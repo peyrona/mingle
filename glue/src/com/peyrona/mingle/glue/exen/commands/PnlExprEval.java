@@ -5,7 +5,7 @@ import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Main;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
-import com.peyrona.mingle.glue.exen.Pnl4ExEn;
+import com.peyrona.mingle.glue.exen.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
@@ -206,7 +206,7 @@ final class PnlExprEval extends javax.swing.JPanel
         Function<String,String[]> fnGroupWise = (groupName) ->
                                                 {
                                                     List<String>  list2Ret   = new ArrayList<>();
-                                                    List<IDevice> lstDevices = ((Pnl4ExEn) Main.frame.getExEnTabsPane().getSelectedComponent()).getDevices();
+                                                    List<IDevice> lstDevices = ((Pnl4ExEn) Main.frame.getExEnsTabPane().getSelectedComponent()).getDevices();
 
                                                     for( IDevice device : lstDevices )
                                                     {

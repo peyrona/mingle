@@ -2,23 +2,19 @@ package com.peyrona.mingle.glue.gswing;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.glue.ConfigManager;
 import com.peyrona.mingle.glue.Main;
 import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Language;
 import java.awt.Dialog;
 import java.awt.Frame;
+import java.awt.Rectangle;
 import java.awt.Window;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
-import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
-import java.io.File;
-import java.io.IOException;
+import java.awt.event.WindowListener;
 import javax.swing.JDialog;
 import javax.swing.JFrame;
 
@@ -29,16 +25,16 @@ import javax.swing.JFrame;
  * to a shared JSON file, allowing windows to maintain their previous
  * position and size across application sessions.
  *
+ * Bounds are only saved if the position or size was changed after the window
+ * becomes visible and before it's closed.
+ *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class WndBoundsPersist
 {
-    private static final File   WINDOWS_FILE = new File( UtilSys.getEtcDir(), "glue_wnds.txt" );
-    private static final Object FILE_LOCK    = new Object();
-
-    private static JsonObject joWindowSizes = null;
+    private static final Object FILE_LOCK = new Object();
 
     //------------------------------------------------------------------------//
     // Public interface
@@ -52,27 +48,10 @@ public final class WndBoundsPersist
      */
     public static void initialize( Window window )
     {
-        loadWindowSizes();
+        WindowBoundsTracker tracker = new WindowBoundsTracker( window );
 
-        // Resize listener - updates in-memory bounds only
-        window.addComponentListener( new ComponentAdapter()
-        {
-            @Override
-            public void componentResized( ComponentEvent e )
-            {
-                joWindowSizes.set( getWindowKey( window ), getWindowBounds( window ) );
-            }
-        } );
-
-        // Window closing listener - saves bounds to file
-        window.addWindowListener( new WindowAdapter()
-        {
-            @Override
-            public void windowClosing( WindowEvent we )
-            {
-                saveWindowSizes();
-            }
-        } );
+        window.addComponentListener( tracker );
+        window.addWindowListener(    tracker );
     }
 
     /**
@@ -83,16 +62,15 @@ public final class WndBoundsPersist
      */
     public static void handlePack( Window window )
     {
-        String    wndKey = getWindowKey( window );
-        JsonValue jvSize = joWindowSizes.get( wndKey );
+        String     wndKey = getWindowKey( window );
+        JsonObject bounds = ConfigManager.getWindowBounds( wndKey );
 
-        if( jvSize != null )   // Window exists: use saved bounds
+        if( bounds != null )   // Window exists: use saved bounds
         {
-            JsonObject bounds = jvSize.asObject();
-            int        x      = bounds.getInt( "x"     , -1 );
-            int        y      = bounds.getInt( "y"     , -1 );
-            int        width  = bounds.getInt( "width" ,  0 );
-            int        height = bounds.getInt( "height",  0 );
+            int x      = bounds.getInt( "x"     , -1 );
+            int y      = bounds.getInt( "y"     , -1 );
+            int width  = bounds.getInt( "width" ,  0 );
+            int height = bounds.getInt( "height",  0 );
 
             if( x > -1 && y > -1 && width > 0 && height > 0 )
             {
@@ -101,9 +79,13 @@ public final class WndBoundsPersist
             }
         }
 
-        // Window doesn't exist: save bounds and let default size and coordinates
-        joWindowSizes.set( wndKey, getWindowBounds( window ) );
+        // Window doesn't exist: let default size and coordinates (do NOT save bounds)
         window.setLocationRelativeTo( Main.frame );
+    }
+
+    public static void reset()
+    {
+        ConfigManager.resetBounds();
     }
 
     //------------------------------------------------------------------------//
@@ -140,61 +122,66 @@ public final class WndBoundsPersist
         return name;
     }
 
-    private static JsonObject getWindowBounds( Window window )
-    {
-        return Json.object()
-                   .add( "x"     , window.getX()      )
-                   .add( "y"     , window.getY()      )
-                   .add( "width" , window.getWidth()  )
-                   .add( "height", window.getHeight() );
-    }
+    //------------------------------------------------------------------------//
+    // Inner class to track window bounds changes
+    //------------------------------------------------------------------------//
 
-    private static void loadWindowSizes()
+    private static class WindowBoundsTracker extends ComponentAdapter implements WindowListener
     {
-        synchronized( FILE_LOCK )
+        private final Window    window;
+        private final Rectangle initial = new Rectangle( -1, -1, -1, -1);
+
+        public WindowBoundsTracker( Window window )
         {
-            if( joWindowSizes != null )
+            this.window = window;
+        }
+
+        @Override
+        public void componentResized( ComponentEvent e )
+        {
+        }
+
+        @Override
+        public void componentMoved( ComponentEvent e )
+        {
+        }
+
+        @Override
+        public void windowOpened( WindowEvent e )
+        {
+            initial.x      = window.getX();
+            initial.y      = window.getY();
+            initial.width  = window.getWidth();
+            initial.height = window.getHeight();
+        }
+
+        @Override
+        public void windowClosing( WindowEvent e )
+        {
+            Rectangle now = new Rectangle( window.getX(), window.getY(), window.getWidth(), window.getHeight() );
+
+            if( now.equals( initial ) )
                 return;
 
-            try
-            {
-                if( WINDOWS_FILE.exists() )
-                {
-                    String content = UtilIO.getAsText( WINDOWS_FILE );
-                    joWindowSizes = Json.parse( content ).asObject();
-                }
-                else
-                {
-                    joWindowSizes = Json.object();
-                }
-            }
-            catch( IOException ioe )
-            {
-                JTools.error( ioe );
-                joWindowSizes = Json.object();
-            }
-            catch( Exception exc )
-            {
-                JTools.error( exc );
-                joWindowSizes = Json.object();
-            }
-        }
-    }
+            // Only save bounds if we have initial bounds and now bounds changed
+            JsonObject jo = Json.object()
+                                .add( "x"     , now.x      )
+                                .add( "y"     , now.y      )
+                                .add( "width" , now.width  )
+                                .add( "height", now.height );
 
-    private static void saveWindowSizes()
-    {
-        synchronized( FILE_LOCK )
-        {
-            try
-            {
-                UtilIO.newFileWriter()
-                      .setFile( WINDOWS_FILE )
-                      .replace( joWindowSizes.toString() );
-            }
-            catch( IOException ioe )
-            {
-                JTools.error( ioe );
-            }
+                ConfigManager.setWindowBounds( WndBoundsPersist.getWindowKey( window ), jo );
         }
+
+        @Override
+        public void windowClosed( WindowEvent e ) {}
+        @Override
+        public void windowIconified( WindowEvent e ) {}
+        @Override
+        public void windowDeiconified( WindowEvent e ) {}
+        @Override
+        public void windowActivated( WindowEvent e ) {}  // Invoked every time the window get focus
+        @Override
+        public void windowDeactivated( WindowEvent e ) {}
     }
 }

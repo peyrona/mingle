@@ -23,7 +23,7 @@ import java.awt.event.WindowEvent;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-final class DlgTableConfig extends javax.swing.JPanel
+final class TableConfigDlg extends javax.swing.JPanel
 {
     private final GTable table;
 
@@ -31,7 +31,7 @@ final class DlgTableConfig extends javax.swing.JPanel
 
     static void show( GTable table, String sFilterLabel )
     {
-        DlgTableConfig panel = new DlgTableConfig( table, sFilterLabel );
+        TableConfigDlg panel = new TableConfigDlg( table, sFilterLabel );
 
         GDialog dlg = new GDialog( "Table config", Dialog.ModalityType.DOCUMENT_MODAL );
                 dlg.add( panel, BorderLayout.CENTER );
@@ -58,7 +58,7 @@ final class DlgTableConfig extends javax.swing.JPanel
     /**
      * Creates new form DlgTableConfig
      */
-    private DlgTableConfig( GTable table, String sFilterLabel )
+    private TableConfigDlg( GTable table, String sFilterLabel )
     {
         this.table = table;
 

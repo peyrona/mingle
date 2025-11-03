@@ -144,6 +144,11 @@ public interface IXprEval
     IXprEval cancel();
 
     /**
+     * Closes the expression evaluator and releases any resources it holds.
+     */
+    void close();
+
+    /**
      * Returns true if this Expression Evaluator recognizes 'oValue' as an Une basic
      * data type: Boolean, Number or String.
      *

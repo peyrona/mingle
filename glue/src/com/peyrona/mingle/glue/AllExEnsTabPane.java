@@ -1,12 +1,10 @@
-
 package com.peyrona.mingle.glue;
 
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
-import com.peyrona.mingle.glue.exen.Pnl4ExEn;
+import com.peyrona.mingle.glue.exen.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -17,7 +15,6 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
-import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
@@ -27,24 +24,22 @@ import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
 /**
- * A TabbePane where each tab contains 5 JList (one per command type) and below a TabbedPane with
- * tables with information.
+ * A TabbePane where each tab contains 5 JList (one per command type) and below a TabbedPane with tables with information.
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public final class ExEnsTabbedPane extends GTabbedPane
+public final class AllExEnsTabPane extends GTabbedPane
 {
     private final BufferedImage img = createTransparentImage();
-    private       File  fUne = null;
-    private       Image scaledImage;
-    private       int   lastWidth  = -1;
-    private       int   lastHeight = -1;
+    private File  fUne = null;
+    private Image scaledImage;
+    private int   lastWidth = -1;
+    private int   lastHeight = -1;
 
     //------------------------------------------------------------------------//
-
-    ExEnsTabbedPane()
+    AllExEnsTabPane()
     {
         setOpaque( true );
         setTabLayoutPolicy( JTabbedPane.WRAP_TAB_LAYOUT );
@@ -54,32 +49,16 @@ public final class ExEnsTabbedPane extends GTabbedPane
     //------------------------------------------------------------------------//
 
     /**
-     * Add a new tab and invokes connection Dialog.
+     * Add a new tab.
      */
-    void add()
+    void add( String sConnName, ExEnClient cc )
     {
-        add( (Consumer<Pnl4ExEn>) null );
-    }
-
-    void add( Consumer<Pnl4ExEn> onTabAdded )
-    {
-        final Pnl4ExEn pnl = new Pnl4ExEn();
-
-        UtilSys.execute( getClass().getName(),
-                        () ->
-                        {
-                            pnl.connect((exenClient) ->
-                                        {
-                                            SwingUtilities.invokeLater( () ->
-                                                    {
-                                                        addTab( exenClient.getName(), pnl, (ActionEvent evt) -> del() );
-                                                        ExEnsTabbedPane.this.validate();
-
-                                                        if( onTabAdded != null )
-                                                            onTabAdded.accept( getFocused() );
-                                                    } );
-                                        } );
-                        } );
+        SwingUtilities.invokeLater(() ->
+            {
+                addTab( sConnName, new Pnl4ExEn( cc ) );
+                AllExEnsTabPane.this.validate();
+                setSelectedIndex( getTabCount() - 1 );
+            } );
     }
 
     /**
@@ -112,10 +91,8 @@ public final class ExEnsTabbedPane extends GTabbedPane
         {
             String sUne = getFocused().getUseSourceCode();
 
-            if( UtilStr.isEmpty( sUne ) )
-                JTools.alert( "The editor is empty: nothing to save" );
-            else
-                saveUneSourceCode( sUne );
+            if( UtilStr.isEmpty( sUne ) )  JTools.alert( "The editor is empty: nothing to save" );
+            else                           saveUneSourceCode( sUne );
         }
     }
 
@@ -133,7 +110,6 @@ public final class ExEnsTabbedPane extends GTabbedPane
 
     //------------------------------------------------------------------------//
     // PROTECTED
-
     @Override
     protected void paintComponent(Graphics g)
     {
@@ -159,7 +135,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
             if( scaledImage != null )
             {
                 // Calculate position to center the image
-                int x = (getWidth()  - scaledImage.getWidth(  null )) / 2;
+                int x = (getWidth() - scaledImage.getWidth( null )) / 2;
                 int y = (getHeight() - scaledImage.getHeight( null )) / 2;
 
                 g2d.drawImage( scaledImage, x, y, this );
@@ -173,34 +149,32 @@ public final class ExEnsTabbedPane extends GTabbedPane
 
     //------------------------------------------------------------------------//
     // PRIVATE
-
     private Pnl4ExEn getFocused()
     {
         Component selected = getSelectedComponent();
         return (selected instanceof Pnl4ExEn) ? (Pnl4ExEn) selected : null;
     }
 
-    private void saveUneSourceCode( String sCode )
+    private void saveUneSourceCode(String sCode)
     {
         UneEditorUnit pnlEditor = new UneEditorUnit( sCode );
 
-        JButton  btnSave = new JButton( "Save to file ");
-                 btnSave.setIcon( IconFontSwing.buildIcon( FontAwesome.FLOPPY_O, 16, JTools.getIconColor() ) );
-                 btnSave.addActionListener( (ActionEvent evt) -> fUne = JTools.fileSaver( JTools.FileType.Une, fUne, pnlEditor.getText() ) );
+        JButton btnSave = new JButton( "Save to file " );
+        btnSave.setIcon( IconFontSwing.buildIcon( FontAwesome.FLOPPY_O, 16, JTools.getIconColor() ) );
+        btnSave.addActionListener( (ActionEvent evt) -> fUne = JTools.fileSaver( JTools.FileType.Une, fUne, pnlEditor.getText() ) );
 
-        GFrame.make()
-              .title( "An opportunity to review the script prior to save it" )
-              .icon( "editor.png" )
-              .onClose( JFrame.DISPOSE_ON_CLOSE )
-              .closeOnEsc()
-              .put( btnSave  , BorderLayout.NORTH  )
-              .put( pnlEditor, BorderLayout.CENTER )
-              .setVisible();
+        new GFrame()
+                .title( "An opportunity to review the script prior to save it" )
+                .icon( "editor.png" )
+                .onClose( JFrame.DISPOSE_ON_CLOSE )
+                .closeOnEsc()
+                .put( btnSave, BorderLayout.NORTH )
+                .put( pnlEditor, BorderLayout.CENTER )
+                .setVisible();
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE STATIC SCOPE (related with background image)
-
     /**
      * Creates a transparent version of the image at the specified path.
      *
@@ -212,7 +186,9 @@ public final class ExEnsTabbedPane extends GTabbedPane
         BufferedImage originalImage = JTools.getImage( "splash.png" );
 
         if( originalImage == null )
+        {
             return null;
+        }
 
         int width = originalImage.getWidth();
         int height = originalImage.getHeight();
@@ -238,17 +214,19 @@ public final class ExEnsTabbedPane extends GTabbedPane
     /**
      * Scales the image maintaining aspect ratio to fit within the given dimensions.
      *
-     * @param image Source image to scale
-     * @param targetWidth Maximum width
+     * @param image        Source image to scale
+     * @param targetWidth  Maximum width
      * @param targetHeight Maximum height
      * @return Scaled image that maintains aspect ratio
      */
     private Image getScaledImage(Image image, int targetWidth, int targetHeight)
     {
         if( image == null )
+        {
             return null;
+        }
 
-        double originalWidth  = image.getWidth(  null );
+        double originalWidth = image.getWidth( null );
         double originalHeight = image.getHeight( null );
 
         if( originalWidth == 0 || originalHeight == 0 )
@@ -257,7 +235,7 @@ public final class ExEnsTabbedPane extends GTabbedPane
         }
 
         double originalAspect = originalWidth / originalHeight;
-        double targetAspect   = (double) targetWidth / targetHeight;
+        double targetAspect = (double) targetWidth / targetHeight;
 
         int scaledWidth;
         int scaledHeight;
@@ -266,15 +244,15 @@ public final class ExEnsTabbedPane extends GTabbedPane
         {
             // Target is wider than original
             scaledHeight = targetHeight;
-            scaledWidth  = (int) (scaledHeight * originalAspect);
+            scaledWidth = (int) (scaledHeight * originalAspect);
         }
         else
         {
             // Target is taller than original
-            scaledWidth  = targetWidth;
+            scaledWidth = targetWidth;
             scaledHeight = (int) (scaledWidth / originalAspect);
         }
 
-        return image.getScaledInstance( scaledWidth -50, scaledHeight -50, Image.SCALE_SMOOTH );
+        return image.getScaledInstance( scaledWidth - 50, scaledHeight - 50, Image.SCALE_SMOOTH );
     }
 }

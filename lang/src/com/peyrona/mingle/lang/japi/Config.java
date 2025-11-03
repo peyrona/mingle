@@ -265,36 +265,6 @@ public final class Config implements IConfig
     }
 
     @Override
-    public String getNetworkServersOutline()
-    {
-        JsonObject module = getModule( "network" );
-
-        if( (module != null)                  &&
-            (module.get( "servers" ) != null) &&
-            (module.get( "servers" ).isArray()) )
-        {
-            return module.get( "servers" ).toString();
-        }
-
-        return null;
-    }
-
-    @Override
-    public String getNetworkClientsOutline()
-    {
-        JsonObject module = getModule( "network" );
-
-        if( (module != null)                  &&
-            (module.get( "clients" ) != null) &&
-            (module.get( "clients" ).isArray()) )
-        {
-            return module.get( "clients" ).toString();
-        }
-
-        return null;
-    }
-
-    @Override
     public INetClient getHttpServerNetClient()
     {
         String   sClass = "com.peyrona.mingle.network.socket.SocketClient";    // Default class
@@ -494,6 +464,9 @@ public final class Config implements IConfig
             throw new MingleException( "'def' is null" );
 
         Class<?> defClass = def.getClass();
+
+        if( value.getClass() == defClass )    // Is it already the same class?
+            return (T) value;                 // Then, nothing to do
 
         if( defClass == String.class )
         {

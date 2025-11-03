@@ -111,7 +111,6 @@ public final class SocketClient
         return this;
     }
 
-
     @Override
     public synchronized INetClient send( String message )
     {
@@ -200,9 +199,13 @@ public final class SocketClient
             {
                 log( "Error closing socket: " + ioe.getMessage() );    // Log error but don't throw
             }
-
-            forEachListener(l -> ((INetClient.IListener) l).onDisconnected(SocketClient.this ) );
+            finally
+            {
+                forEachListener(l -> ((INetClient.IListener) l).onDisconnected( SocketClient.this ) );
+            }
         }
+
+        clearListenersList();
 
         synchronized( this )
         {

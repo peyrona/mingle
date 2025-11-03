@@ -265,7 +265,7 @@ public final class Logger implements ILogger
     {
         sMessage = "["+level+"] "+ sMessage;
 
-        oLogger.log( myLevel2javaLevel( level ), sMessage );    // Using SEVERE here it will be logged for sure: I tried others values but all failed
+        oLogger.log( myLevel2javaLevel( level ), sMessage );
 
         return true;
     }

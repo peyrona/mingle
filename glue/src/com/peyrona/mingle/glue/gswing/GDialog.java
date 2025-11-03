@@ -31,13 +31,29 @@ public class GDialog extends JDialog
 
     //------------------------------------------------------------------------//
 
+    public GDialog( String title )
+    {
+        this( title, true );
+    }
+
     public GDialog( String title, boolean modal )
     {
+        this( title, modal, true );
+    }
+
+    public GDialog( String title, boolean modal, boolean bSaveBounds )
+    {
         this( title, (modal ? DEFAULT_MODALITY_TYPE
-                            : ModalityType.MODELESS ) );
+                            : ModalityType.MODELESS ),
+              bSaveBounds );
     }
 
     public GDialog( String title, ModalityType modelType )
+    {
+        this( title, modelType, true );
+    }
+
+    public GDialog( String title, ModalityType modelType, boolean bSaveBounds )
     {
         super( Main.frame, title, modelType );
 
@@ -63,7 +79,8 @@ public class GDialog extends JDialog
                                               KeyStroke.getKeyStroke( KeyEvent.VK_ESCAPE, 0 ),
                                               JComponent.WHEN_IN_FOCUSED_WINDOW );
 
-        WndBoundsPersist.initialize( this );
+        if( bSaveBounds )
+            WndBoundsPersist.initialize( this );
     }
 
     //------------------------------------------------------------------------//
@@ -72,7 +89,6 @@ public class GDialog extends JDialog
     public void pack()
     {
         super.pack();
-
         WndBoundsPersist.handlePack( this );
     }
 
@@ -88,7 +104,12 @@ public class GDialog extends JDialog
     public GDialog setVisible()
     {
         setVisible( true );
+        return this;
+    }
 
+    public GDialog setFixedSize( boolean b )
+    {
+        setResizable( ! b );
         return this;
     }
 
@@ -100,7 +121,6 @@ public class GDialog extends JDialog
     public GDialog setActionOnOk( ActionListener onOK )
     {
         onOkBtnPressed = onOK;
-
         return this;
     }
 }

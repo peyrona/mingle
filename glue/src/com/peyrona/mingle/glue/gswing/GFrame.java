@@ -25,12 +25,12 @@ import javax.swing.KeyStroke;
  */
 public class GFrame extends JFrame
 {
-    public static GFrame make()
+    public GFrame( )
     {
-        return new GFrame();
+        this( true );
     }
 
-    public GFrame()
+    public GFrame( boolean bSaveBounds )
     {
         setAutoRequestFocus( true );
         setIconImage( JTools.getImage( "glue.png" ) );
@@ -40,8 +40,31 @@ public class GFrame extends JFrame
         getRootPane().setBorder( BorderFactory.createEmptyBorder( 4,7,4,7 ) );
         setLayout( new BorderLayout( 9,7 ) );
 
-        WndBoundsPersist.initialize( this );
+        if( bSaveBounds )
+            WndBoundsPersist.initialize( this );
     }
+
+    //------------------------------------------------------------------------//
+
+    @Override
+    public void pack()
+    {
+        super.pack();
+
+        WndBoundsPersist.handlePack( this );
+    }
+
+    @Override
+    public void setVisible( boolean b )
+    {
+        if( b )
+            pack();
+
+        super.setVisible( b );
+        toFront();
+    }
+
+    //------------------------------------------------------------------------//
 
     public boolean isClosed()
     {
@@ -130,13 +153,5 @@ public class GFrame extends JFrame
         setVisible( true );
         toFront();
         return this;
-    }
-
-    @Override
-    public void pack()
-    {
-        super.pack();
-
-        WndBoundsPersist.handlePack( this );
     }
 }

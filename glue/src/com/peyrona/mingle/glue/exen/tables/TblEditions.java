@@ -4,7 +4,7 @@ package com.peyrona.mingle.glue.exen.tables;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject.Member;
 import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.glue.exen.ExEnClient;
+import com.peyrona.mingle.glue.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GTable;
 import com.peyrona.mingle.glue.gswing.GTableModel;

@@ -3,7 +3,7 @@ package com.peyrona.mingle.glue.exen.commands;
 
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.exen.ExEnClient;
+import com.peyrona.mingle.glue.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GList;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;

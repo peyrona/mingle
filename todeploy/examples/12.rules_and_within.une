@@ -8,7 +8,7 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
-USE LIMIT AS 80    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+USE LIMIT AS 20    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
 
 
 DEVICE CPU
@@ -46,6 +46,6 @@ DEVICE console
 
 WHEN ANY metric ABOVE LIMIT
 THEN console SET "One or more metrics were above {*LIMIT*}% throughout the last 20 seconds"
-IF ANY metric ABOVE LIMIT WITHIN 20s
+IF ANY metric ABOVE LIMIT WITHIN 10s
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

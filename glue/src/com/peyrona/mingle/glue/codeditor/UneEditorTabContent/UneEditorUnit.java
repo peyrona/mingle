@@ -28,7 +28,7 @@ import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
 
 /**
- * A Split Panel with an editor at top and a text area (to show transpiler and run output) at bottom.
+ * A Split Panel with an editor at top and a PanelConsole (to show transpiler and run output) at bottom.
  */
 public final class UneEditorUnit extends JSplitPane
 {

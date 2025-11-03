@@ -248,6 +248,7 @@ EOF
 run_glue()
 {
     nohup "$JAVA_CMD" \
+      # -Dsun.java2d.xrender=false \  To be used when having errors under Linux
         -javaagent:lib/lang.jar \
         com.peyrona.mingle.glue.Main \   # can not use '-jar glue.jar' because it overrides the classpath setting
         > "$SCRIPT_DIR"/glue.out.txt 2>&1 &

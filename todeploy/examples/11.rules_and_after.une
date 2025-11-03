@@ -8,7 +8,8 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
-USE LIMIT AS 80    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+USE LIMIT AS 20     # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+    WAIT  AS 7000   # 7 seconds for the AFTER operator
 
 
 DEVICE CPU
@@ -48,15 +49,15 @@ DEVICE console
 # as far as after the 20 seconds there is one or more above LIMIT.
 
 WHEN ALL metric ABOVE LIMIT
-THEN console SET "All metrics were above {*LIMIT*}% when at begining and at least one metric was also above {*LIMIT*}% after 20 seconds"
-IF ANY metric ABOVE LIMIT AFTER 20s
+THEN console SET "All metrics were above {*LIMIT*}% begining and at least one metric was also above {*LIMIT*}% after {*WAIT*} seconds"
+IF ANY metric ABOVE LIMIT AFTER WAIT
 
 
 # Following RULE is triggered if after 20 seconds there is at least one metric's value that is above LIMIT%. It does not matter if
 # one (or even all metrics) where below LIMIT during these 20 seconds as far as after the 20 seconds there is one or more above LIMIT.
 
 WHEN ANY metric ABOVE LIMIT
-THEN console SET "One or more metrics were above {*LIMIT*}% at begining and also after 20 seconds"
-IF ANY metric ABOVE LIMIT AFTER 20s
+THEN console SET "One or more metrics were above {*LIMIT*}% at begining and also after {*WAIT*} seconds"
+IF ANY metric ABOVE LIMIT AFTER WAIT
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

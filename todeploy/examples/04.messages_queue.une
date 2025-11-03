@@ -12,7 +12,7 @@
 DEVICE MessagesPerMinute
     DRIVER SystemMonitorDriver
         CONFIG
-            metric   SET "mpm"
+            metric   SET "speed"
             interval SET 5s
 
 DEVICE MessagesPending

@@ -1,8 +1,8 @@
 
 package com.peyrona.mingle.glue.exen.commands;
 
+import com.peyrona.mingle.glue.ExEnClient;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.exen.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GList;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
@@ -67,7 +67,9 @@ public class PnlAllCmdsSelector
 
         initExtra();
         refreshButtons();
+
         this.exenClient.add( new ClientListener() );
+        this.exenClient.sendList();
     }
 
     //------------------------------------------------------------------------//
@@ -287,11 +289,11 @@ public class PnlAllCmdsSelector
         ltbDevice.setCaptionFn( (cmd) -> cmd.name() );
         ltbRule.setCaptionFn(   (cmd) -> cmd.name() );
 
-        ltbScrDrv.onPicked( (cmd) -> edit( IScript.class, cmd, false ) );
-        ltbScrInl.onPicked( (cmd) -> edit( IScript.class, cmd, true  ) );
-        ltbDriver.onPicked( (cmd) -> edit( IDriver.class, cmd, false ) );
-        ltbDevice.onPicked( (cmd) -> edit( IDevice.class, cmd, true  ) );
-        ltbRule.onPicked(   (cmd) -> edit( IRule.class  , cmd, true  ) );
+        ltbScrDrv.onPicked( (list) -> edit( IScript.class, list.getSelected(), false ) );
+        ltbScrInl.onPicked( (list) -> edit( IScript.class, list.getSelected(), true  ) );
+        ltbDriver.onPicked( (list) -> edit( IDriver.class, list.getSelected(), false ) );
+        ltbDevice.onPicked( (list) -> edit( IDevice.class, list.getSelected(), true  ) );
+        ltbRule.onPicked(   (list) -> edit( IRule.class  , list.getSelected(), true  ) );
 
         btnScrDrvShow.setIcon( iconShow );
         btnScrDrvShow.addActionListener(  evt -> edit( IScript.class, ltbScrDrv.getSelected(), false ) );
@@ -744,25 +746,25 @@ public class PnlAllCmdsSelector
 
     //------------------------------------------------------------------------//
     // INNER CLASS
+    // This listener is in charge of react when connection is started, is ended
+    // or an error happens: this is common to all instances of ExEnClient class.
     //------------------------------------------------------------------------//
+
     private final class ClientListener implements INetClient.IListener
     {
         @Override
         public void onConnected( INetClient origin )
         {
-            // Nothing to do
         }
 
         @Override
         public void onDisconnected( INetClient origin )
         {
-            // Nothing to do
         }
 
         @Override
         public void onError( INetClient origin, Exception exc )
         {
-            // Nothing to do
         }
 
         @Override

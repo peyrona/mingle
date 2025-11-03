@@ -1,12 +1,13 @@
 
 package com.peyrona.mingle.glue;
 
+import com.eclipsesource.json.JsonArray;
 import com.peyrona.mingle.glue.codeditor.UneMultiEditorPanel;
-import com.peyrona.mingle.glue.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GFrame;
-import com.peyrona.mingle.glue.images.pnlInfo;
+import com.peyrona.mingle.glue.gswing.GTip;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.BorderLayout;
 import java.awt.Color;
@@ -26,6 +27,7 @@ import javax.swing.JComponent;
 import javax.swing.JFrame;
 import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.event.ChangeEvent;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
@@ -123,7 +125,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
 
         // Tabs added or removed
-        Main.frame.getExEnTabsPane().addContainerListener( new ContainerListener()
+        Main.frame.getExEnsTabPane().addContainerListener( new ContainerListener()
         {
             @Override
             public void componentAdded( ContainerEvent ce )    { updateButtonsState(); }
@@ -133,12 +135,12 @@ final class ToolbarPanel extends javax.swing.JPanel
         } );
 
         // Selected tab changed
-        Main.frame.getExEnTabsPane().addChangeListener( (ChangeEvent ce) -> updateButtonsState() );
+        Main.frame.getExEnsTabPane().addChangeListener( (ChangeEvent ce) -> updateButtonsState() );
     }
 
     private void updateButtonsState()
     {
-        int nTabCount = Main.frame.getExEnTabsPane().getTabCount();
+        int nTabCount = Main.frame.getExEnsTabPane().getTabCount();
 
         btnSave.setEnabled( nTabCount > 0 );
         btnDel.setEnabled(  nTabCount > 0 );
@@ -165,7 +167,58 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onConnect2ExEn()
     {
-        Main.frame.getExEnTabsPane().add();
+        JsonArray jaClients = UtilSys.getConfig().get( "network", "clients", new JsonArray() );
+
+        final ConnectDlg dlg = new ConnectDlg( jaClients );
+                         dlg.setVisible();
+
+        if( dlg.getSelection() == null )
+            return;
+
+        JTools.showWaitFrame( "Connecting to " + dlg.getConnName() );
+
+        final ExEnClient client = new ExEnClient( dlg.getSelection(), dlg.getConnName() );
+
+        SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>()
+        {
+            private Exception connectionError = null;
+
+            @Override
+            protected Void doInBackground()
+            {
+                try
+                {
+                    client.connect();
+                }
+                catch( Exception exc )
+                {
+                    connectionError = exc;
+                }
+
+                return null;
+            }
+
+            @Override
+            protected void done()
+            {
+                JTools.hideWaitFrame();
+
+                if( connectionError == null )
+                {
+                    Main.frame.getExEnsTabPane().add( dlg.getConnName(), client );
+                    validate();
+                }
+                else
+                {
+                    UtilSys.getLogger().log( ILogger.Level.WARNING, connectionError );
+                    JTools.error( connectionError );
+                }
+
+                dlg.dispose();
+            }
+        };
+
+        worker.execute();
     }
 
     /**
@@ -174,9 +227,8 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     private void onClearExEn()
     {
-
         if( JTools.confirm( "Do you want to remove all commands?" ) )
-            Main.frame.getExEnTabsPane().clear();
+            Main.frame.getExEnsTabPane().clear();
     }
 
     /**
@@ -199,7 +251,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                 Util.killProcess( procExEn );
                 procExEn = null;
 
-                Main.frame.getExEnTabsPane().del();
+                Main.frame.getExEnsTabPane().del();
                 btnExEn.setIcon( IconFontSwing.buildIcon( FontAwesome.PLAY, 16, JTools.getIconColor() ) );
                 btnExEn.setToolTipText( "Executes internally a local Stick (ExEn) using its configuration file" );
             }
@@ -228,19 +280,17 @@ final class ToolbarPanel extends javax.swing.JPanel
 
             Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
 
-            UtilSys.execute( getClass().getName(),
+            UtilSys.execute(getClass().getName(),
                              1500,
                              () ->     // Stick needs some time to be ready
                                 {
-                                    JTools.hideWaitFrame();
+                                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////Main.frame.getExEnsTabPane().add( "Internal ExEn", null );
 
-                                    Main.frame.getExEnTabsPane().add( (Pnl4ExEn pnl) -> pnl.addExenOutputTab( procExEn ) );
-
-                                    SwingUtilities.invokeLater( () ->
+                                    SwingUtilities.invokeLater(() ->
                                         {
                                             btnExEn.setIcon( IconFontSwing.buildIcon( FontAwesome.STOP, 16, JTools.getIconColor() ) );
                                             btnExEn.setToolTipText( "Stops local internal Stick (ExEn)" );
-                                            Tip.show( "After the ExEn is running, you can:\n\n"+
+                                            GTip.show( "After the ExEn is running, you can:\n\n"+
                                                       "   * Load a '.model' file (click 'folder' icon in toolbar)\n\n"+
                                                       "   * Create new commands using this application (Glue)" );
                                         } );
@@ -250,12 +300,12 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onSaveCurrentModel()
     {
-        Main.frame.getExEnTabsPane().save();
+        Main.frame.getExEnsTabPane().save();
     }
 
     private void onOpenUneEditor()
     {
-        frmEditor = GFrame.make()
+        frmEditor = new GFrame()
                           .title( "Editor for the Mingle Standard Platform (MSP)" )
                           .icon( "editor.png" )
                           .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
@@ -343,10 +393,10 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onInfo()
     {
-        GDialog dlg = new GDialog( "About...", false );
-                dlg.add( new pnlInfo(), BorderLayout.CENTER );
-                dlg.setResizable( false );
-                dlg.setVisible();
+        new GDialog( "About...", false )
+               .setFixedSize( false )
+               .setVisible()
+               .add( new InfoPanel(), BorderLayout.CENTER );
     }
 
     //------------------------------------------------------------------------//

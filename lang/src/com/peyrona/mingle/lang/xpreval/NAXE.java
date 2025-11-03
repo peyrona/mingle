@@ -185,6 +185,13 @@ public final class NAXE implements IXprEval
     }
 
     @Override
+    public void close()
+    {
+        if( evaluator != null )
+            evaluator.shutdown();
+    }
+
+    @Override
     public boolean isBasicDataType( Object o )
     {
         return StdXprFns.isBasicType( o );

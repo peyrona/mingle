@@ -1,15 +1,21 @@
 package com.peyrona.mingle.updater;
 
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.StandardCopyOption;
+import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * Client for interacting with GitHub API to fetch file information and content.
@@ -41,12 +47,21 @@ public final class GitHubApiClient
     private final Object rateLimitLock = new Object();
 
     // Cache for file metadata with size limits and TTL
-    private static final java.util.Map<String, CachedMetadata> metadataCache = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final int MAX_CACHE_SIZE = 1000;
+    private static final Map<String, CachedMetadata> metadataCache = Collections.synchronizedMap(new LinkedHashMap<String, CachedMetadata>(MAX_CACHE_SIZE, 0.75f, true) {
+        @Override
+        protected boolean removeEldestEntry(Map.Entry<String, CachedMetadata> eldest) {
+            boolean remove = size() > MAX_CACHE_SIZE;
+            if (remove) {
+                cacheEvictions.incrementAndGet();
+            }
+            return remove;
+        }
+    });
     private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-    private static final int MAX_CACHE_SIZE = 1000; // Maximum number of cached entries
     private static final long CACHE_CLEANUP_INTERVAL_MS = 60 * 1000; // Clean up every minute
     private static volatile long lastCacheCleanup = 0;
-    
+
     // Cache statistics for monitoring
     private static final java.util.concurrent.atomic.AtomicLong cacheHits = new java.util.concurrent.atomic.AtomicLong( 0 );
     private static final java.util.concurrent.atomic.AtomicLong cacheMisses = new java.util.concurrent.atomic.AtomicLong( 0 );
@@ -145,10 +160,10 @@ public final class GitHubApiClient
                         long resetTimestamp = Long.parseLong( reset );
                         long currentTime = System.currentTimeMillis() / 1000;
                         long waitTime = resetTimestamp - currentTime;
-                        
+
                         if( waitTime > 0 )
                         {
-                            UtilSys.getLogger().log( ILogger.Level.WARNING, 
+                            UtilSys.getLogger().log( ILogger.Level.WARNING,
                                 String.format( "Rate limit exceeded for: %s. Reset in %d seconds", filePath, waitTime ) );
                         }
                         else
@@ -176,78 +191,71 @@ public final class GitHubApiClient
         return false;
     }
 
-    /**
-     * Executes HTTP request with retry logic for rate limiting.
-     *
-     * @param url URL to connect to
-     * @param filePath File path for logging
-     * @return response code, or -1 if all retries failed
-     */
-    private static int executeWithRetry(URL url, String filePath) throws IOException
+    private static HttpURLConnection executeWithRetry(URL url, String filePath) throws IOException
     {
         int retryCount = 0;
         long backoffTime = 2000; // Start with 2 seconds
 
-        while( retryCount < MAX_RETRIES )
+        while (retryCount < MAX_RETRIES)
         {
-            HttpURLConnection connection = null;
+            HttpURLConnection connection = (HttpURLConnection) url.openConnection();
+            connection.setRequestMethod("GET");
+            connection.setRequestProperty("Accept", "application/vnd.github.v3+json");
+            connection.setRequestProperty("User-Agent", USER_AGENT);
+            connection.setConnectTimeout(10000);
+            connection.setReadTimeout(30000);
+
+            int responseCode = connection.getResponseCode();
+
+            if (responseCode == 200)
+            {
+                logRateLimitInfo(connection);
+                return connection;
+            }
+
+            boolean shouldRetry = handleRateLimit(responseCode, connection, filePath);
+
+            java.io.InputStream errorStream = connection.getErrorStream();
+            if (errorStream != null) {
+                try (BufferedReader errorReader = new BufferedReader(new InputStreamReader(errorStream))) {
+                    while (errorReader.readLine() != null) { /* consume */ }
+                } catch (Exception e) { /* ignore */ }
+            }
+
+            connection.disconnect();
+
+            if (!shouldRetry)
+            {
+                UtilSys.getLogger().log(ILogger.Level.WARNING, "GitHub API request failed with status " + responseCode + " for: " + filePath);
+                return null;
+            }
+
+            if (retryCount >= MAX_RETRIES - 1)
+            {
+                UtilSys.getLogger().log(ILogger.Level.SEVERE, "Max retries exceeded for: " + filePath);
+                return null;
+            }
 
             try
             {
-                connection = (HttpURLConnection) url.openConnection();
-                connection.setRequestMethod( "GET" );
-                connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
-                connection.setRequestProperty( "User-Agent", USER_AGENT );
-
-                connection.setConnectTimeout( 10000 );
-                connection.setReadTimeout( 30000 );
-
-                int responseCode = connection.getResponseCode();
-
-                if( responseCode == 200 )
-                {
-                    logRateLimitInfo( connection );
-                    return responseCode;
-                }
-
-                if( ! handleRateLimit( responseCode, connection, filePath ) )
-                {
-                    return responseCode; // Not a rate limit issue, return immediately
-                }
-
-                if( retryCount >= MAX_RETRIES - 1 )
-                {
-                    UtilSys.getLogger().log( ILogger.Level.SEVERE, "Max retries exceeded for: " + filePath );
-                    return responseCode;
-                }
-
-                // Exponential backoff with jitter to avoid thundering herd
-                long jitter = (long) (Math.random() * 1000); // Add up to 1 second jitter
+                long jitter = (long) (Math.random() * 1000);
                 long totalWaitTime = backoffTime + jitter;
-                
-                UtilSys.getLogger().log( ILogger.Level.INFO, 
-                    String.format( "Rate limited, waiting %dms before retry (%d/%d) for: %s", 
-                        totalWaitTime, retryCount + 1, MAX_RETRIES, filePath ) );
-                Thread.sleep( totalWaitTime );
-                
-                backoffTime = Math.min( backoffTime * 2, MAX_BACKOFF_MS );
-                retryCount++;
 
-                // Connection will be closed in finally block, new connection created on next iteration
+                UtilSys.getLogger().log(ILogger.Level.INFO,
+                    String.format("Rate limited, waiting %dms before retry (%d/%d) for: %s",
+                        totalWaitTime, retryCount + 1, MAX_RETRIES, filePath));
+                Thread.sleep(totalWaitTime);
+
+                backoffTime = Math.min(backoffTime * 2, MAX_BACKOFF_MS);
+                retryCount++;
             }
-            catch( InterruptedException e )
+            catch (InterruptedException e)
             {
                 Thread.currentThread().interrupt();
-                return -1;
-            }
-            finally
-            {
-                if( connection != null )
-                    connection.disconnect();
+                return null;
             }
         }
-
-        return -1;
+        return null;
     }
 
     /**
@@ -261,7 +269,7 @@ public final class GitHubApiClient
     {
         // Periodic cache cleanup
         cleanupCacheIfNeeded();
-        
+
         CachedMetadata cached = metadataCache.get( filePath );
 
         if( cached != null )
@@ -286,7 +294,6 @@ public final class GitHubApiClient
 
     /**
      * Caches file metadata with timestamp.
-     * Enforces cache size limits.
      *
      * @param filePath File path
      * @param metadata Metadata to cache
@@ -295,19 +302,6 @@ public final class GitHubApiClient
     {
         if( metadata != null )
         {
-            // Enforce cache size limit atomically
-            if( metadataCache.size() >= MAX_CACHE_SIZE )
-            {
-                synchronized( GitHubApiClient.class )
-                {
-                    // Double-check under lock
-                    if( metadataCache.size() >= MAX_CACHE_SIZE )
-                    {
-                        evictOldestEntries();
-                    }
-                }
-            }
-            
             CachedMetadata cached = new CachedMetadata();
             cached.metadata = metadata;
             cached.timestamp = System.currentTimeMillis();
@@ -333,7 +327,7 @@ public final class GitHubApiClient
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
             return null;
         }
-        
+
         // Check cache first
         GitHubFileResponse cached = getCachedMetadata( filePath );
 
@@ -347,32 +341,13 @@ public final class GitHubApiClient
 
         try
         {
-            String apiUrl = String.format( "%s/repos/%s/%s/contents/%s/%s", GITHUB_API_BASE, REPO_OWNER, REPO_NAME, REPO_PATH, filePath );
+            String path = String.format("/repos/%s/%s/contents/%s/%s", REPO_OWNER, REPO_NAME, REPO_PATH, filePath);
+            URI uri = new URI("https", "api.github.com", path, null, null);
+            URL url = uri.toURL();
 
-            URL url = new URL( apiUrl );
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 30000 );
+            connection = executeWithRetry(url, filePath);
 
-            int responseCode = connection.getResponseCode();
-
-            if( responseCode != 200 )
-            {
-                switch( responseCode )
-                {
-                    case 404:
-                        UtilSys.getLogger().log( ILogger.Level.INFO, "File not found on GitHub: " + filePath );
-                        break;
-                    case 403:
-                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Access forbidden for GitHub API: " + filePath );
-                        break;
-                    default:
-                        UtilSys.getLogger().log( ILogger.Level.WARNING, "GitHub API returned status " + responseCode + " for: " + filePath );
-                        break;
-                }
+            if (connection == null) {
                 return null;
             }
 
@@ -382,7 +357,7 @@ public final class GitHubApiClient
                 StringBuilder response = new StringBuilder();
                 char[] buffer = new char[8192]; // 8KB buffer for better performance
                 int bytesRead;
-                
+
                 while( (bytesRead = reader.read( buffer )) != -1 )
                 {
                     response.append( buffer, 0, bytesRead );
@@ -397,7 +372,7 @@ public final class GitHubApiClient
             }
 
         }
-        catch( IOException e )
+        catch( IOException | URISyntaxException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error fetching file metadata from GitHub: " + filePath );
             return null;
@@ -416,47 +391,41 @@ public final class GitHubApiClient
      * @param targetPath Local path where to save the file
      * @return true if download successful, false otherwise
      */
-    public static boolean downloadFile(String filePath, Path targetPath)
+    /**
+     * Downloads file content from a specific URL.
+     *
+     * @param downloadUrl The exact URL to download from
+     * @param filePath    Relative path of the file (for logging)
+     * @param targetPath  Local path where to save the file
+     * @return true if download successful, false otherwise
+     */
+    public static boolean downloadFileFromUrl(String downloadUrl, String filePath, Path targetPath)
     {
         // Input validation
-        if( filePath == null || filePath.trim().isEmpty() )
+        if( downloadUrl == null || downloadUrl.trim().isEmpty() )
         {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Download URL cannot be null or empty" );
             return false;
         }
-        
+
         if( targetPath == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Target path cannot be null" );
             return false;
         }
-        
+
         // Apply rate limiting before making download call
         rateLimitInstance.applyRateLimiting();
 
         HttpURLConnection connection = null;
-
         try
         {
-            // Use proper URI building to handle path encoding correctly
-            String pathToEncode = REPO_PATH + "/" + filePath;
-            String encodedPath = java.net.URLEncoder.encode( pathToEncode, "UTF-8" )
-                    .replace( "+", "%20" )
-                    .replace( "%2F", "/" ); // Preserve forward slashes
-            String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
+            URL url = new URL( downloadUrl );
 
-            URL url = new URL( rawUrl );
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 30000 );
+            connection = executeWithRetry( url, filePath );
 
-            int responseCode = connection.getResponseCode();
-
-            if( responseCode != 200 )
+            if( connection == null )
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download file, status " + responseCode + ": " + filePath );
                 return false;
             }
 
@@ -465,25 +434,98 @@ public final class GitHubApiClient
 
             // Download file with buffered copying for better performance
             try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() );
-                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath, 
+                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath,
                      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
             {
                 byte[] buffer = new byte[65536]; // 64KB buffer
                 int bytesRead;
                 long totalBytes = 0;
-                
+
                 while( (bytesRead = inputStream.read( buffer )) != -1 )
                 {
                     outputStream.write( buffer, 0, bytesRead );
                     totalBytes += bytesRead;
                 }
-                
+
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded: " + filePath + " (" + totalBytes + " bytes)" );
+                return true;
+            }
+        }
+        catch( java.net.MalformedURLException e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Malformed download URL: " + downloadUrl );
+            return false;
+        }
+        catch( IOException e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error downloading file from URL: " + downloadUrl );
+            return false;
+        }
+        finally
+        {
+            if( connection != null )
+            {
+                connection.disconnect();
+            }
+        }
+    }
+
+    public static boolean downloadFile(String filePath, Path targetPath)
+    {
+        // Input validation
+        if( filePath == null || filePath.trim().isEmpty() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
+            return false;
+        }
+
+        if( targetPath == null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Target path cannot be null" );
+            return false;
+        }
+
+        // Apply rate limiting before making download call
+        rateLimitInstance.applyRateLimiting();
+
+        HttpURLConnection connection = null;
+
+        try
+        {
+            String path = String.format("/%s/%s/%s/%s/%s", REPO_OWNER, REPO_NAME, REPO_BRANCH, REPO_PATH, filePath);
+            URI uri = new URI("https", "raw.githubusercontent.com", path, null, null);
+            URL url = uri.toURL();
+
+            connection = executeWithRetry(url, filePath);
+
+            if (connection == null) {
+                return false;
+            }
+
+            // Create parent directories if they don't exist
+            Files.createDirectories( targetPath.getParent() );
+
+            // Download file with buffered copying for better performance
+            try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() );
+                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath,
+                     java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
+            {
+                byte[] buffer = new byte[65536]; // 64KB buffer
+                int bytesRead;
+                long totalBytes = 0;
+
+                while( (bytesRead = inputStream.read( buffer )) != -1 )
+                {
+                    outputStream.write( buffer, 0, bytesRead );
+                    totalBytes += bytesRead;
+                }
+
                 UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded: " + filePath + " (" + totalBytes + " bytes)" );
                 return true;
             }
 
         }
-        catch( IOException e )
+        catch( IOException | URISyntaxException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error downloading file: " + filePath );
             return false;
@@ -512,37 +554,26 @@ public final class GitHubApiClient
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File path cannot be null or empty" );
             return false;
         }
-        
+
         if( targetPath == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Target path cannot be null" );
             return false;
         }
-        
+
         // Apply rate limiting before making download call
         rateLimitInstance.applyRateLimiting();
 
         HttpURLConnection connection = null;
         try
         {
-            // Use proper URI building to handle path encoding correctly
-            String encodedPath = java.net.URLEncoder.encode( filePath, "UTF-8" )
-                    .replace( "+", "%20" )
-                    .replace( "%2F", "/" ); // Preserve forward slashes
-            String rawUrl = String.format( "%s/%s/%s/%s/%s", GITHUB_RAW_BASE, REPO_OWNER, REPO_NAME, REPO_BRANCH, encodedPath );
+            String path = String.format("/%s/%s/%s/%s", REPO_OWNER, REPO_NAME, REPO_BRANCH, filePath);
+            URI uri = new URI("https", "raw.githubusercontent.com", path, null, null);
+            URL url = uri.toURL();
 
-            URL url = new URL( rawUrl );
-            connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 30000 );
+            connection = executeWithRetry(url, filePath);
 
-            int responseCode = connection.getResponseCode();
-
-            if( responseCode != 200 )
-            {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download file from root, status " + responseCode + ": " + filePath );
+            if (connection == null) {
                 return false;
             }
 
@@ -551,24 +582,24 @@ public final class GitHubApiClient
 
             // Download file with buffered copying for better performance
             try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() );
-                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath, 
+                 java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath,
                      java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
             {
                 byte[] buffer = new byte[65536]; // 64KB buffer
                 int bytesRead;
                 long totalBytes = 0;
-                
+
                 while( (bytesRead = inputStream.read( buffer )) != -1 )
                 {
                     outputStream.write( buffer, 0, bytesRead );
                     totalBytes += bytesRead;
                 }
-                
+
                 UtilSys.getLogger().log( ILogger.Level.INFO, "Successfully downloaded from root: " + filePath + " (" + totalBytes + " bytes)" );
                 return true;
             }
         }
-        catch( IOException e )
+        catch( IOException | URISyntaxException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error downloading file from root: " + filePath );
             return false;
@@ -593,63 +624,13 @@ public final class GitHubApiClient
     {
         try
         {
-            // Simple JSON parsing (avoiding external dependencies)
+            JsonObject fileData = Json.parse(jsonResponse).asObject();
             GitHubFileResponse response = new GitHubFileResponse();
-            response.path = filePath;
-
-            // Extract SHA hash
-            String shaPattern = "\"sha\":\"([^\"]+)\"";
-            java.util.regex.Pattern shaRegex = java.util.regex.Pattern.compile( shaPattern );
-            java.util.regex.Matcher shaMatcher = shaRegex.matcher( jsonResponse );
-            if( shaMatcher.find() )
-            {
-                response.sha = shaMatcher.group( 1 );
-            }
-
-            // Extract download URL
-            String urlPattern = "\"download_url\":\"([^\"]+)\"";
-            java.util.regex.Pattern urlRegex = java.util.regex.Pattern.compile( urlPattern );
-            java.util.regex.Matcher urlMatcher = urlRegex.matcher( jsonResponse );
-
-            if( urlMatcher.find() )
-                response.downloadUrl = urlMatcher.group( 1 ).replace( "\\/", "/" );
-
-            // Extract file size
-            String sizePattern = "\"size\":(\\d+)";
-            java.util.regex.Pattern sizeRegex = java.util.regex.Pattern.compile( sizePattern );
-            java.util.regex.Matcher sizeMatcher = sizeRegex.matcher( jsonResponse );
-
-            if( sizeMatcher.find() )
-                response.size = Long.parseLong( sizeMatcher.group( 1 ) );
-
-            // Extract last modified date
-            String datePattern = "\"last_modified\":\"([^\"]+)\"";
-            java.util.regex.Pattern dateRegex = java.util.regex.Pattern.compile( datePattern );
-            java.util.regex.Matcher dateMatcher = dateRegex.matcher( jsonResponse );
-
-            if( dateMatcher.find() )
-            {
-                String dateStr = "???";
-
-                try
-                {
-                    dateStr = dateMatcher.group( 1 );
-                    // Parse ISO 8601 date format: "2023-10-17T12:34:56Z"
-                    java.time.Instant instant = java.time.Instant.parse( dateStr );
-                    response.lastModified = instant.toEpochMilli();
-                }
-                catch( Exception e )
-                {
-                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to parse last_modified date '" + dateStr + "' for: " + filePath + " - " + e.getMessage() );
-                    response.lastModified = 0;
-                }
-            }
-            else
-            {
-                // last_modified field not found in response
-                response.lastModified = 0;
-            }
-
+            response.path = fileData.getString("path", filePath);
+            response.sha = fileData.getString("sha", null);
+            response.downloadUrl = fileData.getString("download_url", null);
+            response.size = fileData.getLong("size", 0);
+            response.lastModified = 0; // GitHub Content API does not provide this for files.
             return response;
 
         }
@@ -690,7 +671,7 @@ public final class GitHubApiClient
         long currentTime = System.currentTimeMillis();
         if( currentTime - lastCacheCleanup > CACHE_CLEANUP_INTERVAL_MS )
         {
-            synchronized( GitHubApiClient.class )
+            synchronized( metadataCache )
             {
                 // Double-check under lock
                 if( currentTime - lastCacheCleanup > CACHE_CLEANUP_INTERVAL_MS )
@@ -707,44 +688,14 @@ public final class GitHubApiClient
                             removedCount++;
                         }
                     }
-                    
+
                     if( removedCount > 0 )
                     {
                         UtilSys.getLogger().log( ILogger.Level.INFO, "Cache cleanup: removed " + removedCount + " expired entries" );
                     }
-                    
+
                     lastCacheCleanup = currentTime;
                 }
-            }
-        }
-    }
-    
-    /**
-     * Evicts oldest entries from cache to make room for new ones.
-     */
-    private static void evictOldestEntries()
-    {
-        synchronized( GitHubApiClient.class )
-        {
-            // Remove 10% of entries when cache is full
-            int entriesToRemove = Math.max( 1, MAX_CACHE_SIZE / 10 );
-            
-            // Find oldest entries
-            java.util.List<java.util.Map.Entry<String, CachedMetadata>> entries = new java.util.ArrayList<>( metadataCache.entrySet() );
-            entries.sort( java.util.Comparator.comparingLong( e -> e.getValue().timestamp ) );
-            
-            int removedCount = 0;
-            for( int i = 0; i < Math.min( entriesToRemove, entries.size() ); i++ )
-            {
-                String key = entries.get( i ).getKey();
-                metadataCache.remove( key );
-                removedCount++;
-            }
-            
-            if( removedCount > 0 )
-            {
-                cacheEvictions.addAndGet( removedCount );
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Cache eviction: removed " + removedCount + " oldest entries (total evictions: " + cacheEvictions.get() + ")" );
             }
         }
     }
@@ -758,12 +709,12 @@ public final class GitHubApiClient
         long misses = cacheMisses.get();
         long total = hits + misses;
         double hitRate = total > 0 ? (double) hits / total * 100 : 0;
-        
-        UtilSys.getLogger().log( ILogger.Level.INFO, String.format( 
+
+        UtilSys.getLogger().log( ILogger.Level.INFO, String.format(
             "Cache stats: %d hits, %d misses, %.1f%% hit rate, %d entries cached, %d evictions",
             hits, misses, hitRate, metadataCache.size(), cacheEvictions.get() ) );
     }
-    
+
     /**
      * Clears all cache entries and resets statistics.
      */

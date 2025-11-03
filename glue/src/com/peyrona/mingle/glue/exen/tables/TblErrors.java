@@ -1,8 +1,8 @@
 
 package com.peyrona.mingle.glue.exen.tables;
 
+import com.peyrona.mingle.glue.ExEnClient;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.exen.ExEnClient;
 import com.peyrona.mingle.glue.gswing.GTable;
 import com.peyrona.mingle.glue.gswing.GTableModel;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
