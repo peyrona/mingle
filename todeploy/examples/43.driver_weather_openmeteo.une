@@ -9,12 +9,15 @@
 # @author : Francisco José Morero Peyrona
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
+USE _LATITUDE  AS 36.6666
+    _LONGITUDE AS -4.8888
+
 
 DEVICE weather
     DRIVER OpenMeteoDriver
         CONFIG
-            Latitude  SET 36.6666
-            Longitude SET -4.8888
+            Latitude  SET _LATITUDE
+            Longitude SET _LONGITUDE
 
 
 DEVICE console
@@ -22,7 +25,8 @@ DEVICE console
 
 
 WHEN weather:len() > 0
-THEN console SET "Temperature   : "+ weather:get("temperature"     )         +"ºC"
+THEN Console SET "WEATHER FORECAST AT LATITUDE = {*_LATITUDE*} and LONGITUDE = {*_LONGITUDE*}"+ newLine()
+     console SET "Temperature   : "+ weather:get("temperature"     )         +"ºC"
      console SET "Feels like    : "+ weather:get("temperature_feel")         +"ºC"
      console SET "Clouds        : "+ weather:get("clouds"          )         +"%"
      console SET "Humidity      : "+ weather:get("humidity"        ):floor() +"%"

@@ -113,10 +113,11 @@ public interface IXprEval
     Map<String,Object> getVars();
 
     /**
-     * Returns errors found in passed expression.
+     * Returns a List with all errors found in passed expression.
      * <p>
      * Instances of ICandi.IError
-     * @return Errors found in passed expression.
+     * 
+     * @return A List with all errors found in passed expression.
      */
     List<ICandi.IError> getErrors();
 

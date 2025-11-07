@@ -222,13 +222,13 @@ final class EvalByAST
      //     throw new MingleException( "Can not eval() an expression with errors" );
 
         if( (! isBoolean) && (! hasAllVars) )
-            return null;          // result is null when some needed vars are not yet initialized, but only if the expression is not of type boolean,
-                                  // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts, because
-                                  // lazy eval: "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated.
+            return null;        // result is null when some needed vars are not yet initialized, but only if the expression is not of type boolean,
+                                // because if the expression is of type boolean, it is needed to attempt to evaluate left and right parts, because
+                                // lazy eval: "true || x > 5" can be evaluated, this one: "x > 5 || true" has to be also possible to be evaluated.
 
         Object result = null;
 
-        if( executor == null )    // Because the expression does not have futures, it can be evaluated now -------------------------------------
+        if( executor == null )  // Because the expression does not have futures, it can be evaluated now -------------------------------------
         {
             result = root.eval( operators, functions, mapVars, hasAllVars );
 
@@ -237,8 +237,8 @@ final class EvalByAST
 
             // It is not needed to do 'root.reset()' because this expr has no futures
         }
-        else                      // The expression has futures --------------------------------------------------------------------------------
-        {                         // A future always resolves to boolean
+        else                    // The expression has futures --------------------------------------------------------------------------------
+        {                       // A future always resolves to boolean
             if( ! isFutureing() )
             {
                 root.reset();
@@ -247,8 +247,8 @@ final class EvalByAST
 
                 visitor( root, VISIT_PRE_ORDER, (node) ->     // Order here is not important: -1, 0, 1, will produce same result
                         {
-                                 if( node.isAfter()  )  EvalByAST.this.executor.execute( new RunFuture( node ) );
-                            else if( node.isWithin() )  EvalByAST.this.executor.execute( new RunFuture( node ) );
+                                 if( node.isAfter() || node.isWithin() )
+                                     EvalByAST.this.executor.execute( new RunFuture( node ) );
                         } );
             }
             else                     // If the eval is already initialized...
@@ -274,7 +274,7 @@ final class EvalByAST
 
         root.reset();
 
-        // Do not clear the mapVars !
+        // ¡ Do not clear the mapVars !
     }
 
     @Override
@@ -684,7 +684,6 @@ final class EvalByAST
             super.terminated();
             runningThreads.clear();
         }
-
 
         void cancelAllTasks()
         {

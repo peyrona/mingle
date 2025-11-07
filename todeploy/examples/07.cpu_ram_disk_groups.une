@@ -11,6 +11,8 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
+USE MAX_VALUE AS 80
+
 DEVICE CPU
     INIT
         groups SET "metric"           # This sensor (and next two) belongs to a group of sensors named "metric"
@@ -54,15 +56,15 @@ DEVICE file
 
 # Because all devices belong to the same group, we can treat them together
 
-WHEN ANY metric ABOVE 80
-THEN outputs SET "["+ date() +" "+ time() +"] Care! At least one metric is above 80% (using ANY)"
+WHEN ANY metric ABOVE MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Care! At least one metric is above {*MAX_VALUE*}% (using ANY)"
 
 
-WHEN ALL metric ABOVE 80
-THEN outputs SET "["+ date() +" "+ time() +"] Danger! All metrics are above 80% (using ALL)"
+WHEN ALL metric ABOVE MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Danger! All metrics are above {*MAX_VALUE*}% (using ALL)"
 
 
-WHEN ALL metric BELOW 80
-THEN outputs SET "["+ date() +" "+ time() +"] Safe: all metrics are below 80% (using ALL)"
+WHEN ALL metric BELOW MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Safe: all metrics are below {*MAX_VALUE*}% (using ALL)"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

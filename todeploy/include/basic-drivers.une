@@ -133,7 +133,7 @@ SCRIPT CellSetController                              # A controller that stores
    CALL "com.peyrona.mingle.controllers.CellSet"
 
 
-SCRIPT DataBaseController                             # A controller to manage a DataBase and send SQL commands
+SCRIPT DataBaseController                             # A controller to manage an SQL DataBase Server and send commands to it
    LANGUAGE java
    FROM "file://{*home.lib*}controllers.jar"
    CALL "com.peyrona.mingle.controllers.DataBase"

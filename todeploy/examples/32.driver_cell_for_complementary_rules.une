@@ -46,10 +46,10 @@ THEN result = (clock / 1000):mod( 2 ):floor()
 
 
 WHEN result == 0
-THEN console = "Clock value is an even number ["+ result +"]"
+THEN console = "["+ clock +"] Clock value is an even number"
 
 
 WHEN result == 1
-THEN console = "Clock value is an odd  number ["+ result +"]"
+THEN console = "["+ clock +"] Clock value is an odd  number"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

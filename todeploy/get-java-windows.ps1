@@ -41,10 +41,31 @@ $TmpDir = Join-Path $ScriptDir "jdk.11.windows_tmp"
 
 
 # --- 1. Download JDK ---
-Write-Host "Downloading Adoptium JDK 11 for Windows, wait..."
+Write-Host "Downloading Adoptium JDK 11 for Windows..."
 try {
-    # -UseBasicParsing is faster and avoids issues in some environments
-    Invoke-WebRequest -Uri $JdkUrl -OutFile $DownloadFile -UseBasicParsing
+    # Create a web client for download with progress tracking
+    $webClient = New-Object System.Net.WebClient
+    $webClient.DownloadProgressChanged += {
+        param($sender, $e)
+        $percent = $e.ProgressPercentage
+        $downloaded = [math]::Round($e.BytesReceived / 1MB, 2)
+        $total = [math]::Round($e.TotalBytesToReceive / 1MB, 2)
+        Write-Progress -Activity "Downloading JDK 11" -Status "Progress: $downloaded MB of $total MB ($percent%)" -PercentComplete $percent
+    }
+    
+    $webClient.DownloadFileCompleted += {
+        Write-Progress -Activity "Downloading JDK 11" -Completed
+    }
+    
+    # Start the download
+    $webClient.DownloadFileAsync($JdkUrl, $DownloadFile)
+    
+    # Wait for download to complete
+    while ($webClient.IsBusy) {
+        Start-Sleep -Milliseconds 100
+    }
+    
+    $webClient.Dispose()
 } catch {
     Write-Error "Error during download: $_"
     # Exit with a non-zero status code

@@ -140,7 +140,7 @@ final class DumbSense extends JPopupMenu
         }
         catch( BadLocationException ble )
         {
-            JTools.alert( "Error showinh popup menu "+ ble.getMessage() );
+            JTools.alert( "Error showing popup menu "+ ble.getMessage() );
         }
     }
 

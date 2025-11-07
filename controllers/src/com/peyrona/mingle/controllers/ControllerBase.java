@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.controllers;
 
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
@@ -67,7 +68,10 @@ public abstract class      ControllerBase
     @Override
     public synchronized void start( IRuntime rt )
     {
-        assert runtime == null && rt != null;
+        assert runtime == null;
+
+        if( rt == null )
+            throw new MingleException( MingleException.INVALID_ARGUMENTS );
 
         isFaked = rt.getFromConfig( "exen", "faked_drivers", false );
 
@@ -160,7 +164,7 @@ public abstract class      ControllerBase
 
     protected ControllerBase sendReaded( Object newValue )
     {
-        sendChanged(getDeviceName(), newValue );
+        sendChanged( getDeviceName(), newValue );
         return this;
     }
 

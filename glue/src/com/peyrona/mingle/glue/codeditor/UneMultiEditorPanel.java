@@ -7,10 +7,10 @@ import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
 import com.peyrona.mingle.glue.ConfigManager;
 import com.peyrona.mingle.glue.JTools;
-import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
+import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
@@ -369,7 +369,7 @@ public final class UneMultiEditorPanel extends JPanel
     {
         if( getFocusedUnit() == null )
         {
-            JTools.info( "Can not copy file path: no focused editor", this );
+            JTools.info( "Can not copy file path: no focused editor" );
         }
         else
         {
@@ -383,7 +383,7 @@ public final class UneMultiEditorPanel extends JPanel
             Toolkit.getDefaultToolkit()
                    .beep();
 
-            JTools.info( "File path copied to the clipboard", this );
+            JTools.info( "File path copied to the clipboard" );
         }
     }
 

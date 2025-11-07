@@ -35,12 +35,12 @@ DOWNLOAD_FILE="jdk-11-macos.tar.gz"
 
 
 # --- 1. Download JDK ---
-echo "Downloading Adoptium JDK 11 for macOS $JDK_ARCH, wait..."
+echo "Downloading Adoptium JDK 11 for macOS $JDK_ARCH..."
 # -L: Follow redirects
-# -s: Silent mode
+# --progress-bar: Show progress bar
 # -S: Show errors if they occur
 # -o: Output file
-curl -LsSo "$DOWNLOAD_FILE" "$JDK_URL"
+curl -L --progress-bar -o "$DOWNLOAD_FILE" "$JDK_URL"
 
 # Check if download was successful (file is not empty)
 if [ ! -s "$DOWNLOAD_FILE" ]; then

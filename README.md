@@ -35,13 +35,12 @@
 
  **What is the easiest way to start?**
 
-> All needed tools are integrated in the IDE (Integrated Development Environment). So, beginners only need to know about the IDE.
-> "Glue" is the IDE's name, it has all you need: an editor, a compiler and an Execution Environment (to execute the compiled code).
+> To make things simple, all tools are integrated in the IDE, which is called "**Glue**".
 >
 > So, our recommendation is:
-> 1.  Start **Glue**: for Linux, use "menu.sh"; for Windows "run-win.ps1", for MacOS "run-mac.sh" file.
+> 1.  Start **Glue** (for Linux, use "menu.sh"; for Windows "run-win.ps1", for MacOS "run-mac.sh").
 > 2.  Open the editor (click the pencil icon at toolbar).
-> 3.  Open an example (under 'examples' folder): they are numbered from easiest to smartest.
+> 3.  Open an example (under the 'examples' folder): they are numbered from easiest to smartest.
 > 4.  Read, understand and test (play with it).
 > 5.  Modify the _Une_ source code and re-test.
 > 6.  Go to #3

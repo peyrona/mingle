@@ -46,7 +46,6 @@ public final class      Rule
     private       String        sWhen;    // To be used temporarely
     private       String        sIf;      // To be used temporarely
 
-    private final Object[]      aoLast = new Object[2];        // Used to keep the last device, so it can be sent by ::trigger() to all actions as the device that triggered the rule.
     private final Dispatcher<Object[]> onDeviceChangedTask;    // Using Object[] for speed (instead of using Pair<>())
 
 
@@ -63,11 +62,10 @@ public final class      Rule
 
         Consumer<Object[]> consumer = (change) ->
             {
-                String name  = (String) change[0];   // Device name
-                Object value =          change[1];   // Device value
+                IXprEval xpr = ((_if_ != null && _if_.isFutureing()) ? _if_ : when);
 
-                if( (_if_ != null) && _if_.isFutureing() ) _if_.eval( name, value );   // The 'onSolved' does the work
-                else                                       when.eval( name, value );   // for 'when' and for '_if_'
+                xpr.eval( (String) change[0],    // Device name
+                                   change[1] );  // Device value
             };
 
         onDeviceChangedTask = new Dispatcher<>( consumer,
@@ -160,13 +158,8 @@ public final class      Rule
     @Override
     public IRule eval( String devName, Object devValue )
     {
-        if( when != null )     // when == null -> rule has errors (remember: rules can be added on the fly)
-        {
-            aoLast[0] = devName;
-            aoLast[1] = devValue;
-
+        if( when != null )                                                    // when == null -> rule has errors (remember: rules can be added on the fly)
             onDeviceChangedTask.add( new Object[] { devName, devValue } );    // Need to create a new reference to put it into the queue
-        }
 
         return this;
     }
@@ -264,7 +257,7 @@ public final class      Rule
                 if( bLog )
                     getRuntime().log( ILogger.Level.RULE, "\t"+ action.getTarget() +" = "+ action.getValueToSet() + ((action.getDelay() > 0) ? (" delay="+ action.getDelay()) : "") );
 
-                action.trigger( (String) aoLast[0], aoLast[1] );     // If an action fails (throws an exception),
+                action.trigger();        // If an action fails (throws an exception),
             }
             catch( Exception exc )       // the exception is logged and next action will be triggered: this maximizes the number of actions that will be accomplished.
             {

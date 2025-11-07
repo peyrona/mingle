@@ -3,10 +3,8 @@ package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
-import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.UtilColls;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Lexer;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
@@ -17,7 +15,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 import java.util.function.Function;
 
@@ -55,11 +52,10 @@ import java.util.function.Function;
  */
 public final class NAXE implements IXprEval
 {
-    private       EvalByAST                 evaluator    = null;    // Is null only when the expression is empty
-    private       List<ICandi.IError>       lstErrors    = null;
-    private       String                    sOriginal    = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
-    private       Function<String,String[]> fnGroupWise  = null;
-    private final AtomicBoolean             isEvaluating = new AtomicBoolean( false );   // Just a re-entrance flag
+    private EvalByAST                 evaluator    = null;    // Is null only when the expression is empty
+    private List<ICandi.IError>       lstErrors    = null;
+    private String                    sOriginal    = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
+    private Function<String,String[]> fnGroupWise  = null;
 
     //------------------------------------------------------------------------//
 
@@ -116,19 +112,6 @@ public final class NAXE implements IXprEval
     @Override
     public Object eval()
     {
-        boolean bOnEval = ! isEvaluating.compareAndSet( false, true );
-
-        assert ! bOnEval;
-
-        if( bOnEval )
-        {
-            String  msg = "Expression ["+ sOriginal +"] is already being evaluated";
-            ILogger lgr = UtilSys.getLogger();
-
-            if( lgr == null )  System.err.println( msg );
-            else               lgr.log( ILogger.Level.WARNING, msg );
-        }
-
         try
         {
             return evaluator.eval();
@@ -143,10 +126,6 @@ public final class NAXE implements IXprEval
                                            "\n has errors. Check '::getErrors()' prior to evalute" );    // This Exception is intended
 
             throw new MingleException( "Error evaluating:\n"+ sOriginal, exc );
-        }
-        finally
-        {
-            isEvaluating.set( false );
         }
     }
 
