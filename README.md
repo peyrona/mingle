@@ -1,13 +1,12 @@
 # What is Mingle?
 
-> * A rules based language (close to natural language) called "_Une_".
+> * A language (close to human) called "_Une_".
 > * The tools associated with the _Une_ language.
 
 
 # How looks it like?
 
-> Here is how to say:
-> “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
+> Here is how to say: “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
 >
 > ![Une language basic example](une-1st-example.png)
 >
@@ -18,11 +17,11 @@
  **Do I need to know about computer programming?**
 
 > No, you do not: as far as you are familiar with spreadsheets (e.g.: MS Excel) you can successfully use _Une_.
-> It is also true that the more you know about programming computers and about electronics, the more you will be able to do.
+> It is also true that the more you know about programming computers, the more you will be able to do.
 
  **What computer do I need?**
 
-> A PC with Windows, macOS or Linux. In fact, **Mingle** would run in any machine where Java 11 can run.
+> A PC with Windows, macOS or Linux. In fact, **Mingle** would run in any machine where Java 11 (or above) can run.
 > Raspberry Pi is a cheap computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
@@ -41,21 +40,21 @@
 > 1.  Start **Glue** (for Linux, use "menu.sh"; for Windows "run-win.ps1", for MacOS "run-mac.sh").
 > 2.  Open the editor (click the pencil icon at toolbar).
 > 3.  Open an example (under the 'examples' folder): they are numbered from easiest to smartest.
-> 4.  Read, understand and test (play with it).
+> 4.  Read, understand and test (run it).
 > 5.  Modify the _Une_ source code and re-test.
 > 6.  Go to #3
 
  **What license has Mingle?**
 
-> Everything is Open Source under the Apache License 2.0, including the language itself, the MSP specifications, all the source code and even the documentation.
+> All code is Open Source under the Apache License 2.0.
 >
-> The books (licensed as Creative Commons) are under "todeploy/docs" folder:
+> The books (licensed as Creative Commons) are under "docs" folder:
 > * Une_language.pdf
 > * Mingle_Standard__Platform.pdf
 > * Une_reference__sheet.pdf
 
  **What about the logo?**
 
-> Following the Open Source tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You can use it anywhere, as long as it's related to **Mingle** or _Une_.
+> Following the Open Source tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You are allowed to use it anywhere, as long as it's related to **Mingle** or _Une_.
 
 ![Une language logo](https://github.com/peyrona/mingle/blob/main/todeploy/docs/images/mingle-logo-64x64.png)
