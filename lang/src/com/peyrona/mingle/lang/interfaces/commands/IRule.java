@@ -25,14 +25,8 @@ public interface IRule extends ICommand
         Object getValueToSet();
 
         long   getDelay();
-
-        /**
-         * Triggers the action.
-         *
-         * @param sDevName The name of the device that triggered the rule.
-         * @param oDevValue The value of the device that triggered the rule.
-         */
-        void   trigger( String sDevName, Object oDevValue );
+        
+        void   trigger();
     }
 
     /**

@@ -134,8 +134,6 @@ public class Device
     {
         try
         {
-// System.out.println( System.currentTimeMillis() +" -> "+ name() +" == "+ newValue );
-
             // DOC: If user wants that MsgDeviceChanged messages are sent only when the new
             // value is different from the previous value, he has to set a proper DELTA > 0
 

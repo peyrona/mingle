@@ -85,34 +85,19 @@ final class Action implements IRule.IAction
     }
 
     @Override
-    public void trigger( String sDevName, Object oDevValue )
+    public void trigger()
     {
+        assert runtime != null;
 
-
-
-//        private boolean            bParsed = false;
-//        private Map<String,Object> mapXpr  = null;
-//
-//        if( (! bParsed) && (value instanceof String) )
-//        {
-//            value = UtilStr.replaceNewLineMacro( value );
-//            bParsed = true;
-//        }
-
-
-
-
-
-        if( isTargetScriptOrRule() )    // It is of type: THEN MyScript | MyRule
+        if( isTargetScriptOrRule() )              // It is of type: THEN MyScript | MyRule
         {
             runtime.bus().post( new MsgTrigger( target, false ), delay );
         }
-        else                            // It is of type: THEN device = new_value
+        else                                      // It is of type: THEN device = new_value
         {
+            Object val = getValue();              // This method evaluate ::xprEval if needed
 
-            Object val = getValue( sDevName, oDevValue );    // This method evaluate ::xprEval if needed
-
-            if( val != null )           // Device's value is null until the device receives its first value
+            if( val != null )                     // Device's value is null until the device receives its first value
             {
                 if( ! isTargetAnExpression() )    // As said, if it was an expr, it was evaluated by ::getValue()
                 {
@@ -187,7 +172,7 @@ final class Action implements IRule.IAction
                 xprEval = newXprEval( target, runtime );
             }
 
-            return;                                             // 'value' is a Rule or Script name
+            return;                                             // 'value' is a Rule or Script name (nothing else to do)
         }
 
         if( ! (value instanceof String) )                       // 'value' (things after '=') is not and expression. Has to be a constant or another Device
@@ -222,47 +207,46 @@ final class Action implements IRule.IAction
         return (value == null) && (xprEval == null);
     }
 
-    private boolean isTargetAnExpression()    // Only and expression v.g.: THEN put("myvar", "myval")         --> true
-    {                                         // This is not the case: THEN myDevice = put("myvar", "myval")  --> false
+    private boolean isTargetAnExpression()    // Only and expression v.g.: THEN put("myvar", "myval") --> true
+    {                                         // This is an expr plus an assingment: THEN myDevice = put("myvar", "myval")  --> false
         return (value == null) && (xprEval != null);
     }
 
-    private Object getValue( String sDevName, Object oDevValue )
+    private Object getValue()
     {
         IDevice device = (value == null) ? null : getDevice( value.toString() );     // when THEN put("myvar", "myval") --> value == null
 
         if( device != null )
+        {
+            if( device.value() == null )
+                return "Action can not be evaluted now: the device '"+ device.name() +" havs not a value yet";
+
             return device.value();     // 'value' is another Device; e.g.: THEN MyDevice1 = MyDevice2
+        }
 
         if( xprEval == null )          // Then it has to be a constant (a basic Une data type)
             return value;
 
         // The value is an expression and it has to be evaluated
-
-        xprEval.set( sDevName, oDevValue );    // Even if xpr has no vars, this has to be set: this is tricky but works
-
         Map<String,Object> mapVars = xprEval.getVars();
 
         if( mapVars.isEmpty() )
             return xprEval.eval();
 
-        // Expression has variables: they are not automatically updated, so, lets find out their values.
+        // Expression has variables: they are not automatically updated, so, lets find out their current values.
 
         for( String varName : mapVars.keySet() )
         {
-            Object val = mapVars.get( varName );
+            Object val = getDevice( varName ).value();
 
-            if( val == null )
-                val = getDevice( varName ).value();
-
-            if( val != null )
+            if( val != null )                // A device has a null value when no velue arrived yet
                 xprEval.set( varName, val );
         }
 
         Object oRet = xprEval.eval();
 
         if( oRet == null )
-            oRet = "The Action '"+ xprEval +"' can not be evaluted now: one more devices have not a value yet";
+            oRet = "The Action '"+ xprEval +"' can not be evaluated now: one or more devices have not a value yet";
 
         return oRet;
     }

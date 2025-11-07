@@ -9,7 +9,10 @@ import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.updater.Updater;
+import java.awt.AWTException;
 import java.awt.BorderLayout;
+import java.awt.Robot;
+import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -60,16 +63,18 @@ public class Main
             SwingUtilities.invokeLater(() ->
                 {
                     try { UIManager.setLookAndFeel( UIManager.getSystemLookAndFeelClassName() ); }
-                    catch( ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ex ) { /* Nothing to log */ }
+                    catch( ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ex )  { UtilSys.getLogger().log( ILogger.Level.WARNING, ex ); }
 
                     frame.showIt();
 
+                    System.out.println( "Glue started." );
+
                     GTip.show( "Welcome to Glue - The Mingle Swiss-knife tool\n\n"+
-                              "Please read the Mingle Standard Platform manual to get familiar with Glue.\n\n"+
-                              "Suggested actions:\n"+
-                              "     a) Connect with a running ExEn ('plug' icon or F2)\n"+
-                              "     b) Start a local ExEn ('play' icon or F5)\n"+
-                              "     c) Open the Script-Editor ('pencil' icon or F4)." );
+                               "Please read the Mingle Standard Platform manual to get familiar with Glue.\n\n"+
+                               "Suggested actions:\n"+
+                               "     a) Connect with a running ExEn ('plug' icon or F2)\n"+
+                               "     b) Start a local ExEn ('play' icon or F5)\n"+
+                               "     c) Open the Script-Editor ('pencil' icon or F4)." );
 
                     if( shouldCheckForUpdates() )
                     {
@@ -166,24 +171,24 @@ public class Main
             setLocationRelativeTo( null );
             setVisible( true );
 
-//            if( UtilSys.isDevEnv )
-//            {
-//                UtilSys.execute( getClass().getName(),
-//                                 500,
-//                                 () ->
-//                                    {
-//                                        try
-//                                        {
-//                                            Robot robot = new Robot();
-//                                                  robot.keyPress( KeyEvent.VK_F4 );
-//                                                  robot.keyRelease( KeyEvent.VK_F4 );
-//                                        }
-//                                        catch( AWTException ex )
-//                                        {
-//                                            JTools.error( ex );
-//                                        }
-//                                    } );
-//            }
+            if( UtilSys.isDevEnv )
+            {
+                UtilSys.execute( getClass().getName(),
+                                 500,
+                                 () ->
+                                    {
+                                        try
+                                        {
+                                            Robot robot = new Robot();
+                                                  robot.keyPress( KeyEvent.VK_F4 );
+                                                  robot.keyRelease( KeyEvent.VK_F4 );
+                                        }
+                                        catch( AWTException ex )
+                                        {
+                                            JTools.error( ex );
+                                        }
+                                    } );
+            }
         }
 
         private void close()
@@ -208,9 +213,10 @@ public class Main
                 URI uri = UtilIO.expandPath( "{*home.tmp*}" ).get( 0 );
                 UtilIO.delete( new File( uri ), (f) -> UtilIO.hasExtension( f, "json" ), false );
 
+                System.out.println( "Glue finished." );
                 System.exit( 0 );    // Smooth exit
             }
-            catch( Throwable th )
+            catch( Exception th )
             {
                 UtilSys.getLogger().log( ILogger.Level.SEVERE, th, "Fatal error during shutdown" );
                 System.exit( 1 );    // Exit with error code

@@ -25,8 +25,11 @@ import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.plaf.basic.BasicButtonUI;
+import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
+
+
 
 /**
  * An improved JTabPane which main new thing is tabs having a custom button.
@@ -39,6 +42,8 @@ public class GTabbedPane extends JTabbedPane
 {
     public GTabbedPane()
     {
+        setUI( new SafeTabbedPaneUI() );
+
         addChangeListener( (ChangeEvent ce) -> updateSelectedTab() );
     }
 
@@ -112,8 +117,9 @@ public class GTabbedPane extends JTabbedPane
     /**
      * Returns the index of the tab that contains the specified button.
      * Returns -1 if the button is not found in any tab.
+     * @param button
      */
-    public int getTabIndexWhichButtonIs(JButton button)
+    public int getTabIndexWhichButtonIs( JButton button )
     {
         int tabCount = getTabCount();
         for( int i = 0; i < tabCount; i++ )
@@ -167,6 +173,50 @@ public class GTabbedPane extends JTabbedPane
         // Force UI update to handle rollover state changes
         // This helps prevent ArrayIndexOutOfBoundsException when tabs are removed
         repaint();
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+
+    /**
+     * A safe implementation of BasicTabbedPaneUI that prevents an intermittent ArrayIndexOutOfBoundsException that can occur in multithreaded environments.
+     *
+     * @author Francisco José Morero Peyrona
+     *
+     * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+     */
+    private class SafeTabbedPaneUI extends BasicTabbedPaneUI
+    {
+        @Override
+        public int tabForCoordinate( JTabbedPane pane, int x, int y )
+        {
+            try
+            {
+                return super.tabForCoordinate( pane, x, y );
+            }
+            catch( ArrayIndexOutOfBoundsException e )
+            {
+                System.out.println( "sale el mio" );
+                // Ignore this exception, which can happen intermittently in a race condition.
+            }
+
+            return -1;
+        }
+
+        @Override
+        protected void setRolloverTab( int index )
+        {
+            try
+            {
+                super.setRolloverTab( index );
+            }
+            catch( ArrayIndexOutOfBoundsException e )
+            {
+                System.out.println( "sale el otro" );
+                // Ignore this exception, which can happen intermittently in a race condition.
+            }
+        }
     }
 
     //------------------------------------------------------------------------//

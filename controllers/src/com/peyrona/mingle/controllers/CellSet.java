@@ -1,13 +1,17 @@
 
 package com.peyrona.mingle.controllers;
 
+import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
+import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IEventBus;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Dispatcher;
+import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
@@ -31,8 +35,7 @@ import java.util.function.Consumer;
 public final class   CellSet
              extends ControllerBase
 {
-    private static final String KEY = "value";
-
+    private static final String KEY_VALUE = "value";
     private static final Map<String,CellValue>        map = new ConcurrentHashMap<>();
     private static       Dispatcher<MsgDeviceChanged> dis = null;    // Needed to recalculate new values for all affected cells every time a device changes its value
     private static       IEventBus.Listener           ebl = null;
@@ -43,9 +46,9 @@ public final class   CellSet
     @Override
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        setName( deviceName );                  // Must be 1st
-        setListener( listener );                // Must be at begining: in case an error happens, Listener is needed
-        set( KEY, deviceConf.get( "value" ) );  // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
+        setName( deviceName );                         // Must be 1st
+        setListener( listener );                       // Must be at begining: in case an error happens, Listener is needed
+        set( KEY_VALUE, deviceConf.get( "value" ) );   // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
         setValid( true );
         set( deviceConf );
     }
@@ -55,7 +58,7 @@ public final class   CellSet
     {
         super.start( rt );
 
-        CellValue cv = new CellValue( get(  KEY ) );    // Previously saved (at ::set(...)) for this CellSet instance
+        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
 
         // Can not make: 'val = null;'  because start() could be invoked again
 
@@ -67,10 +70,12 @@ public final class   CellSet
         if( isInvalid() )
             return;
 
-        if( dis != null )
-            return;
+        synchronized( CellSet.class )
+        {
+            if( dis != null )
+                return;
 
-        Consumer<MsgDeviceChanged> consumer = (msg) ->
+            Consumer<MsgDeviceChanged> consumer = (msg) ->
                 {
                     for( Map.Entry<String,CellValue> entry : map.entrySet() )
                     {
@@ -85,26 +90,26 @@ public final class   CellSet
                     }
                 };
 
-        dis = new Dispatcher<>( consumer,
-                                (exc) -> sendGenericError( ILogger.Level.SEVERE, exc.getMessage() ),
-                                getClass().getName() )
-                        .start();
+            dis = new Dispatcher<>( consumer,
+                                    (exc) -> sendGenericError( ILogger.Level.SEVERE, exc.getMessage() ),
+                                    getClass().getName() )
+                            .start();
 
-        // This listener receives messages of type 'MsgDeviceChanged'.
-        // Everytime a device changes its value, all cells which have an expression (not a constant)
-        // have to be re-visited and those which have this device in their formula (expression) have
-        // to be evaluated.
+            // This listener receives messages of type 'MsgDeviceChanged'.
+            // Everytime a device changes its value, all cells which have an expression (not a constant)
+            // have to be re-visited and those which have this device in their formula (expression) have
+            // to be evaluated.
 
-        ebl = (IEventBus.Listener<MsgDeviceChanged>) (MsgDeviceChanged msg) -> dis.add( msg );
+            ebl = (IEventBus.Listener<MsgDeviceChanged>) (MsgDeviceChanged msg) -> dis.add( msg );
 
-        rt.bus().add( ebl, MsgDeviceChanged.class );
+            rt.bus().add( ebl, MsgDeviceChanged.class );
+        }
     }
 
     @Override
     public void stop()
     {
-        if( getRuntime() != null )
-            getRuntime().bus().remove( ebl );
+        getRuntime().bus().remove( ebl );
 
         ebl = null;
 
@@ -112,7 +117,13 @@ public final class   CellSet
             dis.stop();
 
         dis = null;
-        map.clear();
+
+        // Only remove this instance's cell, not all cells
+        String deviceName = getDeviceName();
+
+        if( deviceName != null )
+            map.remove( deviceName );
+
         super.stop();
     }
 
@@ -141,14 +152,15 @@ public final class   CellSet
             return;
 
         CellValue cv = map.get( getDeviceName() );
+        Object    va = ((IDevice) getRuntime().get( getDeviceName() )).value();
 
-        if( cv != null && ! Objects.equals( cv.read(), newVal ) )
-        {
+//        if( cv != null && ! Objects.equals( cv.read(), newVal ) )
+//        {
             Object value = cv.write( newVal );
 
             if( value != null )
                 sendReaded( value );
-        }
+//        }
     }
 
     //------------------------------------------------------------------------//
@@ -165,17 +177,28 @@ public final class   CellSet
         if( ! cv.isFormula() )
             return false;
 
+        if( cv.xpreval == null )
+            return false;
+
         for( String var1 : cv.xpreval.getVars().keySet() )
         {
-            if( map.containsKey( var1 ) &&       // true means that passed var (which appears in the cellName's formula) is another cell,
-                map.get( var1 ).isFormula() )    // and this referenced cell contains also a formula
+            if( map.containsKey( var1 ) )       // true means that passed var (which appears in the cellName's formula) is another cell
             {
-                for( String var2 : map.get( var1 ).xpreval.getVars().keySet() )     // So we have to find if the vars contained in this xpr references the other cell
+                CellValue referencedCell = map.get( var1 );
+
+                if( referencedCell != null && referencedCell.isFormula() )    // and this referenced cell contains also a formula
                 {
-                    if( var2.equals( getDeviceName() ) )
+                    if( referencedCell.xpreval != null )
                     {
-                        sendIsInvalid( "Circular reference in: "+ cv.xpreval +" on variable: "+ var2 );
-                        return true;              // 'sendIsInvalid(...)' sets this Controller instance to 'inval
+                        for( String var2 : referencedCell.xpreval.getVars().keySet() )     // So we have to find if the vars contained in this xpr references the other cell
+                        {
+                            if( var2.equals( getDeviceName() ) )
+                            {
+                                String formulaStr = (cv.xpreval != null) ? cv.xpreval.toString() : "null";
+                                sendIsInvalid( "Circular reference in: "+ formulaStr +" on variable: "+ var2 );
+                                return true;              // 'sendIsInvalid(...)' sets this Controller instance to 'inval
+                            }
+                        }
                     }
                 }
             }
@@ -240,7 +263,7 @@ public final class   CellSet
         {
             if( isFormula() )
             {
-                if( ! hasErrors() )    // If has errors, 'value' already contains the errors
+                if( ! hasErrors() && xpreval != null )    // If has errors, 'value' already contains the errors
                 {
                     Object v = xpreval.eval( devName, devValue );
 
@@ -271,10 +294,19 @@ public final class   CellSet
 
                     xpreval = getRuntime().newXprEval().build( str, null, getRuntime().newGroupWiseFn() );
 
-                    bErrors = ! xpreval.getErrors().isEmpty();
+                    if( xpreval != null )
+                    {
+                        List<ICandi.IError> errors = xpreval.getErrors();
+                        bErrors = UtilColls.isNotEmpty( errors );
 
-                    value   = bErrors ? "Error(s): "+ xpreval.getErrors().toString()
-                                      : null;    // Will be inited when 'xpreval' is evaluated for the 1st time
+                        value   = bErrors ? "Error(s): "+ errors.toString()
+                                          : null;    // Will be inited when 'xpreval' is evaluated for the 1st time
+                    }
+                    else
+                    {
+                        bErrors = true;
+                        value   = "Error: Unable to create expression evaluator";
+                    }
                 }
                 else
                 {

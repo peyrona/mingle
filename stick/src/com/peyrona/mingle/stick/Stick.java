@@ -544,11 +544,23 @@ public final class Stick
             bExited = true;
         }
 
+        // Using this does not work (I do not know why) -->
+        //      UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );
+
         millis = ((millis <= 0) ? 500 : millis);    // I set a minium delay time of 500 to allow any pending task to be accomplished
 
-        // NEXT: --> Do not call 'System.exit( 0 )' to allow to run more than one instace of Stick in same JVM
-
-        UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );   // Don't need to ::stop(), it is always invoked by a System hook
+        try
+        {
+            Thread.sleep( millis );
+        }
+        catch( InterruptedException e )
+        {
+            // Nothing to do
+        }
+        finally
+        {
+            System.exit( 0 );   // NEXT: --> Do not call 'System.exit( 0 )' to allow to run more than one instace of Stick in same JVM
+        }
 
         return this;
     }

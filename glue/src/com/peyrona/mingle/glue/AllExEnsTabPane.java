@@ -91,7 +91,7 @@ public final class AllExEnsTabPane extends GTabbedPane
         {
             String sUne = getFocused().getUseSourceCode();
 
-            if( UtilStr.isEmpty( sUne ) )  JTools.alert( "The editor is empty: nothing to save" );
+            if( UtilStr.isEmpty( sUne ) )  JTools.info( "The editor is empty: nothing to save" );
             else                           saveUneSourceCode( sUne );
         }
     }
