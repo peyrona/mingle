@@ -22,7 +22,7 @@
 
  **What computer do I need?**
 
-> A PC with Windows, macOS or Linux. Although not tested, **Mingle** would run in any machine where Java 11 can run.
+> A PC with Windows, macOS or Linux. In fact, **Mingle** would run in any machine where Java 11 can run.
 > Raspberry Pi is a cheap computer very appropriate to experiment with _Une_.
 
  **How to install Mingle?**
@@ -31,7 +31,7 @@
 >
 > 2. If you have Java 11 or above installed in your PC, you are done.
 >    Otherwise, execute the appropriate 'get-java-*' script.
->    Note: if need, change the script permissions to make it executable (chmod +x get_java* or similar).
+>    Note: change the script permissions to make it executable ('chmod +x get_java*' or similar).
 
  **What is the easiest way to start?**
 
@@ -44,9 +44,6 @@
 > 4.  Read, understand and test (play with it).
 > 5.  Modify the _Une_ source code and re-test.
 > 6.  Go to #3
-
- **I am an experienced Linux user or a developer**
-> Have a look at the script 'run.sh', there is a lot of information about how to use all the MSP tools.
 
  **What license has Mingle?**
 
