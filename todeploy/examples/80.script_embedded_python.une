@@ -43,7 +43,7 @@ def doIt():
     return
 
 doIt()                                                               # This makes the SCRIPT command CALL clause innecesary
-_exen_rt_.exit(3000,0)                                               # Ends ExEn execution in 3 seconds (this is rarely used)
+_exen_rt_.exit(3000)                                                 # Ends ExEn execution in 3 seconds (this is rarely used)
 
         }
 

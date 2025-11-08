@@ -4,7 +4,6 @@ package com.peyrona.mingle.controllers.daikin.emura;
 import com.peyrona.mingle.controllers.ControllerBase;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
-import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.RateMonitor;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilType;
@@ -12,7 +11,6 @@ import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.util.Locale;
 import java.util.Map;
 
@@ -43,8 +41,6 @@ public final class   Control
     private final static short H_TARGET  = 5;
 
     private       Talker      talker  = null;
-    private       pair        faked   = null;    // Used only when using Faked drivers
-    private       String      sIpAddr = null;
     private final RateMonitor monitor = new RateMonitor( 5, 3000 );
 
     //------------------------------------------------------------------------//
@@ -54,35 +50,18 @@ public final class   Control
     {
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
-        sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
-        setValid( true );
-        set( deviceInit );
-    }
 
-    @Override
-    public void start( IRuntime rt )
-    {
-        super.start( rt );
-
-        if( isFaked )
+        try
         {
-            faked = new pair().put( as[POWER]   , false )
-                              .put( as[MODE]    , Const.Mode.Fan.toString() )
-                              .put( as[FAN]     , Const.Fan.Minimum.toString() )
-                              .put( as[WINGS]   , Const.Wings.None.toString() )
-                              .put( as[T_TARGET], 22 )
-                              .put( as[H_TARGET], 0 );
+            if( ! isFaked() )
+                talker = new Talker( deviceInit.get( "address" ).toString() );    // This is mandatory
+
+            setValid( true );
+            set( deviceInit );
         }
-        else
+        catch( IOException ioe )    // MalformedURLException extends IOException
         {
-            try
-            {
-                talker = new Talker( sIpAddr );
-            }
-            catch( MalformedURLException mue )
-            {
-                sendIsInvalid( mue );
-            }
+            sendIsInvalid( ioe.getMessage() );
         }
     }
 
@@ -99,8 +78,15 @@ public final class   Control
         if( isInvalid() )
             return;
 
-        if( isFaked )
+        if( isFaked() )
         {
+            pair faked = new pair().put( as[POWER]   , false )
+                                   .put( as[MODE]    , Const.Mode.Fan.toString() )
+                                   .put( as[FAN]     , Const.Fan.Minimum.toString() )
+                                   .put( as[WINGS]   , Const.Wings.None.toString() )
+                                   .put( as[T_TARGET], 22 )
+                                   .put( as[H_TARGET], 0 );
+
             sendReaded( faked );
         }
         else
@@ -122,8 +108,15 @@ public final class   Control
         if( isInvalid() )
             return;
 
-        if( isFaked )
+        if( isFaked() )
         {
+            pair faked = new pair().put( as[POWER]   , false )
+                                   .put( as[MODE]    , Const.Mode.Fan.toString() )
+                                   .put( as[FAN]     , Const.Fan.Minimum.toString() )
+                                   .put( as[WINGS]   , Const.Wings.None.toString() )
+                                   .put( as[T_TARGET], 22 )
+                                   .put( as[H_TARGET], 0 );
+
             for( Object key : ((pair) oRequest).keys() )
                 faked.put( key, ((pair) oRequest).get( key ) );
 

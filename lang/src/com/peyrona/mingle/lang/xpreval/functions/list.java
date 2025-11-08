@@ -129,8 +129,8 @@ public final class list
 
         inner.clear();
 
-        for( int n = 0; n < values.length; n++ )
-            firePropertyChanged( n, values[n], null );
+        for( Object value : values )
+            firePropertyChanged( value, "" );
 
         return this;
     }
@@ -212,7 +212,7 @@ public final class list
     {
         Object old = inner.set( toIndex( index ), item );
 
-        firePropertyChanged( index, old, item );
+        firePropertyChanged( old, item );
 
         return this;
     }
@@ -260,14 +260,19 @@ public final class list
     public list add( Object item )
     {
         if( item instanceof String )
-            item = UtilType.toUneBasics( item.toString() );     // v.g.: "12.5" --> 12.5f
+            item = UtilType.toUneBasics( item.toString() );      // v.g.: "12.5" --> 12.5f
 
         synchronized( inner )
         {
             if( inner.size() > maxLen )
+            {
+                Object old = inner.get( 0 );
                 inner.remove( 0 );
+                firePropertyChanged( old, inner.get( 0 ) );   // 1 because lists are 1 based
+            }
 
             inner.add( item );
+            firePropertyChanged( "", item );      // size() because lists are 1 based
         }
 
         return this;
@@ -289,15 +294,16 @@ public final class list
         if( item instanceof String )
             item = UtilType.toUne( item.toString() );     // v.g.: "12.5" --> 12.5f
 
-        Object old = null;
         int    ndx;
+        Object old = "";
 
         synchronized( inner )
         {
             if( inner.size() > maxLen )
             {
-                old = inner.remove( 0 );
-                firePropertyChanged( 0, old, null );
+                Object _old = inner.get( 0 );
+                inner.remove( 0 );
+                firePropertyChanged( _old, inner.get( 0 ) );   // 1 because lists are 1 based
             }
 
             ndx = toIndex( index );
@@ -308,7 +314,7 @@ public final class list
             inner.add( ndx, item );
         }
 
-        firePropertyChanged( ndx, old, item );
+        firePropertyChanged( old, item );
 
         return this;
     }
@@ -383,29 +389,41 @@ public final class list
 
             inner.remove( n );
 
-            firePropertyChanged( n, value, null );
+            firePropertyChanged( value, "" );
 
             return this;
         }
 
-        int ndx = inner.indexOf( value );
-
         if( ! inner.remove( value ) )
             throw new MingleException( value +" does not exist in list" );
 
-        firePropertyChanged( ndx, value, null );
+        firePropertyChanged( value, "" );
 
         return this;
     }
 
     /**
-     * Deep clones current list.
+     * Creates a deep clone of this list.
+     * <p>
+     * The returned list is a completely independent copy with all elements cloned:
+     * <ul>
+     *   <li>Primitive types (Boolean, Number, String, date, time) are copied by reference (they are immutable)</li>
+     *   <li>Complex types (other ExtraTypeCollection instances) are recursively cloned</li>
+     *   <li>The new list has the same maximum length constraint as the original</li>
+     *   <li>Property change listeners are NOT copied to the cloned list</li>
+     * </ul>
+     * Modifications to the cloned list or its elements do not affect the original list.
      *
-     * @return A deep clone of this list.
+     * @return A deep clone of this list with all elements independently cloned.
      */
     @Override
     public list clone()
     {
+        // super.clone() should not be invoked in this case. Here's why:
+        //    1. The parent class ExtraType doesn't implement Cloneable - It's an abstract class that doesn't have a clone() method.
+        //    2. The intermediate class ExtraTypeCollection declares clone() as abstract - It doesn't provide an implementation.
+        //    3. The list class performs a deep clone manually - The current implementation creates a new instance and copies each element using cloneValue(), which is appropriate for this use case.
+
         list cloned = new list();
 
         synchronized( inner )
@@ -472,10 +490,8 @@ public final class list
 
                 if( set.contains( item ) )
                 {
-                    int ndx = inner.indexOf( item );
-
                     itera.remove();
-                    firePropertyChanged( ndx, item, null );
+                    firePropertyChanged( item, "" );
                 }
                 else
                 {
@@ -643,7 +659,6 @@ public final class list
             while( itera.hasNext() )
             {
                 Object item = itera.next();
-                int    ndx  = inner.indexOf( item );
 
                 if( item instanceof String )
                 {
@@ -664,13 +679,13 @@ public final class list
                     if( ! bFound )
                     {
                         itera.remove();
-                        firePropertyChanged( ndx, item, null );
+                        firePropertyChanged( item, "" );
                     }
                 }
                 else if( ! lst.inner.contains( item ) )
                 {
                     itera.remove();
-                    firePropertyChanged( ndx, item, null );
+                    firePropertyChanged( item, "" );
                 }
             }
         }

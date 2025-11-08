@@ -94,7 +94,7 @@ public final class      Script
     {
         return asFrom;
 
-// TODO: termiar esto para que se pueda acceder desde Glue al código fuente cuando el SCRIPT es INLINE
+// TODO: terminar esto para que se pueda acceder desde Glue al código fuente cuando el SCRIPT es INLINE
 //        if( langMgr == null )
 //            return asFrom;
 //

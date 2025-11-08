@@ -36,6 +36,7 @@ Thumbs.db
 *.model
 GEMINI.md
 count_lines.sh
+generate_javadocs.sh
 release.sh
 !/todeploy/**/*.jar
 /todeploy/examples/9*

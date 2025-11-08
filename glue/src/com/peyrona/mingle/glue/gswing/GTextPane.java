@@ -140,7 +140,7 @@ public class GTextPane extends JTextPane
                 Clipboard       clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
 
                 clipboard.setContents( strSelect, null );
-                JTools.alert( "Text copied to clipboard", JTools.getFocusedWindow() );
+                JTools.info( "Text copied to clipboard" );
             }
         }
         catch( Exception ex )

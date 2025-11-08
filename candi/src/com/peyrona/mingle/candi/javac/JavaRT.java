@@ -151,7 +151,7 @@ public final class JavaRT implements ICandi.ILanguage
          }
 
         if( ! lstLoaded.isEmpty() )
-            prepared.addExtra(sEXTRA_KEY_URI_LOADED, lstLoaded.toArray( String[]::new ) );
+            prepared.addExtra( sEXTRA_KEY_URI_LOADED, lstLoaded.toArray( String[]::new ) );
 
         return prepared.setCallName( call );
     }

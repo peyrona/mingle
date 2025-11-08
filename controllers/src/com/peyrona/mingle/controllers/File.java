@@ -102,18 +102,13 @@ public final class File
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
-        if( bLocal )
-        {
-            String use_disk = "use_disk";
-
-            if( ! getRuntime().getFromConfig( "exen", use_disk, true ) )
-            {
-                sendIsInvalid( use_disk +" flag is off: can not use File System" );
-                return;
-            }
-        }
+        if( bLocal && ! useDisk( true ) )
+            return;
 
         file = new java.io.File( uri );
 

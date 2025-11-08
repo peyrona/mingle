@@ -314,6 +314,23 @@ public final class UtilReflect
                 .map( frame -> frame.getDeclaringClass() )
                 .orElse( null );
     }
+
+    /**
+ * Returns the name of the method that invoked this method 'nSkips' stack above.
+ *
+ * @param nSkips The amount of jumps in the stack.
+ * @return The name of the method that invoked this method 'nSkips' stack above.
+ */
+    public static String getCallerMethodName( int nSkips )
+    {
+        return StackWalker.getInstance()
+                .walk( frames -> frames
+                .skip( nSkips )         // How many methods to skip including this one
+                .findFirst() )
+                .map( StackWalker.StackFrame::getMethodName )
+                .orElse( null );
+    }
+
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 

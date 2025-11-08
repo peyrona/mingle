@@ -52,7 +52,7 @@ public final class   RPiGpioPin
 
     public RPiGpioPin()
     {
-        if( isFaked )
+        if( isFaked() )
         {
             timer = UtilSys.executeAtRate( getClass().getName(),
                                            5000, 3000,    // After 5 secs (initial delay), every 3 secs
@@ -80,6 +80,9 @@ public final class   RPiGpioPin
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         initWiringPi();         // Must be 2nd line because in case of error, the previous line is needed
@@ -142,7 +145,7 @@ public final class   RPiGpioPin
     @Override
     public String toString()
     {
-        return "RaspberryPi GPIO Controller; faked-mode="+ isFaked +", RPi="+ UtilSys.isRaspberryPi();
+        return "RaspberryPi GPIO Controller; faked-mode="+ isFaked() +", RPi="+ UtilSys.isRaspberryPi();
     }
 
     //------------------------------------------------------------------------//
@@ -255,7 +258,7 @@ public final class   RPiGpioPin
         {
             synchronized( this )
             {
-                if( isFaked )
+                if( isFaked() )
                 {
                     pin = new PinFaked( isDigital, isInput );
                 }
@@ -285,7 +288,7 @@ public final class   RPiGpioPin
      */
     private void initWiringPi()
     {
-        if( isFaked || WiringPi.isInited() )
+        if( isFaked() || WiringPi.isInited() )
             return;
 
         if( ! UtilSys.isRaspberryPi() )

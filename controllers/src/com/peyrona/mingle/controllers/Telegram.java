@@ -50,7 +50,7 @@ public final class   Telegram
     @Override
     public void write( Object deviceValue )
     {
-        if( isFaked )  // || isInvalid() --> Is not needed because this controller is always valid
+        if( isFaked() )  // || isInvalid() --> Is not needed because this controller is always valid
             return;
 
         UtilSys.execute( getClass().getName(),

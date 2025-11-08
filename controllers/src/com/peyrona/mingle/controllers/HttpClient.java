@@ -2,9 +2,11 @@ package com.peyrona.mingle.controllers;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.net.URI;
 import java.util.Map;
+import java.util.concurrent.ScheduledFuture;
 
 /**
  *
@@ -14,29 +16,59 @@ import java.util.Map;
 public final class HttpClient
         extends ControllerBase
 {
-    private static final String KEY_URI = "uri";
+    private static final String KEY_URI  = "uri";       // Mandatory
+    private static final String KEY_TIME = "interval";  // In seconds, optional, default = 1
 
     private static final java.net.http.HttpClient client = java.net.http.HttpClient.newHttpClient();    // Only one instance is needed
+    private              ScheduledFuture timer = null;
 
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String, Object> deviceConf, Listener listener )
+    public void set( String deviceName, Map<String, Object> deviceInit, Listener listener )
     {
         setName( deviceName );       // Must be 1st
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        setValid( true );
+        String uri = deviceInit.get( KEY_URI ).toString();
 
-        String uri = deviceConf.get( KEY_URI ).toString();
+        try
+        {
+            int interval = ((Number) deviceInit.getOrDefault( KEY_TIME, 0f )).intValue();
 
-        set( KEY_URI, URI.create( uri ) );
+            if( interval < 0 )
+                interval = 0;
+
+            if( interval > 0 )
+                setBetween( KEY_TIME, 1000, interval, Integer.MAX_VALUE );
+
+            set( KEY_URI, new URI( uri ) );
+            setValid( true );
+        }
+        catch( Exception exc )
+        {
+            sendIsInvalid( exc );
+        }
     }
 
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
+
+        synchronized( this )
+        {
+            if( (int) get( KEY_TIME ) >= 1000 )
+            {
+                timer = UtilSys.executeAtRate( getClass().getName(),
+                                               (int) get( KEY_TIME ),     // 'interval' must also be the initial delay
+                                               (int) get( KEY_TIME ),
+                                               () -> read() );
+            }
+        }
     }
 
     @Override

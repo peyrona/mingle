@@ -31,7 +31,7 @@ public final class   SystemClock
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        int interval = ((Number) deviceInit.getOrDefault( "interval", 1000f )).intValue();
+        int interval = ((Number) deviceInit.getOrDefault( KEY, 1000f )).intValue();
 
         setBetween( KEY, 10, interval, Integer.MAX_VALUE );
 
@@ -55,12 +55,17 @@ public final class   SystemClock
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         synchronized( this )
         {
-            if( timer == null )
-                timer = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY ), (int) get( KEY ), () -> read() );     // 'interval' must also be the initial delay
+            timer = UtilSys.executeAtRate( getClass().getName(),
+                                           (int) get( KEY ),     // 'interval' must also be the initial delay
+                                           (int) get( KEY ),
+                                           () -> read() );
         }
     }
 

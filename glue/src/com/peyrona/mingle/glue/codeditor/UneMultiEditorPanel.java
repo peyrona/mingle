@@ -309,10 +309,10 @@ public final class UneMultiEditorPanel extends JPanel
             if( onTranspile() )     // isEmpty() == no errors
             {
                 GTip.show( "This option runs the script in focused editor inside a tailored ExEn\n\n"+
-                          "In this ExEn:\n"+
-                          "    a) Only plain old Sockets can be used.\n"+
-                          "    b) An unique port number is assigned to it: check it.\n"+
-                          "    c) When 'Fake-drivers' is checked, some examples will not work.");
+                           "In this ExEn:\n"+
+                           "    a) Only plain old Sockets can be used.\n"+
+                           "    b) An unique port number is assigned to it: check it.\n"+
+                           "    c) When 'Fake-drivers' is checked, some examples will not work.");
 
                 if( toolBar.chkFaked.isSelected() )
                     GTip.show( "Take into consideration that you are using 'Fake-drivers'" );

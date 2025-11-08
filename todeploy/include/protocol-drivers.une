@@ -26,7 +26,7 @@ DRIVER ModbusTcpClientDriver                  # This driver provides access to d
         address  AS number REQUIRED           # Register address
         type     AS string REQUIRED           # One of: "boolean" (1 bit) "int" (2 bytes), "long" & "float" (4 bytes)
         order    AS string                    # One of: "ABCD", "BADC", "CDAB" or "DCBA". By default: "ABCD"
-        interval AS number                    # Time between reads (min: 30 millis). Optional, Default: 5s
+        interval AS number                    # Time between reads (min: 30 millis). Optional. Default: 5s
         timeout  AS number                    # Connection timeout. By default 4000 milliseconds.
 
 
@@ -41,21 +41,22 @@ DRIVER SocketClientDriver                     # This driver acts as a Socket (tr
 DRIVER HttpClientDriver                       # Generic HTTP client
     SCRIPT HttpClientController
     CONFIG
-        uri    AS string REQUIRED             # URI to connect to (e.g.: http://google.com)
+        uri      AS string REQUIRED           # URI to connect to (e.g.: http://google.com)
+        interval AS number                    # Time between reads. O for only once. If t > 0, min is 1s. Optional. Default: 0.
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
 SCRIPT MqttClientController                           # A controller that sends and receives messages to/from MQTT broker.
    LANGUAGE java
    FROM     "file://{*home.lib*}controllers.jar"
-            "file://{*home.lib*}controllers/org.eclipse.paho.client.mqttv3-1.2.4.jar"
+            "file://{*home.lib*}controllers/org.eclipse.paho.client.mqttv3_1.2.5.jar"
    CALL     "com.peyrona.mingle.controllers.mqtt.MqttClientWrapper"
 
 
 SCRIPT ModbusTcpClientController                      # A controller to send/receive messages to/from devices in Modbus vis TCP.
    LANGUAGE java
    FROM     "file://{*home.lib*}controllers.jar"
-            "file://{*home.lib*}slf4j-api-2.0.9.jar"
+            "file://{*home.lib*}controllers/slf4j-api-2.0.9.jar"
             "file://{*home.lib*}controllers/j2mod-3.2.1.jar"
    CALL     "com.peyrona.mingle.controllers.modbus.ModbusTcpClientWrapper"
 
@@ -63,7 +64,6 @@ SCRIPT ModbusTcpClientController                      # A controller to send/rec
 SCRIPT SocketClientController
    LANGUAGE java
    FROM     "file://{*home.lib*}controllers.jar"
-            "file://{*home.lib*}slf4j-api-2.0.9.jar"
    CALL     "com.peyrona.mingle.controllers.SocketClient"
 
 

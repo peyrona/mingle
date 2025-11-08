@@ -41,7 +41,7 @@ SCRIPT JavaScript_2
                 for( var n = 0; n < scripts.length; n++ )
                     print( "There is an script named '"+ scripts[n].name() +"'" );
 
-                _exen_rt_.exit( 3000, 0 );                               // exit(...) Ends ExEn execution in 3 seconds (rarely used)
+                _exen_rt_.exit( 3000 );                                  // exit(...) Ends ExEn execution in 3 seconds (rarely used)
             }
         }
 

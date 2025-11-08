@@ -59,6 +59,9 @@ public class Kronos
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+        
         super.start( rt );
 
         if( cron != null )

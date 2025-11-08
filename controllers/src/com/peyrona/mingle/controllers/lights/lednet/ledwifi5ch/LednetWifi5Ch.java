@@ -34,7 +34,7 @@ public final class LednetWifi5Ch
         {
             String sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
 
-            if( ! isFaked )
+            if( ! isFaked() )
                 device = new Wifi5ChDevice( sIpAddr, (val) -> sendWriteError( val, new IOException( "Error writting in socket at "+ device.getIP() ) )  );
 
             setValid( true );
@@ -49,14 +49,14 @@ public final class LednetWifi5Ch
     @Override
     public void read()
     {
-             if( isFaked )    sendReaded( "" );
+             if( isFaked() )  sendReaded( "" );
         else if( isValid() )  sendReaded( device.read() );
     }
 
     @Override
     public void write( Object newValue )
     {
-        if( isFaked || isInvalid() || (device == null) )
+        if( isFaked() || isInvalid() || (device == null) )
             return;
 
         if( newValue == null )

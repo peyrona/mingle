@@ -38,6 +38,12 @@ public final class MqttClientWrapper
 
         set( mapConfig );
 
+        if( isFaked() )
+        {
+            setValid( true );
+            return;
+        }
+
         try
         {
             client = new MqttClient4Paho();
@@ -55,6 +61,9 @@ public final class MqttClientWrapper
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         String sURI  = (String) get( "uri"      );   // This is REQUIRED
@@ -114,7 +123,7 @@ public final class MqttClientWrapper
     @Override
     public void write( Object request )
     {
-        if( isFaked || isInvalid() || (client == null) )
+        if( isFaked() || isInvalid() || (client == null) )
             return;
 
         if( ! client.isConnected() )

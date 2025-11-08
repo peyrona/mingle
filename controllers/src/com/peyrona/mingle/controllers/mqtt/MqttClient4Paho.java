@@ -8,6 +8,7 @@ import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttConnectOptions;
 import org.eclipse.paho.client.mqttv3.MqttException;
+import org.eclipse.paho.client.mqttv3.persist.MemoryPersistence;
 
 /**
  *
@@ -37,28 +38,33 @@ final class MqttClient4Paho
         if( isConnected() )
             return;
 
+        if( sUID == null )
+            sUID = "Mingle_MQTT["+ UUID.randomUUID().toString() +']';
+
+        MqttConnectOptions co = new MqttConnectOptions();
+                           co.setAutomaticReconnect( true );
+                           co.setCleanSession( true );
+                           co.setConnectionTimeout( 20 );    // Seconds
+
+
+        if( sUser != null )
+            co.setUserName( sUser );
+
+        if( sPwd != null )
+            co.setPassword( sPwd.toCharArray() );
+
+        // NEXT: añadir las SSL Props
+        //       co.setSSLProperties( cp.getSSLProperties() );
+
+        // The 'new MemoryPersistence()' is needed bacause Paho shows an awful WARNING about refleection.
+        // NEXT: change the libraty to HiveMQ MQTT Client. And check useDisk config property.
+
+        org.eclipse.paho.client.mqttv3.IMqttClient cliente = new org.eclipse.paho.client.mqttv3.MqttClient( sURI, sUID, new MemoryPersistence() );
+                                                   cliente.setCallback( new Receiver() );
+                                                   cliente.connect( co );
+
         synchronized( this )
         {
-            if( sUID == null )
-                sUID = "Mingle_MQTT["+ UUID.randomUUID().toString() +']';
-
-            MqttConnectOptions co = new MqttConnectOptions();
-                               co.setAutomaticReconnect( true );
-                               co.setCleanSession( true );
-
-            if( sUser != null )
-                co.setUserName( sUser );
-
-            if( sPwd != null )
-                co.setPassword( sPwd.toCharArray() );
-
-            // NEXT: añadir las SSL Props
-            //       co.setSSLProperties( cp.getSSLProperties() );
-
-            org.eclipse.paho.client.mqttv3.IMqttClient cliente = new org.eclipse.paho.client.mqttv3.MqttClient( sURI, sUID );
-                                                       cliente.setCallback( new Receiver() );
-                                                       cliente.connect( co );
-
             this.client = cliente;    // Doing this, if there was an error during connect(...), this.client is still null
         }
     }
@@ -68,16 +74,19 @@ final class MqttClient4Paho
     {
         try
         {
-            client.close();
+            if( isConnected() )
+                client.close();
         }
-        catch( MqttException ex )
+        catch( MqttException me )
         {
-            forEachListener( l -> l.onError( ex ) );
+            forEachListener( l -> l.onError( me ) );
         }
-
-        synchronized( this )
+        finally
         {
-            client = null;
+            synchronized( this )
+            {
+                client = null;
+            }
         }
     }
 
@@ -116,7 +125,7 @@ final class MqttClient4Paho
         }
 
         @Override
-        public void deliveryComplete(IMqttDeliveryToken imdt)
+        public void deliveryComplete( IMqttDeliveryToken imdt )
         {
         }
     }

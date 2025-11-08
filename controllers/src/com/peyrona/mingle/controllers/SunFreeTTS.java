@@ -63,7 +63,7 @@ public final class   SunFreeTTS
     @Override
     public void write( Object text )
     {
-        if( isFaked || isInvalid() || UtilStr.isEmpty( text ) )
+        if( isFaked() || isInvalid() || UtilStr.isEmpty( text ) )
             return;
 
         boolean bNoPending = mapPending.isEmpty();
@@ -92,6 +92,9 @@ public final class   SunFreeTTS
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         if( synthesizer == null )

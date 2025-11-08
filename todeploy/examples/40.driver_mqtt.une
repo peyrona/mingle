@@ -56,12 +56,15 @@
 #==================================================================================================================================
 
 
-DEVICE t_garage                                                  # Emulates the temperature at garage
+# Note: last time this script was tested, the URI 'tcp://test.mosquitto.org:1883' was operative, but
+# it could stop being operative at any moment: in this case, replace this URI by an operative one.
+
+DEVICE t_garage                                              # Emulates the temperature at garage
     DRIVER MqttClientDriver
         CONFIG
-             uri       SET "tcp://mqtt.eclipseprojects.io:1883"  # [schema = tcp] [host = mqtt.eclipseprojects.io] [port = 1883]
-             subscribe SET "GARAGE_TEMPERATURE , 2"              # [topic = GARAGE_TEMPERATURE] [QoS = 2]
-                                                                 # More than one topic can be added: use ';' to separate topics.
+             uri       SET "tcp://test.mosquitto.org:1883"   # [schema = tcp] [host = test.mosquitto.org] [port = 1883]
+             subscribe SET "GARAGE_TEMPERATURE , 2"          # [topic = GARAGE_TEMPERATURE] [QoS = 2]
+                                                             # More than one topic can be added: use ';' to separate topics.
 
 DEVICE console
     DRIVER OutputDriver
@@ -70,21 +73,24 @@ DEVICE console
 # The broker sent a message, this message becomes the device t_garage's new value
 
 WHEN t_garage:len() > 0
-    THEN console SET "Message received: "+ t_garage              # Shows all message information
-         console SET "Temperature     : "+ t_garage:get( "payload" )   # Shows just the payload: new temperature (min 18, max 24)
+THEN console SET "Message received: "+ t_garage                    # Shows all message information
+     console SET "Temperature     : "+ t_garage:get( "payload" )   # Shows just the payload: new temperature (min 18, max 24)
 
 #==================================================================================================================================
+
+USE _INTERVAL_ AS 7000   # 7 seconds
+
 
 DEVICE clock
     DRIVER ClockDriver
         CONFIG
-            interval SET 7s
+            interval SET _INTERVAL_
 
 
 # Following command shows how to send messages to the MQTT broker: by writting a new value to the device 't_garage' what we are
 # really doing is sending this new value to the MQTT broker, which will return back the same message.
 
-WHEN clock > 0                                                   # Triggered every 7 seconds
+WHEN clock > 0                                                   # Triggered every _INTERVAL_ milliseconds
 THEN t_garage SET pair():put( "topic"  , "GARAGE_TEMPERATURE" ) \
                         :put( "payload", rand( 18, 24 ) )        # Random temperature between 18 and 24
 

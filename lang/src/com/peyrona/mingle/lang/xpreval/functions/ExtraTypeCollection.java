@@ -2,6 +2,7 @@
 package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.japi.UtilReflect;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.AbstractMap;
@@ -12,10 +13,11 @@ import java.util.Collection;
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ * @param <T>
  */
-abstract class ExtraTypeCollection<T>
-         extends ExtraType
-         implements Iterable
+public abstract class ExtraTypeCollection<T>
+                extends ExtraType
+                implements Iterable
 {
     private PropertyChangeSupport support;
 
@@ -108,15 +110,19 @@ abstract class ExtraTypeCollection<T>
 
     /**
      *
-     * @param name
+     * @param propName
      * @param oldValue
      * @param newValue null when the property was deleted.
      * @return Itself.
      */
-    protected T firePropertyChanged( Object name, Object oldValue, Object newValue )
+    protected T firePropertyChanged( Object oldValue, Object newValue )
     {
         if( support != null )
-            support.firePropertyChange( name.toString(), oldValue, newValue );
+        {
+            String propName = UtilReflect.getCallerMethodName( 2 );
+
+            support.firePropertyChange( propName, oldValue, newValue );
+        }
 
         return (T) this;
     }

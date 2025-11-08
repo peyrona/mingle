@@ -90,7 +90,7 @@ public final class      Rule
         if( sIf != null )
         {
             Consumer<Object> onSolved = (result) -> {
-                                                        if( canTrigger( result, "IF" ) )
+                                                        if( canTriggerIf( result ) )
                                                             _trigger_();
 
                                                         if( result != null )
@@ -101,7 +101,7 @@ public final class      Rule
         }
 
         Consumer<Object> onSolved = (result) -> {
-                                                    if( canTrigger( result, "WHEN" ) )
+                                                    if( canTriggerWhen( result ) )
                                                     {
                                                         if( _if_ == null )  _trigger_();
                                                         else                _if_.eval();
@@ -286,7 +286,9 @@ public final class      Rule
         }
     }
 
-    private boolean canTrigger( Object result, String sClause )
+    // It is faster to have the following 2 canTrigger*(...) than combining both in one method
+
+    private boolean canTriggerWhen( Object result )
     {
         if( result == null )    // It is null when the var is not part of the expr or the xpr does not have all vars values yet
             return false;
@@ -294,7 +296,20 @@ public final class      Rule
         if( result instanceof Boolean )
             return (Boolean) result;
 
-        getRuntime().log( ILogger.Level.SEVERE, "Clause "+ sClause +" of RULE "+ name() +" is returning '"+ result +"' instead of 'true' or 'false'" );
+        getRuntime().log( ILogger.Level.SEVERE, "Clause WHEN of RULE "+ name() +" is returning '"+ result +"' instead of 'true' or 'false'" );
+
+        return false;
+    }
+
+    private boolean canTriggerIf( Object result )
+    {
+        if( result == null )    // It is null when the var is not part of the expr or the xpr does not have all vars values yet
+            return false;
+
+        if( result instanceof Boolean )
+            return (Boolean) result;
+
+        getRuntime().log( ILogger.Level.SEVERE, "Clause IF of RULE "+ name() +" is returning '"+ result +"' instead of 'true' or 'false'" );
 
         return false;
     }
