@@ -3,6 +3,7 @@ package com.peyrona.mingle.controllers.daikin.emura;
 
 import com.peyrona.mingle.controllers.ControllerBase;
 import com.peyrona.mingle.lang.interfaces.IController;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
@@ -34,8 +35,8 @@ public final class   Sensors
     private static final String KEY_ADRESS   = "address";
     private static final String KEY_INTERVAL = "interval";
 
-    private Talker          talker;
-    private ScheduledFuture timer;
+    private Talker          talker = null;
+    private ScheduledFuture timer  = null;
 
     //------------------------------------------------------------------------//
 
@@ -53,16 +54,14 @@ public final class   Sensors
             if( ! UtilSys.isDevEnv )     // When under development, any value is accepted
                 nInterval = UtilUnit.setBetween( 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
 
-            timer = UtilSys.executeAtRate( getClass().getName(), 5000, nInterval, () -> read() );
-
-            if( ! isFaked )
+            if( ! isFaked() )
                 talker = new Talker( sIpAddr );
 
             setValid( true );
             set( KEY_ADRESS  , sIpAddr   );
             set( KEY_INTERVAL, nInterval );
         }
-        catch( IOException ioe )
+        catch( IOException ioe )    // MalformedURLException extends IOException
         {
             sendIsInvalid( ioe.getMessage() );
         }
@@ -74,7 +73,7 @@ public final class   Sensors
         if( isInvalid() )
             return;
 
-        if( isFaked )
+        if( isFaked() )
         {
             StdXprFns fn = new StdXprFns();
 
@@ -115,6 +114,23 @@ public final class   Sensors
     public void write( Object newValue )
     {
         sendIsNotWritable();
+    }
+
+    @Override
+    public void start( IRuntime rt )
+    {
+        if( isInvalid() )
+            return;
+
+        super.start( rt );
+
+        synchronized( this )
+        {
+            timer = UtilSys.executeAtRate( getClass().getName(),
+                                           5000,                      // Initial delay
+                                           (int) get( KEY_INTERVAL ),
+                                           () -> read() );
+        }
     }
 
     @Override

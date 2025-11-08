@@ -50,6 +50,9 @@ public final class SystemMonitor
             set( KEY_MEASURE, null );
         }
 
+        if( "disk".equals( get( KEY_METRIC ) ) && ! useDisk( true ) )
+            return;
+
         int interval = ((Number) mapConfig.getOrDefault( KEY_INTERVAL, 1000f )).intValue();
         setBetween( KEY_INTERVAL, 500, interval, Integer.MAX_VALUE );
 
@@ -59,6 +62,9 @@ public final class SystemMonitor
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         if( timer == null )

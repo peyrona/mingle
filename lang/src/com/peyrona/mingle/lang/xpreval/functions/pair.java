@@ -113,7 +113,7 @@ public final class pair
         synchronized( inner )
         {
             for( Map.Entry entry : entries )
-                firePropertyChanged( entry.getKey(), entry.getValue(), null );
+                firePropertyChanged( entry.getValue(), "" );
         }
 
         return this;
@@ -190,7 +190,7 @@ public final class pair
             old = inner.put( key, value );     // If existed, the value is updated, otherwise a new entry is created
         }
 
-        firePropertyChanged( key, old, value );
+        firePropertyChanged( old, value );
 
         return this;
     }
@@ -292,7 +292,7 @@ public final class pair
         }
 
         if( old != null )
-            firePropertyChanged( key, old, null );
+            firePropertyChanged( old, "" );
 
         return this;
     }

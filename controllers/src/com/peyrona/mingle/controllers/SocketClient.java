@@ -116,7 +116,7 @@ public final class SocketClient
     @Override
     public void write( Object value )
     {
-        if( isFaked || isInvalid() )
+        if( isFaked() || isInvalid() )
             return;
 
         if( ! client.isConnected() )

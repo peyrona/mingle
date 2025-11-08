@@ -188,25 +188,21 @@ public final class JTools
                                                     KeyStroke.getKeyStroke( KeyEvent.VK_ESCAPE, 0 ),
                                                     JComponent.WHEN_IN_FOCUSED_WINDOW );
 
-        // Top label - "Information" in bold
-        JLabel topLabel = new JLabel( "Information", SwingConstants.CENTER );
-               topLabel.setFont( topLabel.getFont().deriveFont( Font.BOLD ) );
-
         // Center message area
         JLabel messageLabel = new JLabel( msg, SwingConstants.CENTER );
-               messageLabel.setBorder( BorderFactory.createEmptyBorder( 10, 20, 10, 20 ) );
+        Font   messageFont  = messageLabel.getFont();
+        messageLabel.setFont( messageFont.deriveFont( (float) (messageFont.getSize() * 1.2f) ) );
 
         // Bottom label - smaller font
         JLabel bottomLabel = new JLabel( "[Esc] to close", SwingConstants.CENTER );
-        Font   currentFont = bottomLabel.getFont();
-        bottomLabel.setFont( currentFont.deriveFont( (float) (currentFont.getSize() * 0.8f) ) );
+        Font   bottomFont  = bottomLabel.getFont();
+        bottomLabel.setFont( bottomFont.deriveFont( (float) (bottomFont.getSize() * 0.8f) ) );
 
         // Create main panel with border layout and line border and add to Frame
-        Border lineBorder = BorderFactory.createLineBorder( SystemColor.windowBorder, 1 );
-        Border emptyBorder = BorderFactory.createEmptyBorder( 9, 4, 9, 4 );
+        Border lineBorder  = BorderFactory.createLineBorder( SystemColor.windowBorder, 1 );
+        Border emptyBorder = BorderFactory.createEmptyBorder( 12, 14, 12, 14 );
 
-        JPanel mainPanel = new JPanel( new BorderLayout( 0, 9 ) );
-               mainPanel.add( topLabel, BorderLayout.NORTH );
+        JPanel mainPanel = new JPanel( new BorderLayout( 0, 16 ) );
                mainPanel.add( messageLabel, BorderLayout.CENTER );
                mainPanel.add( bottomLabel, BorderLayout.SOUTH );
                mainPanel.setBorder( BorderFactory.createCompoundBorder( lineBorder, emptyBorder ) );

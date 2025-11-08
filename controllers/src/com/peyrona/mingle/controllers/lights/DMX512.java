@@ -65,12 +65,4 @@ public final class   DMX512
     {
         sendIsNotWritable();
     }
-
-    @Override
-    public void stop()
-    {
-
-
-        super.stop();
-    }
 }

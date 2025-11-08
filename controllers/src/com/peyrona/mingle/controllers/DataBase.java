@@ -44,6 +44,12 @@ public final class   DataBase
 
         set( mapConfig );   // Can be done because mapConfig values are not modified
 
+        if( isFaked() )
+        {
+            setValid( true );
+            return;
+        }
+
         try
         {
             String    sURL   = (String) mapConfig.get( "url" );
@@ -78,7 +84,7 @@ public final class   DataBase
     @Override
     public void write( final Object sql )    // sql is one or more SQL commands
     {
-        if( isFaked || isInvalid() || conn == null )
+        if( isFaked() || isInvalid() || conn == null )
             return;
 
         if( ! (sql instanceof String) )
@@ -167,11 +173,11 @@ public final class   DataBase
         String sPwd  = (String) get( "pwd"     );
         String sInit = (String) get( "initial" );   // Initial SQL command(s) to be sent after successfully be connected
 
+        sURL = UtilIO.replaceFileMacros( sURL );
+
         synchronized( this )
         {
-            sURL = UtilIO.replaceFileMacros( sURL );
-
-         // This is not needed because it is DB server responsability to create the folders if they do not exists (H2 does it) -->
+         // This is not needed because it is the DB server responsability to create the folders if they do not exists (H2 does it) -->
          // if( UtilComm.getFileProtocol( sURL ) == UtilComm.Protocol.file )    // To create parent folders if they do not exist
          // {
          //     java.io.File fDB = new java.io.File( new URL( sURL ).toURI() );
@@ -179,8 +185,8 @@ public final class   DataBase
          //     UtilIO.mkdirs( fDB.getParentFile() );
          // }
 
-            if( (sUser == null) || (sPwd == null) )  conn = java.sql.DriverManager.getConnection( sURL );
-            else                                     conn = java.sql.DriverManager.getConnection( sURL, sUser, sPwd );
+            if( UtilStr.isEmpty( sUser ) || UtilStr.isEmpty( sPwd ) )  conn = java.sql.DriverManager.getConnection( sURL );
+            else                                                       conn = java.sql.DriverManager.getConnection( sURL, sUser, sPwd );
 
             conn.setAutoCommit( true );
         }

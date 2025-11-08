@@ -49,14 +49,6 @@ public final class   RGBW2
         sendIsNotWritable();
     }
 
-    @Override
-    public void stop()
-    {
-
-
-        super.stop();
-    }
-
     //------------------------------------------------------------------------//
     // FROM LightCtrlBase
 

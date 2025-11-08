@@ -145,7 +145,7 @@ public final class NAXE implements IXprEval
     @Override
     public boolean isBoolean()
     {
-        return evaluator.isBoolean();        // NullPointerException can be thrown: this is intended
+        return evaluator.isBoolean();    // NullPointerException can be thrown: this is intended
     }
 
     @Override
@@ -203,7 +203,7 @@ public final class NAXE implements IXprEval
     @Override
     public String about()
     {
-        return "NAXE: MSP Expressions Evaluator v.1.4 (the default one for the MSP)";
+        return "NAXE: MSP Expressions Evaluator v.1.4 (the default evaluator for the MSP)";
     }
 
     @Override

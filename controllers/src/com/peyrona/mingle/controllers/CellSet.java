@@ -10,7 +10,11 @@ import com.peyrona.mingle.lang.interfaces.exen.IEventBus;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Dispatcher;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
+import com.peyrona.mingle.lang.xpreval.functions.ExtraTypeCollection;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -46,29 +50,38 @@ public final class   CellSet
     @Override
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        setName( deviceName );                         // Must be 1st
-        setListener( listener );                       // Must be at begining: in case an error happens, Listener is needed
-        set( KEY_VALUE, deviceConf.get( "value" ) );   // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
-        setValid( true );
+        setName( deviceName );                           // Must be 1st
+        setListener( listener );                         // Must be at begining: in case an error happens, Listener is needed
         set( deviceConf );
-    }
-
-    @Override
-    public void start( IRuntime rt )
-    {
-        super.start( rt );
+        set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );   // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
 
         CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
-
-        // Can not make: 'val = null;'  because start() could be invoked again
 
              if( cv.hasErrors() )          sendIsInvalid( "Formula has errors: unusable device" );
         else if( ! hasCircularRef( cv ) )  map.put( getDeviceName(), cv );
 
         setValid( map.containsKey( getDeviceName() ) );
 
+        // 'list' and 'pair' classes can be modified (list:add( 5 )) without this driver knowing it.
+        // That is why the following is needed.
+        if( get( KEY_VALUE ) instanceof ExtraTypeCollection )
+        {
+            PropertyChangeListener pcl = (PropertyChangeEvent pce) ->
+                                        {
+                                            sendReaded( CellSet.this.get( KEY_VALUE ) );
+                                        };
+
+            ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
+        }
+    }
+
+    @Override
+    public void start( IRuntime rt )
+    {
         if( isInvalid() )
             return;
+
+        super.start( rt );
 
         synchronized( CellSet.class )
         {
@@ -154,13 +167,13 @@ public final class   CellSet
         CellValue cv = map.get( getDeviceName() );
         Object    va = ((IDevice) getRuntime().get( getDeviceName() )).value();
 
-//        if( cv != null && ! Objects.equals( cv.read(), newVal ) )
-//        {
+        if( cv != null && ! Objects.equals( cv.read(), newVal ) )
+        {
             Object value = cv.write( newVal );
 
             if( value != null )
                 sendReaded( value );
-//        }
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -217,10 +230,22 @@ public final class   CellSet
         private IXprEval xpreval = null;
         private boolean  bErrors = false;    // A boolean instead of "(xpreval != null) && (! xpreval.getErrors().isEmpty());" to save CPU
 
+        //------------------------------------------------------------------------//
+
         CellValue( Object val )
         {
             init( val );
         }
+
+        //------------------------------------------------------------------------//
+
+        @Override
+        public String toString()
+        {
+            return UtilStr.toString( this );
+        }
+
+        //------------------------------------------------------------------------//
 
         boolean isFormula()
         {

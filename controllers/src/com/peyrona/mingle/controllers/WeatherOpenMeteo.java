@@ -91,7 +91,7 @@ public final class   WeatherOpenMeteo
     @Override
     public void read()
     {
-        if( isInvalid() || isFaked )
+        if( isInvalid() || isFaked() )
             return;
 
         UtilSys.execute( getClass().getName(),
@@ -145,6 +145,9 @@ public final class   WeatherOpenMeteo
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
         if( timer == null )

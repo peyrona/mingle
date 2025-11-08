@@ -122,7 +122,7 @@ public final class ModbusTcpClientWrapper
     @Override
     public void read()
     {
-        if( isFaked || isInvalid() || (client == null) )
+        if( isFaked() || isInvalid() || (client == null) )
             return;
 
         try
@@ -138,7 +138,7 @@ public final class ModbusTcpClientWrapper
     @Override
     public void write( Object newValue )
     {
-        if( isFaked || isInvalid() || (client == null) )
+        if( isFaked() || isInvalid() || (client == null) )
             return;
 
         if( newValue instanceof String )

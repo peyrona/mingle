@@ -1,0 +1,9 @@
+com.peyrona.mingle.controllers
+com.peyrona.mingle.controllers.daikin.emura
+com.peyrona.mingle.controllers.lights
+com.peyrona.mingle.controllers.lights.lednet.ledwifi5ch
+com.peyrona.mingle.controllers.lights.shelly
+com.peyrona.mingle.controllers.modbus
+com.peyrona.mingle.controllers.mqtt
+com.peyrona.mingle.controllers.rpi
+com.peyrona.mingle.controllers.sysmon

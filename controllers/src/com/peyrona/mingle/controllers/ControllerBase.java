@@ -30,12 +30,12 @@ import java.util.Map;
 public abstract class      ControllerBase
                 implements IController
 {
-    protected boolean              isFaked   = false;
-    private   IRuntime             runtime   = null;
-    private   String               devName   = null;    // device devName
-    private   boolean              bValid    = false;
-    private   IController.Listener listener  = null;
-    private   Map<String,Object>   mapConfig = null;
+    private boolean              isFaked   = false;
+    private IRuntime             runtime   = null;
+    private String               devName   = null;    // device devName
+    private boolean              bValid    = false;
+    private IController.Listener listener  = null;
+    private Map<String,Object>   mapConfig = null;
 
     //------------------------------------------------------------------------//
     // PROTECTED CONSTRUCTOR
@@ -52,7 +52,6 @@ public abstract class      ControllerBase
         return bValid;
     }
 
-
     @Override
     public String getDeviceName()
     {
@@ -68,6 +67,9 @@ public abstract class      ControllerBase
     @Override
     public synchronized void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         assert runtime == null;
 
         if( rt == null )
@@ -81,6 +83,9 @@ public abstract class      ControllerBase
     @Override
     public void stop()
     {
+        if( isInvalid() )
+            return;
+
         bValid   = false;
         listener = null;
     }
@@ -124,6 +129,22 @@ public abstract class      ControllerBase
     protected boolean isInvalid()
     {
         return ! bValid;
+    }
+
+    protected boolean isFaked()
+    {
+        return isFaked;
+    }
+
+    protected boolean useDisk( boolean bReport )
+    {
+        String  use_disk = "use_disk";
+        boolean bAllowed = getRuntime().getFromConfig( "exen", use_disk, true );
+
+        if( bReport && ! bAllowed )
+            sendIsInvalid( "Config '"+ use_disk +"' flag is off: can not use File System" );
+
+        return bAllowed;
     }
 
     protected Object get( String name )

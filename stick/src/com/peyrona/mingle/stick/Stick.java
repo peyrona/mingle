@@ -79,6 +79,14 @@ public final class Stick
     // But once Stick is running, exceptions thrown should do not stop Stick.
 
     /**
+     * Starts Stick: the MSP Environment Executor (ExEn) with no model and no configuration file.
+     */
+    public Stick()
+    {
+        this( null, null );
+    }
+
+    /**
      * Starts Stick: the MSP Environment Executor (ExEn).
      *
      * @param sModelJSON  An string containing a valid JSON: this is the transpiled Une code to be executed. It can be empty.
@@ -136,7 +144,7 @@ public final class Stick
 
                 if( lstCmds.isEmpty() )
                 {
-                    UtilSys.getLogger().log( ILogger.Level.WARNING, "There are no commmands in script: this is valid, but it is strange." );
+                    log( ILogger.Level.WARNING, "There are no commmands in script: this is valid, but it is strange." );
                 }
                 else
                 {
@@ -181,8 +189,8 @@ public final class Stick
      */
     public Stick start( String sModelName )
     {
-        UtilSys.getLogger().say( "Stick: An 'Execution Environment' (ExEn) for the 'Mingle Standard Platform' (MSP).\n" +
-                                 "       Version "+ UtilSys.getVersion( getClass() ) );   // Do not move this: for clarity, the best is to start with this message
+        say( "Stick: An 'Execution Environment' (ExEn) for the 'Mingle Standard Platform' (MSP).\n" +
+             "       Version "+ UtilSys.getVersion( getClass() ) );   // Do not move this: for clarity, the best is to start with this message
 
         if( UtilStr.isMeaningless( sModelName ) )
             sModelName = deviMgr.isEmpty() ? "None" : "Unknown";    // "None" means that no model was provided. "Unknown" means that a model was provided but its name is unknown
@@ -253,13 +261,15 @@ public final class Stick
         boolean bUseDisk  = config.get( "exen", "use_disk"     , true  );
         boolean bFakeDrvs = config.get( "exen", "faked_drivers", false );
         boolean bDocker   = UtilSys.isDocker();
+        String  sLogName  = UtilSys.getLogger() == null ? "No logger in use" : UtilSys.getLogger().getName();
+        String  sLogLevel = UtilSys.getLogger() == null ? "No logger in use" : UtilSys.getLogger().getLevel().toString();
 
         String sInfo = new StringBuilder()
                 .append( '\n' )
                 .append( "Model   = "         ).append( sModelName ).append( '\n' )
                 .append( "Config  = "         ).append( config.getURI() ).append( '\n' )
                 .append( "Home    = "         ).append( UtilSys.fHomeDir ).append( '\n' )
-                .append( "Log     = "         ).append( new File( UtilSys.getLogDir(), UtilSys.getLogger().getName() ) ).append( ", Level=" ).append( UtilSys.getLogger().getLevel() ).append( '\n' )
+                .append( "Log     = "         ).append( new File( UtilSys.getLogDir(), sLogName ) ).append( ", Level=" ).append( sLogLevel ).append( '\n' )
                 .append( "XprEval = "         ).append( config.newXprEval().about() ).append( '\n' )
                 .append( "Cmd Lib = "         ).append( config.newCILBuilder().about() ).append( '\n' )
                 .append( "UseDisk = "         ).append( bUseDisk ).append( " -> Local storage is used to read" ).append( bUseDisk ? " and to write" : "-only").append( '\n' )
@@ -277,7 +287,7 @@ public final class Stick
                 .append( '[' ).append( LocalDateTime.now().format( DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" ) ) ).append( "] Stick started..." ).append('\n')
                 .toString();
 
-        UtilSys.getLogger().say( sInfo );
+        say( sInfo );
 
         //------------------------------------------------------------------------//
         // Prepare and start the Event Bus
@@ -530,7 +540,8 @@ public final class Stick
     @Override
     public boolean isLoggable( ILogger.Level level )
     {
-        return UtilSys.getLogger().isLoggable( level );
+        return UtilSys.getLogger() != null &&
+               UtilSys.getLogger().isLoggable( level );
     }
 
     @Override
@@ -567,6 +578,16 @@ public final class Stick
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    private IRuntime say( String msg )
+    {
+        if( UtilSys.getLogger() != null )
+            UtilSys.getLogger().say( msg );
+        else
+            System.out.println( msg );
+
+        return this;
+    }
 
     /**
      * Informs to a device about the down-timed devices.
@@ -606,6 +627,8 @@ public final class Stick
 
     private Stick stop()
     {
+        say( "Shutting down Stick ..." );
+
         eventBus.stop();
         ruleMgr.stop();
         drvrMgr.stop();
@@ -613,11 +636,8 @@ public final class Stick
         gridMgr.stop();
         netwMgr.stop();
         srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped
-        String bye = "<<<<<<< Stick finished >>>>>>>";
-        System.out.println( bye );
 
-        if( UtilSys.getLogger() != null )
-            UtilSys.getLogger().say( bye );
+        say( "<<<<<<< Stick finished >>>>>>>" );
 
         return this;
     }
@@ -834,7 +854,7 @@ public final class Stick
                 if( driver != null )
                     driver4device.put( name, driver );
                 else
-                    Stick.this.failed( new MingleException(), "No driver for device '"+ name +"'\nCheck Stick log file." );
+                    log( ILogger.Level.SEVERE, "No driver for device '"+ name +"'\nCheck Stick log file." );
             }
 
             return driver;

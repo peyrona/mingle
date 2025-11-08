@@ -9,8 +9,11 @@ import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
+import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.xpreval.functions.date;
 import com.peyrona.mingle.lang.xpreval.functions.time;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
@@ -40,9 +43,14 @@ import org.apache.poi.xssf.usermodel.XSSFWorkbook;
 public final class   Excel
              extends ControllerBase
 {
-    private File         file  = null;
-    private XSSFWorkbook book  = null;
-    private XSSFSheet    sheet = null;
+    private File         file       = null;
+    private XSSFWorkbook book       = null;
+    private XSSFSheet    sheet      = null;
+    private int          nWrites    = 0;     // Counter for pending writes
+    private long         nLastFlush = 0;     // Timestamp of the last flush operation
+
+    private static final int    nFLUSH_TIMEOUT     = 180 * 1000;       // Time limit (in milliseconds) for flushing
+    private static final String KEY_WRITE_INTERVAL = "writeinterval";  // Configured number of writes before flushing
 
     //------------------------------------------------------------------------//
 
@@ -52,8 +60,8 @@ public final class   Excel
         setName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
+        String    sFileName  = (String) mapConfig.get( "file" );        // Mandatory
         String    sSheetName = (String) mapConfig.get( "sheetname" );   // Optional
-        String    sFileName  = (String) mapConfig.get( "file" );
         List<URI> lstURL     = new ArrayList<>();
 
         try
@@ -68,28 +76,40 @@ public final class   Excel
         if( lstURL.size() != 1 )
         {
             sendIsInvalid( "Invalid file name: "+ sFileName );
+            return;
         }
-        else
+
+        if( isFaked() )
         {
-            synchronized( this )
-            {
-                file = UtilIO.addExtension( new File( lstURL.get(0) ), ".xlxs" );
-
-                book  = new XSSFWorkbook();
-                sheet = book.createSheet();
-            }
-
-            if( sSheetName != null )
-                book.setSheetName( book.getSheetIndex( sheet ), sSheetName );
-
-            String sHeads = (String) mapConfig.get( "heads" );   // Optional
-
-            if( sHeads != null )
-                writeHead( book, sheet, UtilColls.toMap( sHeads ) );
-
             setValid( true );
-            set( mapConfig );     // Can be done because mapConfig values are not modified
+            return;
         }
+
+        synchronized( this )
+        {
+            file  = UtilIO.addExtension( new File( lstURL.get(0) ), ".xlsx" );
+            book  = new XSSFWorkbook();
+            sheet = book.createSheet();
+        }
+
+        if( sSheetName != null )
+            book.setSheetName( book.getSheetIndex( sheet ), sSheetName );
+
+        String sHeads = (String) mapConfig.get( "heads" );   // Optional
+
+        if( sHeads != null )
+            writeHead( book, sheet, UtilColls.toMap( sHeads ) );
+
+        // Read flush interval from configuration
+        Integer nWriteInterval = (Integer) mapConfig.get( KEY_WRITE_INTERVAL );
+
+        if( nWriteInterval == null )
+            nWriteInterval = 5;
+
+        set( KEY_WRITE_INTERVAL, UtilUnit.setBetween( 1, nWriteInterval, Integer.MAX_VALUE ) );
+
+        setValid( true );
+        set( mapConfig );     // Can be done because mapConfig values are not modified
     }
 
     @Override
@@ -102,42 +122,57 @@ public final class   Excel
     @Override
     public void write( Object deviceValue )    // deviceValue is a string like this: "<col_name> = <col_value>, ..."
     {
-        if( isFaked || isInvalid() || (deviceValue == null) || (book == null) || (sheet == null) )
+        if( isFaked() || isInvalid() || (deviceValue == null) || (book == null) || (sheet == null) )
             return;
 
         UtilSys.execute( getClass().getName(),
                          () ->
                             {
-                                Map<String,String> map = UtilColls.toMap( deviceValue.toString() );
-                                writeRow( book, sheet, map );
-                                flush();
-                                sendReaded( deviceValue );
+                                synchronized( Excel.this )     // Ensure thread-safe access to workbook and counters
+                                {
+                                    Map<String,String> map = UtilColls.toMap( deviceValue.toString() );
+                                    writeRow( book, sheet, map );
+
+                                    int  interval = (int) get( KEY_WRITE_INTERVAL );
+                                    long elapsed  = System.currentTimeMillis() - nLastFlush;
+
+                                    // Flush if write counter reaches the interval
+                                    if( (++nWrites >= interval) || (elapsed >= nFLUSH_TIMEOUT) )
+                                    {
+                                        flush();
+                                        nWrites    = 0;
+                                        nLastFlush = System.currentTimeMillis();
+                                    }
+
+                                    sendReaded( deviceValue );
+                                }
                             } );
     }
 
     @Override
     public void start( IRuntime rt )
     {
+        if( isInvalid() )
+            return;
+
         super.start( rt );
 
-        String use_disk = "use_disk";
-
-        if( ! rt.getFromConfig( "exen", use_disk, true ) )
-        {
-            sendIsInvalid( use_disk +" flag is off: can not use File System" );
+        if( ! useDisk( true ) )
             stop();
-        }
+
+        nLastFlush = System.currentTimeMillis();
     }
 
     @Override
     public void stop()
     {
-        flush();
+        flush(); // Flush any remaining pending writes
         close();
 
-        file  = null;
-        book  = null;
-        sheet = null;
+        nWrites = 0;
+        file    = null;
+        book    = null;
+        sheet   = null;
 
         super.stop();
     }
@@ -215,7 +250,25 @@ public final class   Excel
 
         try
         {
-            book.write( new FileOutputStream( file ) );
+            // Write the current workbook to a byte array, close it, and then write to file.
+            // This pattern avoids InvalidOperationException when writing multiple times.
+            ByteArrayOutputStream baos = new ByteArrayOutputStream();
+
+            book.write( baos );
+            book.close();
+
+            try( FileOutputStream fos = new FileOutputStream( file ) )
+            {
+                baos.writeTo( fos );
+            }
+
+            // Re-open the workbook from the byte array to continue modifications
+            book = new XSSFWorkbook( new ByteArrayInputStream( baos.toByteArray() ) );
+
+            if( book.getNumberOfSheets() > 0 )
+                sheet = book.getSheetAt( 0 );
+
+            nLastFlush = System.currentTimeMillis(); // Update the last flush time
         }
         catch( IOException ioe )
         {

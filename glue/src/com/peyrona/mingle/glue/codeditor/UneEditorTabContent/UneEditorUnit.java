@@ -5,7 +5,6 @@ import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.glue.ConsolePanel;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Util;
-import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
@@ -291,29 +290,26 @@ public final class UneEditorUnit extends JSplitPane
         if( isRunning() )
             return true;
 
-        File fModel = new File( UtilIO.getPath( fCode ), UtilIO.getName( fCode ) +".model" );
-
         try
         {
+            File fModel = new File( UtilIO.getPath( fCode ), UtilIO.getName( fCode ) +".model" );
+
             setDividerLocation( .65d );
             getConsole().clear();
 
             procExEn = Util.runStick( fModel, createConfigFile( bUseFakedCtrl, level ) );
 
-            Util.catchOutput( procExEn, (str) -> getConsole().append( str ) );
-
             if( procExEn == null )
-            {
                 JTools.error( "Unable to start local internal ExEn.\nIt could be there is another instance of ExEn already\nrunning with same communcations configuration.", this );
-                return false;
-            }
+            else
+                Util.catchOutput( procExEn, (str) -> getConsole().append( str ) );
         }
-        catch( IOException ioe )
+        catch( Exception ioe )
         {
-            JTools.error(new MingleException( "Unable to start local internal ExEn.", ioe ), this );
+            JTools.error( ioe );
         }
 
-        return true;
+        return procExEn != null;
     }
 
     public UneEditorUnit stop()

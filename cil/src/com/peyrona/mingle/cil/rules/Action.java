@@ -111,7 +111,8 @@ final class Action implements IRule.IAction
                         runtime.bus().post( new MsgChangeActuator( target, val ), delay );
                     }
                 }
-             // else --> If it is just an expression (e.g.: THEN put("myvar", "myvalue")), there is no message to send
+             // else --> If it is just an expression (e.g.: THEN put("myvar", "myvalue")), there is no message to send.
+             //          And if the xpr modifies a var it must be done via CellSet driver and this driver sends the message.
             }
         }
     }
