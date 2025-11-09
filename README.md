@@ -32,7 +32,7 @@
 > 1. Download lastest release and unzip it inside a folder (e.g. create a folder named 'Mingle').
 >
 > 2. If you have Java 11 or above installed in your PC, you are done.
->    Otherwise, execute the appropriate 'get-java-*' script.<br>
+>    Otherwise, execute the appropriate 'get-java-*' script (inside 'etc' folder).<br>
 >    Note: change the script permissions to make it executable ('chmod +x get_java*' or similar).
 
  **What is the easiest way to start?**
