@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"com.peyrona.mingle.glue"},{"l":"com.peyrona.mingle.glue.codeditor"},{"l":"com.peyrona.mingle.glue.codeditor.UneEditorTabContent"},{"l":"com.peyrona.mingle.glue.exen.commands"},{"l":"com.peyrona.mingle.glue.exen.exen"},{"l":"com.peyrona.mingle.glue.exen.tables"},{"l":"com.peyrona.mingle.glue.gswing"}]

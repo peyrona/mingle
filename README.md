@@ -52,6 +52,8 @@
 > * Une_language.pdf
 > * Mingle_Standard__Platform.pdf
 > * Une_reference__sheet.pdf
+>
+> Additionally, API docs (20 Mb) are also updated for every new version and released also under Creative Commons.
 
  **What about the logo?**
 

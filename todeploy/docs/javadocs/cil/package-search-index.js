@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"com.peyrona.mingle.cil"},{"l":"com.peyrona.mingle.cil.devices"},{"l":"com.peyrona.mingle.cil.drivers"},{"l":"com.peyrona.mingle.cil.rules"},{"l":"com.peyrona.mingle.cil.scripts"}]
