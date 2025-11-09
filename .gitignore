@@ -43,7 +43,7 @@ release.sh
 /todeploy/examples/9*
 /todeploy/log/
 /todeploy/tmp/
-/todeploy/etc/
+/todeploy/etc/gum_user_files/
 /0.PhD/
 /balata/
 /website/
