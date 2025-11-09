@@ -1,7 +1,10 @@
 # What is Mingle?
 
-> * A language (close to human) called "_Une_".
-> * The tools associated with the _Une_ language.
+> A human-like language called _Une_ and the associated tools.
+>
+> You don't need to know how to program: if you know how to use a spreadsheet (like MS Excel), you can create applications.
+>
+> Although it is not limited to this, _Une_ is better suited for the IoT.
 
 
 # How looks it like?
@@ -29,7 +32,7 @@
 > 1. Download lastest release and unzip it inside a folder (e.g. create a folder named 'Mingle').
 >
 > 2. If you have Java 11 or above installed in your PC, you are done.
->    Otherwise, execute the appropriate 'get-java-*' script.
+>    Otherwise, execute the appropriate 'get-java-*' script.<br>
 >    Note: change the script permissions to make it executable ('chmod +x get_java*' or similar).
 
  **What is the easiest way to start?**
@@ -52,8 +55,7 @@
 > * Une_language.pdf
 > * Mingle_Standard__Platform.pdf
 > * Une_reference__sheet.pdf
->
-> Additionally, API docs (20 Mb) are also updated for every new version and released also under Creative Commons.
+> * javdocs.zip: APIs documentation in HTML fomat
 
  **What about the logo?**
 
