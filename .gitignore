@@ -32,8 +32,9 @@ Thumbs.db
 *.txt
 *.odt
 *.odg
-*.zip
 *.model
+*.zip          # Ignore all .zip files
+!javadocs.zip  # EXCEPT for javadocs.zip
 GEMINI.md
 count_lines.sh
 generate_javadocs.sh
