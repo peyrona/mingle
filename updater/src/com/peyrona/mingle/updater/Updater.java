@@ -29,7 +29,7 @@ public final class Updater
             System.err.println( "Error: args cannot be null" );
             System.exit( 1 );
         }
-        
+
         UtilCLI cli = new UtilCLI( args );
 
         if( (args.length == 0) || cli.hasOption( "help" ) || cli.hasOption( "h" ) )
@@ -46,13 +46,13 @@ public final class Updater
 
         boolean dryRun   = cli.hasOption( "dry" );
         String pathArg   = args[0];
-        
+
         if( pathArg == null || pathArg.trim().isEmpty() )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error: Base directory path cannot be null or empty" );
             System.exit( 1 );
         }
-        
+
         File fBaseDir = new File( pathArg );
 
         updateIfNeeded( fBaseDir, dryRun, () -> { return true; } );
@@ -87,13 +87,13 @@ public final class Updater
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
             return;
         }
-        
+
         if( fnExcuteUpdate == null )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Update function cannot be null" );
             return;
         }
-        
+
         if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
@@ -101,6 +101,7 @@ public final class Updater
         }
 
         File tempRemoteCatalog = null;
+
         try
         {
             UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions" );
@@ -115,6 +116,7 @@ public final class Updater
                 try
                 {
                     String localCatalogContent = Files.readString( localCatalogFile.toPath() );
+
                     if( localCatalogContent != null && ! localCatalogContent.trim().isEmpty() )
                     {
                         localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
@@ -137,12 +139,13 @@ public final class Updater
 
             // Get remote catalog version
             String remoteVersion = null;
-            
+
             tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
 
             if( GitHubApiClient.downloadFileFromRoot( "todeploy/etc/catalog.json", tempRemoteCatalog.toPath() ) )
             {
                 String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
+
                 if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
                 {
                     remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
@@ -182,11 +185,8 @@ public final class Updater
         }
         finally
         {
-            // Clean up temp file
             if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
-            {
-                tempRemoteCatalog.delete();
-            }
+                tempRemoteCatalog.delete();   // Clean up temp file
         }
     }
 
@@ -206,7 +206,7 @@ public final class Updater
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
             return false;
         }
-        
+
         // Set working state to true before starting the update process
         if( ! isWorking.compareAndSet( false, true ) )
         {
