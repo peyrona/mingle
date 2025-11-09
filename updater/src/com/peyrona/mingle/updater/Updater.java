@@ -107,7 +107,7 @@ public final class Updater
             UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
 
             // Get local catalog version
-            File localCatalogFile = new File( fMingleDir, "catalog.json" );
+            File localCatalogFile = new File( fMingleDir, "etc/catalog.json" );
             String localVersion = null;
 
             if( localCatalogFile.exists() && localCatalogFile.isFile() )
@@ -140,7 +140,7 @@ public final class Updater
             
             tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
 
-            if( GitHubApiClient.downloadFileFromRoot( "todeploy/catalog.json", tempRemoteCatalog.toPath() ) )
+            if( GitHubApiClient.downloadFileFromRoot( "todeploy/etc/catalog.json", tempRemoteCatalog.toPath() ) )
             {
                 String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
                 if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )

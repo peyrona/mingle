@@ -54,7 +54,7 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
                 FileEntry fileEntry = new FileEntry( entry.path, entry.hash );
                 
                 // Separate catalog.json from other files
-                if( "catalog.json".equals( entry.path ) )
+                if( "etc/catalog.json".equals( entry.path ) )
                 {
                     catalogEntries.add( fileEntry );
                 }

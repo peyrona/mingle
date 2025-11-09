@@ -189,8 +189,8 @@ public class GitHubFileUpdater
         filesChecked++;
 
         // Log when processing catalog.json to ensure it's last
-        if( "catalog.json".equals( entry.path ) )
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Processing catalog.json (ensured to be last in update order)" );
+        if( "etc/catalog.json".equals( entry.path ) )
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Processing etc/catalog.json (ensured to be last in update order)" );
 
         try
         {

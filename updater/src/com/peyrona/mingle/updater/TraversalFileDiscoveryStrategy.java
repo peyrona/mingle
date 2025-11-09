@@ -53,7 +53,7 @@ public class TraversalFileDiscoveryStrategy implements FileDiscoveryStrategy
                 FileEntry fileEntry = new FileEntry( filePath, null ); // No expected hash when traversing
 
                 // Separate catalog.json from other files
-                if( "catalog.json".equals( filePath ) )
+                if( "etc/catalog.json".equals( filePath ) )
                 {
                     catalogEntries.add( fileEntry );
                 }
