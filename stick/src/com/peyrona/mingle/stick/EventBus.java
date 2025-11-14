@@ -9,6 +9,7 @@ import com.peyrona.mingle.lang.japi.Dispatcher;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.messages.Message;
+import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -172,27 +173,48 @@ public class EventBus implements IEventBus
     {
         try
         {
-            // Notify listeners for the specific event type.
-
+            // Notify listeners for specific event type with exception handling
             Set<IEventBus.Listener> specificListeners = mapListeners.get( msg.getClass() );
 
             if( specificListeners != null )
             {
-                for( IEventBus.Listener ltnr : specificListeners )
-                    ltnr.onMessage( msg );
+                for( IEventBus.Listener listener : specificListeners )
+                {
+                    try
+                    {
+                        listener.onMessage( msg );
+                    }
+                    catch( Exception exc )
+                    {
+                        // The iterator for CopyOnWriteArraySet does not support remove().
+                        // Instead, we remove the listener directly from the set, which is a thread-safe operation.
+                        specificListeners.remove( listener );
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to exception: " + exc.getMessage() );
+                    }
+                }
             }
 
-            // If it's a specific message, also notify listeners subscribed to all messages (Message.class),
-            // avoiding double notification if the message itself is of type Message.class.
-
+            // Similar pattern for general listeners...
             if( msg.getClass() != Message.class )
             {
                 Set<IEventBus.Listener> generalListeners = mapListeners.get( Message.class );
 
                 if( generalListeners != null )
                 {
-                    for( IEventBus.Listener ltnr : generalListeners )
-                        ltnr.onMessage( msg );
+                    for( IEventBus.Listener listener : generalListeners )
+                    {
+                        try
+                        {
+                            listener.onMessage( msg );
+                        }
+                        catch( Exception exc )
+                        {
+                            // The iterator for CopyOnWriteArraySet does not support remove().
+                            // Instead, we remove the listener directly from the set, which is a thread-safe operation.
+                            generalListeners.remove( listener );
+                            UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to exception: " + exc.getMessage() );
+                        }
+                    }
                 }
             }
         }

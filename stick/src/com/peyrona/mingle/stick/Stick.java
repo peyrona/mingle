@@ -149,10 +149,7 @@ public final class Stick
                 else
                 {
                     for( ICommand cmd : sortByType( lstCmds, false ) )
-                    {
-                        if( ! add( cmd ) )
-                            failed( null, "Error adding: "+ cmd );    // Fail fast
-                    }
+                        add( cmd );
                 }
             }
             catch( ParseException exc )
@@ -370,32 +367,30 @@ public final class Stick
         cmd = deviMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = ruleMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = srptMgr.named( sName );  if( cmd != null ) return cmd;
-        cmd = drvrMgr.named( sName );  return cmd;                     // Either the command or null
+        cmd = drvrMgr.named( sName );  return cmd;                   // Either the command or null
     }
 
     @Override
-    public boolean add( ICommand command )
+    public void add( ICommand command )
     {
         if( command == null )
         {
-            log( ILogger.Level.SEVERE, "Attempting to add 'null'" );
-            return false;
+            log( ILogger.Level.SEVERE, "Invalid command 'null'" );
+            return;
         }
 
-        if( command instanceof IDriver )  return drvrMgr.add( (IDriver) command );
-        if( command instanceof IScript )  return srptMgr.add( (IScript) command );
-        if( command instanceof IRule   )  return ruleMgr.add( (IRule  ) command );
+        if( command instanceof IDriver )  { drvrMgr.add( (IDriver) command ); return; }
+        if( command instanceof IScript )  { srptMgr.add( (IScript) command ); return; }
+        if( command instanceof IRule   )  { ruleMgr.add( (IRule  ) command ); return; }
 
         eventBus.pause();
 
         IDevice device = (IDevice) command;
 
-        boolean bOK = drvrMgr.add( device ) &&
-                      deviMgr.add( device );
+        if( drvrMgr.add( device ) )
+            deviMgr.add( device );
 
         eventBus.resume();
-
-        return bOK;
 
         // When a new Device is added on the fly, all its dependencies must exist previously: Device's Driver and Script.
 
@@ -685,7 +680,7 @@ public final class Stick
                                     {
                                         while( true )
                                         {
-                                            synchronized( Thread.currentThread() )
+                                            synchronized( Stick.this.config )    // 'config' is as good as any other final
                                             {
                                                 try { Thread.currentThread().wait(); }
                                                 catch( InterruptedException ex ) { break; }
@@ -941,7 +936,7 @@ public final class Stick
                         break;
 
                     case Add:
-                        _add_( in, client );
+                        _add_( in );
                         break;
 
                     case Remove:
@@ -985,24 +980,15 @@ public final class Stick
             }
         }
 
-        private void _add_( ExEnComm comm, INetClient origin )
+        private void _add_( ExEnComm comm )
         {
             List<ICommand> lstAdded = new ArrayList<>();
-            List<ICommand> lstError = new ArrayList<>();
             List<ICommand> lstAll   = comm.getCommands();
 
             for( ICommand cmd : sortByType( lstAll, false ) )    // Java compiler optimizes for-each loops by transforming them into equivalent loops using iterators ('sortByType' is invoked only once)
-            {
-                if( add( cmd ) )  lstAdded.add( cmd );
-                else              lstError.add( cmd );
-            }
+                lstAdded.add( cmd );
 
             netwMgr.broadcast( new ExEnComm( ExEnComm.Request.Added, lstAdded.toArray( ICommand[]::new ) ) );
-
-            if( ! lstError.isEmpty() )
-            {
-                origin.send( new ExEnComm( ExEnComm.Request.ErrorAdding, lstError.toArray( ICommand[]::new ) ).toString() );          // Only to the requester
-            }
         }
 
         private void _remove_( ExEnComm comm, INetClient origin )

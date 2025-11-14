@@ -6,6 +6,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
@@ -29,9 +30,8 @@ public final class Logger implements ILogger
     private static final String  sLOG_LOCK_EXT = ".log.txt.lck";   // Extensión para el nombre de los ficheros de lock de los Log
 
     private java.util.logging.Logger oLogger;    // This uses fFOLDER
-    private Level   level;
-    private String  sName;
-    private boolean bConsole;                    // Is logger using ConsoleHandler()?
+    private Level  level;
+    private String sName;
 
     //------------------------------------------------------------------------//
 
@@ -53,19 +53,28 @@ public final class Logger implements ILogger
         {
             File fLogDir = new File( UtilSys.fHomeDir, "log" );
 
-            if( fLogDir.exists() )     // It is created by UtilSys
+            if( fLogDir.exists() )    // It is not needed to be created here: it is created by UtilSys
             {
-                fLog = new File( fLogDir, sFileName );
-
-                if( fLog.exists() && fLog.isDirectory() )
+                if( ! fLogDir.isDirectory() )
                 {
                     fLog = null;
-                    System.err.println( "Log file is a folder." );
+                    System.err.println( fLogDir +" exists but is is not a folder." );
                 }
                 else if( ! fLogDir.canWrite() )
                 {
                     fLog = null;
-                    System.err.println( "Log folder is read-only." );
+
+                    String name = "unknown";
+
+                    try{ Files.getOwner( fLogDir.toPath() ).getName(); }
+                    catch( IOException ioe ) { }
+
+                    System.err.println( "Current use does not have permission to write in "+ fLogDir +
+                                        "\n.The owner of this folder is "+ name );
+                }
+                else
+                {
+                    fLog = new File( fLogDir, sFileName );
                 }
             }
             else
@@ -75,14 +84,13 @@ public final class Logger implements ILogger
             }
         }
 
-        synchronized( this )
-        {
-            bConsole = ! GraphicsEnvironment.isHeadless();
-            bConsole = bConsole || bAlwaysConsole || (fLog == null);    // When fLog is null, outputs unconditionally to the console (user can always redirect outputs to a file)
-            oLogger  = initLogger( fLog );                              // At this point, oLogger is never null
-        }
+        boolean bConsole = bAlwaysConsole ||
+                          (fLog == null)  ||                   // When fLog is null, outputs unconditionally to the console (user can always redirect outputs to a file)
+                          ! GraphicsEnvironment.isHeadless();
 
         setLevel( (Level) null );     // null == takes the default one
+
+        oLogger = initLogger( fLog, bConsole );    // At this point, oLogger is never null
 
         return this;
     }
@@ -94,12 +102,6 @@ public final class Logger implements ILogger
     public String getName()
     {
         return ((sName == null) ? "" : sName + sLOG_EXT);
-    }
-
-    @Override
-    public boolean isPrintable()
-    {
-        return bConsole;
     }
 
     @Override
@@ -164,7 +166,7 @@ public final class Logger implements ILogger
     @Override
     public boolean say( String msg )
     {
-        if( isPrintable() )
+        if( ! GraphicsEnvironment.isHeadless() )
             System.out.println( msg );
 
         return _log_( Level.INFO, msg );
@@ -280,7 +282,7 @@ public final class Logger implements ILogger
      *
      * @return El logger inicializado.
      */
-    private java.util.logging.Logger initLogger( File fLog )
+    private java.util.logging.Logger initLogger( File fLog, boolean bConsole )
     {
         System.setProperty( "java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] %5$s %n" );
 
@@ -293,7 +295,7 @@ public final class Logger implements ILogger
                                  logger.setUseParentHandlers( false );              // Prevent parent handlers from processing the log records
                                  logger.setLevel( java.util.logging.Level.ALL );    // ALL because I decide which ones will be logged and wich will be not
 
-        if( bConsole )
+        if( bConsole || fLog == null )
             logger.addHandler( new MyConsoleHandler() );
 
         if( fLog != null )
@@ -342,9 +344,6 @@ public final class Logger implements ILogger
         @Override
         public void publish( LogRecord record )
         {
-            if( ! bConsole )
-                return;
-
             String msg = record.getMessage();
 
                  if( record.getLevel().equals( java.util.logging.Level.SEVERE  ) )  UtilANSI.outRed(    msg );

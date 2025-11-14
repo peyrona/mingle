@@ -62,12 +62,6 @@ public interface ILogger
     public boolean isLoggable( ILogger.Level level );
 
     /**
-     * Returns true if message can be sent to the system output.
-     * @return true if message can be sent to the system output.
-     */
-    public boolean isPrintable();                      // Will it be shown in the console?
-
-    /**
      * Deletes Log files older than the argument (in days).<br>
      * <br>
      * If days == 0, all log files will be deleted. If days lower than 0, no action is taken.

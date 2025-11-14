@@ -5,8 +5,13 @@ import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.network.BaseServer4IP;
 
 /**
+ * The Server functionality is divided into two classes using the Strategy Pattern and Factory Pattern
+ * design principles: SocketServer (Factory/Facade): Acts as a public facade that decides which
+ * implementation to use (Plain or SSL).
  *
  * @author francisco
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class SocketServer
              extends BaseServer4IP

@@ -10,8 +10,7 @@ import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.PrintWriter;
-import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
+import java.time.Instant;
 import java.util.List;
 import java.util.UUID;
 
@@ -38,7 +37,7 @@ final class Writer
         pwCode.println( "{\"transpiler\":\"MSP Transpiler ver."+ UtilSys.getVersion( Transpiler.class ) +"\",\n"+
                          "\"code-version\":\"1.0\",\n"+
                          "\"uid\":\""+ UUID.randomUUID().toString() +"\",\n"+
-                         "\"generated\":\""+ LocalDateTime.now().format( DateTimeFormatter.ISO_LOCAL_DATE_TIME ) +"\",\n"+
+                         "\"generated\":\""+ Instant.now().toString() +"\",\n"+
                          "\"commands\":[" );
 
         for( int n = 0; n < tus.size(); n++ )

@@ -50,9 +50,6 @@ public final class SystemMonitor
             set( KEY_MEASURE, null );
         }
 
-        if( "disk".equals( get( KEY_METRIC ) ) && ! useDisk( true ) )
-            return;
-
         int interval = ((Number) mapConfig.getOrDefault( KEY_INTERVAL, 1000f )).intValue();
         setBetween( KEY_INTERVAL, 500, interval, Integer.MAX_VALUE );
 
@@ -66,6 +63,12 @@ public final class SystemMonitor
             return;
 
         super.start( rt );
+
+        if( "disk".equals( get( KEY_METRIC ) ) && ! useDisk( true ) )
+        {
+            sendIsInvalid( get( KEY_METRIC ) +" is invalid. Stick is not allowed to use disk." );
+            return;
+        }
 
         if( timer == null )
             timer = UtilSys.executeAtRate( getClass().getName(), 5000, (int) get( KEY_INTERVAL ), () -> read() );

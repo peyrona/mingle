@@ -214,7 +214,8 @@
                                         isMaster = true;
                                         $('#work').show()
                                         $('#div-same-wnd').show();
-                                        onPageReloaded();            // To load files
+                                        setTimeout( onPageReloaded, 250 );  // Small delay to ensure DOM is ready
+                                        onPageReloaded();                   // To load files
                                     }
                                     else
                                     {
@@ -259,8 +260,8 @@
 
                                             asFileNames.forEach(
                                                 (value) => $("#lst-files").append( $('<option />')
-                                                                        .val( value )
-                                                                        .text( delExt( value ) ) ) );
+                                                                          .val( value )
+                                                                          .text( delExt( value ) ) ) );
 
                                             if( asFileNames.length > 0 )
                                                 $("#lst-files option:eq(0)").prop( 'selected', true );

@@ -193,7 +193,7 @@ public final class      Driver
             Map<String,Object> mapDevInit = device.getDriverInit();
                                mapDevInit = (mapDevInit == null) ? new HashMap<>() : mapDevInit;   // So, nullity it is not needed to be checked in every driver
 
-            cntrlr.set( device.name(), mapDevInit, listener );   // FIXME: esto no debe estar aquí sino en el Controller que es quien lo maneja
+            cntrlr.set( device.name(), mapDevInit, listener );
 
             if( cntrlr.isValid() )
             {
