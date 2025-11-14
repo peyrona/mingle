@@ -75,7 +75,10 @@ final class   DriverManager
         driver.remove( device );
 
         if( driver.isEmpty() )
+        {
+            driver.stop();
             runtime.remove( driver );      // Better to use Stick:remove(...) than using ::remove(...)
+        }
 
         return true;
     }

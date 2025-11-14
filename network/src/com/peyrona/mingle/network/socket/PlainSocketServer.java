@@ -27,11 +27,6 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Plain socket server implementation for non-secure communication.
  * This class provides basic socket functionality without SSL/TLS encryption.
- * <p>
- * It is mainly used to send requests to the ExEn or to retrieve the status of a
- * device.
- * <p>
- * Used protocol is defined by SocketProtocol class.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -368,7 +363,7 @@ final class PlainSocketServer
         @Override
         public void onMessage( INetClient origin, String msg )
         {
-            forEachListener(l -> l.onMessage(PlainSocketServer.this, origin, msg ) );
+            forEachListener(l -> l.onMessage( PlainSocketServer.this, origin, msg ) );
         }
 
         @Override

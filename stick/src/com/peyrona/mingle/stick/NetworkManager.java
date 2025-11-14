@@ -22,8 +22,6 @@ import java.util.Set;
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 final class NetworkManager
 {
@@ -79,7 +77,7 @@ final class NetworkManager
                     entry.getKey().add( listener );
                 }
 
-                // Now all server hav been created and have their listener
+                // Now all servers have been created and have their listener
 
                 for( Map.Entry<INetServer,String> entry : map.entrySet() )
                 {
@@ -90,7 +88,7 @@ final class NetworkManager
                     }
                     catch( Exception exc )
                     {
-                        // Nothing to do
+                        UtilSys.getLogger().log( Level.SEVERE, exc );
                     }
                 }
 

@@ -132,9 +132,8 @@ public interface IRuntime
      * triggers a Script and it does not exist when the rule is satisfied, and error will happen.
      *
      * @param command ICommand to be removed.
-     * @return true when the ICommand was successfully removed; false otherwise.
      */
-    boolean add( ICommand command );
+    void add( ICommand command );
 
     /**
      * Removes passed ICommand from the ExEn.

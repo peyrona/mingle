@@ -28,7 +28,7 @@ import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
 /**
- * A "Mission Control Tool" for the IoT: development and monitoring.
+ * A "Mission Control Tool" for the MSP: development and monitoring.
  *
  * @author Francisco José Morero Peyrona
  *

@@ -12,6 +12,8 @@ import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -55,9 +57,31 @@ public final class UtilSys
         }
 
         // These are needed to be created if they do not exist. IOException is never thrown, even if HD is read-only.
-        UtilIO.mkdirs( new File( fHomeDir, "log" ) );
-        UtilIO.mkdirs( new File( fHomeDir, "tmp" ) );
-        UtilIO.mkdirs( new File( fHomeDir, "etc" ) );    // This one has no macro associated because it is used internally only
+        File fLog = new File( fHomeDir, "log" );
+        File fTmp = new File( fHomeDir, "tmp" );
+        File fEtc = new File( fHomeDir, "etc" ); // This one has no macro associated because it is used internally only
+
+        // If the app is invoked the first time with 'sudo', created folders will have only 'sudo' priviledges.
+        // If subsequent invocations are done without 'sudo', the access to these created folders will be rejected.
+
+        try // Only one 'try-catch' because if it can be done if one, can be done with the three
+        {
+            Set<PosixFilePermission> permissions = PosixFilePermissions.fromString( "rwxrwxrwx" );
+
+            if( UtilIO.mkdirs( fLog ) )
+                Files.setPosixFilePermissions( fLog.toPath(), permissions );
+
+            if( UtilIO.mkdirs( fTmp ) )
+                Files.setPosixFilePermissions( fTmp.toPath(), permissions );
+
+            if( UtilIO.mkdirs( fEtc ) )
+                Files.setPosixFilePermissions( fEtc.toPath(), permissions );
+        }
+        catch( IOException ioe )
+        {
+            if( getLogger() == null )  ioe.printStackTrace( System.err );
+            else                       getLogger().log( ILogger.Level.WARNING, ioe );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -98,7 +122,7 @@ public final class UtilSys
 
         String  sLogLevel = config.get( "common", "log_level", "WARNING" );
         boolean bDisk     = config.get( "exen"  , "use_disk" , true      );
-        boolean b2Console = UtilSys.isDevEnv;                                    // FIXME: en la RPi no se están creando los ficheros de log
+        boolean b2Console = UtilSys.isDevEnv;
 
         logger = new Logger().init( name.trim(), bDisk, b2Console )
                              .setLevel( sLogLevel )

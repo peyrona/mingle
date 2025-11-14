@@ -67,22 +67,21 @@ abstract class BaseManager<T extends ICommand>
         return map.get( name.toLowerCase() );
     }
 
-    boolean add( T cmd )
+    void add( T cmd )
     {
         String name = cmd.name().toLowerCase();
 
         if( map.containsKey( name ) )
         {
             runtime.log( ILogger.Level.INFO, "Attempting to add more than once: "+ cmd.getClass().getSimpleName() +':'+ cmd.name() );
-            return true;
         }
+        else
+        {
+            map.put( name, cmd );
 
-        map.put( name, cmd );
-
-        if( isStarted() )
-            cmd.start( runtime );
-
-        return true;
+            if( isStarted() )
+                cmd.start( runtime );
+        }
     }
 
     /**
@@ -115,10 +114,7 @@ abstract class BaseManager<T extends ICommand>
         if( map.isEmpty() )
             return;
 
-        synchronized( map )
-        {
-            map.values().forEach( cmd -> consumer.accept( cmd ) );
-        }
+        map.values().forEach( cmd -> consumer.accept( cmd ) );
     }
 
     boolean isEmpty()

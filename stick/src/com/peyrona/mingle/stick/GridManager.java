@@ -179,7 +179,8 @@ final class GridManager
 
     private boolean error( String sCause )
     {
-        lstTargets.clear();
+        if( lstTargets != null )
+            lstTargets.clear();
 
         UtilSys.getLogger().log( ILogger.Level.SEVERE, "Grid became useless.\nCause: "+ sCause );
 

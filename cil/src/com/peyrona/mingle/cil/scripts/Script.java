@@ -6,6 +6,8 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.commands.ICommand;
+import com.peyrona.mingle.lang.interfaces.commands.IDriver;
 import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -39,8 +41,9 @@ public final class      Script
     private final boolean    isInline;          // This inf. is not part of the language, it is provided by the transpiler (True when Une source code FROM clause contents (SCRIPT command) is in between brackets ({...}))
     private final String     call;              // Function or method to call (invoke) inside FROM (can be null for some languages (not for Java))
     private final String[]   asFrom;            // URI(s) or Code
-    private ICandi.ILanguage langMgr  = null;   // Language manager
-    private ICandi.IPrepared prepared = null;
+    private       boolean    is4Controller = false;
+    private ICandi.ILanguage langMgr       = null;   // Language manager
+    private ICandi.IPrepared prepared      = null;
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
@@ -176,6 +179,11 @@ public final class      Script
     @Override
     public IController newController()
     {
+        synchronized( this )
+        {
+            is4Controller = true;
+        }
+
         if( canExecute() )
         {
             try
@@ -200,9 +208,16 @@ public final class      Script
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Checks if the script can be executed.
+     * 
+     * @return true if the script has been successfully prepared and has no compilation errors,
+     *         false otherwise. Logs a SEVERE error if the script cannot be executed due to errors.
+     * @throws AssertionError if the script has not been started
+     */
     private boolean canExecute()
     {
-        assert isStarted() : "Not started";
+        assert isStarted();
 
         if( prepared == null )
             getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Script '"+ name() +"' (using '"+ langName +"') can not be executed because it has errors." ) );
@@ -210,10 +225,55 @@ public final class      Script
         return (prepared != null);
     }
 
+    /**
+     * Determines if the script is allowed to execute based on language type and configuration.
+     * 
+     * Une scripts are always allowed. For other languages, checks the 'allow_native_code' 
+     * configuration flag. Scripts used by Drivers are also allowed regardless of the flag.
+     * 
+     * @return true if execution is allowed, false otherwise
+     */
+    private boolean isAllowed2Exec()
+    {
+        if( "une".equalsIgnoreCase( langName ) )    // Une is always allowed (faster)
+            return true;
+
+        if( getRuntime().getFromConfig( "exen", "allow_native_code", true ) )   // Config allows it
+            return true;
+
+        // Check if the script is used by a Driver: this is allowed
+        for( ICommand cmd : getRuntime().all( "drivers" ) )
+        {
+            if( ((IDriver) cmd).getScriptName().equals( name() ) );
+                return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Prepares the script for execution by building the language manager and compiling/preparing the source code.
+     * 
+     * This method is synchronized to ensure thread-safe preparation. It:
+     * 1. Checks if execution is allowed via isAllowed2Exec()
+     * 2. Builds the appropriate language manager
+     * 3. For inline scripts, creates a prepared wrapper with no errors
+     * 4. For file-based scripts, prepares the source code via the language manager
+     * 5. Validates compilation errors and logs them if found
+     * 6. Binds the prepared script to the language manager
+     * 
+     * If preparation fails due to errors, both langMgr and prepared are set to null.
+     */
     private synchronized void prepare()
     {
         if( prepared != null )
             return;
+
+        if( ! isAllowed2Exec() )
+        {
+            getRuntime().log( ILogger.Level.WARNING, langName +" code is not allowed: 'allow_native_code' flag is 'false'" );
+            return;
+        }
 
         langMgr = getRuntime().newLanguageBuilder().build( langName );
 

@@ -138,11 +138,14 @@ public abstract class      ControllerBase
 
     protected boolean useDisk( boolean bReport )
     {
-        String  use_disk = "use_disk";
-        boolean bAllowed = getRuntime().getFromConfig( "exen", use_disk, true );
+        if( getRuntime() == null )
+            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+
+        String  sUseDisk = "use_disk";
+        boolean bAllowed = getRuntime().getFromConfig( "exen", sUseDisk, true );
 
         if( bReport && ! bAllowed )
-            sendIsInvalid( "Config '"+ use_disk +"' flag is off: can not use File System" );
+            sendIsInvalid( "Config '"+ sUseDisk +"' flag is off: can not use File System" );
 
         return bAllowed;
     }
