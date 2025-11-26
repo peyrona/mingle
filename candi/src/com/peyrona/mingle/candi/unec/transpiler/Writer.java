@@ -34,7 +34,7 @@ final class Writer
      */
     void write( PrintWriter pwCode, PrintWriter pwInfo, List<TransUnit> tus )
     {
-        pwCode.println( "{\"transpiler\":\"MSP Transpiler ver."+ UtilSys.getVersion( Transpiler.class ) +"\",\n"+
+        pwCode.println( "{\"transpiler\":\"MSP Transpiler v."+ UtilSys.getVersion( Transpiler.class ) +"\",\n"+
                          "\"code-version\":\"1.0\",\n"+
                          "\"uid\":\""+ UUID.randomUUID().toString() +"\",\n"+
                          "\"generated\":\""+ Instant.now().toString() +"\",\n"+

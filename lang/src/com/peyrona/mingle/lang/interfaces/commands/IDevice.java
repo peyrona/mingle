@@ -31,9 +31,9 @@ public interface IDevice extends ICommand
      * Changes current device's state (for consistency the name is 'value').
      *
      * @param newValue New device's value.
-     * @return The device itself.
+     * @return true if the new value effectively changed device's value (DELTA is used).
      */
-    IDevice value( Object newValue );
+    boolean value( Object newValue );
 
     /**
      * Returns the delta value for this device: 0 means no delta.<br>

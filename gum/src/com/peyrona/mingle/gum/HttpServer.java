@@ -144,7 +144,7 @@ final class HttpServer
     HttpServer( String host, int httpPort, int maxSessions, String allowed, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
     {
         sessionMgr = new InMemorySessionManager( "MINGLE_SESSION_MANAGER", maxSessions, true );
-        sessionMgr.setDefaultSessionTimeout( ServiceUtil.getSessionTimeout() );    // In secs, not in millis
+        sessionMgr.setDefaultSessionTimeout( (int) ServiceUtil.getSessionTimeout() );    // In secs, not in millis
 
         nClientAllow = UtilComm.clientScope( allowed, null );
 

@@ -46,8 +46,11 @@ public class Main
         List<URI> lstURIs = UtilIO.expandPath( asURIs );
         Charset   charset = null;
 
-        if( ! config.get( "exen", "use_disk", true ) )
-            throw new IOException( "'use_disk' is set to false: can not transpile" );
+        if( ! UtilSys.isFsWritable )
+            throw new IOException( "FileSystem is readonly (can not write): can not transpile" );
+
+        if( ! config.get( "exen", "write_disk", true ) )
+            throw new IOException( "'write_disk' is set to false: can not transpile" );
 
         if( UtilStr.isNotEmpty( cli.getValue( "charset" ) ) )
         {

@@ -27,7 +27,7 @@ public final class LednetWifi5Ch
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         try
@@ -66,9 +66,14 @@ public final class LednetWifi5Ch
             newValue = new pair( "power", newValue );
 
         if( newValue instanceof pair )
+        {
             device.write( (pair) newValue );
+            sendChanged( (pair) newValue );
+        }
         else
+        {
             sendGenericError( ILogger.Level.SEVERE, "Value is a "+ newValue.getClass().getSimpleName() +", but should be a 'pair'" );
+        }
     }
 
     @Override

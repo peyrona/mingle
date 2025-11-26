@@ -26,7 +26,7 @@ import java.util.List;
  */
 public final class ConfigManager
 {
-    private static final String CONFIG_FILE_NAME = "glue_config.json";
+    private static final String CONFIG_FILE_NAME = "glue-settings.json";
     private static final File   CONFIG_FILE = new File( UtilSys.getEtcDir(), CONFIG_FILE_NAME );
     private static final Object FILE_LOCK   = new Object();
     private static       JsonObject config  = null;

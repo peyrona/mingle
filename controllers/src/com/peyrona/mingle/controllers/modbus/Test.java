@@ -38,6 +38,12 @@ public class Test
         return new IController.Listener()
                                 {
                                     @Override
+                                    public void onReaded(String deviceName, Object newValue)
+                                    {
+                                        System.out.println( deviceName +" readed: "+ newValue );
+                                    }
+
+                                    @Override
                                     public void onChanged(String deviceName, Object newValue)
                                     {
                                         System.out.println( deviceName +" changed: "+ newValue );

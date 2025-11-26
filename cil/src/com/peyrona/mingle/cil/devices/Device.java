@@ -8,7 +8,6 @@ import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
-import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
 import com.peyrona.mingle.lang.messages.MsgReadDevice;
 import java.util.Arrays;
 import java.util.Collections;
@@ -44,7 +43,7 @@ public class Device
 {
     private final Map<String,Object> deviceInit;
     private final String[]           groups;
-    private final DataValue          value;
+    private final DeviceValue          value;
     private final Map<String,Object> driverInit;
     private final String             driverName;
     private final long               downtime;
@@ -75,13 +74,13 @@ public class Device
 
         Float delta = 0f;
 
-        if( (deviceInit != null) && deviceInit.containsKey( "delta" ) )   // Do not move this if to DataValue class
+        if( (deviceInit != null) && deviceInit.containsKey( "delta" ) )   // Do not move this if to DeviceValue class
         {
             delta = ((Number) deviceInit.get( "delta" )).floatValue();
             delta = Math.abs( delta );
         }
 
-        this.value      = new DataValue( delta );
+        this.value      = new DeviceValue( delta );
         this.driverName = driverName;
         this.driverInit = UtilColls.isEmpty( driverInit ) ? null : Collections.unmodifiableMap( driverInit );    // Acts as a defensive copy
         this.deviceInit = UtilColls.isEmpty( deviceInit ) ? null : Collections.unmodifiableMap( deviceInit );    // Acts as a defensive copy
@@ -130,15 +129,14 @@ public class Device
     }
 
     @Override
-    public IDevice value( Object newValue )
+    public boolean value( Object newValue )
     {
         try
         {
             // DOC: If user wants that MsgDeviceChanged messages are sent only when the new
             // value is different from the previous value, he has to set a proper DELTA > 0
 
-            if( value.set( newValue ) )
-                getRuntime().bus().post( new MsgDeviceChanged( name(), value.get() ) );
+            return value.set( newValue );
         }
         catch( MingleException me )
         {
@@ -149,7 +147,7 @@ public class Device
             getRuntime().log( ILogger.Level.WARNING, "Can not assign null to device '"+ name() +'\'' );
         }
 
-        return this;
+        return false;
     }
 
     @Override
@@ -185,8 +183,6 @@ public class Device
     @Override
     public void start( IRuntime rt )
     {
-        assert ! isStarted();    // Only for testing under development
-
         if( isStarted() )
             return;
 

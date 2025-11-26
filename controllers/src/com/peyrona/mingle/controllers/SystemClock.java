@@ -28,7 +28,7 @@ public final class   SystemClock
     @Override
     public void set( final String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         int interval = ((Number) deviceInit.getOrDefault( KEY, 1000f )).intValue();
@@ -63,14 +63,14 @@ public final class   SystemClock
         synchronized( this )
         {
             timer = UtilSys.executeAtRate( getClass().getName(),
-                                           (int) get( KEY ),     // 'interval' must also be the initial delay
-                                           (int) get( KEY ),
+                                           getLong( KEY ),     // 'interval' must also be the initial delay
+                                           getLong( KEY ),
                                            () -> read() );
         }
     }
 
     @Override
-    public void stop()
+    public synchronized void stop()
     {
         if( timer != null )
         {

@@ -12,7 +12,7 @@ import io.undertow.util.StatusCodes;
  */
 final class ServiceUtil extends ServiceBase
 {
-    private static int timeout = -1;
+    private static int timeout = -1;   // In seconds
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
@@ -27,9 +27,9 @@ final class ServiceUtil extends ServiceBase
         return ServiceUtil.timeout;
     }
 
-    static void setSessionTimeout( int n )
+    static void setSessionTimeout( int nSecs )
     {
-        ServiceUtil.timeout = n;
+        ServiceUtil.timeout = nSecs;
     }
 
     //------------------------------------------------------------------------//

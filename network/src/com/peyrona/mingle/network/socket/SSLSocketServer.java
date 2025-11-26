@@ -57,7 +57,7 @@ final class SSLSocketServer
             if( isRunning() )
                 return this;
 
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT ) )
+            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL ) )
                 return this;
 
             if( getSSLCert() == null || getSSLKey() == null )

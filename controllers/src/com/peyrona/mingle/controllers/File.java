@@ -43,7 +43,7 @@ public final class File
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         set( KEY_APEND    , (Boolean) deviceInit.getOrDefault( KEY_APEND    , Boolean.TRUE ) );
@@ -107,13 +107,13 @@ public final class File
 
         super.start( rt );
 
-        if( bLocal && ! useDisk( true ) )
+        if( bLocal && ! isDiskWritable( true ) )
             return;
 
         file = new java.io.File( uri );
 
         if( (future == null) && ((int) get( KEY_INTERVAL ) > -1) )
-            future = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY_INTERVAL ), (int) get( KEY_INTERVAL ), () -> read() );
+            future = UtilSys.executeAtRate( getClass().getName(), getLong( KEY_INTERVAL ), getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override
@@ -175,7 +175,7 @@ public final class File
                 if( (Boolean) get( KEY_APEND ) ) writer.append(  s );
                 else                             writer.replace( s );
 
-                sendReaded( value );
+                sendChanged( value );
             }
             catch( IOException exc )
             {

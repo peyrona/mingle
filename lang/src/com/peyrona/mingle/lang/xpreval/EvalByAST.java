@@ -100,7 +100,6 @@ final class EvalByAST
         {
             int nFutures = 0;
 
-
             for( XprToken xt : lstInfix )
             {
                 if( xt.isType( XprToken.VARIABLE ) )

@@ -29,7 +29,7 @@ public class Kronos
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         if( deviceInit.isEmpty() )

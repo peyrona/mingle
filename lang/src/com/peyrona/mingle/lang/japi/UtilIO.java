@@ -30,10 +30,6 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
-import java.nio.file.StandardWatchEventKinds;
-import java.nio.file.WatchEvent;
-import java.nio.file.WatchKey;
-import java.nio.file.WatchService;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.Normalizer;
 import java.util.ArrayList;
@@ -41,7 +37,6 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
-import java.util.function.Consumer;
 import java.util.function.Function;
 
 /**
@@ -668,7 +663,7 @@ public final class UtilIO
     {
         if( str.length == 1 )    // To save CPU
         {
-            return new ByteArrayInputStream( str[0].getBytes() );
+            return new ByteArrayInputStream( str[0].getBytes( StandardCharsets.UTF_8 ) );
         }
 
         StringBuilder sb = new StringBuilder( 1024 * str.length );
@@ -678,7 +673,7 @@ public final class UtilIO
             sb.append( s );
         }
 
-        return new ByteArrayInputStream( sb.toString().getBytes() );
+        return new ByteArrayInputStream( sb.toString().getBytes( StandardCharsets.UTF_8 ) );
     }
 
     /**
@@ -710,10 +705,10 @@ public final class UtilIO
         }
     }
 
-    public static FileMonitor newFileMonitor( File file )
-    {
-        return new FileMonitor( file );
-    }
+//    public static FileMonitor newFileMonitor( File file )
+//    {
+//        return new FileMonitor( file );
+//    }
 
     //------------------------------------------------------------------------//
     // WRITTING RELATED METHODS
@@ -1224,83 +1219,83 @@ public final class UtilIO
         }
     }
 
-    //------------------------------------------------------------------------//
-    // INNER CLASS: FileMonitor
-    // Thread safe when a new instance is created by user at run-time
-    //------------------------------------------------------------------------//
-
-    public static final class FileMonitor
-    {
-        private final Path     filePath;
-        private       Consumer onCreated;
-        private       Consumer onModified;
-        private       Consumer onDeleted;
-
-        private FileMonitor( File file )
-        {
-            filePath = file.toPath();
-
-            Path   parentDir = filePath.getParent();
-            String fileName  = filePath.getFileName().toString();
-
-            UtilSys.execute( getClass().getSimpleName(),
-                             () ->
-                            {
-                                boolean bOK = true;
-
-                                try( WatchService watchService = FileSystems.getDefault().newWatchService() )
-                                {
-                                    parentDir.register( watchService,
-                                                        StandardWatchEventKinds.ENTRY_MODIFY,
-                                                        StandardWatchEventKinds.ENTRY_CREATE,
-                                                        StandardWatchEventKinds.ENTRY_DELETE );
-
-                                    while( bOK )
-                                    {
-                                        WatchKey key = watchService.take();    // Wait for an event
-
-                                        for( WatchEvent<?> event : key.pollEvents() )
-                                        {
-                                            WatchEvent.Kind<?> kind    = event.kind();
-                                            Path               evtFile = (Path) event.context();
-
-                                            if( evtFile.toString().equals( fileName ) )
-                                            {
-                                                     if( kind == StandardWatchEventKinds.ENTRY_MODIFY )  onModified.accept( filePath );
-                                                else if( kind == StandardWatchEventKinds.ENTRY_DELETE )  onDeleted.accept(  filePath );
-                                                else if( kind == StandardWatchEventKinds.ENTRY_CREATE )  onCreated.accept(  filePath );
-                                            }
-                                        }
-
-                                        boolean valid = key.reset();
-
-                                        if( ! valid )
-                                            break;    // WatchKey no longer valid, exiting...
-                                    }
-                                }
-                                catch( IOException | InterruptedException e )
-                                {
-                                    // Nothing to do
-                                }
-                            } );
-        }
-
-        public FileMonitor onCreated( Consumer action )
-        {
-            onCreated = action;
-            return this;
-        }
-
-        public FileMonitor onModified( Consumer action )
-        {
-            onModified = action;
-            return this;
-        }
-
-        public FileMonitor onDeleted( Consumer action )
-        {
-            onDeleted = action;
-            return this;
-        }
-    }
+//    //------------------------------------------------------------------------//
+//    // INNER CLASS: FileMonitor
+//    // Thread safe when a new instance is created by user at run-time
+//    //------------------------------------------------------------------------//
+//
+//    public static final class FileMonitor
+//    {
+//        private final Path     filePath;
+//        private       Consumer onCreated;
+//        private       Consumer onModified;
+//        private       Consumer onDeleted;
+//
+//        private FileMonitor( File file )
+//        {
+//            filePath = file.toPath();
+//
+//            Path   parentDir = filePath.getParent();
+//            String fileName  = filePath.getFileName().toString();
+//
+//            UtilSys.execute( getClass().getSimpleName(),
+//                             () ->
+//                            {
+//                                boolean bOK = true;
+//
+//                                try( WatchService watchService = FileSystems.getDefault().newWatchService() )
+//                                {
+//                                    parentDir.register( watchService,
+//                                                        StandardWatchEventKinds.ENTRY_MODIFY,
+//                                                        StandardWatchEventKinds.ENTRY_CREATE,
+//                                                        StandardWatchEventKinds.ENTRY_DELETE );
+//
+//                                    while( bOK )
+//                                    {
+//                                        WatchKey key = watchService.take();    // Wait for an event
+//
+//                                        for( WatchEvent<?> event : key.pollEvents() )
+//                                        {
+//                                            WatchEvent.Kind<?> kind    = event.kind();
+//                                            Path               evtFile = (Path) event.context();
+//
+//                                            if( evtFile.toString().equals( fileName ) )
+//                                            {
+//                                                     if( kind == StandardWatchEventKinds.ENTRY_MODIFY )  onModified.accept( filePath );
+//                                                else if( kind == StandardWatchEventKinds.ENTRY_DELETE )  onDeleted.accept(  filePath );
+//                                                else if( kind == StandardWatchEventKinds.ENTRY_CREATE )  onCreated.accept(  filePath );
+//                                            }
+//                                        }
+//
+//                                        boolean valid = key.reset();
+//
+//                                        if( ! valid )
+//                                            break;    // WatchKey no longer valid, exiting...
+//                                    }
+//                                }
+//                                catch( IOException | InterruptedException e )
+//                                {
+//                                    // Nothing to do
+//                                }
+//                            } );
+//        }
+//
+//        public FileMonitor onCreated( Consumer action )
+//        {
+//            onCreated = action;
+//            return this;
+//        }
+//
+//        public FileMonitor onModified( Consumer action )
+//        {
+//            onModified = action;
+//            return this;
+//        }
+//
+//        public FileMonitor onDeleted( Consumer action )
+//        {
+//            onDeleted = action;
+//            return this;
+//        }
+//    }
 }

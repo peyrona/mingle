@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
@@ -51,14 +52,14 @@ public final class   WeatherOpenMeteo
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         float  latit    = (float)   deviceInit.get( KEY_LATITUDE  );                                             // This is REQUIRED
         float  longi    = (float)   deviceInit.get( KEY_LONGITUDE );                                             // This is REQUIRED
-        int    interval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL , 60 * UtilUnit.MINUTE )).intValue();   // Number of minutes between 2 consecutives calls to the Weather Web API
-        int    forecast = ((Number) deviceInit.getOrDefault( KEY_FORECAST ,  0 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours
-        int    frame    = ((Number) deviceInit.getOrDefault( KEY_FRAME    ,  1 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours (valid only when forecast > 0)
+        long   interval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL , 60 * UtilUnit.MINUTE )).intValue();   // Number of minutes between 2 consecutives calls to the Weather Web API
+        long   forecast = ((Number) deviceInit.getOrDefault( KEY_FORECAST ,  0 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours
+        long   frame    = ((Number) deviceInit.getOrDefault( KEY_FRAME    ,  1 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours (valid only when forecast > 0)
         String timezone = (String)  deviceInit.getOrDefault( KEY_TIME_ZONE, "auto" );
 
         if( isValid( latit, longi ) )
@@ -111,7 +112,7 @@ public final class   WeatherOpenMeteo
                                 try
                                 {
                                     conn   = (HttpURLConnection) new URL( sURL ).openConnection();
-                                    reader = new BufferedReader( new InputStreamReader( conn.getInputStream() ) );
+                                    reader = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) );
 
                                     StringBuilder sbAnswer = new StringBuilder( 1024 * 4 );
                                     String        sLine;
@@ -151,7 +152,7 @@ public final class   WeatherOpenMeteo
         super.start( rt );
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), (int) get( KEY_INTERVAL ), (int) get( KEY_INTERVAL ), () -> read() );
+            timer = UtilSys.executeAtRate( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override

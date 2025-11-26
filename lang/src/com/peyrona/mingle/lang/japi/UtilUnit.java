@@ -13,11 +13,11 @@ import com.peyrona.mingle.lang.lexer.Language;
  */
 public final class UtilUnit
 {
-    /** 1 millisecond */            public final static int MILLIS = 1;           // Just for code clarity
-    /** 1 second in milliseconds */ public final static int SECOND = 1000;
-    /** 1 minute in milliseconds */ public final static int MINUTE = SECOND * 60;
-    /** 1 hour in milliseconds */   public final static int HOUR   = MINUTE * 60;
-    /** 1 day in milliseconds */    public final static int DAY    = HOUR   * 24;
+    /** 1 millisecond */            public final static long MILLIS = 1;           // Just for code clarity.
+    /** 1 second in milliseconds */  public final static long SECOND = 1000;
+    /** 1 minute in milliseconds */ public final static long MINUTE = SECOND * 60; // All have to be long because if int overflow
+    /** 1 hour in milliseconds */   public final static long HOUR   = MINUTE * 60; // can happen under certain circumstances.
+    /** 1 day in milliseconds */    public final static long DAY    = HOUR   * 24; // e.g.: DAY * 30
 
     public final static int BYTE      = 1;
     public final static int KILO_BYTE = BYTE      * 1024;
@@ -136,6 +136,39 @@ public final class UtilUnit
      * @param max Maximum value
      * @return true if:<pre>(value >= min) && (value <= max)</pre>
      */
+    public static boolean isBetween( long min, long value, long max )
+    {
+        if( min > max )
+            throw new MingleException( "Min value is bigger than Max" );
+
+        return (value >= min) && (value <= max);
+    }
+
+    /**
+     * Normalizes value making it neither greater than max nor less than min.
+     *
+     * @param min Minimum accepted value
+     * @param value Value to normalize
+     * @param max Maximum accepted value
+     * @return The normalized value.
+     */
+    public static long setBetween( long min, long value, long max )
+    {
+        if( min > max )
+            throw new MingleException( "Min value is bigger than Max" );
+
+        return ((value > max) ? max
+                              : ((value < min) ? min
+                                               : value) );
+    }
+
+    /**
+     * Returns true if:<pre>(value >= min) && (value <= max)</pre>
+     * @param min Minimum value
+     * @param value The value
+     * @param max Maximum value
+     * @return true if:<pre>(value >= min) && (value <= max)</pre>
+     */
     public static boolean isBetween( float min, float value, float max )
     {
         if( min > max )
@@ -145,12 +178,12 @@ public final class UtilUnit
     }
 
     /**
-     * Normaliza value haciendo que no sea mayor que max ni menor que min.
+     * Normalizes value making it neither greater than max nor less than min.
      *
-     * @param min Mínimo valor aceptado
-     * @param value Valor a normalizar
-     * @param max Máximo valor aceptado
-     * @return El valor normalizado.
+     * @param min Minimum accepted value
+     * @param value Value to normalize
+     * @param max Maximum accepted value
+     * @return The normalized value.
      */
     public static float setBetween( float min, float value, float max )
     {

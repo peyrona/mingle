@@ -202,10 +202,10 @@ final class   DeviceManager
         }
 
         @Override
-        public IDevice value( Object newValue )
+        public boolean value( Object newValue )
         {
             value = newValue;
-            return this;
+            return true;
         }
 
         @Override

@@ -70,7 +70,7 @@ public final class Stick
     private final DeviceManager  deviMgr;
     private final RuleManager    ruleMgr;
     private       boolean        bExited  = false;
-    private       boolean        bSendAll = false;     // Broadcast all msgs or only changes and errors?
+    private       boolean        bSendAll = false;    // Broadcast all msgs or only changes and errors?
 
     //----------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -255,7 +255,7 @@ public final class Stick
         }
 
         //------------------------------------------------------------------------//
-        boolean bUseDisk  = config.get( "exen", "use_disk"     , true  );
+        boolean bUseDisk  = UtilSys.isFsWritable && config.get( "exen", "write_disk", true  );
         boolean bFakeDrvs = config.get( "exen", "faked_drivers", false );
         boolean bDocker   = UtilSys.isDocker();
         String  sLogName  = UtilSys.getLogger() == null ? "No logger in use" : UtilSys.getLogger().getName();
@@ -737,34 +737,47 @@ public final class Stick
         {
             driver4device = new ConcurrentHashMap<>( 5 );   // Cached driver for every device (5 to start small: will grow as needed)
 
-            msgHandler = Map.of( MsgDeviceChanged.class , this::handleDeviceChanged,
-                                 MsgDeviceReaded.class  , this::handleDeviceReaded,
+            msgHandler = Map.of( MsgDeviceReaded.class  , this::handleDeviceReaded,
+                                 MsgDeviceChanged.class , this::handleDeviceChanged,
                                  MsgChangeActuator.class, this::handleChangeActuator,
                                  MsgTrigger.class       , this::handleExecute,
                                  MsgReadDevice.class    , this::handleReadDevice );
         }
 
-        private void handleDeviceChanged(Message message)
-        {
-            final MsgDeviceChanged msg = (MsgDeviceChanged) message;
-            final boolean          own = deviMgr.named( msg.name ) != null;
-
-            if( own || gridMgr.isNode )
-                ruleMgr.forEach( rule -> rule.eval( msg.name, msg.value ) );
-
-            broadcast( message, own );
-        }
-
         private void handleDeviceReaded( Message message )
         {
             final MsgDeviceReaded msg = (MsgDeviceReaded) message;
-            final boolean         own = deviMgr.named( msg.name ) != null;
+            final IDevice         dev = deviMgr.named( msg.name );               // dev != null when this Stick manages the device
+            final boolean         chg = dev != null && dev.value( msg.value );   // Does the new value effectively changed the device's value?
 
-            if( own )
-                deviMgr.named( msg.name ).value( msg.value );
+            if( chg )
+            {
+                ruleMgr.forEach( rule -> rule.eval( msg.name, msg.value ) );
 
-            if( bSendAll )
-                broadcast( message, own );
+                if( bSendAll )
+                    broadcast( message );
+            }
+            else if( gridMgr.isNode )                                             // The msg came from another Stick node
+            {
+                ruleMgr.forEach( rule -> rule.eval( dev.name(), dev.value() ) );
+            }
+        }
+
+        private void handleDeviceChanged( Message message )
+        {
+            final MsgDeviceChanged msg = (MsgDeviceChanged) message;
+            final IDevice          dev = deviMgr.named( msg.name );               // dev != null when this Stick manages the device
+            final boolean          chg = dev != null && dev.value( msg.value );   // Does the new value effectively changed the device's value?
+
+            if( chg )
+            {
+                ruleMgr.forEach( rule -> rule.eval( dev.name(), dev.value() ) );  // Use 'dev' instead of 'msg' because it could be: 'dev.value() != msg.value'
+                broadcast( message );
+            }
+            else if( gridMgr.isNode )                                             // The msg came from another Stick node
+            {
+                ruleMgr.forEach( rule -> rule.eval( dev.name(), dev.value() ) );
+            }
         }
 
         private void handleChangeActuator( Message message )
@@ -776,15 +789,13 @@ public final class Stick
                 driver.write( msg.name, msg.value );
 
             if( bSendAll )
-                broadcast( message, driver != null );
+                broadcast( message );    // Perhaps the actuator is in another grid node
         }
 
         private void handleExecute( Message message )
         {
-            final MsgTrigger msg = (MsgTrigger) message;
-            boolean          own = true;
-
-            final IRule rule = ruleMgr.named( msg.name );
+            final MsgTrigger msg  = (MsgTrigger) message;
+            final IRule      rule = ruleMgr.named( msg.name );
 
             if( rule != null )
             {
@@ -794,12 +805,12 @@ public final class Stick
             {
                 final IScript script = srptMgr.named( msg.name );
 
-                if( script != null )  script.execute();
-                else                  own = false;
+                if( script != null )
+                    script.execute();
             }
 
             if( bSendAll )
-                broadcast( message, own );
+                broadcast( message );    // Perhaps the rule or script is in another grid node
         }
 
         private void handleReadDevice( Message message )
@@ -811,12 +822,14 @@ public final class Stick
                 driver.read( msg.name );
 
             if( bSendAll )
-                broadcast( message, driver != null );
+                broadcast( message );
         }
 
-        private void broadcast( Message message, boolean owned )
+        private void broadcast( Message message )
         {
             ExEnComm msg = null;
+
+            // Sends the message to all listeners (they are not normally members of the grid)
 
             if( ! netwMgr.isEmpty() )                      // Saves CPU: avoids to create the ExEnComm and the JSON
             {
@@ -824,17 +837,14 @@ public final class Stick
                 netwMgr.broadcast( msg );                  // Internally uses a thread
             }
 
+            // Sends the message to all members of the grid (they are not simply listerners)
+
             if( gridMgr.isNode )
             {
-                Class clazz = message.getClass();
+                if( msg == null )                      // Saves CPU (if netwMgr.isEmpty() is false, 'msg' was built previously)
+                    msg = new ExEnComm( message );
 
-                if( (! owned) || (clazz == MsgDeviceChanged.class) )    // It is needed to be sent only if this condition is satisfied
-                {
-                    if( msg == null )                      // Saves CPU (if netwMgr.isEmpty() is false, 'msg' was built previously)
-                        msg = new ExEnComm( message );
-
-                    gridMgr.broadcast( msg );              // Internally uses a thread
-                }
+                gridMgr.broadcast( msg );              // Internally uses a thread
             }
         }
 

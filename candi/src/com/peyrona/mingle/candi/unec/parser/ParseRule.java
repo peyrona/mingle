@@ -286,10 +286,10 @@ public final class ParseRule extends ParseBase
                 }
             }
 
-            String sFullName = name.text() +'-'+ sUse;   // RULE name + USE name
+            String sFullName = name.text() +'-'+ sUse;  // RULE name + USE name
 
-            bUsed = doUseAs( when, sUse ) || bUsed;    // To avoid lazy eval
-            bUsed = doUseAs( _if_, sUse ) || bUsed;    // To avoid lazy eval
+            bUsed = doUseAs( when, sUse ) || bUsed;     // To avoid lazy eval
+            bUsed = doUseAs( _if_, sUse ) || bUsed;     // To avoid lazy eval
             bUsed = (then != null && then.applyUse( sUse, " get(\""+ sFullName +"\") ")) || bUsed;   // 'then' is null when WHEN clause is empty
 
             if( ! bUsed )

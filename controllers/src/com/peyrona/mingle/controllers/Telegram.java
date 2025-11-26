@@ -9,6 +9,7 @@ import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -33,7 +34,7 @@ public final class   Telegram
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );   // Must be at begining: in case an error happens, Listener is needed
         setValid( true );          // This controller is always valid
         set( deviceInit );         // Can be done because mapConfig values are not modified
@@ -61,7 +62,7 @@ public final class   Telegram
                                     {
                                         _sendIM_( (String) get( KEY_TOKEN ), (String) get( KEY_CHAT ), msg );
                                         sLastSent = msg;
-                                        sendReaded( msg );
+                                        sendChanged( msg );
                                     }
                                     catch( IOException ioe )
                                     {
@@ -76,8 +77,8 @@ public final class   Telegram
     private void _sendIM_( String sToken, String sChat, String sMsg ) throws IOException
     {
         URL url  = new URL( "https://api.telegram.org/bot" + sToken +
-                            "/sendMessage?chat_id=" + URLEncoder.encode( sChat, "UTF-8" ) +
-                            "&text=" + URLEncoder.encode( sMsg, "UTF-8" ) );
+                            "/sendMessage?chat_id=" + URLEncoder.encode( sChat, StandardCharsets.UTF_8 ) +
+                            "&text=" + URLEncoder.encode( sMsg, StandardCharsets.UTF_8 ) );
 
         HttpURLConnection conn = null;
 
@@ -90,7 +91,7 @@ public final class   Telegram
 
             if( code == HttpURLConnection.HTTP_OK )
             {
-                try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream() ) ) )
+                try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) ) )
                 {
                     String        inputLine;
                     StringBuilder response = new StringBuilder();

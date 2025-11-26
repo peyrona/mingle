@@ -20,6 +20,14 @@ public interface IController
     interface Listener
     {
         /**
+         * Invoked when a device's current value is read.
+         *
+         * @param deviceName Name of the device.
+         * @param newValue Device's current value: Boolean, Integer, Float or String (can not be null).
+         */
+        void onReaded( String deviceName, Object newValue );
+
+        /**
          * Invoked when a change occurs in the real world (physical device).
          *
          * @param deviceName Name of the device which value changed.

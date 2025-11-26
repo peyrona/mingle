@@ -57,7 +57,7 @@ public final class   Excel
     @Override
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         String    sFileName  = (String) mapConfig.get( "file" );        // Mandatory
@@ -144,7 +144,7 @@ public final class   Excel
                                         nLastFlush = System.currentTimeMillis();
                                     }
 
-                                    sendReaded( deviceValue );
+                                    sendChanged( deviceValue );
                                 }
                             } );
     }
@@ -157,7 +157,7 @@ public final class   Excel
 
         super.start( rt );
 
-        if( ! useDisk( true ) )
+        if( ! isDiskWritable( true ) )
             stop();
 
         nLastFlush = System.currentTimeMillis();

@@ -71,7 +71,7 @@ public interface IRuntime
     /**
      * A more generic logging: received Exception is logged if the LogLevel is appropriate.<br>
      * When an exception occurs in ExEn, all connected clients has to be informed.<br>
-     * Where the log will is stored depends on several parameters: 'use_disk' among them.
+     * Where the log will is stored depends on several parameters: 'write_disk' among them.
      *
      * @param level LogLevel
      * @param message What to log.

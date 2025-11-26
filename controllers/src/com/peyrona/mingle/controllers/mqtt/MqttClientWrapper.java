@@ -13,6 +13,7 @@ import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 /**
@@ -33,7 +34,7 @@ public final class MqttClientWrapper
     @Override
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         set( mapConfig );
@@ -149,7 +150,7 @@ public final class MqttClientWrapper
             try
             {
                 client.send( pReq.get( "topic" ).toString(),
-                             pReq.get( "payload" ).toString().getBytes(),
+                             pReq.get( "payload" ).toString().getBytes( StandardCharsets.UTF_8 ),
                              UtilUnit.setBetween( 0, nQoS.intValue(), 2 ),
                              bRetained );
 
@@ -208,7 +209,7 @@ public final class MqttClientWrapper
         @Override
         public void onMessage( String topic, IMqttClient.Message msg )
         {
-            sendReaded( new pair().split( msg ).put( "topic", topic ) );
+            sendChanged( new pair().split( msg ).put( "topic", topic ) );
         }
 
         @Override

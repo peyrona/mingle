@@ -42,8 +42,8 @@ import java.util.regex.Pattern;
 public final class StdXprFns
 {
     // JUST FEW CACHES
-    private static final Map<String,DecimalFormat> mapFormats  = new ConcurrentHashMap<>();   // Used by ::format(...)
-    private static final Map<MapKey,MethodHandle>  mapMethods  = new ConcurrentHashMap<>();
+    private static final Map<String,DecimalFormat> mapFormats = new ConcurrentHashMap<>();   // Used by ::format(...)
+    private static final Map<MapKey,MethodHandle>  mapMethods = new ConcurrentHashMap<>();
 
     // Pre-allocated arrays to avoid repeated allocations
     private static final Class[] EMPTY_CLASS_ARRAY = new Class[0];

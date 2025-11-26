@@ -36,7 +36,7 @@ public final class   DataBase
     {
         // DB Controller can work even if Use_Disk is off because the DB could reside in another machine
 
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         String sJARs = (String) mapConfig.get( "jars" );
@@ -116,7 +116,7 @@ public final class   DataBase
                                 }
                             }
 
-                            if( exc == null )  sendReaded( sql );
+                            if( exc == null )  sendChanged( sql );
                             else               sendWriteError( sql, exc );
                         } );
     }

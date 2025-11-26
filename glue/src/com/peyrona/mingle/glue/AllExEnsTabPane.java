@@ -183,7 +183,7 @@ public final class AllExEnsTabPane extends GTabbedPane
      */
     private static BufferedImage createTransparentImage()
     {
-        BufferedImage originalImage = JTools.getImage( "splash.png" );
+        BufferedImage originalImage = JTools.getImage( "glue.png" );
 
         if( originalImage == null )
         {

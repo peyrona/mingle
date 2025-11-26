@@ -1,6 +1,7 @@
 package com.peyrona.mingle.network.socket;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.network.BaseServer4IP;
 
@@ -23,6 +24,12 @@ public final class SocketServer
     @Override
     public INetServer start( String sCfgAsJSON )
     {
+        if (impl != null && impl.isRunning()) {
+            return this;
+        }
+
+        init(sCfgAsJSON, 0); // Port is determined by Plain or SSL server
+
         if( getSSLCert() == null && getSSLKey() == null )
         {
             impl = new PlainSocketServer();
@@ -41,8 +48,30 @@ public final class SocketServer
             impl = new SSLSocketServer();
         }
 
-        if( impl != null )
-            impl.start( sCfgAsJSON );
+        // Proxy listeners to the implementation
+        impl.add(new INetServer.IListener() {
+            @Override
+            public void onConnected(INetServer server, INetClient client) {
+                forEachListener(l -> l.onConnected(SocketServer.this, client));
+            }
+
+            @Override
+            public void onDisconnected(INetServer server, INetClient client) {
+                forEachListener(l -> l.onDisconnected(SocketServer.this, client));
+            }
+
+            @Override
+            public void onMessage(INetServer server, INetClient client, String msg) {
+                forEachListener(l -> l.onMessage(SocketServer.this, client, msg));
+            }
+
+            @Override
+            public void onError(INetServer server, INetClient client, Exception e) {
+                forEachListener(l -> l.onError(SocketServer.this, client, e));
+            }
+        });
+
+        impl.start( sCfgAsJSON );
 
         return this;
     }
@@ -68,6 +97,11 @@ public final class SocketServer
     @Override
     public boolean hasClients()
     {
-        return (impl == null) ? false : impl.hasClients();
+        return (impl != null) && impl.hasClients();
+    }
+
+    @Override
+    public boolean isRunning() {
+        return (impl != null) && impl.isRunning();
     }
 }

@@ -9,6 +9,7 @@ import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
 import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
+import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
 import com.peyrona.mingle.lang.messages.MsgDeviceReaded;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -58,17 +59,34 @@ public final class      Driver
         listener = new IController.Listener()
                     {
                         @Override
+                        public void onReaded( String name, Object value )
+                        {
+                            if( check( name, value ) )
+                                getRuntime().bus().post( new MsgDeviceReaded( name, value ) );
+                        }
+
+                        @Override
                         public void onChanged( String name, Object value )
                         {
-                                 if( name  == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: device name is 'null'" );
-                            else if( value == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: 'null' notified as new value for '"+ name +'\'' );
-                            else                      getRuntime().bus().post( new MsgDeviceReaded( name, value ) );
+                            if( check( name, value ) )
+                                getRuntime().bus().post( new MsgDeviceChanged( name, value ) );
                         }
 
                         @Override
                         public void onError( ILogger.Level level, String message, String device )
                         {
                             getRuntime().log( level, message + (device == null ? "" : " Device; '"+ device +'\'') );
+                        }
+
+                        private boolean check( String name, Object value )
+                        {
+                            if( name != null && value != null )
+                                return true;
+
+                            if( name  == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: device name is 'null'" );
+                            if( value == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: 'null' notified as new value for '"+ name +'\'' );
+
+                            return false;
                         }
                     };
     }

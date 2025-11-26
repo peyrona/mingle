@@ -42,7 +42,7 @@ public final class ModbusTcpClientWrapper
         String  sHost = UtilComm.getHost( sURI );
         int     nPort = UtilComm.getPort( sURI, 552 );
 
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         if( UtilStr.isEmpty( sHost ) )
@@ -146,7 +146,7 @@ public final class ModbusTcpClientWrapper
 
         try
         {
-            sendReaded( client.write( newValue ) );
+            sendChanged( client.write( newValue ) );
         }
         catch( Exception exc )
         {
@@ -163,7 +163,7 @@ public final class ModbusTcpClientWrapper
         @Override
         public void onMessage( Object msg )
         {
-            sendReaded( msg );
+            sendChanged( msg );
         }
 
         @Override

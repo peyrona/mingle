@@ -9,6 +9,8 @@ import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -29,6 +31,18 @@ import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
 /**
+ * Utility class providing system-level operations and services for the Mingle framework.
+ *
+ * This class offers functionality for:
+ * - Directory management and file system operations
+ * - Logger and configuration management
+ * - Thread pool execution and task scheduling
+ * - System information and OS detection
+ * - Class path manipulation and JAR loading
+ * - Time utilities and version information
+ * - Simple key-value storage
+ *
+ * All methods are static and the class cannot be instantiated.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -36,14 +50,15 @@ import java.util.concurrent.TimeUnit;
  */
 public final class UtilSys
 {
-    public  static final boolean                  isDevEnv   = getDevEnvDir().exists();   // true when the app is running in my Development Environment (NetBeans).
-    public  static final File                     fHomeDir   = getHomeDir();
-    private static       ILogger                  logger     = null;
-    private static       IConfig                  config     = null;
-    private static final long                     nAtStart   = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
-    private static final Set<URI>                 lstLoaded  = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because messsages are only added
-    private static final Map<Object,Object>       mapStorage = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
-    private static final ScheduledExecutorService pool       = (ScheduledExecutorService) Executors.newScheduledThreadPool( 8 );   // Note: a lot needed beacuse there is one per each AFTER and WITHIN (plus Controllers)
+    public  static final boolean                  isDevEnv     = getDevEnvDir().exists();   // true when the app is running in my Development Environment (NetBeans).
+    public  static final File                     fHomeDir     = getHomeDir();
+    public  static final boolean                  isFsWritable = isFileSystemWritable();    // Has to be after getHomeDir()
+    private static       ILogger                  logger       = null;
+    private static       IConfig                  config       = null;
+    private static final long                     nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
+    private static final Set<URI>                 lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because messsages are only added
+    private static final Map<Object,Object>       mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
+    private static final ScheduledExecutorService pool         = (ScheduledExecutorService) Executors.newScheduledThreadPool( 8 );   // Note: a lot needed beacuse there is one per each AFTER and WITHIN (plus Controllers)
 
     //------------------------------------------------------------------------//
 
@@ -51,20 +66,21 @@ public final class UtilSys
     {
         if( ! isAtLeastJava11() )
         {
-            System.err.println( "Java version at folder: "+ UtilSys.getJavaHome() +'\n'+
-                                "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11." );
+            System.err.println( "Java version at: "+ UtilSys.getJavaHome() +'\n'+
+                                "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11.\n"+
+                                "Can no continue.");
             System.exit( 1 );
         }
 
         // These are needed to be created if they do not exist. IOException is never thrown, even if HD is read-only.
         File fLog = new File( fHomeDir, "log" );
         File fTmp = new File( fHomeDir, "tmp" );
-        File fEtc = new File( fHomeDir, "etc" ); // This one has no macro associated because it is used internally only
+        File fEtc = new File( fHomeDir, "etc" );  // This one has no macro associated because it is used internally only
 
         // If the app is invoked the first time with 'sudo', created folders will have only 'sudo' priviledges.
         // If subsequent invocations are done without 'sudo', the access to these created folders will be rejected.
 
-        try // Only one 'try-catch' because if it can be done if one, can be done with the three
+        try // Only one 'try-catch' because if it can be done once, it can be done with the three
         {
             Set<PosixFilePermission> permissions = PosixFilePermissions.fromString( "rwxrwxrwx" );
 
@@ -86,51 +102,102 @@ public final class UtilSys
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Returns the include directory where external files and libraries are stored.
+     *
+     * @return File object representing the include directory
+     */
     public static File getIncDir()
     {
         return new File( fHomeDir, "include" );
     }
 
+    /**
+     * Returns the library directory where JAR files and dependencies are stored.
+     *
+     * @return File object representing the library directory
+     */
     public static File getLibDir()
     {
         return new File( fHomeDir, "lib" );
     }
 
+    /**
+     * Returns the log directory where log files are stored.
+     *
+     * @return File object representing the log directory
+     */
     public static File getLogDir()
     {
         return new File( fHomeDir, "log" );
     }
 
+    /**
+     * Returns the temporary directory for transient files.
+     *
+     * @return File object representing the temporary directory
+     */
     public static File getTmpDir()
     {
         return new File( fHomeDir, "tmp" );
     }
 
+    /**
+     * Returns the etc directory for configuration files.
+     *
+     * @return File object representing the etc directory
+     */
     public static File getEtcDir()
     {
         return new File( fHomeDir, "etc" );
     }
 
+    /**
+     * Returns the current logger instance.
+     *
+     * @return the logger instance, or null if not initialized
+     */
     public static ILogger getLogger()
     {
         return logger;
     }
 
+    /**
+     * Initializes and sets the logger with the specified name and configuration.
+     *
+     * @param name the logger name
+     * @param config the configuration to use, or null to use default config
+     * @return the initialized logger instance
+     */
     public static ILogger setLogger( String name, IConfig config )
     {
         config = (config == null) ? getConfig() : config;
 
-        String  sLogLevel = config.get( "common", "log_level", "WARNING" );
-        boolean bDisk     = config.get( "exen"  , "use_disk" , true      );
+        String  sLogLevel = "WARNING";
+        boolean bDisk     = isFsWritable;
+        int     expire    = 90;
         boolean b2Console = UtilSys.isDevEnv;
+
+        if( config != null )
+        {
+            sLogLevel = config.get( "common", "log_level" , "WARNING" );
+            bDisk     = isFsWritable && config.get( "exen", "write_disk", true );
+            expire    = config.get( "common", "log_expire", -1 );
+        }
 
         logger = new Logger().init( name.trim(), bDisk, b2Console )
                              .setLevel( sLogLevel )
-                             .deleteOlderThan( (UtilSys.isDevEnv ? 21 : config.get( "common", "log_expire", -1 )) );
+                             .deleteOlderThan( (UtilSys.isDevEnv ? 21 : expire) );
 
         return logger;
     }
 
+    /**
+     * Returns the configuration instance, creating it if necessary.
+     *
+     * @return the configuration instance
+     * @throws MingleException if there's an error loading the configuration
+     */
     public static IConfig getConfig()
     {
         if( config == null )
@@ -148,31 +215,50 @@ public final class UtilSys
         return config;
     }
 
+    /**
+     * Sets the configuration instance and updates the logger if it exists.
+     *
+     * @param conf the configuration instance to set
+     */
     public static void setConfig( IConfig conf )
     {
         config = conf;
-
-        if( logger != null )    // Has to be here (can not be at ::setLogger(...) because config is normlly null when setting the logger)
-        {
-            logger.setLevel( config.get( "common", "log_level", "WARNING" ) )
-                  .deleteOlderThan( (UtilSys.isDevEnv ? 21 : config.get( "common", "log_expire", -1 )) );
-        }
     }
 
     //------------------------------------------------------------------------//
     // PUBLIC STORAGE
 
+    /**
+     * Stores a key-value pair in the internal storage map.
+     *
+     * @param key the key to store
+     * @param value the value to associate with the key
+     * @return always returns true
+     */
     public static boolean put( Object key, Object value )
     {
         mapStorage.put( key, value );
         return true;
     }
 
+    /**
+     * Retrieves a value from the internal storage map.
+     *
+     * @param key the key to retrieve
+     * @return the associated value, or empty string if not found
+     */
     public static Object get( Object key )
     {
         return get( key, "" );
     }
 
+    /**
+     * Retrieves a value from the internal storage map with a default value.
+     *
+     * @param key the key to retrieve
+     * @param def the default value to return if key is not found
+     * @return the associated value, or the default if not found
+     */
     public static Object get( Object key, Object def )
     {
         Object value = mapStorage.get( key );
@@ -180,6 +266,12 @@ public final class UtilSys
         return (value == null) ? def : value;
     }
 
+    /**
+     * Removes a key-value pair from the internal storage map.
+     *
+     * @param key the key to remove
+     * @return true if the key existed and was removed, false otherwise
+     */
     public static boolean del( Object key )
     {
         Object ret = mapStorage.remove( key );
@@ -362,6 +454,12 @@ public final class UtilSys
         return Instant.ofEpochMilli( unixTime ).atZone( ZoneId.systemDefault() ).toLocalTime();     // Java internally caches ZoneId.systemDefault()
     }
 
+    /**
+     * Returns the version of a class based on its JAR file modification date.
+     *
+     * @param clazz the class to get version information for
+     * @return the modification date as a string, or "unknown" if it cannot be determined
+     */
     public static final String getVersion( Class clazz )
     {
         try
@@ -376,6 +474,13 @@ public final class UtilSys
         }
     }
 
+    /**
+     * Returns the Java home directory, handling both JDK and JRE installations.
+     *
+     * If the java.home points to a JRE, attempts to find the parent JDK directory.
+     *
+     * @return the Java home directory, or null if it cannot be determined
+     */
     public static File getJavaHome()
     {
         File f = new File( System.getProperty( "java.home" ) );
@@ -422,21 +527,41 @@ public final class UtilSys
         return Integer.parseInt( version ) >= 11;
     }
 
+    /**
+     * Returns the operating system name.
+     *
+     * @return the OS name from system properties
+     */
     public static String getOS()
     {
         return System.getProperty( "os.name" );
     }
 
+    /**
+     * Checks if the current operating system is Windows.
+     *
+     * @return true if running on Windows, false otherwise
+     */
     public static boolean isWindows()
     {
         return getOS().toLowerCase().contains( "win" );
     }
 
+    /**
+     * Checks if the current operating system is macOS.
+     *
+     * @return true if running on macOS, false otherwise
+     */
     public static boolean isMac()
     {
         return getOS().toLowerCase().contains( "mac" );
     }
 
+    /**
+     * Checks if the current operating system is a Unix-like system.
+     *
+     * @return true if running on a Unix-like system (Linux, AIX, etc.), false otherwise
+     */
     public static boolean isUnix()
     {
         String OS = getOS().toLowerCase();
@@ -446,6 +571,11 @@ public final class UtilSys
                OS.contains( "aix" );
     }
 
+    /**
+     * Checks if the current operating system is Solaris.
+     *
+     * @return true if running on Solaris, false otherwise
+     */
     public static boolean isSolaris()
     {
         String OS = getOS().toLowerCase();
@@ -454,11 +584,21 @@ public final class UtilSys
                OS.contains( "solaris" );
     }
 
+    /**
+     * Checks if the current operating system is Linux.
+     *
+     * @return true if running on Linux, false otherwise
+     */
     public static boolean isLinux()
     {
         return getOS().toLowerCase().contains( "linux" );
     }
 
+    /**
+     * Checks if the current operating system is HP-UX.
+     *
+     * @return true if running on HP-UX, false otherwise
+     */
     public static boolean isHpUnix()
     {
         String OS = getOS().toLowerCase();
@@ -467,6 +607,11 @@ public final class UtilSys
                OS.contains( "hpux"  );
     }
 
+    /**
+     * Checks if the current system architecture is ARM.
+     *
+     * @return true if running on ARM architecture, false otherwise
+     */
     public static boolean isARM()
     {
         String os = System.getProperty( "os.arch" ).toLowerCase();
@@ -505,7 +650,7 @@ public final class UtilSys
 
             if( Files.exists( modelPath ) )
             {
-                String cpuInfo = Files.readString( modelPath );
+                String cpuInfo = Files.readString( modelPath, StandardCharsets.UTF_8 );
 
                 if( cpuInfo.contains( "Raspberry Pi" ) ||
                     cpuInfo.contains( "BCM2708" )      ||
@@ -525,7 +670,7 @@ public final class UtilSys
 
             if( Files.exists( osReleasePath ) )
             {
-                String osRelease = Files.readString( osReleasePath );
+                String osRelease = Files.readString( osReleasePath, StandardCharsets.UTF_8 );
 
                 if( osRelease.toLowerCase().contains( "raspbian" ) || osRelease.toLowerCase().contains( "raspberry pi os" ) )
                 {
@@ -541,6 +686,14 @@ public final class UtilSys
         return false;
     }
 
+    /**
+     * Checks if the application is running inside a Docker container.
+     *
+     * Uses multiple detection methods including environment variables,
+     * Docker-specific files, and cgroup information.
+     *
+     * @return true if running in Docker, false otherwise
+     */
     public static boolean isDocker()
     {
         if( System.getenv( "MINGLE_CONTAINER" ) != null )    // I use this var when crerating my own dockers
@@ -605,14 +758,54 @@ public final class UtilSys
         // Avoids creating instances of this class.
     }
 
+    /**
+     * Returns the development environment directory.
+     *
+     * Used only during development to locate the todeploy directory.
+     *
+     * @return File object representing the development directory
+     */
     private static File getDevEnvDir()   // This method is invoked only twice
     {
         return new File( System.getProperty( "user.home" ), "proyectos/mingle/todeploy" );
     }
 
+    /**
+     * Returns the home directory based on the execution environment.
+     *
+     * In development mode, returns the development directory.
+     * In production mode, returns the current working directory.
+     *
+     * @return File object representing the appropriate home directory
+     */
     private static File getHomeDir()     // This method is invoked only once
     {
         return (isDevEnv ? getDevEnvDir()
                          : new File( System.getProperty( "user.dir" ) ));
+    }
+
+    private static boolean isFileSystemWritable()
+    {
+        try
+        {
+            // Check the actual working directory (more relevant than home dir)
+            Path targetDir = Paths.get( "" ).toAbsolutePath();
+
+            // Alternative: Check specific directory if known
+            // Path targetDir = Paths.get("/path/to/app/data");
+            FileStore store = Files.getFileStore( targetDir );
+
+            return ! store.isReadOnly();
+        }
+        catch( IOException ioe )
+        {
+            String msg = "WARNING: Unable to verify filesystem write access. Assuming read-only.\n"+
+                         UtilStr.toStringBrief( ioe );
+
+            if( getLogger() == null )   getLogger().log( ILogger.Level.SEVERE, msg );
+                                        System.err.println( msg );
+
+            return false;   // Conservative: assume read-only on error
+        }
     }
 }

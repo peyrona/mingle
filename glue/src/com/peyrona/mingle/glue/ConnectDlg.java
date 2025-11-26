@@ -13,6 +13,7 @@ import java.awt.event.KeyEvent;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.KeyStroke;
+import javax.swing.SwingConstants;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -408,13 +409,16 @@ public final class ConnectDlg extends GDialog
             return;
         }
 
+        JLabel lbl = new JLabel( "Select: [ ↑ ]  [ ↓ ]      Delete: [Del]      Select: [Enter] or Dbl-click      Close: [Esc]" );
+               lbl.setHorizontalAlignment( SwingConstants.CENTER );
+
         JPanel pnlAll = new JPanel( new BorderLayout( 0, 10 ) );
-               pnlAll.add( new JLabel( "Select: [ ↑ ]  [ ↓ ]      Delete: [Del]     Select: [Enter] / Double-click)" ), BorderLayout.SOUTH );
+               pnlAll.add( lbl, BorderLayout.SOUTH );
 
         GDialog dlg = new GDialog( "Select a saved connection", true );
-                dlg.setMinimumSize(   new Dimension( 320, 240 ) );
-                dlg.setPreferredSize( new Dimension( 420, 360 ) );
-                dlg.add( pnlAll );
+                dlg.setMinimumSize(   new Dimension( 320, 340 ) );
+                dlg.setPreferredSize( new Dimension( 420, 460 ) );
+                dlg.put( pnlAll, BorderLayout.CENTER );
 
         GList<JsonObject> ltb = new GList<>()
                                 .addTo( pnlAll, BorderLayout.CENTER )

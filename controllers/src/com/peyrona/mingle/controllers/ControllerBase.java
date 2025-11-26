@@ -32,7 +32,7 @@ public abstract class      ControllerBase
 {
     private boolean              isFaked   = false;
     private IRuntime             runtime   = null;
-    private String               devName   = null;    // device devName
+    private String               devName   = null;    // device name
     private boolean              bValid    = false;
     private IController.Listener listener  = null;
     private Map<String,Object>   mapConfig = null;
@@ -104,7 +104,7 @@ public abstract class      ControllerBase
         return runtime;
     }
 
-    protected ControllerBase setName( String name )
+    protected ControllerBase setDeviceName( String name )
     {
         this.devName = name;
         return this;
@@ -136,23 +136,47 @@ public abstract class      ControllerBase
         return isFaked;
     }
 
-    protected boolean useDisk( boolean bReport )
+    protected boolean isDiskWritable( boolean bReport )
     {
+        if( ! UtilSys.isFsWritable )
+            return false;
+
+        // HD can be writable but the user can avoid to write in it via 'config.json' file
         if( getRuntime() == null )
             throw new MingleException( MingleException.INVALID_ARGUMENTS );
 
-        String  sUseDisk = "use_disk";
+        String  sUseDisk = "write_disk";
         boolean bAllowed = getRuntime().getFromConfig( "exen", sUseDisk, true );
 
         if( bReport && ! bAllowed )
-            sendIsInvalid( "Config '"+ sUseDisk +"' flag is off: can not use File System" );
+            sendIsInvalid( "Config '"+ sUseDisk +"' flag is off: can use File System for reading only." );
 
         return bAllowed;
     }
 
+    //------------------------------------------------------------------------//
+    // ACCESSING DEVICE CONFIGURATION
+
     protected Object get( String name )
     {
         return mapConfig.get( name );
+    }
+
+    protected Object get( String name, Object def )
+    {
+        Object val = mapConfig.get( name );
+
+        return (val == null ? def : val);
+    }
+
+    protected Long getLong( String name )
+    {
+        Object value = get( name );
+
+             if( value instanceof Integer )  return ((Integer) value).longValue();
+        else if( value instanceof Long    )  return (Long) value;
+
+        throw new MingleException( MingleException.INVALID_ARGUMENTS );
     }
 
     protected ControllerBase set( Map<String,Object> map )
@@ -188,8 +212,22 @@ public abstract class      ControllerBase
 
     protected ControllerBase sendReaded( Object newValue )
     {
-        sendChanged( getDeviceName(), newValue );
+        return sendReaded( getDeviceName(), newValue );
+    }
+
+    protected ControllerBase sendReaded( String deviceName, Object newValue )
+    {
+        if( listener != null )
+            listener.onReaded( deviceName, newValue );
+        else
+            sendError( ILogger.Level.SEVERE, "", null );
+
         return this;
+    }
+
+    protected ControllerBase sendChanged( Object newValue )
+    {
+        return sendChanged( getDeviceName(), newValue );
     }
 
     protected ControllerBase sendChanged( String deviceName, Object newValue )
