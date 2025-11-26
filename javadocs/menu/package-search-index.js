@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"com.peyrona.mingle.menu"},{"l":"com.peyrona.mingle.menu.core"},{"l":"com.peyrona.mingle.menu.linux"},{"l":"com.peyrona.mingle.menu.mac"},{"l":"com.peyrona.mingle.menu.util"},{"l":"com.peyrona.mingle.menu.win"}]

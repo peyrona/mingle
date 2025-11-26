@@ -1,1 +1,0 @@
-packageSearchIndex = [{"l":"All Packages","url":"allpackages-index.html"},{"l":"com.peyrona.mingle.network"},{"l":"com.peyrona.mingle.network.socket"},{"l":"com.peyrona.mingle.network.websocket"}]

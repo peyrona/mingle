@@ -1,1 +1,0 @@
-typeSearchIndex = [{"l":"All Classes","url":"allclasses-index.html"},{"p":"com.peyrona.mingle.stick","l":"EventBus"},{"p":"com.peyrona.mingle.stick","l":"Main"},{"p":"com.peyrona.mingle.stick","l":"Stick"}]
