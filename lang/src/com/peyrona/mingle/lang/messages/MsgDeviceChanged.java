@@ -2,9 +2,10 @@
 package com.peyrona.mingle.lang.messages;
 
 /**
- * A Device received a message of type MsgDeviceReaded, and if the device effectively
- * changed its value (delta and others considerations) then, the device will send a
- * message of this type to the bus.
+ * A Controller or another grid node sent this message: if it was sent by another node,
+ * the device effectively got a new value. But if the device belongs to current node,
+ * it is needed to check if the new value will produce a change in the device's value
+ * (delta and others considerations) and act consequently.
  *
  * @see MsgDeviceReaded
  * @author Francisco José Morero Peyrona

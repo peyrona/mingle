@@ -5,6 +5,7 @@ import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Objects;
 import java.util.function.Supplier;
@@ -115,7 +116,7 @@ public final class Updater
             {
                 try
                 {
-                    String localCatalogContent = Files.readString( localCatalogFile.toPath() );
+                    String localCatalogContent = Files.readString( localCatalogFile.toPath(), StandardCharsets.UTF_8 );
 
                     if( localCatalogContent != null && ! localCatalogContent.trim().isEmpty() )
                     {
@@ -144,7 +145,7 @@ public final class Updater
 
             if( GitHubApiClient.downloadFileFromRoot( "todeploy/etc/catalog.json", tempRemoteCatalog.toPath() ) )
             {
-                String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath() );
+                String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath(), StandardCharsets.UTF_8 );
 
                 if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
                 {

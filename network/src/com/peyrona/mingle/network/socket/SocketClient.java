@@ -13,6 +13,7 @@ import java.io.InputStreamReader;
 import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
+import java.nio.charset.StandardCharsets;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
@@ -153,7 +154,7 @@ public final class SocketClient
         try
         {
             client = socket;
-            input  = new BufferedReader( new InputStreamReader( client.getInputStream() ) );
+            input  = new BufferedReader( new InputStreamReader( client.getInputStream(), StandardCharsets.UTF_8 ) );
             output = new PrintWriter( client.getOutputStream(), true );
             exec   = Executors.newCachedThreadPool();
             exec.submit( new ThreadReader() );

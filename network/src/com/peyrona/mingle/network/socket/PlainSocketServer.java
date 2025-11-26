@@ -7,6 +7,7 @@ import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.network.BaseServer4IP;
 import java.io.IOException;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
@@ -134,7 +135,12 @@ final class PlainSocketServer
         }
         catch( IOException | RejectedExecutionException e )
         {
-            MingleException me = new MingleException( "Failed to start server", e );
+            String msg = "Failed to start server";
+
+            if( e instanceof BindException )
+                msg += ": apparently the port "+ getPort() +" is already in use.";
+
+            MingleException me = new MingleException( msg, e );
 
             cleanup();
             log( me );

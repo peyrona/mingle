@@ -27,7 +27,7 @@ public final class HttpClient
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, Listener listener )
     {
-        setName( deviceName );       // Must be 1st
+        setDeviceName( deviceName );       // Must be 1st
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         String uri = deviceInit.get( KEY_URI ).toString();
@@ -64,8 +64,8 @@ public final class HttpClient
             if( (int) get( KEY_TIME ) >= 1000 )
             {
                 timer = UtilSys.executeAtRate( getClass().getName(),
-                                               (int) get( KEY_TIME ),     // 'interval' must also be the initial delay
-                                               (int) get( KEY_TIME ),
+                                               getLong( KEY_TIME ),     // 'interval' must also be the initial delay
+                                               getLong( KEY_TIME ),
                                                () -> read() );
             }
         }
@@ -84,7 +84,7 @@ public final class HttpClient
                                  .header( "Accept", "application/json" ) // Add appropriate headers
                                  .build();
 
-        executeRequestAsync( request );
+        executeRequestAsync( request, false );
     }
 
     @Override
@@ -132,7 +132,7 @@ public final class HttpClient
             }
 
             if( request != null )
-                executeRequestAsync( request );
+                executeRequestAsync( request, true );
         }
         catch( ClassCastException cce )
         {
@@ -147,11 +147,21 @@ public final class HttpClient
  * Executes an HTTP request asynchronously and handles the response
  * @param request The HttpRequest to execute
  */
-    private void executeRequestAsync( java.net.http.HttpRequest request )
+    private void executeRequestAsync( java.net.http.HttpRequest request, boolean bChanged )
     {
-        client.sendAsync( request, java.net.http.HttpResponse.BodyHandlers.ofString() )
-              .thenApply( java.net.http.HttpResponse::body )
-              .thenAccept( this::sendReaded )
-              .exceptionally( ex -> { sendReadError( (Exception) ex ); return null; } );
+        if( bChanged )
+        {
+            client.sendAsync( request, java.net.http.HttpResponse.BodyHandlers.ofString() )
+                  .thenApply( java.net.http.HttpResponse::body )
+                  .thenAccept( this::sendChanged )
+                  .exceptionally( ex -> { sendReadError( (Exception) ex ); return null; } );
+        }
+        else
+        {
+            client.sendAsync( request, java.net.http.HttpResponse.BodyHandlers.ofString() )
+                  .thenApply( java.net.http.HttpResponse::body )
+                  .thenAccept( this::sendReaded )
+                  .exceptionally( ex -> { sendReadError( (Exception) ex ); return null; } );
+        }
     }
 }

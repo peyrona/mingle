@@ -40,7 +40,7 @@ public final class   SunFreeTTS
     @Override
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )    // CARE: this map can be inmutable
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         Locale locale = new Locale( (String) mapConfig.getOrDefault( KEY_LOCALE, Locale.US.toString() ) );
@@ -63,7 +63,7 @@ public final class   SunFreeTTS
     @Override
     public void write( Object text )
     {
-        if( isFaked() || isInvalid() || UtilStr.isEmpty( text ) )
+        if( isFaked() || isInvalid() || UtilStr.isMeaningless( text.toString() ) )
             return;
 
         boolean bNoPending = mapPending.isEmpty();
@@ -81,6 +81,7 @@ public final class   SunFreeTTS
                                     Map.Entry<String,String> entry = itera.next();
 
                                     say( entry.getKey(), entry.getValue() );
+                                    sendChanged( entry.getKey(), entry.getValue() );
                                     itera.remove();
                                 }
                             }

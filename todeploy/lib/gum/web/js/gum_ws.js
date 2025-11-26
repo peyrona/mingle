@@ -258,7 +258,7 @@ var gum_ws =
         this.socket.send( JSON.stringify( { exen: xExEnAddr, msg: oMsg } ) );
     },
 
-    _onMessageReceived_ : function( msg )      // msg is like this: { "exen": { host: 192.168.1.7, port: 55886, ssl: false }, "Changed": {"when":1659613508344, "name":"clock", "value":1521284 } }"
+    _onMessageReceived_ : function( msg )      // msg is like this: { "exen": { host: 192.168.1.7, port: 55880, ssl: false }, "Changed": {"when":1659613508344, "name":"clock", "value":1521284 } }"
     {
         if( (! msg.data) || (msg.data.trim().length === 0) )
             return;

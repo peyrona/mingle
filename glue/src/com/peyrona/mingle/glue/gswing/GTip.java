@@ -36,11 +36,11 @@ public final class GTip
                       pnl.add( chk );
 
             new GFrame( false )
-                  .title( "Tip" )
+                  .title( "The wizard Tune" )
                   .closeOnEsc()
                   .onClose( JFrame.DISPOSE_ON_CLOSE )
                   .onClose((GFrame g) -> GTip.save( msg, chk.isSelected() ) )
-                  .put( new JLabel( JTools.getIcon( "wizard.png", 64, 94 ) ), BorderLayout.WEST )
+                  .put( new JLabel( JTools.getIcon( "wizard.png", 94, 94 ) ), BorderLayout.WEST )
                   .put( txt, BorderLayout.CENTER )
                   .put( pnl, BorderLayout.SOUTH )
                   .setVisible()

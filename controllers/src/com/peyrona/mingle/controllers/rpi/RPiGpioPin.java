@@ -44,9 +44,8 @@ public final class   RPiGpioPin
 {
     private static volatile boolean isBCM = false;
 
-    private ScheduledFuture    timer  = null;
-    private IPin               pin    = null;
-    private Map<String,Object> mapCfg = null;
+    private ScheduledFuture timer = null;
+    private IPin            pin   = null;
 
     //------------------------------------------------------------------------//
 
@@ -55,9 +54,9 @@ public final class   RPiGpioPin
         if( isFaked() )
         {
             timer = UtilSys.executeAtRate( getClass().getName(),
-                                           5000, 3000,    // After 5 secs (initial delay), every 3 secs
+                                           5000l, 3000l,    // After 5 secs (initial delay), every 3 secs
                                            () -> {
-                                                    if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )    // 2/3 of times, it does not send
+                                                    if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
                                                         sendReaded( pin.read() );                               // a new random value
                                                  } );
         }
@@ -70,13 +69,12 @@ public final class   RPiGpioPin
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
         setListener( listener );    // Must be at begining: in case an error happens, Listener is needed
-        setName( deviceName );      // Must be second line to have name of device in case of error
+        setDeviceName( deviceName );      // Must be second line to have name of device in case of error
         setValid( true );           // So far this is valid, but start() can change it
-
-        mapCfg = mapConfig;
         set( mapConfig );
     }
 
+    
     @Override
     public void start( IRuntime rt )
     {
@@ -86,7 +84,7 @@ public final class   RPiGpioPin
         super.start( rt );
 
         initWiringPi();         // Must be 2nd line because in case of error, the previous line is needed
-        createPin( mapCfg );
+        createPin( getDeviceConfig() );
         setValid( pin != null );
     }
 
@@ -133,7 +131,7 @@ public final class   RPiGpioPin
                 if( newValue instanceof Boolean ) pin.write( (boolean) newValue );
                 else                              pin.write( UtilType.toInteger( newValue ) );
 
-                sendReaded( newValue );
+                sendChanged( newValue );
             }
             catch( MingleException ie )
             {
@@ -178,13 +176,13 @@ public final class   RPiGpioPin
         // NOTE: in received map, the keys had been lowered (are lower-case) by the transpiler. But the values preserve their case.
 
         boolean bSuccesss = true;
-        boolean isDigital = get( mapConfig, "type", "analog", true );              // Everything except "analog" is "digital" (if not in map, true)
-        boolean isInput   = get( mapConfig, "mode", "output", true );              // Everything except "output" is "input"   (if not in map, true)
-        boolean isInvert  = false;                                                 // Makes true to be false and false to be true
+        boolean isDigital = get( "type", "analog", true );                       // Everything except "analog" is "digital" (if not in map, true)
+        boolean isInput   = get( "mode", "output", true );                       // Everything except "output" is "input"   (if not in map, true)
+        boolean isInvert  = false;                                               // Makes true to be false and false to be true
         boolean isButton  = false;
-        int     nPull     = (isInput ? WiringPi.PULL_DOWN : WiringPi.PULL_UP);     // Default value
-        int     debounce  = 0;                                                     // Default value
-        int     address   = UtilType.toInteger( mapConfig.get( "pin" ) );          // Transpiler ensures this value is a number (exists because is REQUIRED)
+        int     nPull     = (isInput ? WiringPi.PULL_DOWN : WiringPi.PULL_UP);   // Default value
+        int     debounce  = 0;                                                   // Default value
+        int     address   = UtilType.toInteger( mapConfig.get( "pin" ) );        // Transpiler ensures this value is a number (exists because is REQUIRED)
 
         if( mapConfig.containsKey( "pull" ) )
         {
@@ -308,18 +306,21 @@ public final class   RPiGpioPin
         }
     }
 
-    private boolean get( Map<String,Object> mapConfig, String sKey, String sValue, boolean bDefault )    // Just to make code more clear
+    private boolean get( String sKey, String sValue, boolean bDefault )    // Just to make code more clear
     {
-        if( mapConfig.containsKey( sKey ) )
-            return ! mapConfig.get( sKey ).toString().equalsIgnoreCase( sValue );
+        if( getDeviceConfig().containsKey( sKey ) )
+            return ! getDeviceConfig().get( sKey ).toString().equalsIgnoreCase( sValue );
 
         return bDefault;
     }
 
     private void failed( String msg )
     {
-        sendGenericError( ILogger.Level.SEVERE, msg );
+        System.err.println( msg );
 
-        getRuntime().exit( 0 );
+        if( UtilSys.getLogger() != null )
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, msg );
+
+        getRuntime().exit( 1 );
     }
 }

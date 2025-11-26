@@ -4,6 +4,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
 
@@ -39,7 +40,7 @@ public class GitHubFileUpdater
         {
             throw new IllegalArgumentException( "Base directory cannot be null" );
         }
-        
+
         this.baseDir   = baseDir;
         this.dryRun    = dryRun;
         this.backupMgr = dryRun ? null : new BackupManager();
@@ -141,7 +142,7 @@ public class GitHubFileUpdater
         {
             try
             {
-                String catalogContent = Files.readString( catalogFile.toPath() );
+                String catalogContent = Files.readString( catalogFile.toPath(), StandardCharsets.UTF_8 );
                 List<CatalogParser.CatalogFileEntry> entries = CatalogParser.parseCatalogJson( catalogContent );
 
                 if( ! entries.isEmpty() )
@@ -171,21 +172,21 @@ public class GitHubFileUpdater
             errors++;
             return;
         }
-        
+
         if( comparator == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File comparator is null for: " + entry.path );
             errors++;
             return;
         }
-        
+
         if( entry.path == null || entry.path.trim().isEmpty() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File path is null or empty, skipping" );
             errors++;
             return;
         }
-        
+
         filesChecked++;
 
         // Log when processing catalog.json to ensure it's last
@@ -298,7 +299,7 @@ public class GitHubFileUpdater
             : String.format( "Process completed: %d files checked, %d files updated, %d errors", filesChecked, filesUpdated, errors );
 
         UtilSys.getLogger().log( ILogger.Level.INFO, summary );
-        
+
         // Log cache statistics
         GitHubApiClient.logCacheStatistics();
     }

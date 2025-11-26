@@ -3,7 +3,6 @@ package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
-import java.awt.GraphicsEnvironment;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -22,14 +21,17 @@ import java.util.logging.LogRecord;
  * If passed file name is empty, then exceptions are not stored into a file, they
  * are only shown in System:out.
  *
- * Created by peyrona on 21/07/2013.
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class Logger implements ILogger
 {
-    private static final String  sLOG_EXT      = ".log.txt";       // Extensión para el nombre de los ficheros de Log
-    private static final String  sLOG_LOCK_EXT = ".log.txt.lck";   // Extensión para el nombre de los ficheros de lock de los Log
+    private static final String sLOG_EXT      = ".log.txt";       // Extensión para el nombre de los ficheros de Log
+    private static final String sLOG_LOCK_EXT = ".log.txt.lck";   // Extensión para el nombre de los ficheros de lock de los Log
+    private static final String sLOG_FORMAT   = "[%1$tF %1$tT] %5$s %n";
 
-    private java.util.logging.Logger oLogger;    // This uses fFOLDER
+    private java.util.logging.Logger oLogger;
     private Level  level;
     private String sName;
 
@@ -53,23 +55,20 @@ public final class Logger implements ILogger
         {
             File fLogDir = new File( UtilSys.fHomeDir, "log" );
 
-            if( fLogDir.exists() )    // It is not needed to be created here: it is created by UtilSys
+            if( fLogDir.exists() || UtilIO.mkdirs( fLogDir ) )    // It is not needed to be created here: it is created by UtilSys. But done as double check.
             {
                 if( ! fLogDir.isDirectory() )
                 {
-                    fLog = null;
                     System.err.println( fLogDir +" exists but is is not a folder." );
                 }
                 else if( ! fLogDir.canWrite() )
                 {
-                    fLog = null;
-
                     String name = "unknown";
 
-                    try{ Files.getOwner( fLogDir.toPath() ).getName(); }
+                    try{ name = Files.getOwner( fLogDir.toPath() ).getName(); }
                     catch( IOException ioe ) { }
 
-                    System.err.println( "Current use does not have permission to write in "+ fLogDir +
+                    System.err.println( "Current user does not have permission to write in "+ fLogDir +
                                         "\n.The owner of this folder is "+ name );
                 }
                 else
@@ -79,18 +78,15 @@ public final class Logger implements ILogger
             }
             else
             {
-                fLog = null;
-                System.err.println( "Unable to create logs folder." );
+                System.err.println( "'log' folder does not exists and can not be created." );
             }
         }
 
-        boolean bConsole = bAlwaysConsole ||
-                          (fLog == null)  ||                   // When fLog is null, outputs unconditionally to the console (user can always redirect outputs to a file)
-                          ! GraphicsEnvironment.isHeadless();
-
         setLevel( (Level) null );     // null == takes the default one
 
-        oLogger = initLogger( fLog, bConsole );    // At this point, oLogger is never null
+        bAlwaysConsole = bAlwaysConsole || (fLog == null);    // When fLog is null, outputs unconditionally to the console (user can always redirect outputs to a file)
+
+        oLogger = initLogger( fLog, bAlwaysConsole );         // At this point, oLogger is never null
 
         return this;
     }
@@ -134,16 +130,19 @@ public final class Logger implements ILogger
     }
 
     @Override
-    public ILogger deleteOlderThan( int hours )
+    public ILogger deleteOlderThan( int days )
     {
-        if( hours > 0 )
+        if( days > 0 )
         {
             long now = System.currentTimeMillis();
-            long max = UtilUnit.HOUR * hours;       // Tiene q ser un long (el int puede salir negativo)
+            long max = UtilUnit.DAY * days;        // Tiene q ser un long (el int puede salir negativo)
 
             for( File f : getAllLogFiles( true ) )
             {
-                if( (now - f.lastModified()) > max )
+                long last = f.lastModified();
+
+                if( (last > 0) &&                  // lastModified() returns 0 when unknown
+                    (now - last) > max )
                 {
                     try
                     {
@@ -166,10 +165,11 @@ public final class Logger implements ILogger
     @Override
     public boolean say( String msg )
     {
-        if( ! GraphicsEnvironment.isHeadless() )
-            System.out.println( msg );
+        System.out.println( msg );
 
-        return _log_( Level.INFO, msg );
+        oLogger.log( myLevel2javaLevel( ILogger.Level.INFO ), msg );    // Has to use ::oLogger to unconditionally log (oLogger has Level.ALL)
+
+        return true;
     }
 
     @Override
@@ -284,7 +284,7 @@ public final class Logger implements ILogger
      */
     private java.util.logging.Logger initLogger( File fLog, boolean bConsole )
     {
-        System.setProperty( "java.util.logging.SimpleFormatter.format", "[%1$tF %1$tT] %5$s %n" );
+        System.setProperty( "java.util.logging.SimpleFormatter.format", sLOG_FORMAT );
 
         File fLogDir = new File( UtilSys.fHomeDir, "log" );
 

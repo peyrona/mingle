@@ -50,17 +50,12 @@ public final class   CellSet
     @Override
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        setName( deviceName );                           // Must be 1st
-        setListener( listener );                         // Must be at begining: in case an error happens, Listener is needed
+        setDeviceName( deviceName );                       // Must be 1st
+        setListener( listener );                           // Must be at begining: in case an error happens, Listener is needed
         set( deviceConf );
-        set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );   // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
+        set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );     // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
 
-        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
-
-             if( cv.hasErrors() )          sendIsInvalid( "Formula has errors: unusable device" );
-        else if( ! hasCircularRef( cv ) )  map.put( getDeviceName(), cv );
-
-        setValid( map.containsKey( getDeviceName() ) );
+        // Can not validate the value now because caould be a formula and for thisd case, the Runtime is needed.
 
         // 'list' and 'pair' classes can be modified (list:add( 5 )) without this driver knowing it.
         // That is why the following is needed.
@@ -73,15 +68,23 @@ public final class   CellSet
 
             ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
         }
+
+        setValid( true );
     }
 
     @Override
     public void start( IRuntime rt )
     {
+        super.start( rt );
+
+        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
+
+             if( cv.hasErrors() )        sendIsInvalid( "Formula has errors: unusable device" );
+        else if( hasCircularRef( cv ) )  sendIsInvalid( "Formula has circular references: unusable device" );
+        else                             map.put( getDeviceName(), cv );
+
         if( isInvalid() )
             return;
-
-        super.start( rt );
 
         synchronized( CellSet.class )
         {
@@ -172,7 +175,7 @@ public final class   CellSet
             Object value = cv.write( newVal );
 
             if( value != null )
-                sendReaded( value );
+                sendChanged( value );
         }
     }
 

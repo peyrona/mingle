@@ -37,10 +37,10 @@ public final class WebSocketClient
     private static final int  MAX_RETRIES  = 3;
     private static final long RETRY_DELAY  = 1000L;
 
-    private volatile WebSocketChannel channel = null;
-    private volatile XnioWorker worker = null;
-    private volatile AtomicBoolean isShuttingDown = new AtomicBoolean(false);
-    private final    Object connectionLock = new Object();
+    private volatile       WebSocketChannel channel = null;
+    private volatile       XnioWorker       worker = null;
+    private volatile       AtomicBoolean    isShuttingDown = new AtomicBoolean(false);
+    private          final Object           connLock = new Object();
 
     //------------------------------------------------------------------------//
 
@@ -53,12 +53,12 @@ public final class WebSocketClient
     @Override
     public INetClient connect( String sCfgAsJSON )
     {
-        synchronized( connectionLock )
+        synchronized( connLock )
         {
             if( isConnected() )
                 return this;
 
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT ) )
+            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
                 return this;
 
             for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )

@@ -240,16 +240,11 @@ final class Action implements IRule.IAction
         {
             Object val = getDevice( varName ).value();
 
-            if( val != null )                // A device has a null value when no velue arrived yet
+            if( val != null )                // A device has a null value when no value arrived yet
                 xprEval.set( varName, val );
         }
 
-        Object oRet = xprEval.eval();
-
-        if( oRet == null )
-            oRet = "The Action '"+ xprEval +"' can not be evaluated now: one or more devices have not a value yet";
-
-        return oRet;
+        return xprEval.eval();   // When one or more devices have not a value yet, the xpr was not evaluated and null is returned.
     }
 
     private IDevice getDevice( String name )

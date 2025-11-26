@@ -41,28 +41,30 @@ import java.util.Set;
  */
 public class UtilComm
 {
-    public static final int MINGLE_DEFAULT_SOCKET_PORT        = 55886;
- // public static final int MINGLE_DEFAULT_SOCKET_PORT_SSL    = 55887;   // Perhaps for future use
-    public static final int MINGLE_DEFAULT_WEBSOCKET_PORT     = 55888;
- // public static final int MINGLE_DEFAULT_WEBSOCKET_PORT_SSL = 55889;   // Perhaps for future use
+    // All ports are above 49152 are safe for custom apps.
 
-    public static final int TCP_PORT_MIN_ALLOWED      = 1;
-    public static final int UDP_PORT_MIN_ALLOWED      = 0;
-    public static final int TCP_PORT_MAX_ALLOWED      = 0xFFFF;
-    public static final int UDP_PORT_MAX_ALLOWED      = 0xFFFF;
-    public static final int PORT_USER_MIN_ALLOWED     =   1024;
-    public static final int PORT_USER_MIN_RECOMMENDED = 0xC000;   // == 49152
+    public static final int MINGLE_DEFAULT_SOCKET_PORT        = 55880;
+    public static final int MINGLE_DEFAULT_SOCKET_PORT_SSL    = 55881;
+    public static final int MINGLE_DEFAULT_WEBSOCKET_PORT     = 55882;
+    public static final int MINGLE_DEFAULT_WEBSOCKET_PORT_SSL = 55883;
 
-    public static final int PORT_FTP_DEFAULT  =  21;
-    public static final int PORT_SSH_DEFAULT  =  22;
-    public static final int PORT_SMTP_DEFAULT =  25;
-    public static final int PORT_POP3_DEFAULT = 110;
-    public static final int PORT_IMAP_DEFAULT = 143;
+    public static final int TCP_PORT_MIN_ALLOWED              = 1;
+    public static final int UDP_PORT_MIN_ALLOWED              = 0;
+    public static final int TCP_PORT_MAX_ALLOWED              = 0xFFFF;
+    public static final int UDP_PORT_MAX_ALLOWED              = 0xFFFF;
+    public static final int PORT_USER_MIN_ALLOWED             =   1024;
+    public static final int PORT_USER_MIN_RECOMMENDED         = 0xC000;   // == 49152
 
-    public static final short ALLOW_IP_LOCAL    = 1;    // 192.168.7.9
-    public static final short ALLOW_IP_SUBNET   = 2;    // 192.168.7.*
-    public static final short ALLOW_IP_INTRANET = 3;    // 192.168.*.*
-    public static final short ALLOW_IP_ANY      = 4;    // *.*.*.*
+    public static final int PORT_FTP_DEFAULT                  =  21;
+    public static final int PORT_SSH_DEFAULT                  =  22;
+    public static final int PORT_SMTP_DEFAULT                 =  25;
+    public static final int PORT_POP3_DEFAULT                 = 110;
+    public static final int PORT_IMAP_DEFAULT                 = 143;
+
+    public static final short ALLOW_IP_LOCAL                  = 1;    // 192.168.7.9
+    public static final short ALLOW_IP_SUBNET                 = 2;    // 192.168.7.*
+    public static final short ALLOW_IP_INTRANET               = 3;    // 192.168.*.*
+    public static final short ALLOW_IP_ANY                    = 4;    // *.*.*.*
 
     public static enum  Protocol { file, http, https }
 

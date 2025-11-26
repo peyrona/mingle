@@ -18,7 +18,7 @@ import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
-import java.nio.charset.Charset;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
@@ -41,8 +41,8 @@ public final class Main
 
         if( cli.hasOption( "help" ) || cli.hasOption( "h" ))
         {
-            System.out.println( UtilIO.getAsText( Main.class.getResourceAsStream( "help.txt" ),     // Done using a .txt file to save RAM
-                                                  Charset.forName( "UTF-8" ) ) );
+            System.out.println( UtilIO.getAsText( Main.class.getResourceAsStream( "help.txt" ),   // Done using a .txt file to save RAM
+                                                  StandardCharsets.UTF_8 ) );
         }
         else
         {
@@ -56,16 +56,18 @@ public final class Main
 
                 compareAndUpdateModels( config, asModel );
 
-                Pair<String,String> pair    = loadFirstValidModel( asModel );
-                String              sName   = pair == null ? null : pair.getKey();
-                String              sJSON   = pair == null ? null : pair.getValue();
+                Pair<String,String> pair  = loadFirstValidModel( asModel );
+                String              sName = pair == null ? null : pair.getKey();
+                String              sJSON = pair == null ? null : pair.getValue();
 
                 stick = new Stick( sJSON, config ).start( sName );
             }
             catch( Exception exc )
             {
-                if( stick != null )  stick.log( ILogger.Level.SEVERE, exc );
-                else                 System.err.println( exc.getMessage() + "\nStick can not continue.\n"+ UtilStr.toString( exc ) );
+                String msg = exc.getMessage() +"\nStick can not continue.\n"+ UtilStr.toString( exc );
+
+                if( stick != null )  stick.log( ILogger.Level.SEVERE, msg  );
+                else                 System.err.println( msg );
             }
         }
     }

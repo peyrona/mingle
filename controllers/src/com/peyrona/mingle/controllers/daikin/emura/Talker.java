@@ -96,8 +96,8 @@ final class Talker
             conn.setUseCaches( false );
             conn.setRequestProperty( "Content-Type", "application/x-www-form-urlencoded" );
             conn.setRequestProperty( "User-Agent"  , "Java Daikin Emura Controller");    // Some servers may reject requests without a User-Agent header.
-            conn.setConnectTimeout( 2 * UtilUnit.MINUTE );
-            conn.setReadTimeout(    2 * UtilUnit.MINUTE );
+            conn.setConnectTimeout( (int) (2 * UtilUnit.MINUTE) );
+            conn.setReadTimeout(    (int) (2 * UtilUnit.MINUTE) );
 
             return conn;
         }
@@ -118,7 +118,7 @@ final class Talker
         {
             conn = connect( url );
 
-            try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream() ) ) )
+            try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) ) )
             {
                 String        sLine;
                 StringBuilder sbRet = new StringBuilder();

@@ -41,7 +41,7 @@ public final class   DMX512
     @Override
     public void set( final String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         int interval = ((Number) deviceInit.getOrDefault( "interval", 1000f )).intValue();

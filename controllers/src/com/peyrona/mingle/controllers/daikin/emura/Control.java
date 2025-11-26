@@ -48,7 +48,7 @@ public final class   Control
     @Override
     public void set( String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         try
@@ -136,7 +136,7 @@ public final class   Control
                     {
                         String sNewState = talker.write( encode( (pair) oRequest ) );
 
-                        sendReaded( decode( sNewState ) );
+                        sendChanged( decode( sNewState ) );
                     }
                     catch( IOException ioe )
                     {

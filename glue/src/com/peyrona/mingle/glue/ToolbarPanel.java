@@ -395,8 +395,8 @@ final class ToolbarPanel extends javax.swing.JPanel
     {
         new GDialog( "About...", false )
                .setFixedSize( false )
-               .setVisible()
-               .add( new InfoPanel(), BorderLayout.CENTER );
+               .put( new InfoPanel(), BorderLayout.CENTER )
+               .setVisible();
     }
 
     //------------------------------------------------------------------------//

@@ -43,13 +43,13 @@ public final class   Sensors
     @Override
     public void set( final String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         try
         {
             String sIpAddr   = deviceInit.get( KEY_ADRESS ).toString();    // This is mandatory
-            int    nInterval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (5 * UtilUnit.MINUTE) )).intValue();
+            long   nInterval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (5 * UtilUnit.MINUTE) )).longValue();
 
             if( ! UtilSys.isDevEnv )     // When under development, any value is accepted
                 nInterval = UtilUnit.setBetween( 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
@@ -127,8 +127,8 @@ public final class   Sensors
         synchronized( this )
         {
             timer = UtilSys.executeAtRate( getClass().getName(),
-                                           5000,                      // Initial delay
-                                           (int) get( KEY_INTERVAL ),
+                                           5000l,                      // Initial delay
+                                           getLong( KEY_INTERVAL ),
                                            () -> read() );
         }
     }

@@ -184,7 +184,7 @@ final class Dlg4Cmd extends GDialog
         // This method does not supervise buttons: do not invoke pnlCentral:getSourceCode(),
         // beacuse normally buttons are not involved in changes in sourcve code (e.g. [OK]).
         // But sometimes there are buttons that are involved in this. It is panel's
-        // resposability to add these buttons to the List
+        // resposability to put these buttons to the List
 
         for( JButton btn : ((PnlCmdBase) pnlCentral).lstBtn2Check4Changes )
         {

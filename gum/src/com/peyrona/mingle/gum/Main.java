@@ -11,7 +11,6 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.io.File;
 import java.io.IOException;
 import java.net.InetAddress;
@@ -53,11 +52,11 @@ public class Main
             int        maxSess = config.get( "monitoring", "max_sessions", 64 );
             String     allow   = config.get( "monitoring", "allow", "intranet" );
             JsonObject joSSL   = config.get( "monitoring", "ssl", Json.object() );
+            int        timeout = config.get( "monitoring", "timeout", 1800 );      // Inseconds
 
             checkPreRequisites( joSSL );
 
-            ServiceUtil.setSessionTimeout( (UtilSys.isDevEnv ? (3 * UtilUnit.HOUR / 1000)
-                                                             : config.get( "monitoring", "timeout", 1800 )) );    // Inseconds
+            ServiceUtil.setSessionTimeout( (UtilSys.isDevEnv ? 180 : timeout) );
 
             if( UtilStr.isEmpty( host ) || UtilSys.isDocker() )    // For info when running inside a Docker:
             {
@@ -105,9 +104,11 @@ public class Main
                             '\n'+
                             "Syntax:\n"+
                             "\tgum [-config=<URI>] [-host=<host>] [-port=<port>] [-user=<user_name>] [-password=<pwd>] [-help] [-h]\n"+
-                            "\t\tconfig  A JSON file with the configuration to use. By default, '{*home*}config.json'. It is optional.\n"+
-                            "\t\thost    Host name. By default, 'localhost'. It is optional.\n"+
-                            "\t\tport    Port number. By default, '8080'. It is optional.\n"+
+                            "\t\tconfig    A JSON file (local or remote) with the configuration to use. By default, '{*home*}config.json'.\n"+
+                            "\t\thost      Host name. By default, 'localhost'.\n"+
+                            "\t\tport      Port number. By default, '8080'.\n"+
+                            "\t\tuser      User name for authentication in: admin users to the web interface and Database. By default, ''.\n"+
+                            "\t\tpassword  Password for authentication (same as 'user'). By default, ''.\n"+
                             '\n'+
                             "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n"+
                             '\n'+

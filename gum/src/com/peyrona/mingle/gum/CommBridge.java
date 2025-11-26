@@ -3,9 +3,11 @@ package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.Pair;
+import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import io.undertow.websockets.WebSocketConnectionCallback;
@@ -14,6 +16,8 @@ import io.undertow.websockets.spi.WebSocketHttpExchange;
 import java.io.File;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
+import java.lang.reflect.InvocationTargetException;
+import java.net.URISyntaxException;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -129,7 +133,8 @@ public final class CommBridge implements WebSocketConnectionCallback
     }
 
     // Thread-safe map: WebSocket → List of (ExEn client, ExEn address) pairs
-    private static final ConcurrentHashMap<WeakReference<WebSocketChannel>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>> channelToClients = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<WeakReference<WebSocketChannel>,
+                                           CopyOnWriteArrayList<Pair<INetClient,JsonObject>>> channelToClients = new ConcurrentHashMap<>();
 
     // Reverse lookup: ExEn client → (WebSocket, ExEn address)
     private static final ConcurrentHashMap<INetClient, Pair<WeakReference<WebSocketChannel>, JsonObject>> clientToChannel = new ConcurrentHashMap<>();
@@ -138,7 +143,7 @@ public final class CommBridge implements WebSocketConnectionCallback
     private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor( r ->
                                                                                                                 {
                                                                                                                     Thread t = new Thread( r, "CommBridge-Cleanup" );
-                                                                                                                    t.setDaemon( true );
+                                                                                                                           t.setDaemon( true );
                                                                                                                     return t;
                                                                                                                 } );
 
@@ -161,11 +166,8 @@ public final class CommBridge implements WebSocketConnectionCallback
         {
             String exenHash = path.substring( path.lastIndexOf( File.separator ) + 1 );
 
-            if( !exenHash.isEmpty() && !exenHash.equals( "bridge" ) )
-            {
-                // Store ExEn hash in channel attachment for later use
-                session.setAttribute( "exenHash", exenHash );
-            }
+            if( ! exenHash.isEmpty() && !exenHash.equals( "bridge" ) )
+                session.setAttribute( "exenHash", exenHash );    // Store ExEn hash in channel attachment for later use
         }
 
         session.getReceiveSetter().set( new WebSocketListener() );
@@ -181,18 +183,13 @@ public final class CommBridge implements WebSocketConnectionCallback
     {
         try
         {
-            INetClient client = UtilSys.getConfig().getHttpServerNetClient();
-            if( client == null )
-            {
-                throw new IllegalStateException( "Failed to create ExEn client" );
-            }
-
-            client.add( new ExEnListener() );
-            client.connect( exenAddress.toString() );
+            INetClient client = getNetClient();
+                       client.add( new ExEnListener() );
+                       client.connect( exenAddress.toString() );
 
             // Add to both maps atomically
             WeakReference<WebSocketChannel> sessionRef = new WeakReference<>( session );
-            Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
+            Pair<INetClient, JsonObject>    clientPair = new Pair<>( client, exenAddress );
 
             channelToClients.computeIfAbsent( sessionRef, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
             clientToChannel.put( client, new Pair<>( sessionRef, exenAddress ) );
@@ -201,10 +198,26 @@ public final class CommBridge implements WebSocketConnectionCallback
             return client;
 
         }
-        catch( IllegalStateException e )
+        catch( MingleException me )
         {
-            logError( "Failed to create ExEn client for " + exenAddress, e );
+            logError( "Failed to create ExEn client for " + exenAddress, me );
             return null;
+        }
+    }
+
+    private static INetClient getNetClient()
+    {
+        String   sClass = UtilSys.getConfig().get( "monitoring", "client", "com.peyrona.mingle.network.socket.SocketClient" );
+        String[] asURIs = UtilSys.getConfig().get( "monitoring", "uris"  , new String[] { "file://{*home.lib*}network.jar" } );
+
+        try
+        {
+            return UtilReflect.newInstance( INetClient.class, sClass, asURIs );
+        }
+        catch( ClassNotFoundException | InstantiationException | IllegalAccessException   | NoSuchMethodException |
+               URISyntaxException     | IOException            | IllegalArgumentException | InvocationTargetException exc )
+        {
+            throw new MingleException( exc );
         }
     }
 
@@ -214,16 +227,14 @@ public final class CommBridge implements WebSocketConnectionCallback
     private static INetClient findExEnClient(WebSocketChannel session, JsonObject exenAddress)
     {
         WeakReference<WebSocketChannel> sessionRef = findSessionReference( session );
+
         if( sessionRef == null )
-        {
             return null;
-        }
 
         CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = channelToClients.get( sessionRef );
+
         if( clients == null )
-        {
             return null;
-        }
 
         return clients.stream()
                       .filter( pair -> Objects.equals( pair.getValue(), exenAddress ) )
@@ -239,10 +250,9 @@ public final class CommBridge implements WebSocketConnectionCallback
     private static boolean removeExEnClient(WebSocketChannel channel, INetClient client)
     {
         WeakReference<WebSocketChannel> sessionRef = findSessionReference( channel );
+
         if( sessionRef == null )
-        {
             return false;
-        }
 
         CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = channelToClients.get( sessionRef );
 
@@ -254,6 +264,7 @@ public final class CommBridge implements WebSocketConnectionCallback
         if( removed )
         {
             clientToChannel.remove( client );
+
             try
             {
                 client.disconnect();
@@ -282,15 +293,13 @@ public final class CommBridge implements WebSocketConnectionCallback
     /**
      * Centralized error handling that logs, notifies client, and cleans up.
      */
-    private static void handleError(WebSocketChannel session, Throwable error, String context)
+    private static void handleError( WebSocketChannel session, Throwable error, String context )
     {
         logWarning( "WebSocket error in " + context + ": " + session, error );
 
-        // Send sanitized error message to client
-        try
+        try    // Send sanitized error message to client
         {
-            JsonObject errorMessage = new JsonObject()
-                    .add( MessageType.ERROR.getValue(), sanitizeErrorMessage( error.getMessage() ) );
+            JsonObject errorMessage = new JsonObject().add( MessageType.ERROR.getValue(), sanitizeErrorMessage( error.getMessage() ) );
             sendToWebSocket( session, errorMessage.toString() );
         }
         catch( Exception e )
@@ -393,9 +402,11 @@ public final class CommBridge implements WebSocketConnectionCallback
             // Close WebSocket with proper code
             if( session.isOpen() )
             {
-                session.setCloseCode(   closeCode.getCode()   );
-                session.setCloseReason( closeCode.getReason() );
-                session.close();
+                try( session )
+                {
+                    session.setCloseCode(   closeCode.getCode()   );
+                    session.setCloseReason( closeCode.getReason() );
+                }
             }
         }
         catch( IOException ioe )
@@ -411,22 +422,24 @@ public final class CommBridge implements WebSocketConnectionCallback
     {
         try
         {
-            Iterator<Map.Entry<WeakReference<WebSocketChannel>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>>> iterator
-                    = channelToClients.entrySet().iterator();
+            Iterator<Map.Entry<WeakReference<WebSocketChannel>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>>> iterator = channelToClients.entrySet().iterator();
 
             int cleanedCount = 0;
+
             while( iterator.hasNext() )
             {
-                Map.Entry<WeakReference<WebSocketChannel>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>> entry = iterator.next();
-                WebSocketChannel session = entry.getKey().get();
+                Map.Entry<WeakReference<WebSocketChannel>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>> entry   = iterator.next();
+                WebSocketChannel                                                                               session = entry.getKey().get();
 
                 if( session == null || !session.isOpen() )
                 {
                     // Dead reference or closed session
                     CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = entry.getValue();
+
                     for( Pair<INetClient, JsonObject> pair : clients )
                     {
                         clientToChannel.remove( pair.getKey() );
+
                         try
                         {
                             pair.getKey().disconnect();
@@ -436,16 +449,14 @@ public final class CommBridge implements WebSocketConnectionCallback
                             // Ignore cleanup errors
                         }
                     }
+
                     iterator.remove();
                     cleanedCount++;
                 }
             }
 
             if( cleanedCount > 0 )
-            {
                 logInfo( "Cleaned up " + cleanedCount + " dead WebSocket references" );
-            }
-
         }
         catch( Exception e )
         {
@@ -457,10 +468,9 @@ public final class CommBridge implements WebSocketConnectionCallback
     private static void logInfo(String message)
     {
         ILogger logger = UtilSys.getLogger();
+
         if( logger.isLoggable( ILogger.Level.INFO ) )
-        {
             logger.log( ILogger.Level.INFO, message );
-        }
     }
 
     private static void logWarning(String message, Throwable throwable)
@@ -479,7 +489,7 @@ public final class CommBridge implements WebSocketConnectionCallback
     private static final class WebSocketListener extends AbstractReceiveListener
     {
         @Override
-        protected void onFullTextMessage(WebSocketChannel session, BufferedTextMessage message)
+        protected void onFullTextMessage( WebSocketChannel session, BufferedTextMessage message )
         {
             try
             {
@@ -502,7 +512,7 @@ public final class CommBridge implements WebSocketConnectionCallback
                 if( exenAddress == null )
                 {
                     handleError( session,
-                                 new IllegalArgumentException( "Missing or invalid ExEn address" ),
+                                 new IllegalArgumentException( "Missing or invalid ExEn address:\n"+ session ),
                                  "ExEn address extraction" );
                     return;
                 }
@@ -521,7 +531,7 @@ public final class CommBridge implements WebSocketConnectionCallback
                 else
                 {
                     handleError( session,
-                                 new IllegalStateException( "ExEn client unavailable" ),
+                                 new IllegalStateException( "ExEn client unavailable:\n"+ session ),
                                  "ExEn communication" );
                 }
             }
@@ -577,10 +587,9 @@ public final class CommBridge implements WebSocketConnectionCallback
         public void onDisconnected(INetClient client)
         {
             Pair<WeakReference<WebSocketChannel>, JsonObject> channelInfo = clientToChannel.remove( client );
+
             if( channelInfo == null )
-            {
-                return; // Already cleaned up
-            }
+                return;     // Already cleaned up
 
             WeakReference<WebSocketChannel> sessionRef = channelInfo.getKey();
             WebSocketChannel session = sessionRef.get();
@@ -591,10 +600,9 @@ public final class CommBridge implements WebSocketConnectionCallback
 
                 // Close WebSocket if no more ExEn connections
                 CopyOnWriteArrayList<Pair<INetClient, JsonObject>> remainingClients = channelToClients.get( sessionRef );
+
                 if( remainingClients == null || remainingClients.isEmpty() )
-                {
                     cleanupSession( session, CloseCode.GOING_AWAY );
-                }
             }
         }
 
@@ -602,24 +610,19 @@ public final class CommBridge implements WebSocketConnectionCallback
         public void onMessage(INetClient client, String message)
         {
             if( message == null )
-            {
                 return;
-            }
 
             try
             {
                 Pair<WeakReference<WebSocketChannel>, JsonObject> channelInfo = clientToChannel.get( client );
 
                 if( channelInfo == null )
-                {
                     return; // Connection already closed
-                }
 
                 WebSocketChannel session = channelInfo.getKey().get();
+
                 if( session == null || !session.isOpen() )
-                {
                     return; // WebSocket closed
-                }
 
                 JsonObject exenAddress = channelInfo.getValue();
                 JsonObject responseMessage = Json.parse( message ).asObject().add( "exen", exenAddress );
@@ -636,28 +639,22 @@ public final class CommBridge implements WebSocketConnectionCallback
         public void onError(INetClient client, Exception error)
         {
             Pair<WeakReference<WebSocketChannel>, JsonObject> channelInfo = clientToChannel.get( client );
+
             if( channelInfo == null )
-            {
-                return; // Already cleaned up
-            }
+                return;    // Already cleaned up
 
             WeakReference<WebSocketChannel> sessionRef = channelInfo.getKey();
-            WebSocketChannel session = sessionRef.get();
-            JsonObject exenAddress = channelInfo.getValue();
+            WebSocketChannel                session = sessionRef.get();
+            JsonObject                      exenAddress = channelInfo.getValue();
 
             if( session != null && session.isOpen() )
             {
                 try
                 {
                     String errorMessage;
-                    if( error.getClass().getPackage().getName().startsWith( "java.net" ) )
-                    {
-                        errorMessage = "ExEn '" + client + "' cannot be reached. Is it running and accepting connections?";
-                    }
-                    else
-                    {
-                        errorMessage = sanitizeErrorMessage( error.getMessage() );
-                    }
+
+                    if( error.getClass().getPackage().getName().startsWith( "java.net" ) )  errorMessage = "ExEn '" + client + "' cannot be reached. Is it running and accepting connections?";
+                    else                                                                    errorMessage = sanitizeErrorMessage( error.getMessage() );
 
                     JsonObject errorResponse = new JsonObject()
                             .add( MessageType.ERROR.getValue(), errorMessage )
@@ -671,8 +668,7 @@ public final class CommBridge implements WebSocketConnectionCallback
                     logError( "Error sending ExEn error to WebSocket", e );
                 }
 
-                // Clean up the failed client
-                removeExEnClient( session, client );
+                removeExEnClient( session, client );   // Clean up the failed client
             }
         }
     }

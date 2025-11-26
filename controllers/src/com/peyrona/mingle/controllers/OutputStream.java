@@ -23,9 +23,9 @@ public final class   OutputStream
     @Override
     public synchronized void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
-        setName( deviceName );       // Must be 1st
-        setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
-        setValid( true );            // Always valid because this driver has no config: mapConfig.size() == 0
+        setDeviceName( deviceName );    // Must be 1st
+        setListener( listener );        // Must be at begining: in case an error happens, Listener is needed
+        setValid( true );               // Always valid because this driver has no config: mapConfig.size() == 0
 
         set( KEY_AUTO_NL, (Boolean) mapConfig.getOrDefault( "autofeed", Boolean.TRUE ) );
     }
@@ -46,6 +46,6 @@ public final class   OutputStream
         if( (Boolean) get( KEY_AUTO_NL ) ) System.out.println( value );
         else                               System.out.print(   value );
 
-        sendReaded( value );
+        sendChanged( getDeviceName(), value );
     }
 }

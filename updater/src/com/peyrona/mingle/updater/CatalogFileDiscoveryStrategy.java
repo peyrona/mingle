@@ -4,6 +4,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
@@ -45,14 +46,14 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
             String content = this.catalogContent;
             if( content == null )
             {
-                content = Files.readString( catalogFile.toPath() );
+                content = Files.readString( catalogFile.toPath(),StandardCharsets.UTF_8 );
             }
             List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( content );
 
             for( CatalogParser.CatalogFileEntry entry : catalogFileEntries )
             {
                 FileEntry fileEntry = new FileEntry( entry.path, entry.hash );
-                
+
                 // Separate catalog.json from other files
                 if( "etc/catalog.json".equals( entry.path ) )
                 {

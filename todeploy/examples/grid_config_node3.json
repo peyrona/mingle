@@ -16,7 +16,7 @@
     # Excution Environment configuration
     {
       "module": "exen",
-      "use_disk": true
+      "write_disk": true
     },
 
     # Plugable Commmands Library to be used

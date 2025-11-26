@@ -7,6 +7,7 @@ import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.nio.charset.StandardCharsets;
 
 /**
  *
@@ -135,7 +136,7 @@ public final class IntermediateCodeWriter implements Closeable
 
             try
             {
-                p = new PrintWriter( new FileWriter( getTarget(), true ) );    // true == appending mode (it is needed)
+                p = new PrintWriter( new FileWriter( getTarget(), StandardCharsets.UTF_8, true ) );    // true == appending mode (it is needed)
             }
             catch( IOException ex )
             {

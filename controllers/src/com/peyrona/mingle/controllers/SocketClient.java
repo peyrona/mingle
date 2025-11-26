@@ -31,7 +31,7 @@ public final class SocketClient
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         boolean bOK   = true;
@@ -128,7 +128,7 @@ public final class SocketClient
         if( value != null )
             client.send( value.toString() );
 
-        sendReaded( value );
+        sendChanged( value );
     }
 
     //------------------------------------------------------------------------//
@@ -149,7 +149,7 @@ public final class SocketClient
         @Override
         public void onMessage( INetClient origin, String msg )
         {
-            sendReaded( msg );
+            sendChanged( msg );
         }
 
         @Override

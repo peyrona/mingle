@@ -4,6 +4,7 @@ package com.peyrona.mingle.glue;
 import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.glue.gswing.WndBoundsPersist;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 
 /**
@@ -12,7 +13,7 @@ import javax.swing.SwingUtilities;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class InfoPanel extends javax.swing.JPanel
+public class InfoPanel extends JPanel
 {
     /**
      * Creates new form pnlInfo
@@ -43,6 +44,8 @@ public class InfoPanel extends javax.swing.JPanel
         btnResetTips = new javax.swing.JButton();
         jTextArea1 = new javax.swing.JTextArea();
         btnResetBounds = new javax.swing.JButton();
+
+        setMinimumSize(new java.awt.Dimension(0, 48));
 
         jLabel1.setFont(new java.awt.Font("Ubuntu", 0, 48)); // NOI18N
         jLabel1.setHorizontalAlignment(javax.swing.SwingConstants.CENTER);
@@ -143,7 +146,7 @@ public class InfoPanel extends javax.swing.JPanel
                 .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
                     .addComponent(btnResetTips)
                     .addComponent(btnResetBounds))
-                .addContainerGap(30, Short.MAX_VALUE))
+                .addGap(55, 55, 55))
         );
     }// </editor-fold>//GEN-END:initComponents
 

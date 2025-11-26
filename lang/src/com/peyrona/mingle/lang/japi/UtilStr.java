@@ -232,7 +232,13 @@ public class UtilStr
 
         for( String s : strs )
         {
-            if( (s != null) && str.contains( s.toLowerCase() ) )
+            if( s == null )
+                return false;
+
+            if( s.isEmpty() )
+                return true;     // Empty string is always contained
+
+            if( str.contains( s.toLowerCase() ) )
                 return true;
         }
 
@@ -348,18 +354,12 @@ public class UtilStr
     public static String leftPad( String string, final char padder, final int length )
     {
         if( string == null )
-        {
             string = "";
-        }
 
         if( string.length() < length )
-        {
             return UtilStr.fill( padder, length - string.length() ) + string;
-        }
-        else
-        {
-            return string;
-        }
+
+        return string;
     }
 
     /**
@@ -374,18 +374,12 @@ public class UtilStr
     public static String rightPad( String string, final char padder, final int length )
     {
         if( string == null )
-        {
             string = "";
-        }
 
         if( string.length() < length )
-        {
             return string + UtilStr.fill( padder, length - string.length() );
-        }
-        else
-        {
-            return string;
-        }
+
+        return string;
     }
 
     /**
@@ -402,9 +396,7 @@ public class UtilStr
         final StringBuilder sb = new StringBuilder( length );
 
         for( int n = 0; n < length; n++ )
-        {
             sb.append( pattern );
-        }
 
         return sb.toString();
     }

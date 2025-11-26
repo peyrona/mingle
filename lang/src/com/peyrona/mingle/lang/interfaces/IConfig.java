@@ -1,11 +1,7 @@
-/*
- * Click nbfs://nbhost/SystemFileSystem/Templates/Licenses/license-default.txt to change this license
- * Click nbfs://nbhost/SystemFileSystem/Templates/Classes/Interface.java to edit this template
- */
+
 package com.peyrona.mingle.lang.interfaces;
 
 import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.GridNode;
 import java.io.IOException;
 import java.util.List;
@@ -53,11 +49,12 @@ public interface IConfig
     IConfig set(String module, String varName, Object newValue) throws MingleException;
 
     /**
-     * Used by Gum to decide the type of Comm Client to use.
+     * Add received Command Line arguments to config, so config will also use these arguments to look into.
      *
-     * @return An InetClient instance.
+     * @param as CLI arguments.
+     * @return Itself.
      */
-    INetClient getHttpServerNetClient();
+    IConfig setCliArgs( String[] as );
 
     /**
      * Returns the location of the configuration file.
@@ -94,12 +91,7 @@ public interface IConfig
      */
     IXprEval newXprEval();
 
-    IConfig setCliArgs( String[] as );
-
     String toStrJSON();
-
-    @Override
-    String toString();
 
     //------------------------------------------------------------------------//
     // GRID RELATED METHODS

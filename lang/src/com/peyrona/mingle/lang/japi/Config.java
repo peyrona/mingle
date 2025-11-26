@@ -11,7 +11,6 @@ import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -262,33 +261,6 @@ public final class Config implements IConfig
                    asURIs = ((asURIs != null) ? asURIs : new String[] { ("file://"+ UtilSys.fHomeDir +"/lib/lang.jar") });   // Using default NAXE's JAR
 
         return instantiate( IXprEval.class, sClass, asURIs );
-    }
-
-    @Override
-    public INetClient getHttpServerNetClient()
-    {
-        String   sClass = "com.peyrona.mingle.network.socket.SocketClient";    // Default class
-        String[] asURIs = new String[] { "file://{*home.lib*}network.jar" };   // Default URI
-        UtilJson module = new UtilJson( getModule( "monitoring" ) );
-
-        if( module != null )
-        {
-            sClass = (module.getString( "client" ) == null) ? sClass : module.getString( "client" );
-
-            JsonArray ja = module.getArray( "uris" );
-
-            if( ja != null )
-            {
-                List<JsonValue> lstJo  = ja.values();
-                List<String>    lstStr = new ArrayList<>( lstJo.size() );
-
-                lstJo.forEach( jo -> lstStr.add( jo.asString() ) );
-
-                asURIs = lstStr.toArray( String[]::new );
-            }
-        }
-
-        return instantiate( INetClient.class, sClass, asURIs );
     }
 
     @Override

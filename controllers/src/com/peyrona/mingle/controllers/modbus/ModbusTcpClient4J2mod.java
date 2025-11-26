@@ -39,7 +39,7 @@ public final class ModbusTcpClient4J2mod
     private final String                 sType;
     private final String                 sOrder;
     private final int                    nTimeout;
-    private final int                    nInterval;
+    private final long                   nInterval;
     private final IModbusClient.Listener listener;
     private       ScheduledFuture        future = null;
 
@@ -68,7 +68,7 @@ public final class ModbusTcpClient4J2mod
     public void open()
     {
         this.future = UtilSys.executeAtRate( getClass().getName(),
-                                             Math.max( 2000, nTimeout ),     // 2000 is the recommended time in Modbus to start accessing devices because some of them could need a lot of time to be available
+                                             (long) Math.max( 2000, nTimeout ),    // 2000 is the recommended time in Modbus to start accessing devices because some of them could need a lot of time to be available
                                              nInterval,
                                              () ->
                                              {

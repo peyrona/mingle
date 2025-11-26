@@ -3,6 +3,7 @@ package com.peyrona.mingle.glue.gswing;
 
 import com.peyrona.mingle.glue.Main;
 import java.awt.BorderLayout;
+import java.awt.Component;
 import java.awt.Toolkit;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
@@ -84,6 +85,12 @@ public class GDialog extends JDialog
     }
 
     //------------------------------------------------------------------------//
+
+    public GDialog put( Component component, Object constraints )
+    {
+        add( component, constraints );
+        return this;
+    }
 
     @Override
     public void pack()

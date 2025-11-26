@@ -31,7 +31,7 @@ public final class SystemMonitor
     @Override
     public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
     {
-        setName( deviceName );
+        setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
         set( KEY_METRIC, ((String) mapConfig.getOrDefault( KEY_METRIC, "cpu" )).toLowerCase() );
@@ -64,14 +64,14 @@ public final class SystemMonitor
 
         super.start( rt );
 
-        if( "disk".equals( get( KEY_METRIC ) ) && ! useDisk( true ) )
+        if( "disk".equals( get( KEY_METRIC ) ) && ! isDiskWritable( true ) )
         {
             sendIsInvalid( get( KEY_METRIC ) +" is invalid. Stick is not allowed to use disk." );
             return;
         }
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), 5000, (int) get( KEY_INTERVAL ), () -> read() );
+            timer = UtilSys.executeAtRate( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override

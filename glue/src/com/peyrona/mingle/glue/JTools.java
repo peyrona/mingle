@@ -103,7 +103,7 @@ public final class JTools
      * <li>Base reading speed: 200-250 words per minute (~16.67 characters/second)</li>
      * <li>Character-based calculation: More reliable than word counting</li>
      * <li>Minimum display time: 3 seconds for very short messages</li>
-     * <li>Complexity adjustments: Punctuation adds 10% per mark, numbers add 5% per digit</li>
+     * <li>Complexity adjustments: Punctuation adds 10% per mark, numbers put 5% per digit</li>
      * <li>Maximum display time: 60 seconds for reasonable UI behavior</li>
      * </ul>
      * </p>
@@ -198,7 +198,7 @@ public final class JTools
         Font   bottomFont  = bottomLabel.getFont();
         bottomLabel.setFont( bottomFont.deriveFont( (float) (bottomFont.getSize() * 0.8f) ) );
 
-        // Create main panel with border layout and line border and add to Frame
+        // Create main panel with border layout and line border and put to Frame
         Border lineBorder  = BorderFactory.createLineBorder( SystemColor.windowBorder, 1 );
         Border emptyBorder = BorderFactory.createEmptyBorder( 12, 14, 12, 14 );
 
@@ -646,18 +646,11 @@ public final class JTools
 
         try
         {
-            return ImageIO.read( JTools.class.getResourceAsStream( "./images/"+ name ) );
+            return ImageIO.read( JTools.class.getResourceAsStream( "/com/peyrona/mingle/glue/images/"+ name ) );
         }
-        catch( IOException exc )
+        catch( Exception exc )
         {
-            try
-            {
-                return ImageIO.read( JTools.class.getResourceAsStream( "/images/glue.png" ) );
-            }
-            catch( IOException ex )
-            {
-                return null;
-            }
+            return null;
         }
     }
 
