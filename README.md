@@ -29,7 +29,7 @@
 
  **How to install Mingle?**
 
-> 1. Download lastest release and unzip it.
+> 1. Download lastest release (mingle.n.n.n-date.zip) and unzip it.
 >
 > 2. If you have Java 11 or above installed in your PC, you are done.
 >

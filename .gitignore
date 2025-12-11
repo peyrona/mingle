@@ -26,19 +26,21 @@ dist/
 Thumbs.db
 
 # Otros ficheros y dirs to ignore
-.*             # ignore all hidden files
-.*/            # ignore all hidden folders
-!/.gitignore   # do not ignore this hidden file
-
-**/.history/   # all history diors in all dirs and subdirs
+# Ignore hidden files and directories
+.*
+!/.gitignore
+/.cache/
+/.config/
+/todeploy/lib/gum/web/.history/
+/todeploy/lib/gum/web/.GEMINI.md
 
 *.graphml
 *.txt
 *.odt
 *.odg
 *.model
-*.zip          # Ignore all .zip files
-!javadocs.zip  # Except for javadocs.zip
+*.zip           # Ignore all .zip files
+!javadocs.zip   # Except for javadocs.zip
 
 GEMINI.md
 count_lines.sh
