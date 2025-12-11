@@ -30,6 +30,8 @@ Thumbs.db
 .*/            # ignore all hidden folders
 !/.gitignore   # do not ignore this hidden file
 
+**/.history/   # all history diors in all dirs and subdirs
+
 *.graphml
 *.txt
 *.odt
