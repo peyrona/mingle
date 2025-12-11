@@ -8,11 +8,12 @@ if( typeof free === "undefined" )
 {
 var free =
 {
-    _isInited_    : false,   // Just a flag to avoid multiple initializations
-    _isChanged_   : false,   // Just a flag
-    _aGadgets_    : [],
-    _gadgetFocus_ : null,    // Current focused gadget (null when not under design mode)
-    _bodySize_    : null,    // Body size when dashboard was saved last time
+    _isInited_         : false,   // Just a flag to avoid multiple initializations
+    _isChanged_        : false,   // Just a flag
+    _aGadgets_         : [],
+    _aGadgetsSelected_ : [],      // All selected gadgets
+    _gadgetFocus_      : null,    // Current focused gadget (null when not under design mode)
+    _bodySize_         : null,    // Body size when dashboard was saved last time
 
 
     //------------------------------------------------------------------------//
@@ -24,7 +25,11 @@ var free =
      */
     saved : function()
     {
-        this._isChanged_ = false;    // Reset the changed flag because all gadgets were saved
+        this._isChanged_ = false;    // Reset changed flag because all gadgets were saved
+        
+        // Reset all gadget changed flags
+        for( const gadget of this._aGadgets_ )
+            gadget._isChanged_ = false;
     },
 
     isChanged : function()
@@ -61,9 +66,10 @@ var free =
 
     setContents : function( oData )
     {
-        this._bodySize_    = oData.bodysize;
-        this._aGadgets_    = [];
-        this._gadgetFocus_ = null;
+        this._bodySize_         = oData.bodysize;
+        this._aGadgets_         = [];
+        this._aGadgetsSelected_ = [];
+        this._gadgetFocus_      = null;
 
         if( ! oData.gadgets )
         {
@@ -100,8 +106,9 @@ var free =
                .offset( { left: gadget.x, top: gadget.y } )
                .on( 'mousedown', (event) => free._setFocused_( event ) )
                .on( 'dblclick' , (event) => free._edit_( event ) )
-               .draggable( { drag : function(event) { free._onGadgetDrag_( event, true  ); },
-                              stop : function(event) { free._onGadgetDrag_( event, false ); } } );
+               .draggable( { start: function(event,ui) { free._onGadgetDragStart_( event, ui ); },
+                              drag : function(event,ui) { free._onGadgetDrag_( event, ui, true  ); },
+                              stop : function(event,ui) { free._onGadgetDrag_( event, ui, false ); } } );
 
         gadget.getContainer()           // The DIV were the gadget is shown (contained)
               .css('width' ,'100%')     // 100% only when inside the pseudo-window (design mode)
@@ -135,6 +142,9 @@ var free =
                                 '<td>Click</td><td>Selects it (makes it the default one)</td>'+
                             '</tr>'+
                             '<tr>'+
+                                '<td>Shift + Click</td><td>To add/remove a gadget to/from selection (multi-selection)</td>'+
+                            '</tr>'+
+                            '<tr>'+
                                 '<td>Double click</td><td>Open properties editor dialog for selected</td>'+
                             '</tr>'+
                             '<tr>'+
@@ -153,16 +163,19 @@ var free =
                             '</tr>'+
                             '<tr>'+
                                 '<td>Page Up</td><td>Increases Z-order (min: 0, max: '+ p_base.getMaxZIndex() +')<br>'+
-                                'Gadgets start with Z == 100 to easily allow shift them in Z order.</td>'+
+                                'Gadgets start with Z == 100 to easily allow shift them in Z order.<br>'+
+                                'Add [Shift] to make steps of 10 levels.</td>'+
                             '</tr>'+
                             '<tr>'+
-                                '<td>Page Down</td><td>Decreases Z-order (min: 0, max: '+ p_base.getMaxZIndex() +')</td>'+
+                                '<td>Page Down</td><td>Decreases Z-order (min: 0, max: '+ p_base.getMaxZIndex() +')<br>'+
+                                'Gadgets start with Z == 100 to easily allow shift them in Z order.<br>'+
+                                'Add [Shift] to make steps of -10 levels.</td>'+
                             '</tr>'+
                             '<tr>'+
                                 '<td>Insert</td><td>Clones selected gadget</td>'+
                             '</tr>'+
                             '<tr>'+
-                                '<td>Del</td><td>Deletes selected gadget (asking for confirmation)</td>'+
+                                '<td>Del</td><td>Deletes selected gadget(s) (asking for confirmation)</td>'+
                             '</tr>'+
                             '<tr>'+
                                 '<td>Esc</td><td>Closes a dialog</td>'+
@@ -193,14 +206,34 @@ var free =
 
         if( gum.isInDesignMode() )
         {
-            $('#gum-toolbar').append( $('<br>' +
-                                        '<div style="display:flex; justify-content:space-between; align-items:center;">' +
-                                            '<span id="free_focused_wnd_info" style="font-size:70%;">x = , y = , w = , h = , z =</span>' +
-                                            '<span>' +
-                                                '<i class="gum-mini-btn fa fa-copy" title="Clone highlighted gadget" onclick="free._clone_()"></i>' +
-                                                '<i class="gum-mini-btn fa fa-trash" title="Delete highlighted gadget" onclick="free._del_()"></i>' +
-                                            '</span>' +
-                                        '</div>') );
+            $('#gum-toolbar').append(
+                '<br>' +
+                '<div style="display:flex; justify-content:space-between; align-items:center;">' +
+                    '<span id="free_focused_wnd_info" style="font-size:70%;">x = , y = , w = , h = , z =</span>' +
+                    '<span>' +
+                        '<i class="gum-mini-btn ti ti-copy" title="Clone highlighted gadget" onclick="free._clone_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-trash" title="Delete highlighted gadget(s)" onclick="free._del_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-code" title="HTML and JavaScript editor" onclick="gum._coder_()"></i>' +
+                    '</span>' +
+                '</div>' +
+                '<div id="gum-align-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-top: 4px;">' +
+                    '<span>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-left" title="Align left" onclick="free._alignLeft_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-center" title="Align center" onclick="free._alignCenter_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-right" title="Align right" onclick="free._alignRight_()"></i>' +
+                    '</span>' +
+                    '<span>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-top" title="Align top" onclick="free._alignTop_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-middle" title="Align middle" onclick="free._alignMiddle_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-layout-align-bottom" title="Align bottom" onclick="free._alignBottom_()"></i>' +
+                    '</span>' +
+                    '<span>' +
+                        '<i class="gum-mini-btn ti ti-arrows-horizontal" title="Same width" onclick="free._sameWidth_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-arrows-vertical" title="Same height" onclick="free._sameHeight_()"></i>' +
+                        '<i class="gum-mini-btn ti ti-maximize" title="Same size" onclick="free._sameSize_()"></i>' +
+                    '</span>' +
+                '</div>'
+                );
 
             $(document).on( 'keydown', function(evt) { free._onKeyPressed_(evt); } );  // Arrow keys are only triggered by onkeydown
         }
@@ -224,34 +257,51 @@ var free =
         gadget.show();
 
         if( gum.isInDesignMode() )
+        {
             this._showGadgetInfo_();
+        }
 
         return this;
     },
 
-    _del_ : function( gadget = this._gadgetFocus_ )    // Usend only when in design mode
+    _del_ : function()    // Usend only when in design mode
     {
-        if( !gadget ) return this;
+        if( this._aGadgetsSelected_.length === 0 )
+        {
+            return this;
+        }
 
-        p_app.confirm( "Do you want to delete selected gadget?",
-                       () => {
-                                let index = free._aGadgets_.indexOf( gadget );
+        const msg = (this._aGadgetsSelected_.length > 1) ? "Do you want to delete selected gadgets?"
+                                                         : "Do you want to delete selected gadget?";
+        p_app.confirm( msg, function() {
+            let aRemainingGadgets = [];
 
-                                gadget.getContainer().parent().remove();
-                                gadget.destroy();
-                                free._aGadgets_.splice( index, 1 );
+            for( const gadget of free._aGadgets_ )
+            {
+                if( free._aGadgetsSelected_.includes( gadget ) )
+                {
+                    gadget.getContainer().parent().remove();
+                    gadget.destroy();
+                }
+                else
+                {
+                    aRemainingGadgets.push( gadget );
+                }
+            }
 
-                                if( free._aGadgets_.length > 0 )
-                                {
-                                    let newIndex = (index >= free._aGadgets_.length) ? free._aGadgets_.length - 1 : index;
-                                    free._setFocused_( free._aGadgets_[newIndex] );
-                                }
-                                else
-                                {
-                                    free._gadgetFocus_ = null;
-                                    free._showGadgetInfo_(); // this will clear the info panel
-                                }
-                             } );
+            free._aGadgets_ = aRemainingGadgets;
+            free._aGadgetsSelected_ = [];
+            free._gadgetFocus_ = null;
+
+            if( free._aGadgets_.length > 0 )
+            {
+                free._setFocused_( free._aGadgets_[0] );
+            }
+            else
+            {
+                free._showGadgetInfo_(); // this will clear the info panel
+            }
+        });
 
         this._isChanged_ = true;
 
@@ -260,13 +310,28 @@ var free =
 
     _edit_ : function()    // Usend only when in design mode
     {
-        this._gadgetFocus_.edit();
+        if( this._aGadgetsSelected_.length > 1 )
+        {
+            p_app.alert( "Please, select only one gadget to edit." );
+            return this;
+        }
+
+        if( this._gadgetFocus_ )
+        {
+            this._gadgetFocus_.edit();
+        }
 
         return this;
     },
 
     _clone_ : function()    // Usend only when in design mode
     {
+        if( this._aGadgetsSelected_.length > 1 )
+        {
+            p_app.alert( "Please, select only one gadget to clone." );
+            return this;
+        }
+
         if( ! this._gadgetFocus_ )
         {
             p_app.alert( "Please, select a gadget to clone." );
@@ -291,42 +356,99 @@ var free =
 
     _setFocused_ : function( eventOrGadget )    // Usend only when in design mode
     {
-        let $gadWnd = (eventOrGadget instanceof GumGadget) ? eventOrGadget.getContainer().parent()   // It is a gadget
-                                                           : this._getGadgetWnd_( eventOrGadget );   // It is an event
+        const isShift = eventOrGadget && eventOrGadget.shiftKey;
+        const $gadWnd = (eventOrGadget instanceof GumGadget) ? eventOrGadget.getContainer().parent() : this._getGadgetWnd_( eventOrGadget );
+        const gadget  = this._getGadget_( $gadWnd );
 
-        for( const gadget of this._aGadgets_ )
+        if( ! isShift )
         {
-            let $wnd = gadget.getContainer().parent();
+            this._aGadgetsSelected_ = [];
+            this._aGadgetsSelected_.push( gadget );
+        }
+        else
+        {
+            const index = this._aGadgetsSelected_.indexOf( gadget );
 
-            $wnd.css('border', '0px');    // Unfocused: no border
-
-            if( $wnd[0] === $gadWnd[0] )   // [0] is needed: comparing (===) JQuery objects does not work
-                this._gadgetFocus_ = gadget;
+            if( index > -1 )
+            {
+                this._aGadgetsSelected_.splice( index, 1 ); // Already selected, so unselect
+            }
+            else
+            {
+                this._aGadgetsSelected_.push( gadget );     // Not selected, so select
+            }
         }
 
-        $gadWnd.css('border', '1px dashed #BE81F7');    // Focused: dashed border
+        this._gadgetFocus_ = (this._aGadgetsSelected_.length > 0) ? this._aGadgetsSelected_[ this._aGadgetsSelected_.length - 1 ] : null;
 
-        this._showGadgetInfo_( $gadWnd );
+        //-- Update borders
+        for( const g of this._aGadgets_ )
+        {
+            const $w = g.getContainer().parent();
+
+            if( this._aGadgetsSelected_.includes( g ) )
+            {
+                $w.css('border', (g === this._gadgetFocus_) ? '2px dashed #BE81F7' : '1px solid #BE81F7');
+            }
+            else
+            {
+                $w.css('border', '0px');
+            }
+        }
+
+        this._showGadgetInfo_();
+        this._updateAlignToolbar_();
 
         return this;
     },
 
-    _onGadgetDrag_ : function( event, isOngoing )
+    _onGadgetDragStart_ : function( event, ui )
+    {
+        for( const g of this._aGadgetsSelected_ )
+        {
+            const $w = g.getContainer().parent();
+            $w.data('originalPosition', $w.offset());
+        }
+    },
+
+    _onGadgetDrag_ : function( event, ui, isOngoing )
     {
         let $gadWnd = this._getGadgetWnd_( event );
         let gadget  = this._getGadget_( $gadWnd );
 
-        gadget.x    = parseInt( $gadWnd.offset().left );
-        gadget.y    = parseInt( $gadWnd.offset().top );
-
         if( isOngoing )
         {
-            this._showGadgetInfo_( gadget );
+            let originalDraggedPos = $(ui.helper).data('originalPosition');
+            let dx = ui.offset.left - originalDraggedPos.left;
+            let dy = ui.offset.top - originalDraggedPos.top;
+
+            for( const g of this._aGadgetsSelected_ )
+            {
+                if( g === gadget )
+                {
+                    continue;
+                }
+
+                const $w = g.getContainer().parent();
+                const originalPos = $w.data('originalPosition');
+                if (originalPos) {
+                    $w.offset({ top: originalPos.top + dy, left: originalPos.left + dx });
+                }
+            }
         }
-        else
+        else // stop
         {
+             for( const g of this._aGadgetsSelected_ )
+            {
+                const $w = g.getContainer().parent();
+                g.x = parseInt( $w.offset().left );
+                g.y = parseInt( $w.offset().top );
+                $w.removeData('originalPosition');
+            }
             this._isChanged_ = true;
         }
+
+        this._showGadgetInfo_( gadget );
     },
 
     _onGadgetResize_ : function( event, isOngoing )
@@ -372,13 +494,21 @@ var free =
         {
             evt.preventDefault();
 
-            let z  = $gadWnd.css('z-index');
-                z += (evt.keyCode === 33) ? 1 : -1;
-                z  = p_base.setBetween( 0, z, p_base.getMaxZIndex() );
+            let incr = ((evt.shiftKey || evt.metaKey) ? 10 : 1);
 
-            $gadWnd.css('z-index', z.toString());
+            for( const gadget of this._aGadgetsSelected_ )
+            {
+                 if( ! p_base.isNumber( gadget.z ) )
+                    gadget.z = 100;    // Default Z index when not defined
 
-            this._showGadgetInfo_( $gadWnd );
+                let z  = gadget.z;
+                    z += (evt.keyCode === 33) ? incr : (incr * -1);
+                    z  = p_base.setBetween( 0, z, p_base.getMaxZIndex() );
+
+                gadget.z = z;
+                gadget.getContainer().parent().css('z-index', z.toString());
+            }
+            this._showGadgetInfo_( this._gadgetFocus_ );
             this._isChanged_ = true;
         }
         else if( (evt.keyCode >= 37 ) && (evt.keyCode <= 40) )         // Arrows key codes: left = 37, up = 38, right = 39, down = 40
@@ -387,49 +517,63 @@ var free =
 
             if( evt.shiftKey )
             {
-                switch( evt.keyCode )
+                evt.preventDefault();
+                for( const gadget of this._aGadgetsSelected_ )
                 {
-                    case 37: evt.preventDefault(); $gadWnd.offset( { left: $gadWnd.offset().left - incr } ); break;
-                    case 38: evt.preventDefault(); $gadWnd.offset( { top : $gadWnd.offset().top  - incr } ); break;
-                    case 39: evt.preventDefault(); $gadWnd.offset( { left: $gadWnd.offset().left + incr } ); break;
-                    case 40: evt.preventDefault(); $gadWnd.offset( { top : $gadWnd.offset().top  + incr } ); break;
+                    const $w = gadget.getContainer().parent();
+                    switch( evt.keyCode )
+                    {
+                        case 37: $w.offset( { left: $w.offset().left - incr } ); break;
+                        case 38: $w.offset( { top : $w.offset().top  - incr } ); break;
+                        case 39: $w.offset( { left: $w.offset().left + incr } ); break;
+                        case 40: $w.offset( { top : $w.offset().top  + incr } ); break;
+                    }
+                    this._updateGadgetSize_( $w, false );
                 }
             }
-            else if( evt.ctrlKey && free._getGadget_( $gadWnd ).isResizable() )
+            else if( evt.ctrlKey && this._gadgetFocus_.isResizable() )
             {
-                switch( evt.keyCode )
+                 evt.preventDefault();
+                for( const gadget of this._aGadgetsSelected_ )
                 {
-                    case 37: evt.preventDefault(); $gadWnd.width(  $gadWnd.width()  - incr ); break;
-                    case 38: evt.preventDefault(); $gadWnd.height( $gadWnd.height() - incr ); break;
-                    case 39: evt.preventDefault(); $gadWnd.width(  $gadWnd.width()  + incr ); break;
-                    case 40: evt.preventDefault(); $gadWnd.height( $gadWnd.height() + incr ); break;
+                    const $w = gadget.getContainer().parent();
+                    if( !gadget.isResizable() )
+                    {
+                        continue;
+                    }
+
+                    switch( evt.keyCode )
+                    {
+                        case 37: $w.width(  $w.width()  - incr ); break;
+                        case 38: $w.height( $w.height() - incr ); break;
+                        case 39: $w.width(  $w.width()  + incr ); break;
+                        case 40: $w.height( $w.height() + incr ); break;
+                    }
+                    this._updateGadgetSize_( $w, false );
                 }
             }
-
-            this._updateGadgetSize_( $gadWnd, false );
             this._isChanged_ = true;
         }
     },
 
     _showGadgetInfo_ : function( wndOrGad = null )    // Is invoked only when in design mode
     {
-        let gadget = (wndOrGad && (wndOrGad instanceof GumGadget)) ? wndOrGad : free._getGadget_( wndOrGad );
+        let gadget = (wndOrGad && (wndOrGad instanceof GumGadget)) ? wndOrGad : this._gadgetFocus_;
 
         if( ! gadget )    // v.g. after last gadget is deleted, no gadget has focus
         {
-            $('#free_focused_wnd_info').text( "  x = " +
-                                              ", y = " +
-                                              ", w = " +
-                                              ", h = " +
-                                              ", z = " );
+            $('#free_focused_wnd_info').html( "&nbsp;" );
         }
         else
         {
-            $('#free_focused_wnd_info').text( "  x = "+ parseInt( gadget.x )      +
-                                              ", y = "+ parseInt( gadget.y )      +
-                                              ", w = "+ parseInt( gadget.width )  +
-                                              ", h = "+ parseInt( gadget.height ) +
-                                              ", z = "+ parseInt( gadget.z ) );
+            let width  = gadget.width  ? gadget.width  : gadget.getContainer().parent().width();    // Some gadtes like buttons,
+            let height = gadget.height ? gadget.height : gadget.getContainer().parent().height();   // do not have width and height defined
+
+            $('#free_focused_wnd_info').text(   "x=" + parseInt( gadget.x ) +
+                                              ", y=" + parseInt( gadget.y ) +
+                                              ", w=" + parseInt( width    ) +
+                                              ", h=" + parseInt( height   ) +
+                                              ", z=" + parseInt( gadget.z ) );
         }
 
         return this;
@@ -481,52 +625,155 @@ var free =
         throw "Error: no gadget found for the given window";
     },
 
-    _updateGadgetSize_( $gadWnd, isOngoing = false )
+    _updateGadgetSize_: function( $gadWnd, isOngoing = false )
     {
         let gadget = free._getGadget_( $gadWnd );
         let z      = $gadWnd.css('z-index');
 
         gadget.x      = parseInt( $gadWnd.offset().left );
         gadget.y      = parseInt( $gadWnd.offset().top );
-        gadget.z      = (p_base.isNumeric( z ) ? z : 0);
+        gadget.z      = (p_base.isNumber( z ) ? z : 100);
         gadget.width  = parseInt( $gadWnd.width() );
         gadget.height = parseInt( $gadWnd.height() );
 
         this._showGadgetInfo_( gadget );
-        this._gadgetFocus_.show( isOngoing );
+        gadget.show( isOngoing );
 
         if( ! isOngoing )
+        {
             free._isChanged_ = true;
+        }
 
         return this;
     },
 
+    _updateAlignToolbar_ : function()
+    {
+        const disabled = this._aGadgetsSelected_.length < 2;
+        $('#gum-align-toolbar i').css('opacity', disabled ? 0.2 : 1.0);
+        $('#gum-align-toolbar i').css('cursor', disabled ? 'not-allowed' : 'pointer');
+        $('#gum-align-toolbar i').prop('disabled', disabled);
+    },
+
+    //------------------------------------------------------------------------//
+    // --- ALIGNMENT AND SIZING ---
+
+    _alignLeft_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetX = this._gadgetFocus_.x;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.x = targetX;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _alignCenter_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetX = this._gadgetFocus_.x + this._gadgetFocus_.width / 2;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.x = targetX - g.width / 2;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _alignRight_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetX = this._gadgetFocus_.x + this._gadgetFocus_.width;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.x = targetX - g.width;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _alignTop_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetY = this._gadgetFocus_.y;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.y = targetY;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _alignMiddle_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetY = this._gadgetFocus_.y + this._gadgetFocus_.height / 2;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.y = targetY - g.height / 2;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _alignBottom_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetY = this._gadgetFocus_.y + this._gadgetFocus_.height;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_) continue;
+            g.y = targetY - g.height;
+            g.getContainer().parent().offset({ left: g.x, top: g.y });
+        }
+        this._isChanged_ = true;
+    },
+
+    _sameWidth_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetWidth = this._gadgetFocus_.width;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_ || !g.isResizable()) continue;
+            g.width = targetWidth;
+            g.getContainer().parent().width(g.width);
+            g.show();
+        }
+        this._isChanged_ = true;
+    },
+
+    _sameHeight_ : function()
+    {
+        if (this._aGadgetsSelected_.length < 2) return;
+        const targetHeight = this._gadgetFocus_.height;
+        for (const g of this._aGadgetsSelected_)
+        {
+            if (g === this._gadgetFocus_ || !g.isResizable()) continue;
+            g.height = targetHeight;
+            g.getContainer().parent().height(g.height);
+            g.show();
+        }
+        this._isChanged_ = true;
+    },
+
+    _sameSize_ : function()
+    {
+        this._sameWidth_();
+        this._sameHeight_();
+    },
+
     _onBrowserResized_ : function()
     {
-        // const newSize = p_app.getBodySize();
-        // const scale   = Math.min( newSize.width / this._bodySize_.width,
-        //                           newSize.height / this._bodySize_.height );    // Use minimum ratio to maintain aspect ratio
-
-        // this._aGadgets_.forEach( gadget =>
-        // {
-        //     const newX      = gadget.x      * scale;
-        //     const newY      = gadget.y      * scale;
-        //     const newWidth  = gadget.width  * scale;
-        //     const newHeight = gadget.height * scale;
-
-        //     if( gum.isInDesignMode() )
-        //     {
-        //         gadget.getContainer().parent()
-        //             .offset( { left: newX, top: newY } )
-        //             .width( newWidth )
-        //             .height( newHeight );
-        //     }
-
-        //     gadget.x = newX;
-        //     gadget.y = newY;
-        //     gadget.width = newWidth;
-        //     gadget.height = newHeight;
-        // } );
+        // TODO: to be implemented
+        return this;
     }
 };
 }

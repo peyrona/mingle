@@ -25,11 +25,8 @@ import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.plaf.basic.BasicButtonUI;
-import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
-
-
 
 /**
  * An improved JTabPane which main new thing is tabs having a custom button.
@@ -42,8 +39,6 @@ public class GTabbedPane extends JTabbedPane
 {
     public GTabbedPane()
     {
-        setUI( new SafeTabbedPaneUI() );
-
         addChangeListener( (ChangeEvent ce) -> updateSelectedTab() );
     }
 
@@ -51,7 +46,7 @@ public class GTabbedPane extends JTabbedPane
 
     public void addTab( String title, Component component, ActionListener al )
     {
-        addTab( title, component, al, IconFontSwing.buildIcon( FontAwesome.TIMES, 12, JTools.getIconColor() ), "close this tab" );
+        addTab( title, component, al, IconFontSwing.buildIcon( FontAwesome.TIMES, 12, JTools.getIconColor() ), "Close this tab" );
     }
 
     public void addTab( String title, Component component, ActionListener al, Icon icon, String sTooltipText )
@@ -180,50 +175,6 @@ public class GTabbedPane extends JTabbedPane
     //------------------------------------------------------------------------//
 
     /**
-     * A safe implementation of BasicTabbedPaneUI that prevents an intermittent ArrayIndexOutOfBoundsException that can occur in multithreaded environments.
-     *
-     * @author Francisco José Morero Peyrona
-     *
-     * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
-     */
-    private class SafeTabbedPaneUI extends BasicTabbedPaneUI
-    {
-        @Override
-        public int tabForCoordinate( JTabbedPane pane, int x, int y )
-        {
-            try
-            {
-                return super.tabForCoordinate( pane, x, y );
-            }
-            catch( ArrayIndexOutOfBoundsException e )
-            {
-                System.out.println( "sale el mio" );
-                // Ignore this exception, which can happen intermittently in a race condition.
-            }
-
-            return -1;
-        }
-
-        @Override
-        protected void setRolloverTab( int index )
-        {
-            try
-            {
-                super.setRolloverTab( index );
-            }
-            catch( ArrayIndexOutOfBoundsException e )
-            {
-                System.out.println( "sale el otro" );
-                // Ignore this exception, which can happen intermittently in a race condition.
-            }
-        }
-    }
-
-    //------------------------------------------------------------------------//
-    // INNER CLASS
-    //------------------------------------------------------------------------//
-
-    /**
          * Component to be used as tabComponent.
          * Contains a JLabel to show the text and a JButton to close the tab it belongs to.
          */
@@ -282,23 +233,16 @@ public class GTabbedPane extends JTabbedPane
         {
             this.icon = icon;
 
-            int size = 19;
-
-            setPreferredSize( new Dimension( size, size ) );
+            setPreferredSize( new Dimension( 19, 19 ) );
             setToolTipText( sToolTipText );
-            //Make the button looks the same for all Laf's
-            setUI( new BasicButtonUI() );
-            //Make it transparent
-            setContentAreaFilled( false );
-            //No need to be focusable
-            setFocusable( false );
+            setUI( new BasicButtonUI() );             // Make the button looks the same for all Laf's
+            setContentAreaFilled( false );            // Make it transparent
+            setFocusable( false );                    // No need to be focusable
             setBorder( BorderFactory.createEtchedBorder() );
             setBorderPainted( false );
-            //Making nice rollover effect: we use the same listener for all buttons
-            addMouseListener( buttonMouseListener );
+            addMouseListener( buttonMouseListener );  // Making nice rollover effect: we use the same listener for all buttons
             setRolloverEnabled( true );
-            //Launches the action by clicking the button
-            addActionListener( al );
+            addActionListener( al );                  // Launches the action by clicking the button
         }
 
         //we don't want to update UI for this button

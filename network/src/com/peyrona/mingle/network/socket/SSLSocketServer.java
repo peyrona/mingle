@@ -5,29 +5,16 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.network.BaseServer4IP;
-import java.io.FileInputStream;
 import java.io.IOException;
+import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.security.GeneralSecurityException;
-import java.security.KeyStore;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Queue;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentLinkedQueue;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 
@@ -42,29 +29,24 @@ import javax.net.ssl.SSLServerSocketFactory;
 final class SSLSocketServer
       extends BaseServer4IP
 {
-    private       ServerThread    server = null;
-    private       ExecutorService exec   = null;
-    private final Object          locker = new Object();
-    private final AtomicBoolean   isStopping = new AtomicBoolean(false);
+    private       ScheduledFuture future = null;
+    private final AtomicBoolean   isStopping = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
 
     @Override
-    public INetServer start( String sCfgAsJSON )
+    public synchronized INetServer start( String sCfgAsJSON )
     {
-        synchronized( locker )
-        {
-            if( isRunning() )
-                return this;
+        if( isRunning() )
+            return this;
 
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL ) )
-                return this;
+        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL ) )
+            return this;
 
-            if( getSSLCert() == null || getSSLKey() == null )
-                throw new MingleException( "SSL certificate and key files are required for SSL server" );
+        if( getSSLCert() == null || getSSLKey() == null )
+            throw new MingleException( "SSL certificate and key files are required for SSL server" );
 
-            startServerSSL();
-        }
+        startServerSSL();
 
         return this;
     }
@@ -72,116 +54,51 @@ final class SSLSocketServer
     @Override
     public INetServer stop()
     {
-        synchronized( locker )
-        {
-            isStopping.set( true );
-            cleanup();
-            setRunning( false );
-            isStopping.set( false );
-        }
+        isStopping.set( true );
+
+        if( future != null )
+            future.cancel( true );
+
+        future = null;
+
+        isStopping.set( false );
 
         return this;
-    }
-
-    @Override
-    public INetServer broadcast( String message )
-    {
-        if( ! isRunning() )
-            forEachListener( l -> l.onError( SSLSocketServer.this, null, new MingleException( "Attempting to use a closed server-socket" ) ) );
-
-        if( server != null )
-            server.broadcast( message );
-
-        return this;
-    }
-
-    @Override
-    public boolean hasClients()
-    {
-        return ((server != null) && (! server.lstClients.isEmpty()));
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private void cleanup()
-    {
-        if( exec != null )
-        {
-            exec.shutdownNow();
-
-            try
-            {
-                exec.awaitTermination( 5, TimeUnit.SECONDS );
-            }
-            catch( InterruptedException e )
-            {
-                MingleException me = new MingleException( "Attempting to use a closed server-socket" );
-
-                log( me );
-                Thread.currentThread().interrupt();
-                forEachListener( l -> l.onError( SSLSocketServer.this, null, me ) );
-            }
-        }
-
-        if( server != null )
-            server.clean();
-
-        exec   = null;
-        server = null;
-    }
-
     private void startServerSSL()
     {
         try
         {
-            SSLContext sslContext = createSSLContext();
-            SSLServerSocketFactory ssf = sslContext.getServerSocketFactory();
+            SSLServerSocketFactory ssf = createSSLContext().getServerSocketFactory();
 
-            server = new ServerThread(getPort(), ssf);
-            exec   = Executors.newCachedThreadPool();
-            exec.submit(server);
-
-            setRunning(true);
+            future = UtilSys.execute( getClass().getSimpleName() +":server", new ServerThread( getPort(), ssf ) );
         }
-        catch( IOException | RejectedExecutionException | GeneralSecurityException e )
+        catch( Exception exc )
         {
-            MingleException me = new MingleException( "Failed to start SSL server", e );
+            String msg = "Failed to start server";
 
-            cleanup();
+            if( exc instanceof BindException )
+                msg += ": apparently the port "+ getPort() +" is already in use.";
+
+            MingleException me = new MingleException( msg, exc );
+
             log( me );
+            notifyError( (INetClient) null, me );
             throw me;
         }
-    }
-
-    private SSLContext createSSLContext() throws GeneralSecurityException, IOException
-    {
-        SSLContext sslContext = SSLContext.getInstance("TLS");
-
-        KeyStore keyStore = KeyStore.getInstance("PKCS12");
-        char[] password   = getSSLPassword();
-
-        try( FileInputStream fis = new FileInputStream( getSSLCert() ) )
-        {
-            keyStore.load( fis, password );
-        }
-
-        KeyManagerFactory kmf = KeyManagerFactory.getInstance( KeyManagerFactory.getDefaultAlgorithm() );
-        kmf.init( keyStore, password );
-
-        sslContext.init( kmf.getKeyManagers(), null, null );
-        return sslContext;
     }
 
     //------------------------------------------------------------------------//
     // INNER CLASS
     // Server Socket Thread
     //------------------------------------------------------------------------//
-    private class ServerThread extends Thread
+    private final class ServerThread extends Thread
     {
-        protected final ServerSocket ss;
-        private   final Queue<SocketClient> lstClients = new ConcurrentLinkedQueue<>();
-        private   final ScheduledExecutorService maintenanceExecutor = Executors.newSingleThreadScheduledExecutor();
+        private final ServerSocket ss;
 
         //------------------------------------------------------------------------//
 
@@ -191,16 +108,6 @@ final class SSLSocketServer
 
             ss = createServerSocket( nPort, sslSocketFactory );
             ss.setReuseAddress(true);
-
-            maintenanceExecutor.scheduleAtFixedRate( this::performMaintenance, 30, 30, TimeUnit.SECONDS );
-        }
-
-        protected ServerSocket createServerSocket( int nPort, SSLServerSocketFactory sslSocketFactory ) throws IOException
-        {
-            SSLServerSocket sslServerSocket = (SSLServerSocket) sslSocketFactory.createServerSocket(nPort);
-            sslServerSocket.setReuseAddress(true);
-            sslServerSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
-            return sslServerSocket;
         }
 
         //------------------------------------------------------------------------//
@@ -210,7 +117,7 @@ final class SSLSocketServer
         {
             while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
             {
-                Socket                             socket = null;
+                Socket                        socket = null;
                 AtomicReference<SocketClient> client = new AtomicReference<>( null );
 
                 try
@@ -225,7 +132,7 @@ final class SSLSocketServer
                     {
                         MingleException me = new MingleException( socket.getInetAddress() + ": address not allowed" );
 
-                        forEachListener( l -> l.onError( SSLSocketServer.this, client.get(), me ) );
+                        notifyError( client.get(), me );
                         closeSocket( socket );
                     }
                 }
@@ -240,90 +147,30 @@ final class SSLSocketServer
                 }
             }
 
-            clean();
+            cleanupClients( true );
         }
 
         //------------------------------------------------------------------------//
 
-        synchronized void broadcast(String message)
+        private ServerSocket createServerSocket( int nPort, SSLServerSocketFactory sslSocketFactory ) throws IOException
         {
-            cleanupDisconnectedClients();
+            SSLServerSocket sslServerSocket = (SSLServerSocket) sslSocketFactory.createServerSocket(nPort);
+            sslServerSocket.setReuseAddress(true);
+            sslServerSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
 
-            if( lstClients.isEmpty() )
-                return;
-
-            Iterator<SocketClient>   iterator = lstClients.iterator();
-            List<CompletableFuture<Void>> futures  = new ArrayList<>();
-
-            while( iterator.hasNext() )
-            {
-                SocketClient client = iterator.next();
-
-                CompletableFuture<Void> future = CompletableFuture.runAsync( () ->
-                                                    {
-                                                        try
-                                                        {
-                                                            client.send( message );
-                                                        }
-                                                        catch( Exception e )
-                                                        {
-                                                            forEachListener( l -> l.onError( SSLSocketServer.this, client, e ) );
-                                                            iterator.remove();
-                                                        }
-                                                    }, exec );
-
-                futures.add( future );
-            }
-
-            try
-            {
-                CompletableFuture.allOf( futures.toArray( CompletableFuture[]::new ) ).get( 5000, TimeUnit.MILLISECONDS );
-            }
-            catch( Exception e )
-            {
-                forEachListener( l -> l.onError( SSLSocketServer.this, null, e ) );
-            }
+            return sslServerSocket;
         }
-
-        void clean()
-        {
-            maintenanceExecutor.shutdownNow();
-
-            for( Iterator<SocketClient> itera = lstClients.iterator(); itera.hasNext(); )
-            {
-                SocketClient client = itera.next();
-
-                forEachListener( l -> l.onDisconnected( SSLSocketServer.this, client ) );
-
-                if( client.isConnected() )
-                    client.disconnect();
-
-                itera.remove();
-            }
-
-            try
-            {
-                if( ! ss.isClosed() )
-                    ss.close();
-            }
-            catch( IOException ioe )
-            {
-                // Ignore close errors
-            }
-        }
-
-        //------------------------------------------------------------------------//
 
         private void handleNewConnection( Socket socket, AtomicReference<SocketClient> clientRef ) throws IOException
         {
             SocketClient newClient = new SocketClient();
-                              newClient.add( new ClientListener() );
+                         newClient.add( newClientListener() );
 
             if( newClient.connect( socket ) )
             {
                 clientRef.set( newClient );
-                lstClients.add( newClient );
-                forEachListener( l -> l.onConnected( SSLSocketServer.this, newClient ) );
+                add( newClient );
+                notifyConnected( newClient );
             }
         }
 
@@ -332,14 +179,9 @@ final class SSLSocketServer
             if( client != null )
                 client.disconnect();
 
-            forEachListener( l -> l.onError( SSLSocketServer.this, client, exc ) );
+            del( client );
+            notifyError( client, exc );
             closeSocket( socket );
-        }
-
-        private void removeClient( SocketClient client )
-        {
-            lstClients.remove( client );
-            forEachListener( l -> l.onDisconnected( SSLSocketServer.this, client ) );
         }
 
         private void closeSocket(Socket socket)
@@ -355,50 +197,6 @@ final class SSLSocketServer
                     // Ignore close errors
                 }
             }
-        }
-
-        private void cleanupDisconnectedClients()
-        {
-            lstClients.removeIf( client -> {
-                if( ! client.isConnected() )
-                {
-                    removeClient( client );
-                    return true;
-                }
-                return false;
-            });
-        }
-
-        private void performMaintenance()
-        {
-            cleanupDisconnectedClients();
-        }
-    }
-
-    //------------------------------------------------------------------------//
-    // INNER CLASS
-    //------------------------------------------------------------------------//
-    private final class ClientListener implements INetClient.IListener
-    {
-        @Override
-        public void onConnected(INetClient origin)
-        {
-        }
-
-        @Override
-        public void onDisconnected(INetClient origin)
-        {
-        }
-
-        @Override
-        public void onMessage( INetClient origin, String msg )
-        {
-            forEachListener( l -> l.onMessage( SSLSocketServer.this, origin, msg ) );
-        }
-
-        @Override
-        public void onError(INetClient origin, Exception exc)
-        {
         }
     }
 }

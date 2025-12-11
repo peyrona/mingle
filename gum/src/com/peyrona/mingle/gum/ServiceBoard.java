@@ -50,7 +50,7 @@ final class ServiceBoard extends ServiceBase
     private static final String sMarkStart = "// START MARK TO INSERT getConfig()";
     private static final String sMarkEnd   = "// END MARK TO INSERT getConfig()";
                                 // Pwd   , Boards
-    private static final OneToMany<String,String> mapPwdBoard = new OneToMany<>();    // Internally, a 'OneToMany' this is a: Map<K,List<V>>
+    private static final OneToMany<String,String> mapPwdBoard = new OneToMany<>();    // Internally, a 'OneToMany' is a: Map<K,List<V>>
 
     private static       String sMasterPwd = null;    // There is only one for all users
 
@@ -111,6 +111,17 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPost() throws IOException    // UPDATE  (used to update master password and also to update dashboard contents)
     {
+        if( xchg.isInIoThread() )
+        {
+            xchg.dispatch( () ->
+                            {
+                                try{ doPost(); }
+                                catch( IOException ioe )
+                                { sendError( ioe ); }
+                            } );
+            return;
+        }
+
         asJSON( (JsonObject jo) ->
                 {
                     UtilJson   uj = new UtilJson( jo );
@@ -192,7 +203,7 @@ final class ServiceBoard extends ServiceBase
     {
         String name = asString( "name" );
 
-        UtilIO.delete( getBoardFolder( name ) );   // Deletes the folder (cotaining 'board.html' and any other files/folders (like the images folder)
+        UtilIO.delete( getBoardFolder( name ) );   // Deletes the folder (containing 'board.html' and any other files/folders (like the images folder)
 
         removeFileFromList( name );                // After file was properly deleted, we can remove the board from the Map
     }
@@ -302,9 +313,13 @@ final class ServiceBoard extends ServiceBase
             UtilIO.newFileWriter()
                   .setFile( getFile4MasterPwd() )
                   .replace( sPwdNew );
-        }
 
-        sMasterPwd = sPwdNew;    // After successfully saved the file
+            sMasterPwd = sPwdNew;    // After successfully saved the file
+        }
+        else
+        {
+            sendError( "Invalid old master password.", StatusCodes.UNAUTHORIZED );
+        }
     }
 
     private void cloneBoard( String source, String target ) throws IOException

@@ -146,16 +146,49 @@ public class WinServiceManager extends AbstractServiceManager
         try
         {
             String serviceName = getServiceName( service );
-            
+
             // Stop the service first
             UtilSys.executeAndWait( "sc", "stop", serviceName );
-            
+
             // Delete the service
             return UtilSys.executeAndWait( "sc", "delete", serviceName ).succeeded();
         }
         catch( IOException | InterruptedException e )
         {
             System.err.println( "Failed to delete service: " + e.getMessage() );
+            return false;
+        }
+    }
+
+    @Override
+    public boolean showFile( String service )
+    {
+        try
+        {
+            String serviceName = getServiceName( service );
+
+            // Use sc.exe to query the service configuration
+            ProcessResult result = UtilSys.executeAndWait( "sc", "qc", serviceName );
+
+            if( ! result.succeeded() )
+            {
+                System.out.println( "Service configuration not found for " + service + "." );
+                return false;
+            }
+
+            System.out.println( "===============================================" );
+            System.out.println( "      " + service.substring( 0, 1 ).toUpperCase() + service.substring( 1 ) + " Service Configuration" );
+            System.out.println( "===============================================" );
+            System.out.println( "Service Name: " + serviceName );
+            System.out.println();
+            System.out.println( result.output );
+            System.out.println( "===============================================" );
+
+            return true;
+        }
+        catch( IOException | InterruptedException e )
+        {
+            System.err.println( "Failed to query service configuration: " + e.getMessage() );
             return false;
         }
     }

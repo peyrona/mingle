@@ -4,6 +4,7 @@ package com.peyrona.mingle.gum;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.interfaces.IConfig;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.japi.Config;
 import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -12,7 +13,10 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -84,8 +88,32 @@ public class Main
             // invoked: even if INTERRUPT signal (Ctrl-C) is used, the JVM will invoke this hook.
             // Even when System.exit(...) is used, the JVM will invoke this hook.
 
-            Runtime.getRuntime()
-                   .addShutdownHook( new Thread( () -> server.stop() ) );
+            Runtime.getRuntime().addShutdownHook( new Thread( "Gum-Shutdown-Hook" )
+            {
+                @Override
+                public void run()
+                {
+                    try
+                    {
+                        UtilSys.getLogger().say( "Shutdown hook initiated..." );
+
+                        // 1. Stop accepting new connections first
+                        server.stop();
+
+                        // 2. Wait for graceful shutdown with timeout
+                        Thread.sleep( 2000 );  // Allow 2 seconds for ongoing requests
+
+                        // 3. Force cleanup if still running
+                        CommBridge.shutdown();  // Cleanup WebSocket resources
+
+                        UtilSys.getLogger().say( "Shutdown completed." );
+                    }
+                    catch( Exception e )
+                    {
+                        UtilSys.getLogger().log( Level.SEVERE, "Error during shutdown: " + e.getMessage() );
+                    }
+                }
+            } );
         }
         catch( Exception ioe )
         {
@@ -107,7 +135,7 @@ public class Main
                             "\t\tconfig    A JSON file (local or remote) with the configuration to use. By default, '{*home*}config.json'.\n"+
                             "\t\thost      Host name. By default, 'localhost'.\n"+
                             "\t\tport      Port number. By default, '8080'.\n"+
-                            "\t\tuser      User name for authentication in: admin users to the web interface and Database. By default, ''.\n"+
+                            "\t\tuser      User name for authentication in: admin users to the web interface and Database. By default ''.\n"+
                             "\t\tpassword  Password for authentication (same as 'user'). By default, ''.\n"+
                             '\n'+
                             "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n"+
@@ -162,37 +190,24 @@ public class Main
                 throw new IOException( "Can not attend SSL without a 'keystore.jks' password" );
         }
 
-        if( UtilColls.isEmpty( Util.getServedFilesDir().list() ) )
+        File fReadMe = new File( Util.getServedFilesDir(), "READ_ME.txt" );
+
+        if( ! fReadMe.exists() )
         {
             UtilIO.newFileWriter()
-                  .setFile( new File( Util.getServedFilesDir(), "READ_ME.txt" ) )
-                  .append( "The files shown here are served by Gum from context 'user_files'.\nFor full files URL, refer to Gum startup info.\n\n"+
+                  .setFile( fReadMe )
+                  .append( "The files shown here are served by Gum from context 'gum/user_files'.\nFor full files URL, refer to Gum startup info.\n\n"+
                            "Dashboards are stored under '"+ Util.getBoardsDir().getName() +"' folder: every Dashboard is stored in a folder having the same name as the Dashboard itself.");
+        }
 
-            UtilIO.newFileWriter()
-                  .setFile( new File( Util.getServedFilesDir(), "users.json" ) )
-                  .append( "#---------------------------------------------------------------------------------------------"+
-                           "# This is a very simplistic file and the use of it made by the HTTP server is evem simpler."+
-                           "#"+
-                           "# While user-name is case insensitive, user-password is case sensitive."+
-                           "#"+
-                           "# Following macros can be used (only in user-password, not in user-name):"+
-                           "#   + {*d*} -> Will be replaced by current day of the month"+
-                           "#   + {*h*} -> Will be replaced by current hour of the day"+
-                           "#"+
-                           "# Example: \"pwd\": \"{*d*}adm{*t*}in\""+
-                           "#"+
-                           "# Before saving, be sure the contents of this file are JSON compliant."+
-                           "#"+
-                           "# // TODO: improve how users are used by the HHTP Server"+
-                           "#          Much more work has to be done in this area"+
-                           "#"+
-                           "#---------------------------------------------------------------------------------------------"+
-                           "\n"+
-                           "["+
-                           "    { \"name\": \"root\", \"pwd\": \"admin\", \"role\": \"admin\" },"+
-                           "    { \"name\": \"1234\", \"pwd\": \"12345\", \"role\": \"guest\", \"allow\": \"192.168.6.9\" }"+
-                           "]" );
+        File fUsers = new File( Util.getServedFilesDir(), "users.json" );
+
+        if( ! fUsers.exists() )
+        {
+            InputStream  is = Main.class.getResourceAsStream( "users.json" );
+            OutputStream os = new FileOutputStream( fUsers );
+
+            UtilIO.copy(  is, os );
         }
     }
  }

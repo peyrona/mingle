@@ -25,16 +25,8 @@ isRoot()
 log()
 {
     local level=$1
-
-    case "$level" in
-        "ERROR"|"FATAL")  icon="❌" ;;
-        "WARNING")        icon="⚠️" ;;
-        "DEBUG")          icon="🐞" ;;
-        "*")              icon="✅" ;;
-    esac
-
     shift
-    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$icon  $level] $*" >&2
+    echo "[$(date +'%Y-%m-%d %H:%M:%S')] [$level] $*" >&2
 }
 
 die()

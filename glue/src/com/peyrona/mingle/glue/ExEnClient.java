@@ -18,6 +18,8 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Opens, closes and send messages to an ExEn using an INetClient.
@@ -49,10 +51,10 @@ public final class ExEnClient
 
     //------------------------------------------------------------------------//
 
-    public synchronized void connect() throws MingleException
+    public synchronized boolean connect() throws MingleException
     {
         if( netClient != null && netClient.isConnected() )
-            return;
+            return true;
 
         netClient = NetworkBuilder.buildClient( joConnDef.toString() );
 
@@ -65,7 +67,22 @@ public final class ExEnClient
         lstPendingListeners.clear();
         // ------------------------------------------------
 
-        netClient.connect( joConnDef.get("init").asObject().toString() );
+        try
+        {
+            netClient.connect( joConnDef.get("init").asObject().toString() );
+
+            CountDownLatch latch   = new CountDownLatch( 1 );
+            boolean        started = latch.await( 3, TimeUnit.SECONDS );   // Wait up to 3 seconds for the client to connect to server
+
+            if( ! started || ! netClient.isConnected() )
+                throw new MingleException( "" );
+        }
+        catch( Exception e )
+        {
+            throw new MingleException( "Client failed to connect with ExEn", e );
+        }
+
+        return true;
     }
 
     public void disconnect()
@@ -212,12 +229,6 @@ public final class ExEnClient
         @Override
         public void onConnected( INetClient origin )
         {
-            if( (netClient != null) && (! netClient.isConnected()) )
-            {
-                JTools.alert( "Error: client shoud be connected but it is not" );
-                return;
-            }
-
             ExEnClient.this.sendList();
 
             UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" connected to "+ sConnName );

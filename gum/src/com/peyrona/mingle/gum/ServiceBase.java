@@ -173,6 +173,10 @@ abstract class ServiceBase
                 {
                     sendError("Internal server error", StatusCodes.BAD_REQUEST );
                 }
+                catch( Throwable t )
+                {
+                    sendError( "Unexpected error", StatusCodes.INTERNAL_SERVER_ERROR );
+                }
             } );
     }
 

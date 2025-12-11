@@ -198,14 +198,17 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                Map<String,Long> map  = new HashMap<>();
-
-                for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
+                if( mapRootsTotal == null )
                 {
-                    map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
-                }
+                    Map<String,Long> map  = new HashMap<>();
 
-                mapRootsTotal = Collections.unmodifiableMap( map );
+                    for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
+                    {
+                        map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
+                    }
+
+                    mapRootsTotal = Collections.unmodifiableMap( map );
+                }
             }
         }
 
@@ -218,14 +221,17 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                Map<String,Long> map  = new HashMap<>();
-
-                for( String fRoot : mapRootsTotal.keySet() )
+                if( mapRootsFree == null )
                 {
-                    map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
-                }
+                    Map<String,Long> map  = new HashMap<>();
 
-                mapRootsFree = map;
+                    for( String fRoot : mapRootsTotal.keySet() )
+                    {
+                        map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
+                    }
+
+                    mapRootsFree = map;
+                }
             }
         }
 

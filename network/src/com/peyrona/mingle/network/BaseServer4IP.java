@@ -7,11 +7,18 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
+import java.security.GeneralSecurityException;
+import java.security.KeyStore;
+import java.security.KeyStoreException;
+import java.security.cert.Certificate;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicBoolean;
+import javax.net.ssl.KeyManagerFactory;
+import javax.net.ssl.SSLContext;
 
 /**
  *
@@ -28,15 +35,14 @@ public abstract class   BaseServer4IP
 
     //------------------------------------------------------------------------//
 
-    private       String        sHost;
-    private       int           nPort;
-    private       int           nTimeout;
-    private       String        sKeyPath;
-    private       short         nAllow;
-    private       File          fCert;    // File containing SSL certificate
-    private       File          fKey;     // File containing SSL key
-    private       char[]        acPass;   // SSL Certificate password
-    private final AtomicBoolean isRunning = new AtomicBoolean( false );
+    private String sHost;
+    private int    nPort;
+    private int    nTimeout;
+    private String sKeyPath;
+    private short  nAllow;
+    private File   fCert;    // File containing SSL certificate
+    private File   fKey;     // File containing SSL key
+    private char[] acPass;   // SSL Certificate password
 
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
@@ -74,12 +80,6 @@ public abstract class   BaseServer4IP
     public char[] getSSLPassword()
     {
         return acPass;
-    }
-
-    @Override
-    public boolean isRunning()
-    {
-        return isRunning.get();
     }
 
     @Override
@@ -203,11 +203,52 @@ public abstract class   BaseServer4IP
         return UtilComm.isCLientAllowed( nAllow, addr );
     }
 
-    protected BaseServer4IP setRunning( boolean b )
+    protected SSLContext createSSLContext() throws GeneralSecurityException, IOException
     {
-        isRunning.set( b );
+        SSLContext sslContext = SSLContext.getInstance( "TLS" );
+        KeyStore   keyStore   = KeyStore.getInstance( "PKCS12" );
+        char[]     password   = getSSLPassword();
 
-        return this;
+        try( FileInputStream fis = new FileInputStream( getSSLCert() ) )
+        {
+            keyStore.load( fis, password );
+        }
+
+        // Add certificate validation
+        keyStore.aliases().asIterator().forEachRemaining( alias ->
+        {
+            try
+            {
+                Certificate cert = keyStore.getCertificate( alias );
+
+                if( cert instanceof java.security.cert.X509Certificate )
+                     ((java.security.cert.X509Certificate) cert).checkValidity();
+            }
+            catch( KeyStoreException e )
+            {
+                throw new IllegalArgumentException( "KeyStore access error for alias: " + alias, e );
+            }
+            catch( java.security.cert.CertificateExpiredException e )
+            {
+                throw new SecurityException( "Certificate expired for alias: " + alias, e );
+            }
+            catch( java.security.cert.CertificateNotYetValidException e )
+            {
+                throw new SecurityException( "Certificate not yet valid for alias: " + alias, e );
+            }
+            catch( Exception e )
+            {
+                throw new SecurityException( "Unexpected error validating certificate: " + alias, e );
+            }
+        } );
+
+        KeyManagerFactory kmf = KeyManagerFactory.getInstance( KeyManagerFactory.getDefaultAlgorithm() );
+                          kmf.init( keyStore, password );
+
+        // Use stronger SSL configuration
+        sslContext.init( kmf.getKeyManagers(), null, null );
+
+        return sslContext;
     }
 
     //------------------------------------------------------------------------//
@@ -216,15 +257,18 @@ public abstract class   BaseServer4IP
     private String allow2Str()
     {
         if( nAllow == UtilComm.ALLOW_IP_LOCAL )
-            return sHost;
+            return sHost != null ? sHost : "unknown";
 
         if( nAllow == UtilComm.ALLOW_IP_ANY )
             return "All";
 
-        if( UtilStr.countChar( sHost, '.' ) != 3 )
+        if( sHost == null || UtilStr.countChar( sHost, '.' ) != 3 )
             return "Intranet";
 
         String[] groups = sHost.split( "\\." );
+
+        if( groups.length < 2 )   // Additional safety check
+            return "Intranet";
 
         return groups[0] +'.'+ groups[1] +".*.*";
     }

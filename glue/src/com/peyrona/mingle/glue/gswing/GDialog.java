@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.glue.gswing;
 
+import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Main;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -111,6 +112,12 @@ public class GDialog extends JDialog
     public GDialog setVisible()
     {
         setVisible( true );
+        return this;
+    }
+
+    public GDialog icon( String iconName )
+    {
+        JTools.setIconImages( this, iconName );
         return this;
     }
 

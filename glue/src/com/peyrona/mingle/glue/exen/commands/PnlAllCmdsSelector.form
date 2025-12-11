@@ -29,7 +29,7 @@
     </DimensionLayout>
     <DimensionLayout dim="1">
       <Group type="103" groupAlignment="0" attributes="0">
-          <Component id="pnlCommands" pref="431" max="32767" attributes="0"/>
+          <Component id="pnlCommands" pref="130" max="32767" attributes="0"/>
       </Group>
     </DimensionLayout>
   </Layout>
@@ -139,7 +139,7 @@
                                   <Component id="btnScrInlClone" min="-2" max="-2" attributes="0"/>
                                   <EmptySpace type="separate" max="-2" attributes="0"/>
                                   <Component id="btnScrInlDel" min="-2" max="-2" attributes="0"/>
-                                  <EmptySpace pref="61" max="32767" attributes="0"/>
+                                  <EmptySpace max="32767" attributes="0"/>
                               </Group>
                           </Group>
                           <Component id="lblScrDriver" min="-2" max="-2" attributes="0"/>

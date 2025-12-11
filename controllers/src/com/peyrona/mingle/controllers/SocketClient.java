@@ -76,7 +76,7 @@ public final class SocketClient
 
         if( (Boolean) get( KEY_USE_WS ) )
         {
-            // FIXME: implementar los WebSockets con la lib Undertow
+            // FIXME: uar los WebSockets de network
 
 //            NettyWebSocketClient wsc = new NettyWebSocketClient();
 //                                 wsc.add( new MyListener() );

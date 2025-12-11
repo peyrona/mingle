@@ -1,0 +1,168 @@
+<div id="properties-check" style="display:none;">
+    <form onsubmit="return false;">
+        <div class="container">
+            <div class="columns">
+                <div class="column">
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Target ExEn</label>
+                                <div class="control is-expanded">
+                                    <div class="select is-fullwidth">
+                                        <select name="exen" onchange="dlgCheck.geh.changed(this)">
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Device (type Boolean)</label>
+                                <div class="control is-expanded">
+                                    <div class="select is-fullwidth">
+                                        <select name="device" onchange="dlgCheck.geh.changed(this)">
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Icon when OFF</label>
+                                <div class="control is-expanded">
+                                    <div class="select is-fullwidth">
+                                        <select name="icon_off" onchange="dlgCheck.geh.changed(this)">
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Icon when ON</label>
+                                <div class="control is-expanded">
+                                    <div class="select is-fullwidth">
+                                        <select name="icon_on" onchange="dlgCheck.geh.changed(this)">
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="field">
+                        <label class="checkbox">
+                            <input type="checkbox" name="actuable" checked onchange="dlgCheck.geh.changed(this)">        <!-- Not needed to call .update() (when dialog is closed all values are updated) -->
+                                Actuable: toggles device state when user clicks the image
+                        </label>
+                    </div>
+                </div>
+
+                <div class="column">
+                    <div class="field is-grouped">
+                        <p class="control label">
+                            Available images
+                        </p>
+                        <p class="control" style="width:70%">
+                            <button class="button is-link is-small is-pulled-right" onclick="dlgCheck._uploadImg_();"><i class="fa fa-cloud-upload"></i>&nbsp;&nbsp;Upload</button>
+                        </p>
+                    </div>
+                    <div style="display:block; overflow:auto;">
+                        <table id="tbl-check-images" class="table is-bordered is-fullwidth is-fullheight">
+                            <tbody>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+
+if( typeof dlgCheck === "undefined" )
+{
+var dlgCheck =
+{
+    geh : null,
+
+    setup : function( gadget, fnOnChanged, fnOnEditEnd )
+    {
+        this._reloadAllImages_();
+
+        if( this.geh === null )
+            this.geh = new GadgetEditorHelperSingleExEn( "properties-check", gadget, fnOnChanged, fnOnEditEnd );
+        else
+            this.geh.setGadget( gadget );
+
+        return this;
+    },
+
+    show()
+    {
+        this.geh.showDialog();
+
+        return this;
+    },
+
+    //-------------------------------------------------------------------------------------//
+
+    _uploadImg_ : function()
+    {
+        gt.upload( { target: 'board_images', board: gum.getDashboardName() },
+                   dlgCheck._reloadAllImages_() );
+    },
+
+    _delImg_ : function( sImage )
+    {
+        if( sImage.toLowerCase().startsWith( "default_on"  ) ||
+            sImage.toLowerCase().startsWith( "default_off" ) )
+        {
+            p_app.alert( '"'+ sImage +'" can not be deleted because it is in use' );
+            return;
+        }
+
+        p_app.confirm( 'Delete "'+ sImage +'"?',
+                          function()        // NOTA: los DELETE exigen q los params se pasen en la URL.
+                          {
+                                $.ajax( {   url     : "/gum/ws/images?"+ $.param( sImage ),
+                                            type    : "DELETE",
+                                            error   : (xhr) => p_app.showAjaxError( xhr ),
+                                            success : ()    => dlgCheck._reloadAllImages_()
+                                        } );
+                          } );
+    },
+
+    _reloadAllImages_ : function()
+    {
+        gt.getImages( (asFiles) =>
+                        {
+                            let $selectOn  = $('#properties-check').find('[name="icon_on"]' );
+                            let $selectOff = $('#properties-check').find('[name="icon_off"]');
+                            let $tableBody = $('#tbl-check-images tbody:last');
+
+                            $selectOn.empty();
+                            $selectOff.empty();
+                            $tableBody.empty();
+
+                            for( let n = 0; n < asFiles.length; n++ )
+                            {
+                                $selectOn.append(  $('<option value="'+ asFiles[n] +'">'+ asFiles[n] +'</option>') );
+                                $selectOff.append( $('<option value="'+ asFiles[n] +'">'+ asFiles[n] +'</option>') );
+
+                                $tableBody.append( '<tr>'+
+                                                   '  <td class="vertical-align:middle;"><img src="images/'+ asFiles[n] +'" width="36" height="36"></td>'+
+                                                   '  <td class="vertical-align:middle;">'+ asFiles[n] +'</td>'+
+                                                   '  <td class="vertical-align:middle;"><span class="icon"><i class="fa fa-trash fa-lg gum-pointer" onclick="dlgCheck._delImg_(\''+ asFiles[n] +'\')"></i></span></td>'+
+                                                   '</tr>');
+                            }
+                        }
+                    );
+    }
+};
+}
+</script>

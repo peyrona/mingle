@@ -96,7 +96,7 @@ class GumChart extends GumGadget
             {
                 let fn = function( action, payload )   // Better to have a function per device
                     {
-                        if( self._isProperValue( "Number", payload.value, payload.name ) )
+                        if( self._isValidValue( "Number", payload.value, payload.name ) )
                         {
                             self._hasErrors( false );
                             self.wrapper.plot( payload.name, payload.when, payload.value );
@@ -111,11 +111,8 @@ class GumChart extends GumGadget
     }
 }
 
-
 //------------------------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------------------------------------------------------------------------------------------//
-//------------------------------------------------------------------------------------------------------------------------------------//
-
 
 //-------------------------------------------------------------------------------------//
 // Wrapper class for graphs whose X-axis (abscissa) is the time: dynamic
@@ -290,7 +287,7 @@ class ChartWrap
         if( isOngoing )
             return this;
 
-        let $container = $(this.parent.getContainer());
+        let $container = $(this.parent.getContentArea());
 
         $container.empty()
                   .append( this._getChartDiv_( $container.width(), $container.height() - 75 ) );

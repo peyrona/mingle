@@ -164,9 +164,16 @@ public class ParseRuleThen extends ParseBase
             return null;
         }
 
-        Lexeme lexTarget = lexemes.get(0);
-        String sTarget   = lexTarget.text();
-        int    nAfter    = getAfter( lexemes );    // The lexemes 'AFTER <n>' if existed, were removed by getAfter(...)
+        List<Lexeme> lstLexBak = new ArrayList<>( lexemes );  // To be used only in case of error
+        Lexeme       lexTarget = lexemes.get(0);
+        String       sTarget   = lexTarget.text();
+        int          nAfter    = getAfter( lexemes );         // The lexemes 'AFTER <n>' if existed, were removed by getAfter(...)
+
+        if( lexemes.isEmpty() )
+        {
+            addError( "\"THEN\" clause: has only \"AFTER\" modifier.", lstLexBak.get( 0 ) );
+            return null;
+        }
 
         // If there is only one lexeme, it must be a name: either an script's name or a rule's name,
         // can not be an expression because expressions need at least 2 lexemes: "! true"

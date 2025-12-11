@@ -7,6 +7,9 @@ import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
+import java.net.URISyntaxException;
+import java.util.List;
 
 /**
  *
@@ -76,22 +79,45 @@ final class Util
      *
      * @return
      */
-    private static File getUserDir()
+    private static File getUserDir() throws IOException
     {
         if( fUserDir == null )
         {
             synchronized( Util.class )
             {
-                if( fUserDir == null )
+                String userDir = UtilSys.getConfig().get( "monitoring", "user_base", "" );
+
+                if( ! UtilStr.isMeaningless( userDir ) )
                 {
-                    String userDir = UtilSys.getConfig().get( "monitoring", "user_files_dir", "" );
+                    try
+                    {
+                        List<URI> lst = UtilIO.expandPath( userDir );
 
-                    fUserDir = UtilStr.isEmpty( userDir ) ? new File( UtilSys.getEtcDir(), "gum_user_files" )
-                                                          : new File( userDir            , "gum_user_files" );
-
-                    if( ! UtilIO.mkdirs( fUserDir ) )
-                        throw new MingleException( "Can not create "+ fUserDir );
+                        if( ! lst.isEmpty() )
+                            userDir = lst.get( 0 ).toString();
+                    }
+                    catch( IOException | URISyntaxException exc )
+                    {
+                        if( exc instanceof IOException )  throw (IOException) exc;
+                        else                              throw new IOException( exc );
+                    }
                 }
+
+                fUserDir = UtilStr.isMeaningless( userDir ) ? new File( UtilSys.getEtcDir(), "gum_user_base" )
+                                                            : new File( userDir            , "gum_user_base" );
+
+                if( ! UtilIO.mkdirs( fUserDir ) )
+                    throw new MingleException( "Can not create "+ fUserDir );
+
+                String result = UtilIO.canRead( fUserDir, true );
+
+                if( result != null )
+                    throw new MingleException( result );
+
+                //----------------------------------------------------
+//                if( UtilSys.isDevEnv )
+//                    fUserDir = new File( UtilSys.fHomeDir.getParentFile(), "balata/gum_user_base" );
+                //----------------------------------------------------
             }
         }
 

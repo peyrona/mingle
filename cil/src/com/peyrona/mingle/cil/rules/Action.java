@@ -10,7 +10,7 @@ import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
-import com.peyrona.mingle.lang.messages.MsgTrigger;
+import com.peyrona.mingle.lang.messages.MsgExecute;
 import java.util.Map;
 import java.util.Objects;
 
@@ -91,7 +91,7 @@ final class Action implements IRule.IAction
 
         if( isTargetScriptOrRule() )              // It is of type: THEN MyScript | MyRule
         {
-            runtime.bus().post( new MsgTrigger( target, false ), delay );
+            runtime.bus().post(new MsgExecute( target, false ), delay );
         }
         else                                      // It is of type: THEN device = new_value
         {

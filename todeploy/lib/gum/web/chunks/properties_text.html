@@ -2,12 +2,14 @@
 
 <div id="properties-text" style="display:none;">
     <div class="box">
-        This gadget allows to place either an image, a fixed text, the value of a device (use macro '{*device*}') or a combination of all. Example:
-        <code>The value is {*device*} Celsius</code><br>
-        Text can be extended over several rows. In the case the text includes the macro, the number of last values than will be shown can be selected.<br>
-        When using single line (number of rows is 0), the text can be HTML5 valid content.<br>
-        Alignment (left, center and right), as well as text effects (Bold, Italic and Underline) are used only when using single line (number of rows is 0).<br>
-        To show an image, go to the "Style" tab and select a "Background image": image and text can be used simultaneously.
+        <p>This gadget can display an image, static text, a device value (using the <code>{*device*}</code> macro), or any combination —e.g., "The value is <code>{*device*}</code> Celsius."</p>
+        <ul>
+            <li><strong>Multi-line text</strong>: Supported when "Number of rows" is greater than 0. If the text includes the <code>{*device*}</code> macro, you can choose how many recent values to show.</li>
+            <li><strong>Single-line mode</strong> (rows = 0): Text can include valid HTML5 and supports alignment (left, center, right) and styling (bold, italic, underline).</li>
+            <li><strong>Images</strong>: Add a background image via the <strong>Style</strong> tab—images and text can appear together.</li>
+        </ul>
+        <br>
+        <b>Observe that this gadget has 2 texts and both are optional: a "Gadget title" and a "Text (optional)"</b>
     </div>
     <form onsubmit="return false;">
         <div class="container">
@@ -16,7 +18,7 @@
                 <div class="columns">
                     <div class="column">
                         <div class="field">
-                            <label class="label">Card title</label>
+                            <label class="label">Gadget title (optional)</label>
                             <div class="control">
                                 <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgText.geh.changed(this)">
                             </div>
@@ -28,6 +30,10 @@
                             <label class="radio">
                                 <input type="radio" name="card_title_location" value="north" onchange="dlgText.geh.changed(this)" checked>
                                 North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="center" onchange="dlgText.geh.changed(this)">
+                                Center
                               </label>
                               <label class="radio">
                                 <input type="radio" name="card_title_location" value="south" onchange="dlgText.geh.changed(this)">

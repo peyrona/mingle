@@ -10,7 +10,8 @@ package com.peyrona.mingle.lang.messages;
  */
 public abstract class MsgAbstractOne extends Message
 {
-    public final String name;
+    public final String  name;
+    public final boolean isOwn;
 
     //------------------------------------------------------------------------//
 
@@ -21,6 +22,18 @@ public abstract class MsgAbstractOne extends Message
      */
     public MsgAbstractOne( String name )
     {
-        this.name = name;    // 'name' validity is checked by the transpiler. If someone call here from an Script, he/she must do it properly.
+        this( name, true );
+    }
+
+    /**
+     * Constructor.
+     *
+     * @param name Device's name.
+     * @param isOwn true when the message is generated in this ExEn, false when comes for another (via network).
+     */
+    public MsgAbstractOne( String name, boolean isOwn )
+    {
+        this.name  = name;    // 'name' validity is checked by the transpiler. If someone call here from an Script, he/she must do it properly.
+        this.isOwn = isOwn;
     }
 }

@@ -242,7 +242,7 @@ public abstract class      ControllerBase
 
     protected ControllerBase sendReadError( Exception exc )
     {
-        sendError(ILogger.Level.SEVERE, "Error reading value for device '"+ getDeviceName() +'\'', exc );
+        sendError( ILogger.Level.SEVERE, "Error reading value for device '"+ getDeviceName() +'\'', exc );
         return this;
     }
 

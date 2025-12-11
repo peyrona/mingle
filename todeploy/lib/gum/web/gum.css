@@ -3,15 +3,14 @@
     Author     : Francisco Morero Peyrona
 */
 
-/* Font Awesome 4.7.0 */
-@import "https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css";
+/** Tabler Icons Webfont */
+@import url("https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css");
 
 /* Bulma CSS 0.9.4 */
 @import "https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css";
 
 /* Grid Stack 7.2.3 */
 @import "https://cdnjs.cloudflare.com/ajax/libs/gridstack.js/7.2.3/gridstack.min.css";
-
 
 html
 {
@@ -37,6 +36,9 @@ body
 /*------------------------------------------------------------------*/
 /* FREE LAYOUT */
 
+.gum-moveable {
+    position: absolute;
+}
 
 /*------------------------------------------------------------------*/
 /* GRID LAYOUT */
@@ -86,9 +88,23 @@ body
 .gadget-title
 {
     text-align   : center;
-    font-size    : 1.5rem;
+ /* font-size    : 1rem;
     font-weight  : bold;
-    margin-bottom: 3px;
+    margin-top   : 3px;
+    margin-bottom: 3px; */
+}
+
+.gadget-title-center
+{
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 10;
+    text-align: center;
+    padding: 5px;
+    background: rgba(255, 255, 255, 0.8);
+    border-radius: 4px;
 }
 
 .gum-mini-btn

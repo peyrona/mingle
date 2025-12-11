@@ -26,6 +26,13 @@ import jiconfont.swing.IconFontSwing;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
+
+
+// FIXME: esta dialog no está alineada con lo que el WebSocketClient espera:
+//        la CUA de la dialog no recoje lo que hay que enviar al client.
+//        Pero SÍ funciona para Plain Sockets.
+
+
 public final class ConnectDlg extends GDialog
 {
     private final JsonArray         jaClients;
@@ -68,7 +75,7 @@ public final class ConnectDlg extends GDialog
 
     //------------------------------------------------------------------------//
 
-    public JsonObject getSelection()
+    public JsonObject getSelectedProtocol()
     {
         return joSelected;
     }
@@ -377,7 +384,7 @@ public final class ConnectDlg extends GDialog
 
     private void btnConnectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConnectActionPerformed
 
-        joSelected = ltbProtocols.getSelected();
+        joSelected = ltbProtocols.getSelected();   // This value will be read by the invoker of this dialog
         dispose();
     }//GEN-LAST:event_btnConnectActionPerformed
 
@@ -393,14 +400,14 @@ public final class ConnectDlg extends GDialog
                 return;
         }
 
-        ConfigManager.setConnection( name, ltbProtocols.getSelected() );
+        SettingsManager.setConnection( name, ltbProtocols.getSelected() );
 
         sSavedName = name;    // Because no problem on saving
     }//GEN-LAST:event_btnSaveActionPerformed
 
     private void btnLoadActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnLoadActionPerformed
     {//GEN-HEADEREND:event_btnLoadActionPerformed
-        JsonArray connections = ConfigManager.getConnections();
+        JsonArray connections = SettingsManager.getConnections();
 
         if( connections.isEmpty() )
         {
@@ -429,7 +436,7 @@ public final class ConnectDlg extends GDialog
                                              if( JTools.confirm( "Delete the selected saved connection?" ) )
                                              {
                                                 JsonObject jo = ((GList<JsonObject>) list).remove();
-                                                ConfigManager.removeConnection( jo.getString( "name", null ) );
+                                                SettingsManager.removeConnection( jo.getString( "name", null ) );
                                              }
                                          } )
                                 .onPicked( (list) ->

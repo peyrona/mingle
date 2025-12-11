@@ -70,6 +70,7 @@ public final class      Rule
 
         onDeviceChangedTask = new Dispatcher<>( consumer,
                                                 (exc) -> getRuntime().log( ILogger.Level.SEVERE, exc ),
+                                                32, 2048,
                                                 name() );
     }
 

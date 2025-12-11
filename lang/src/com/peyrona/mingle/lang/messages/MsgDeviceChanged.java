@@ -16,6 +16,11 @@ public class MsgDeviceChanged extends MsgAbstractTwo
 {
     public MsgDeviceChanged( String device, Object newValue )
     {
-        super( device, newValue );
+        super( device, newValue, true );
+    }
+
+    public MsgDeviceChanged( String device, Object newValue, boolean isOwn )
+    {
+        super( device, newValue, isOwn );
     }
 }

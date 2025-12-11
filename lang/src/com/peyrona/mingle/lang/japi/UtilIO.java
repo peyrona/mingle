@@ -202,7 +202,7 @@ public final class UtilIO
         int           nLen  = conn.getContentLength();
 
         if( nLen == -1 )
-            throw new IOException( uri +": file not found." );
+            throw new IOException( uri + ": Content length is unknown, cannot read into fixed buffer." );
 
         if( sType.startsWith( "text/" ) )
             throw new IOException( uri +": is not a binary file." );
@@ -283,7 +283,7 @@ public final class UtilIO
 
     public static List<String> splitByFolder( String path )
     {
-        return new ArrayList<>( Arrays.asList( path.split( File.separator ) ) );    // Can not invoke ::splitByFolder( File )
+        return new ArrayList<>( Arrays.asList( path.split( java.util.regex.Pattern.quote( File.separator ) ) ) );
     }
 
     public static List<String> splitByFolder( File path )
@@ -294,7 +294,7 @@ public final class UtilIO
         if( path == null )
             return new ArrayList<>();
 
-        return new ArrayList<>( Arrays.asList( path.getAbsolutePath().split( File.separator ) ) );
+        return new ArrayList<>( Arrays.asList( path.getAbsolutePath().split( java.util.regex.Pattern.quote( File.separator ) ) ) );
     }
 
     /**
@@ -320,32 +320,36 @@ public final class UtilIO
      * <p>
      * MACROS FOR FILE PATHs:
      * <ul>
-     *  <li>{*home*} - Where the MSP is installed</li>
-     *  <li>{*home.lib*} - Where the additional MSP libraries are</li>
-     *  <li>{*home.log*} - Where log files are</li>
-     *  <li>{*home.tmp*} - Used for temporary files: its contents can be safely deleted</li>
+     *    <li>{*home*} - Where the MSP is installed</li>
+     *    <li>{*home.lib*} - Where the additional MSP libraries are</li>
+     *    <li>{*home.log*} - Where log files are</li>
+     *    <li>{*home.tmp*} - Used for temporary files: its contents can be safely deleted</li>
      * </ul>
      * <p>
      * Example:
      * <code>
-     *  INCLUDE "file://{*home*}include/standard-includes.une"
+     *    INCLUDE "file://{*home*}include/standard-includes.une"
+     *    INCLUDE "file://{*home.lib*}gum/*"
+     *    INCLUDE "file://{*home.lib*}controllers/**"
      * </code>
      * <p>
      * <p>
      * WILDCARDS:
      * <ul>
-     *  <li>"*" - All files in the folder will be used</li>
-     *  <li>"**" - All files in the folder and in sub-folders will be used</li>
+     *    <li>"*" - All files in the specified folder only (non-recursive)</li>
+     *    <li>"**" - All files in the specified folder and in all sub-folders (recursive)</li>
      * </ul>
      * <p>
      * Examples:
      * <code>
-     *  {*home.lib*}my_libs/*
-     *  {*home.tmp*}my_temps/**
+     *    {*home.lib*}my_libs/*      // Files only in my_libs folder (non-recursive)
+     *    {*home.tmp*}my_temps/**    // Files in my_temps folder and all sub-folders (recursive)
+     *    *.java                     // All .java files in current directory only
+     *    **<kbd>/<kbd>*.txt         // All .txt files in current directory and sub-directories
      * </code>
      *
      * @param asPaths[n]
-     * @return
+     * @return A List of URIs.
      * @throws java.net.URISyntaxException
      * @throws java.io.IOException
      */
@@ -705,11 +709,6 @@ public final class UtilIO
         }
     }
 
-//    public static FileMonitor newFileMonitor( File file )
-//    {
-//        return new FileMonitor( file );
-//    }
-
     //------------------------------------------------------------------------//
     // WRITTING RELATED METHODS
     // Meanwhile read can be done from local or meote files, write is only local
@@ -724,26 +723,26 @@ public final class UtilIO
      * Copy all contents from InputStream to the OutputStream using the Java 8 way.<br>
      * This method always attempt to close both streams.
      *
-     * @param from
-     * @param to
+     * @param isFrom
+     * @param osTo
      * @throws java.io.IOException
      */
-    public static void copy( InputStream from, OutputStream to ) throws IOException
+    public static void copy( InputStream isFrom, OutputStream osTo ) throws IOException
     {
         try
         {
             int    length;
             byte[] bytes = new byte[ 1024 * 16 ];
 
-            while( (length = from.read( bytes ) ) != -1 )
-                to.write( bytes, 0, length );
+            while( (length = isFrom.read( bytes ) ) != -1 )
+                osTo.write( bytes, 0, length );
 
-            to.flush();
+            osTo.flush();
         }
         finally
         {
-            try{ from.close(); } catch( IOException e ) { /* Nothing to do */ }
-            try{ to.close();   } catch( IOException e ) { /* Nothing to do */ }
+            try{ isFrom.close(); } catch( IOException e ) { /* Nothing to do */ }
+            try{ osTo.close();   } catch( IOException e ) { /* Nothing to do */ }
         }
     }
 
@@ -769,6 +768,9 @@ public final class UtilIO
 
         if( fFrom.isDirectory() && (! fTo.isDirectory()) )
             throw new IOException( fFrom +" is a folder but "+ fTo +" is not" );
+
+        if( fFrom.isDirectory() && fTo.getCanonicalPath().startsWith( fFrom.getCanonicalPath() ) )
+            throw new IOException( "Cannot copy parent directory into a child directory: " + fFrom + " -> " + fTo );   // When copying a directory into its own subdirectory
 
         if( fFrom.isFile() && fTo.isFile() )
         {
@@ -906,20 +908,40 @@ public final class UtilIO
      */
     public static String canRead( File f )
     {
+        return canRead( f, false );
+    }
+
+    /**
+     * Checks if file or dir can be read.
+     *
+     * @param f File to check.
+     * @param bDir true to treat f as a folder (dir), false for a regular file.
+     * @return null if file can be read or an string explaining why the file can not be read.
+     */
+    public static String canRead( File f, boolean bDir )
+    {
         if( f == null )
-            return "ERROR: file can not be null";
+            return "ERROR: " + (bDir ? "directory" : "file") + " cannot be null";
 
         if( ! f.exists() )
-            return "ERROR: file does not exists:\n\t"+ f.getAbsolutePath();
+            return "ERROR: " + (bDir ? "directory" : "file") + " does not exist:\n\t" + f.getAbsolutePath();
 
-        if( f.isDirectory() )
-            return "ERROR: file is a folder:\n\t"+ f.getAbsolutePath();
+        if( bDir )   // Directory-specific checks
+        {
+            if( ! f.isDirectory() )
+                return "ERROR: path is not a directory:\n\t" + f.getAbsolutePath();
+        }
+        else         // File-specific checks
+        {
+            if( f.isDirectory() )
+                return "ERROR: path is a directory, not a file:\n\t" + f.getAbsolutePath();
 
-        if( ! f.isFile() )
-            return "ERROR: file is not a regular file:\n\t"+ f.getAbsolutePath();
+            if( ! f.isFile() )
+                return "ERROR: path is not a regular file:\n\t" + f.getAbsolutePath();
+        }
 
         if( ! f.canRead() )
-            return "ERROR: file can not be readed:\n\t"+ f.getAbsolutePath();
+            return "ERROR: " + (bDir ? "directory" : "file") + " cannot be read:\n\t" + f.getAbsolutePath();
 
         return null;
     }
@@ -935,7 +957,30 @@ public final class UtilIO
     //------------------------------------------------------------------------//
     // PRIVATE INTERFACE
 
-    private static List<URI> listFiles( String sPath ) throws IOException     // sPath can be a remote URL
+    /**
+     * Locates and returns a list of file {@link URI}s matching the specified path,
+     * which can include local filesystem glob-syntax ({@code *} and {@code **}).
+     *
+     * <p>This method handles three types of paths:</p>
+     * <ol>
+     * <li><b>Simple Path:</b> A direct path or URL with no glob characters.</li>
+     * <li><b>Flat Glob ({@code *}) :</b> A path containing wildcards that only match files within the immediate
+     * parent directory (non-recursive).</li>
+     * <li><b>Recursive Glob ({@code **}):</b> A path containing the recursive wildcard, matching files in the parent
+     * directory and all subdirectories.</li>
+     * </ol>
+     *
+     * <p>The method is designed to resolve local filesystem paths even if they are
+     * prefixed with {@code file://}.</p>
+     * * @param sPath The file path or URI to resolve. This may include the {@code file://} scheme,
+     * and local paths can contain glob patterns ({@code *} for single-level matching,
+     * {@code **} for multi-level/recursive matching). Macros are not supported and
+     * must be resolved before calling this method.
+     * @return A list of {@link URI} objects corresponding to the files found. Returns an empty
+     * list if the path is invalid or no files match the glob pattern.
+     * @throws IOException If an I/O error occurs while accessing the file system (e.g., during directory traversal).
+     */
+    private static List<URI> listFiles( String sPath ) throws IOException
     {
         assert ! Language.hasMacro( sPath );
 
@@ -951,37 +996,57 @@ public final class UtilIO
                 sPath = sPath.substring( 7 );
 
             String sParent = getFoldersUntilGlob( sPath );
-            String sGlob   = sPath.substring( sParent.length() + File.separator.length() -1 );
-            File   fParent = new File( sParent );
 
-            PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher( "glob:"+ sGlob  );
+            // Calculate the glob pattern (remove the parent path and the separator)
+            String sGlob = sPath.substring( sParent.length() );
 
-            Files.walkFileTree( fParent.toPath(),
-                                new SimpleFileVisitor<Path>()
-                                {
-                                    @Override
-                                    public FileVisitResult visitFile( Path file, BasicFileAttributes attrs )
-                                    {
-                                        if( pathMatcher.matches( file ) )
-                                            lst.add( file.toUri() );
+            if( sGlob.startsWith( File.separator ) || sGlob.startsWith( "/" ) || sGlob.startsWith( "\\" ) )
+                sGlob = sGlob.substring( 1 );
 
-                                        return FileVisitResult.CONTINUE;
-                                    }
-                                } );
+            File fParent = new File( sParent );
 
-            // I do noty know why, but the previous Files.walkFileTree(...) does not work with things like: "12.*.une"
-            // And next Files.newDirectoryStream(...) does not work with things like: "**/*"
+            if( !fParent.exists() )
+                return lst;
 
-            try( DirectoryStream<Path> directoryStream = Files.newDirectoryStream( fParent.toPath() ) )
+            final PathMatcher pathMatcher = FileSystems.getDefault().getPathMatcher( "glob:" + sGlob );
+
+            // Crucial: Only use walkFileTree for deep recursion ("**")
+            // Simple wildcards like "12.*.une" should be handled by DirectoryStream for finding files in place.
+            boolean isRecursive = sGlob.contains( "**" );
+
+            if( isRecursive )
             {
-                for( Path path : directoryStream )
+                Files.walkFileTree( fParent.toPath(), new SimpleFileVisitor<Path>()
                 {
-                    if( pathMatcher.matches( path.getFileName() ) )
+                    @Override
+                    public FileVisitResult visitFile( Path file, BasicFileAttributes attrs )
                     {
-                        URI uri = path.toUri();
+                        // Match the path relative to the start directory
+                        Path relativePath = fParent.toPath().relativize( file );
 
-                        if( ! lst.contains( uri ) )
-                            lst.add( uri );
+                        if( pathMatcher.matches( relativePath ) )
+                            lst.add( file.toUri() );
+
+                        return FileVisitResult.CONTINUE;
+                    }
+                });
+            }
+            else
+            {
+                // Use newDirectoryStream for flat "*" patterns.
+                // This correctly handles specific file patterns like "12.*.une" in the immediate directory.
+                try( DirectoryStream<Path> directoryStream = Files.newDirectoryStream( fParent.toPath() ) )
+                {
+                    for( Path path : directoryStream )
+                    {
+                        // For flat scans, we usually match against the file name
+                        if( pathMatcher.matches( path.getFileName() ) )
+                        {
+                            URI uri = path.toUri();
+
+                            if( ! lst.contains( uri ) )
+                                lst.add( uri );
+                        }
                     }
                 }
             }
@@ -1103,10 +1168,11 @@ public final class UtilIO
 
     public static final class FileWriter
     {
-        private File    file       = null;
-        private boolean isTemporal = false;
-        private String  extension  = null;
-        private Charset charset    = Charset.defaultCharset();
+        private File    file        = null;
+        private boolean isTemporal  = false;
+        private String  extension   = null;
+        private Charset charset     = Charset.defaultCharset();
+        private boolean isGenerated = false;
 
         private FileWriter()    // Only accesible from this class
         {
@@ -1192,14 +1258,19 @@ public final class UtilIO
 
         //------------------------------------------------------------------------//
 
-        private void check() throws IOException
+        private void check() throws IOException   // Has to distinguish between a user-supplied file and the internally generated temp file.
         {
             if( isTemporal )
             {
-                if( file != null )
+                // [FIX] Only throw if the file exists AND it was not generated by us
+                if( (file != null) && (! isGenerated) )
                     throw new IOException( "File is temporal but name was specified" );
 
-                file = newTempFile();
+                if( file == null )
+                {
+                    file        = newTempFile();
+                    isGenerated = true;      // [FIX] Mark as internally generated
+                }
             }
             else
             {

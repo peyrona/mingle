@@ -81,4 +81,11 @@ public interface IServiceManager
      * @return true if service was deleted successfully, false otherwise
      */
     boolean delete( String service );
+
+    /**
+     * Shows the current service unit file contents for the specified component.
+     * @param service Either "stick" or "gum".
+     * @return true if service file contents were displayed successfully, false otherwise
+     */
+    boolean showFile( String service );
 }

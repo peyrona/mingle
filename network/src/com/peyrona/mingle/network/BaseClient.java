@@ -24,17 +24,17 @@ public abstract
 
     //------------------------------------------------------------------------//
 
-    protected void log( String msg )
+    protected INetClient log( ILogger.Level levcl, String msg )
     {
-        log( msg, null );
+        return log( msg, null );
     }
 
-    protected void log( Throwable th )
+    protected INetClient log( Throwable th )
     {
-        log( null, th );
+        return log( null, th );
     }
 
-    protected void log( String msg, Throwable th )
+    protected INetClient log( String msg, Throwable th )
     {
         if( UtilSys.getLogger() == null )
         {
@@ -43,11 +43,20 @@ public abstract
 
             if( th != null )
                 th.printStackTrace( System.err );
-
-            return;
+        }
+        else if( msg != null )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, th, msg );
         }
 
-        if( msg != null )
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, th, msg );
+        return this;
+    }
+
+    protected INetClient sendError( Exception exc )
+    {
+        if( exc != null )
+            forEachListener( (l) -> l.onError( this, exc ) );
+
+        return this;
     }
 }

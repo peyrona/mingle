@@ -264,6 +264,9 @@ public final class UneEditorUnit extends JSplitPane
         getConsole().clear();
         getConsole().appendln( "Mingle Standard Platform Traspiler\n" );
 
+        if( isNeededToSave() )
+            save();
+
         try
         {
             return TranspilerTask.execute( UtilSys.getConfig(), null, new Printer( getConsole() ), fCode.toURI() );
@@ -274,6 +277,7 @@ public final class UneEditorUnit extends JSplitPane
         }
         catch( Exception exc )
         {
+            exc.printStackTrace( System.err );
             getConsole().appendln( "Internal error: transpilation aborted", UtilANSI.nRED );
         }
 

@@ -86,7 +86,7 @@ public final class   CellSet
         if( isInvalid() )
             return;
 
-        synchronized( CellSet.class )
+        synchronized( this )
         {
             if( dis != null )
                 return;
@@ -108,7 +108,7 @@ public final class   CellSet
 
             dis = new Dispatcher<>( consumer,
                                     (exc) -> sendGenericError( ILogger.Level.SEVERE, exc.getMessage() ),
-                                    getClass().getName() )
+                                    32, 4096 )
                             .start();
 
             // This listener receives messages of type 'MsgDeviceChanged'.

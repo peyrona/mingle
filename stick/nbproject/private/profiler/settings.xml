@@ -3,10 +3,10 @@
 <properties>
 <entry key="org.netbeans.modules.profiler.v2.features.ObjectsFeature_ProjectClassesMode_PROJECTS_FLAG">/home/francisco/proyectos/mingle/controllers:/home/francisco/proyectos/mingle/lang:/home/francisco/proyectos/mingle/stick:/home/francisco/proyectos/mingle/network:/home/francisco/proyectos/mingle/cil:</entry>
 <entry key="PROFILING_POINTS">false</entry>
-<entry key="org.netbeans.modules.profiler.v2.features.MethodsFeature_ProjectClassesMode_PROJECTS_FLAG">/home/francisco/proyectos/mingle/controllers:/home/francisco/proyectos/mingle/stick:</entry>
+<entry key="org.netbeans.modules.profiler.v2.features.MethodsFeature_ProjectClassesMode_PROJECTS_FLAG">/home/francisco/proyectos/mingle/controllers:/home/francisco/proyectos/mingle/stick:/home/francisco/proyectos/mingle/network:</entry>
 <entry key="org.netbeans.modules.profiler.v2.features.MethodsFeature_MODE_FLAG">ProjectClassesMode</entry>
 <entry key="org.netbeans.modules.profiler.v2.features.MethodsFeature_SETTINGS_FLAG">true</entry>
-<entry key="ACTIVATED_FEATURES">#org.netbeans.modules.profiler.v2.features.MethodsFeature@</entry>
+<entry key="ACTIVATED_FEATURES">#org.netbeans.modules.profiler.v2.features.ThreadsFeature@</entry>
 <entry key="org.netbeans.modules.profiler.v2.features.ObjectsFeature_SETTINGS_FLAG">true</entry>
 <entry key="org.netbeans.modules.profiler.v2.features.ObjectsFeature_MODE_FLAG">ProjectClassesMode</entry>
 </properties>

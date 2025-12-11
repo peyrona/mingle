@@ -496,10 +496,10 @@ public final class Language
 
         int n1 = s.indexOf( "{*" );
 
-        if( n1 > -1 )
-            return s.indexOf( "*}" ) > n1;
+        if( n1 == -1 )
+            return false;
 
-        return false;
+        return s.indexOf( "*}", n1 ) > -1;
     }
 
     public static String buildMacro( String s )

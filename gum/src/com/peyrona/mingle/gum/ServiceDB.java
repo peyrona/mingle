@@ -94,6 +94,7 @@ final class ServiceDB extends ServiceBase
                                   ps.clearParameters();
                                   ps.setDate( 1, dFrom );
                                   ps.setDate( 2, dTo   );
+                                  ps.closeOnCompletion();
 
                 sb.append( '{' )
                   .append( "\"label\": \"" ).append( tbl ).append( '.' ).append( val ).append( '"' )   // DataSerie -> "label": "table.values"

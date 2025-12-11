@@ -14,9 +14,11 @@ import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
 import java.awt.FontMetrics;
+import java.awt.Graphics2D;
 import java.awt.HeadlessException;
 import java.awt.Image;
 import java.awt.KeyboardFocusManager;
+import java.awt.RenderingHints;
 import java.awt.SystemColor;
 import java.awt.Toolkit;
 import java.awt.Window;
@@ -505,14 +507,13 @@ public final class JTools
                 hideWaitFrame();     // Just in case there were one wnd open
 
                 JProgressBar bar = new JProgressBar();
-                bar.setIndeterminate( true );
+                             bar.setIndeterminate( true );
 
                 // Safe border color handling
                 Color borderColor = (iconClr != null) ? iconClr : SystemColor.windowBorder;
-                Border border = BorderFactory.createCompoundBorder(
-                        BorderFactory.createLineBorder( borderColor, 1 ),
-                        BorderFactory.createEmptyBorder( 16, 22, 16, 22 )
-                );
+
+                Border border = BorderFactory.createCompoundBorder( BorderFactory.createLineBorder( borderColor, 1 ),
+                                                                    BorderFactory.createEmptyBorder( 16, 22, 16, 22 ) );
 
                 // Create message label with proper text
                 String displayMessage = (message == null ? "Please, wait..." : message);
@@ -522,7 +523,7 @@ public final class JTools
                 FontMetrics fm = messageLabel.getFontMetrics( messageLabel.getFont() );
                 int textWidth = fm.stringWidth( displayMessage );
                 int preferredWidth = Math.max( 250, Math.min( 400, textWidth + 80 ) ); // Min 250, Max 400
-                int preferredHeight = 100;
+                int preferredHeight = fm.getHeight() * 3 + 22 + 8 + 4;
 
                 // Create message panel for better centering
                 JPanel messagePanel = new JPanel( new FlowLayout( FlowLayout.CENTER, 0, 5 ) );
@@ -716,6 +717,109 @@ public final class JTools
         return iconClr;
     }
 
+    public static void setIconImages( Window wnd, String imgName )
+    {
+        BufferedImage bi = getImage( imgName );
+
+        if( bi != null )
+        {
+            List<Image> icons = new ArrayList<>();
+                        icons.add( resizeImage( bi, 256, 256 ) );    // Large version - might be used for taskbar/alt-tab
+                        icons.add( resizeImage( bi,  64,  64 ) );    // Medium version
+                        icons.add( resizeImage( bi,  32,  32 ) );    // Small version - might be used for window title bar
+
+            wnd.setIconImages( icons );
+        }
+    }
+
+    /**
+     * Resizes a BufferedImage while preserving its original aspect ratio.
+     * <p>
+     * This method scales an image to fit within the specified target dimensions
+     * without distortion. The image is scaled to the maximum possible size
+     * that fits within both width and height constraints while maintaining the
+     * original width-to-height ratio.
+     * </p>
+     * <p>
+     * The resizing algorithm:
+     * <ol>
+     * <li>Calculates the original aspect ratio (width ÷ height)</li>
+     * <li>Initially assumes width is the limiting factor and calculates corresponding height</li>
+     * <li>If calculated height exceeds target height, recalculates using height as limiting factor</li>
+     * <li>Creates a new BufferedImage with the calculated dimensions</li>
+     * <li>Uses high-quality bicubic interpolation for smooth scaling</li>
+     * </ol>
+     * </p>
+     * <p>
+     * <b>Example usage:</b>
+     * <pre>{@code
+     * BufferedImage original = ImageIO.read(new File("photo.jpg"));
+     * BufferedImage thumbnail = JTools.resizeImage(original, 200, 200);
+     * // Result: 200x150 image for 4:3 aspect ratio photo
+     *
+     * BufferedImage portrait = JTools.resizeImage(original, 300, 400);
+     * // Result: 300x225 image (width limited, height calculated)
+     * }</pre>
+     * </p>
+     *
+     * @param originalImage the source BufferedImage to resize; must not be null
+     * @param targetWidth the maximum width in pixels for the resized image; must be positive
+     * @param targetHeight the maximum height in pixels for the resized image; must be positive
+     *
+     * @return a new BufferedImage with dimensions that fit within the target bounds
+     *         while preserving the original aspect ratio; never returns null
+     *
+     * @throws IllegalArgumentException if originalImage is null or if target dimensions are not positive
+     * @throws OutOfMemoryError if the resized image is too large to allocate
+     *
+     * @see BufferedImage
+     * @see RenderingHints#VALUE_INTERPOLATION_BICUBIC
+     * @see Graphics2D#drawImage(Image, int, int, int, int, ImageObserver)
+     */
+    public static BufferedImage resizeImage( BufferedImage originalImage, int targetWidth, int targetHeight )
+    {
+        if( originalImage == null )
+            return null;
+
+        if( originalImage.getWidth()  == targetWidth  &&
+            originalImage.getHeight() == targetHeight )
+        {
+            return originalImage;
+        }
+
+        // Calculate dimensions preserving aspect ratio
+        double aspectRatio = (double) originalImage.getWidth() / originalImage.getHeight();
+        int    newWidth    = targetWidth;
+        int    newHeight   = (int) (targetWidth / aspectRatio);
+
+        // Adjust if height exceeds maximum
+        if( newHeight > targetHeight )
+        {
+            newHeight = targetHeight;
+            newWidth = (int) (targetHeight * aspectRatio);
+        }
+
+        // Create new BufferedImage with calculated dimensions (not target dimensions)
+        BufferedImage resizedImage = new BufferedImage( newWidth,
+                                                        newHeight,
+                                                        BufferedImage.TYPE_INT_RGB );
+
+        // Get Graphics2D and set rendering hints for quality
+        Graphics2D g2d = resizedImage.createGraphics();
+                   g2d.setRenderingHint( RenderingHints.KEY_INTERPOLATION,
+                                         RenderingHints.VALUE_INTERPOLATION_BICUBIC );
+                   g2d.setRenderingHint( RenderingHints.KEY_RENDERING,
+                                         RenderingHints.VALUE_RENDER_QUALITY );
+                   g2d.setRenderingHint( RenderingHints.KEY_ANTIALIASING,
+                                         RenderingHints.VALUE_ANTIALIAS_ON );
+
+        // Draw scaled image using calculated dimensions
+        g2d.drawImage( originalImage, 0, 0, newWidth, newHeight, null );
+        g2d.dispose();
+
+        return resizedImage;
+    }
+
     /**
      * Assigns a keyboard shortcut to a JButton.
      * <p>
@@ -824,9 +928,7 @@ public final class JTools
         for( int n = 0; n < model.getSize(); n++ )
         {
             if( fnFind.apply( model.getElementAt( n ) ) )
-            {
                 return n;
-            }
         }
 
         return -1;

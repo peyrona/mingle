@@ -4,6 +4,8 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.network.BaseServer4IP;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.stream.Stream;
 
 /**
  * The Server functionality is divided into two classes using the Strategy Pattern and Factory Pattern
@@ -17,18 +19,18 @@ import com.peyrona.mingle.network.BaseServer4IP;
 public final class SocketServer
              extends BaseServer4IP
 {
-    private BaseServer4IP impl = null;
+    private final AtomicBoolean isStopping = new AtomicBoolean( false );
+    private       BaseServer4IP impl       = null;
 
     //------------------------------------------------------------------------//
 
     @Override
-    public INetServer start( String sCfgAsJSON )
+    public synchronized INetServer start( String sCfgAsJSON )
     {
-        if (impl != null && impl.isRunning()) {
+        if( isRunning() )
             return this;
-        }
 
-        init(sCfgAsJSON, 0); // Port is determined by Plain or SSL server
+        init( sCfgAsJSON, 0 ); // Port is determined by Plain or SSL server
 
         if( getSSLCert() == null && getSSLKey() == null )
         {
@@ -38,70 +40,84 @@ public final class SocketServer
         {
             if( getSSLCert() == null || getSSLKey() == null )
             {
-                String cause = "SSL "+ ((getSSLCert() == null) ? "Certificate" : "Key");
-                MingleException me = new MingleException( "SSL Server can not be started because '"+ cause +"' was not provided." );
-
+                String          cause = "SSL "+ ((getSSLCert() == null) ? "Certificate" : "Key");
+                MingleException me    = new MingleException( "SSL Server can not be started because '"+ cause +"' was not provided." );
                 log( me );
+                notifyError( (INetClient) null, me );
                 throw me;
             }
 
             impl = new SSLSocketServer();
         }
 
-        // Proxy listeners to the implementation
-        impl.add(new INetServer.IListener() {
-            @Override
-            public void onConnected(INetServer server, INetClient client) {
-                forEachListener(l -> l.onConnected(SocketServer.this, client));
-            }
+        // We must transfer all listeners from the facade to the implementation
+        forEachListener( listener -> impl.add( listener ) );
 
-            @Override
-            public void onDisconnected(INetServer server, INetClient client) {
-                forEachListener(l -> l.onDisconnected(SocketServer.this, client));
-            }
+        impl.start( sCfgAsJSON );   // Start implementation first, then set running state
 
-            @Override
-            public void onMessage(INetServer server, INetClient client, String msg) {
-                forEachListener(l -> l.onMessage(SocketServer.this, client, msg));
-            }
-
-            @Override
-            public void onError(INetServer server, INetClient client, Exception e) {
-                forEachListener(l -> l.onError(SocketServer.this, client, e));
-            }
-        });
-
-        impl.start( sCfgAsJSON );
-
+        // The 'super.start()' call is not needed here, as the 'impl' handles everything.
+        // The isRunning state will be managed by the implementation.
         return this;
     }
 
     @Override
-    public INetServer stop()
+    public synchronized INetServer stop()
     {
+        isStopping.set( true );
+
         if( impl != null )
             impl.stop();
 
+        isStopping.set( false );
         return this;
+    }
+
+    // --- DELEGATED METHODS ---
+
+    @Override
+    public boolean isRunning()
+    {
+        return (impl != null) && impl.isRunning();
+    }
+
+    @Override
+    public boolean add( INetClient client )
+    {
+        if( impl != null )
+            return impl.add( client );
+        return false;
+    }
+
+    @Override
+    public boolean del( INetClient client )
+    {
+        if( impl != null )
+            return impl.del( client );
+        return false;
+    }
+
+    @Override
+    public boolean hasClients()
+    {
+        if( impl != null )
+            return impl.hasClients();
+        return false;
     }
 
     @Override
     public INetServer broadcast( String message )
     {
         if( impl != null )
-            impl.broadcast( message );
-
+            return impl.broadcast( message );
         return this;
     }
 
     @Override
-    public boolean hasClients()
+    public Stream<INetClient> getClients()
     {
-        return (impl != null) && impl.hasClients();
-    }
+        if( impl != null )
+            return impl.getClients();
 
-    @Override
-    public boolean isRunning() {
-        return (impl != null) && impl.isRunning();
+        return super.getClients();
     }
 }

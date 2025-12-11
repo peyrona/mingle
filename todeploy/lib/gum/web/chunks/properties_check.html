@@ -6,7 +6,7 @@
                 <div class="columns">
                     <div class="column">
                         <div class="field">
-                            <label class="label">Card title</label>
+                            <label class="label">Gadget title (optional)</label>
                             <div class="control">
                                 <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgCheck.geh.changed(this)">
                             </div>
@@ -18,6 +18,10 @@
                             <label class="radio">
                                 <input type="radio" name="card_title_location" value="north" onchange="dlgCheck.geh.changed(this)" checked>
                                 North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="center" onchange="dlgCheck.geh.changed(this)">
+                                Center
                               </label>
                               <label class="radio">
                                 <input type="radio" name="card_title_location" value="south" onchange="dlgCheck.geh.changed(this)">
@@ -64,10 +68,10 @@
                                         <input class="input" name="icon_off" type="text" title="Choose an image (optional)" placeholder="Choose one or leave empty" onchange="dlgCheck.geh.changed(this)">
                                     </p>
                                     <p class="control" title="Select an image" style="cursor:pointer;" onclick="gt.selectImg4Text($('#properties-check').find('[name=\'icon_off\']'))">
-                                        <a class="button is-static"><i class="fa fa-folder-open-o"></i></a>
+                                        <a class="button is-static"><i class="ti ti-folder-open"></i></a>
                                     </p>
                                     <p class="control" title="Upload an image" style="cursor:pointer;" onclick="gt.uploadImage()">
-                                        <a class="button is-static"><i class="fa fa-cloud-upload"></i></a>
+                                        <a class="button is-static"><i class="ti ti-cloud-upload"></i></a>
                                     </p>
                                 </div>
                             </div>
@@ -80,10 +84,10 @@
                                         <input class="input" name="icon_on" type="text" title="Choose an image (optional)" placeholder="Choose one or leave empty" onchange="dlgCheck.geh.changed(this)">
                                     </p>
                                     <p class="control" title="Select an image" style="cursor:pointer;" onclick="gt.selectImg4Text($('#properties-check').find('[name=\'icon_on\']'))">
-                                        <a class="button is-static"><i class="fa fa-folder-open-o"></i></a>
+                                        <a class="button is-static"><i class="ti ti-folder-open"></i></a>
                                     </p>
                                     <p class="control" title="Upload an image" style="cursor:pointer;" onclick="gt.uploadImage()">
-                                        <a class="button is-static"><i class="fa fa-cloud-upload"></i></a>
+                                        <a class="button is-static"><i class="ti ti-cloud-upload"></i></a>
                                     </p>
                                 </div>
                             </div>

@@ -152,7 +152,8 @@ final class Menu
     {
         if( Main.isInteractive() && isFileNeeded( args ) )
         {
-            String fileName = UtilUI.readFileName( "Provide only one '.model' file, or just [Enter] for no model: " );
+            System.out.println( "'.model' can be provided or not. Can be taken also from 'config.json'. See help for more info." );
+            String fileName = UtilUI.readFileName( "Provide '.model' file, or just [Enter] for no model: " );
 
             if( ! fileName.isEmpty() )
                 args = append( args, fileName );
@@ -163,16 +164,18 @@ final class Menu
         switch( mode )
         {
             case "lowram":
+                lstOpts.add( "-XX:+UseG1GC" );
                 lstOpts.add( "-XX:+UseStringDeduplication" );
                 lstOpts.add( "-XX:+UseCompressedOops"      );
                 break;
 
             case "debug":
+                lstOpts.add( "-XX:+UseG1GC" );
                 lstOpts.add( "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=0.0.0.0:8800" );
                 break;
 
             case "profile":
-                lstOpts.add( "-server" );
+                lstOpts.add( "-XX:+UseG1GC" );
                 lstOpts.add( "-Dcom.sun.management.jmxremote"                    );
                 lstOpts.add( "-Dcom.sun.management.jmxremote.port=1099"          );
                 lstOpts.add( "-Dcom.sun.management.jmxremote.ssl=false"          );
@@ -182,9 +185,9 @@ final class Menu
                 break;
 
             case "resident":    // Configure for long-running background service
-                lstOpts.add( "-server" );                           // Server JVM
+                lstOpts.add( "-XX:+UseG1GC" );
                 lstOpts.add( "-Xms16m" );                           // Initial heap
-                lstOpts.add( "-Xmx64m" );                           // Max heap
+                lstOpts.add( "-Xmx512m" );                          // Max heap
                 lstOpts.add( "-XX:+UseG1GC" );                      // Modern GC
                 lstOpts.add( "-XX:MaxGCPauseMillis=200" );          // Responsive GC
                 lstOpts.add( "-XX:+UseStringDeduplication" );       // Memory efficiency
@@ -231,7 +234,7 @@ final class Menu
             if( ! showServiceMenu( gumSelected, stickSelected ) )
                 break;
 
-            String choice = UtilUI.readInput( "Enter your option: " );
+            String choice = UtilUI.readInput( "Select an option: " );
 
             if( choice.isBlank() )
                 break;
@@ -254,6 +257,7 @@ final class Menu
                 case "3": command = new String[] { "stop"   , selectedService }; break;
                 case "4": command = new String[] { "restart", selectedService }; break;
                 case "5": command = new String[] { "showlog", selectedService }; break;
+                case "6": command = new String[] { "showfile", selectedService }; break;
                 case "9": command = new String[] { "delete" , selectedService }; break;
                 default:
                     System.out.println( "Invalid option." );
@@ -300,7 +304,7 @@ final class Menu
             }
             else
             {
-                choice = UtilUI.readInput( "Provide an ID to kill it, 0 to refresh or [Enter] to return: " );
+                choice = UtilUI.readInput( "Provide an ID (A,B,C,...) to kill it, 0 to refresh or [Enter] to return: " );
 
                 if( choice.isEmpty() )
                     break;
@@ -568,7 +572,7 @@ final class Menu
 
         if( orchestrator.isServiceManagerAvailable() )
         {
-            if( UtilSys.isAdmin() )
+            if( UtilSys.isAdmin() || UtilSys.isDevEnv() )
             {
                 String gumCheckbox   = gumSelected   ? "[X]" : "[ ]";
                 String stickCheckbox = stickSelected ? "[X]" : "[ ]";
@@ -580,11 +584,12 @@ final class Menu
                 System.out.println( " 3 - Service Stop" );
                 System.out.println( " 4 - Service Restart" );
                 System.out.println( " 5 - Service show log" );
+                System.out.println( " 6 - Service show file contents" );
                 System.out.println( " 9 - Delete service file" );
                 System.out.println( "---------------------------------" );
-                System.out.println( " 0   + [Enter] to change tool" );
-                System.out.println( " 1-9 + [Enter] to execute" );
-                System.out.println( " Just  [Enter] to go back" );
+                System.out.println( " 0   + [Enter] to change tool"     );
+                System.out.println( " 1-9 + [Enter] to execute a task"  );
+                System.out.println( " Only  [Enter] to go back"         );
                 System.out.println( "---------------------------------" );
             }
             else

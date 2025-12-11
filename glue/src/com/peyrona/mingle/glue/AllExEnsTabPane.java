@@ -53,12 +53,24 @@ public final class AllExEnsTabPane extends GTabbedPane
      */
     void add( String sConnName, ExEnClient cc )
     {
-        SwingUtilities.invokeLater(() ->
-            {
-                addTab( sConnName, new Pnl4ExEn( cc ) );
-                AllExEnsTabPane.this.validate();
-                setSelectedIndex( getTabCount() - 1 );
-            } );
+        SwingUtilities.invokeLater( () ->
+        {
+            addTab( sConnName,
+                    new Pnl4ExEn( cc ),
+                    (ActionEvent evt) ->
+                                        {
+                                            int tabIndex = getTabIndexWhichButtonIs( (JButton) evt.getSource() );
+
+                                            if( tabIndex >= 0 )
+                                            {
+                                                getFocused().disconnect();
+                                                removeTabAt( tabIndex );
+                                            }
+                                        } );
+
+            AllExEnsTabPane.this.validate();
+            setSelectedIndex( getTabCount() - 1 );
+        } );
     }
 
     /**
@@ -101,11 +113,14 @@ public final class AllExEnsTabPane extends GTabbedPane
      */
     void close()
     {
-        for( int n = 0; n < getTabCount(); n++ )
-        {
-            setSelectedIndex( n );
-            del();
-        }
+        SwingUtilities.invokeLater( () ->
+                                    {
+                                        while( getTabCount() > 0 )
+                                        {
+                                            setSelectedIndex( 0 );
+                                            del();
+                                        }
+                                    } );
     }
 
     //------------------------------------------------------------------------//
@@ -165,7 +180,7 @@ public final class AllExEnsTabPane extends GTabbedPane
 
         new GFrame()
                 .title( "An opportunity to review the script prior to save it" )
-                .icon( "editor.png" )
+                .icon( "editor-256x256.png" )
                 .onClose( JFrame.DISPOSE_ON_CLOSE )
                 .closeOnEsc()
                 .put( btnSave, BorderLayout.NORTH )

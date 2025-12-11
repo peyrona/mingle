@@ -5,7 +5,7 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
-import com.peyrona.mingle.glue.ConfigManager;
+import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
@@ -288,9 +288,7 @@ public final class UneMultiEditorPanel extends JPanel
     private boolean onTranspile()
     {
         if( getFocusedUnit() == null )
-            return true;
-
-        onSave( null );
+            return true;               // Nothing to transpile
 
         return getFocusedUnit().transpile( toolBar.chk4Grid.isSelected() );
     }
@@ -298,7 +296,7 @@ public final class UneMultiEditorPanel extends JPanel
     private void onRun()               // Same button is used to run and stop
     {
         if( getFocusedUnit() == null )
-            return;
+            return;                    // Nothing to run
 
         if( getFocusedUnit().isRunning() )
         {
@@ -352,7 +350,7 @@ public final class UneMultiEditorPanel extends JPanel
 
             new GFrame()
                   .title( "Une Script Code Editor Help" )
-                  .icon( "editor.png" )
+                  .icon( "editor-256x256.png" )
                   .onClose( JFrame.DISPOSE_ON_CLOSE )
                   .closeOnEsc()
                   .put( new JScrollPane( edt ), BorderLayout.CENTER )
@@ -408,7 +406,7 @@ public final class UneMultiEditorPanel extends JPanel
         }
         else
         {
-            futureSave.set( UtilSys.executeAtFixed( getClass().getName(), 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
+            futureSave.set( UtilSys.executeWithDelay( getClass().getName(), 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
         }
     }
 
@@ -459,8 +457,8 @@ public final class UneMultiEditorPanel extends JPanel
                                                 updateAllTabTitles();
                                             } );
 
-            tabbedPane.addTab(  "", ueu,
-                                (ActionEvent evt) -> close( tabbedPane.getTabIndexWhichButtonIs( (JButton) evt.getSource() ) ) );
+            tabbedPane.addTab( "", ueu,
+                               (ActionEvent evt) -> close( tabbedPane.getTabIndexWhichButtonIs( (JButton) evt.getSource() ) ) );
             updateAllTabTitles();
         }
         catch( IOException ioe )
@@ -496,15 +494,18 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
     }
 
-    private void closeAll( Window window )
+    private void closeAll( final Window window )
     {
         saveOpenedFilesList();
-
-        while( tabbedPane.getTabCount() > 0 )
-            close( 0 );
-
         cleanup();
-        window.dispose();
+
+        SwingUtilities.invokeLater( () ->
+                                    {
+                                        while( tabbedPane.getTabCount() > 0 )
+                                            close( 0 );
+
+                                        window.dispose();
+                                    } );
     }
 
     /**
@@ -514,6 +515,7 @@ public final class UneMultiEditorPanel extends JPanel
     {
         // Cancel auto-save task
         ScheduledFuture current = futureSave.get();
+
         if( current != null )
         {
             current.cancel( false );
@@ -534,7 +536,7 @@ public final class UneMultiEditorPanel extends JPanel
 
     File getLastUsedDir()
     {
-        String lastDirPath = ConfigManager.getLastUsedDir();
+        String lastDirPath = SettingsManager.getLastUsedDir();
         return new File( lastDirPath );
     }
 
@@ -544,7 +546,7 @@ public final class UneMultiEditorPanel extends JPanel
             return;
 
         fNewLastDir = fNewLastDir.isDirectory() ? fNewLastDir : fNewLastDir.getParentFile();
-        ConfigManager.setLastUsedDir( fNewLastDir.getAbsolutePath() );
+        SettingsManager.setLastUsedDir( fNewLastDir.getAbsolutePath() );
     }
 
     private boolean isOpen( File file )
@@ -576,26 +578,37 @@ public final class UneMultiEditorPanel extends JPanel
             }
         }
 
-        ConfigManager.setEditorFiles( jaEdit );
+        SettingsManager.setEditorFiles( jaEdit );
     }
 
     private void restoreOpenedFiles()
     {
-        JsonArray editorFiles = ConfigManager.getEditorFiles();
+        try
+        {
+            JsonArray editorFiles = SettingsManager.getEditorFiles();
 
-        editorFiles.forEach( (JsonValue jv) -> {
+            editorFiles.forEach( (JsonValue jv) ->
+                                    {
                                         String s = jv.asObject().getString( "file", null );
                                         File   f = (s == null) ? null : new File( s );
 
                                         if( (f != null) && f.exists() )
-                                            newTab( f ).setCaretOffset( jv.asObject().getInt( "caret", 0 ) );
+                                        {
+                                            UneEditorUnit ueu = newTab( f );
+
+                                            if( ueu != null )
+                                                ueu.setCaretOffset( jv.asObject().getInt( "caret", 0 ) );
+                                        }
                                     } );
 
-        if( tabbedPane.getTabCount() > 0 )
-            tabbedPane.setSelectedIndex( 0 );
+            if( tabbedPane.getTabCount() > 0 )
+                tabbedPane.setSelectedIndex( 0 );
+        }
+        catch( Exception exc )
+        {
+            JTools.error( exc );
+        }
     }
-
-
 
     // It does not worth it to have two methods: one to update the focused editor and another one to update all editors
     private void updateAllTabTitles()   // It is important to invoke here after updating toolbar (not before)

@@ -50,7 +50,7 @@ public class LinuxServiceManager extends AbstractServiceManager
         try
         {
             // Build service file content
-            String execStart      = UtilJVM.javaCmdToString(UtilJVM.buildJavaCmd( service, lstOptions, args ) );
+            String execStart      = UtilJVM.javaCmdToString( UtilJVM.buildJavaCmd( service, lstOptions, args ) );
             String serviceContent = buildServiceFileContent( service, execStart );
 
             // Write service file (May throw AccessDeniedException if not root)
@@ -141,26 +141,58 @@ public class LinuxServiceManager extends AbstractServiceManager
         try
         {
             String serviceName = getServiceName( service );
-            
+
             // Stop and disable the service first
             UtilSys.executeAndWait( "systemctl", "stop", serviceName );
             UtilSys.executeAndWait( "systemctl", "disable", serviceName );
-            
+
             // Delete the service file
             Path servicePath = Paths.get( getServiceFilePath( service ) );
             if( Files.exists( servicePath ) )
             {
                 Files.delete( servicePath );
             }
-            
+
             // Reload systemd daemon
             UtilSys.executeAndWait( "systemctl", "daemon-reload" );
-            
+
             return true;
         }
         catch( IOException | InterruptedException e )
         {
             System.err.println( "Failed to delete service: " + e.getMessage() );
+            return false;
+        }
+    }
+
+    @Override
+    public boolean showFile( String service )
+    {
+        try
+        {
+            Path servicePath = Paths.get( getServiceFilePath( service ) );
+
+            if( ! Files.exists( servicePath ) )
+            {
+                System.out.println( "Service file does not exist for " + service + "." );
+                return false;
+            }
+
+            String content = Files.readString( servicePath );
+
+            System.out.println( "===============================================" );
+            System.out.println( "      " + service.substring( 0, 1 ).toUpperCase() + service.substring( 1 ) + " Service File Contents" );
+            System.out.println( "===============================================" );
+            System.out.println( "File: " + servicePath.toString() );
+            System.out.println();
+            System.out.println( content );
+            System.out.println( "===============================================" );
+
+            return true;
+        }
+        catch( IOException e )
+        {
+            System.err.println( "Failed to read service file: " + e.getMessage() );
             return false;
         }
     }

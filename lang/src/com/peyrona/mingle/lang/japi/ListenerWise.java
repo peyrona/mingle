@@ -3,8 +3,8 @@ package com.peyrona.mingle.lang.japi;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.List;
-import java.util.concurrent.CopyOnWriteArrayList;
+import java.util.Set;
+import java.util.concurrent.CopyOnWriteArraySet;
 import java.util.function.Consumer;
 
 /**
@@ -16,7 +16,7 @@ import java.util.function.Consumer;
  */
 public abstract class ListenerWise<T>
 {
-    private final List<T> listeners = new CopyOnWriteArrayList<>();
+    private final Set<T> listeners = new CopyOnWriteArraySet<>();   // Set instead of List to avoid duplicates
 
     /**
      * Add a new listener to be informed.
@@ -59,7 +59,7 @@ public abstract class ListenerWise<T>
      */
     public final Collection<T> getAllListeners()
     {
-        return Collections.unmodifiableList( listeners );
+        return Collections.unmodifiableSet( listeners );
     }
 
     /**

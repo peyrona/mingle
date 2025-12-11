@@ -1,0 +1,22 @@
+#---------------------------------------------------------------------------------------------
+# This is a very simplistic file and the use of it made by the HTTP server is evem simpler.
+#
+# While user-name is case insensitive, user-password is case sensitive.
+#
+# Following macros can be used (only in user-password, not in user-name):
+#   + {*d*} -> Will be replaced by current day of the month
+#   + {*h*} -> Will be replaced by current hour of the day
+#
+# Example: \"pwd\": \"{*d*}adm{*t*}in\"
+#
+# Before saving, be sure the contents of this file are JSON compliant.
+#
+# // TODO: improve how users are used by the HHTP Server
+# //       Much more work has to be done in this area
+#
+#---------------------------------------------------------------------------------------------
+
+[
+    { "user": "root", "pwd": "admin", "role": "admin" },
+    { "user": "1234", "pwd": "12345", "role": "guest", "allow": "192.168.6.9" }
+]

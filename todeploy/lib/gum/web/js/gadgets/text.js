@@ -13,7 +13,7 @@ class GumText extends GumGadget
             this.device    = null;
             this.label     = "This is a fixed text";
             this.align     = "left";
-            this.rows      = 1  ;       // Multi-line text (textarea)?
+            this.rows      = 1  ;
             this.keep      = 0  ;       // Keep only last N lines (0 == all)
             this.size      = 100;       // Font size (relative as %)
             this.color     = "#000000";
@@ -59,7 +59,7 @@ class GumText extends GumGadget
                                      : '<textarea id="'+ this.id +'" class="textarea is-expanded" rows="'+ this.rows +'">'+
                                        '<textarea>';
 
-        let $txt = this.getContainer()
+        let $txt = this.getContentArea()
                        .empty()
                        .append( sHTML )
                        .children()
@@ -121,8 +121,8 @@ class GumText extends GumGadget
         let fn = function( action, payload )
                 {
                     if( ! payload.value )
-                        return;    
-                
+                        return;
+
                     let sTxt = self.label.replace( /\{\*device\*\}/gi, payload.value.toString() );
 
                     if( self.rows === 1 )    // It is a <label></label>
