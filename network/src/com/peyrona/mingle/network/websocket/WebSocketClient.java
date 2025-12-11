@@ -1,21 +1,26 @@
 package com.peyrona.mingle.network.websocket;
 
+import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.network.BaseClient4IP;
 import io.undertow.server.DefaultByteBufferPool;
 import io.undertow.websockets.core.AbstractReceiveListener;
 import io.undertow.websockets.core.BufferedTextMessage;
+import io.undertow.websockets.core.StreamSourceFrameChannel;
 import io.undertow.websockets.core.WebSocketChannel;
 import io.undertow.websockets.core.WebSockets;
+import java.io.IOException;
 import java.net.URI;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import org.xnio.IoFuture;
 import org.xnio.IoUtils;
+import org.xnio.OptionMap;
 import org.xnio.Xnio;
 import org.xnio.XnioWorker;
+import org.xnio.ssl.JsseXnioSsl;
 
 /**
  * This class exposes a WebSocket service (port is configurable) that can be used
@@ -37,10 +42,10 @@ public final class WebSocketClient
     private static final int  MAX_RETRIES  = 3;
     private static final long RETRY_DELAY  = 1000L;
 
-    private volatile       WebSocketChannel channel = null;
-    private volatile       XnioWorker       worker = null;
-    private volatile       AtomicBoolean    isShuttingDown = new AtomicBoolean(false);
-    private          final Object           connLock = new Object();
+    private volatile WebSocketChannel channel    = null;
+    private volatile XnioWorker       worker     = null;
+    private volatile AtomicBoolean    isStopping = new AtomicBoolean(false);
+
 
     //------------------------------------------------------------------------//
 
@@ -53,100 +58,94 @@ public final class WebSocketClient
     @Override
     public INetClient connect( String sCfgAsJSON )
     {
-        synchronized( connLock )
+        if( isConnected() )
+            return this;
+
+        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
+            return this;
+
+        try
         {
-            if( isConnected() )
-                return this;
+            // The XnioWorker is created once for all retry attempts
+            worker = Xnio.getInstance().createWorker( OptionMap.EMPTY );
+        }
+        catch( Exception e )
+        {
+            sendError( e );
+            return this;
+        }
 
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
-                return this;
-
-            for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )
+        for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )
+        {
+            try
             {
+                String scheme = ( isSSLEnabled() ? "wss://" : "ws://" );
+
+                URI uri = URI.create( scheme + getHost() + ":" + getPort() );
+
+                io.undertow.websockets.client.WebSocketClient.ConnectionBuilder builder =
+                    io.undertow.websockets.client.WebSocketClient.connectionBuilder( worker,
+                                                                                     new DefaultByteBufferPool( false, 1024, 1024, 0 ),
+                                                                                     uri );
+
+                if( isSSLEnabled() )    // Wrap the standard SSLContext into an XnioSsl instance
+                    builder.setSsl( new JsseXnioSsl( worker.getXnio(), OptionMap.EMPTY, createSSLContext() ) );
+
+                IoFuture<WebSocketChannel> future = builder.connect();
+
+                // Synchronously wait for the connection to complete or time out
+                if( future.await( getTimeout(), TimeUnit.MILLISECONDS ) != IoFuture.Status.DONE )
+                {
+                    future.cancel(); // Cancel the pending attempt
+                    throw new IOException( "Connection timed out after " + getTimeout() + "ms" );
+                }
+
+                // If we get here, the future is DONE. Check if it was successful.
+                this.channel = future.get(); // This will throw an exception if the connection failed
+                setupChannel( this.channel );
+
+                forEachListener( l -> l.onConnected( this ) );
+
+                return this;    // Success! Exit the method.
+            }
+            catch( Exception e )
+            {
+                if( attempt == MAX_RETRIES - 1 ) // This was the last attempt
+                {
+                    log( "Connection with server failed", e );
+                    sendError( e ); // Report the final error
+                    break;          // Exit loop to perform final cleanup
+                }
+                else
+                {
+                    log( Level.INFO, "Connection attempt " + (attempt + 1) + " failed: " + e.getMessage() );
+                }
+
                 try
                 {
-                    Xnio xnio = Xnio.getInstance();
-                    worker = xnio.createWorker( null );
-
-                    String wsUri = "ws://" + getHost() + ":" + getPort();
-                    URI uri = URI.create( wsUri );
-
-                    CountDownLatch latch = new CountDownLatch(1);
-                    AtomicBoolean connected = new AtomicBoolean(false);
-
-                    io.undertow.websockets.client.WebSocketClient.ConnectionBuilder builder =
-                        io.undertow.websockets.client.WebSocketClient.connectionBuilder( worker, new DefaultByteBufferPool( false, 1024, 1024, 0 ), uri );
-
-                    IoFuture<WebSocketChannel> future = builder.connect();
-                    future.addNotifier( new IoFuture.Notifier<WebSocketChannel, Object>()
-                        {
-                            @Override
-                            public void notify( IoFuture<? extends WebSocketChannel> future, Object attachment )
-                            {
-                                if( future.getStatus() == IoFuture.Status.DONE )
-                                {
-                                    try
-                                    {
-                                        WebSocketChannel connection = future.get();
-                                        channel = connection;
-                                        connected.set( true );
-                                        setupChannel( connection );
-                                        forEachListener(l -> ((INetClient.IListener) l).onConnected( WebSocketClient.this ) );
-                                    }
-                                    catch( Exception e )
-                                    {
-                                        forEachListener(l -> ((INetClient.IListener) l).onError( WebSocketClient.this, e ) );
-                                    }
-                                }
-                                else
-                                {
-                                    Throwable throwable = future.getException();
-                                    Exception exception = (throwable instanceof Exception) ? (Exception) throwable : new Exception( throwable );
-                                    forEachListener(l -> ((INetClient.IListener) l).onError( WebSocketClient.this, exception ) );
-                                }
-                                latch.countDown();
-                            }
-                        }, null );
-
-                    latch.await( getTimeout(), TimeUnit.MILLISECONDS );
-
-                    if( connected.get() )
-                        return this;
-                    else
-                        cleanupResources();
+                    Thread.sleep( RETRY_DELAY );
                 }
-                catch( Exception e )
+                catch( InterruptedException ie )
                 {
-                    cleanupResources();
-
-                    if( attempt == MAX_RETRIES - 1 )
-                    {
-                        forEachListener(l -> ((INetClient.IListener) l).onError( WebSocketClient.this, e ) );
-                        break;
-                    }
-
-                    try
-                    {
-                        Thread.sleep( RETRY_DELAY );
-                    }
-                    catch( InterruptedException ie )
-                    {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+                    Thread.currentThread().interrupt();
+                    sendError(new MingleException("Connection retry interrupted", ie));
+                    break; // Exit loop if interrupted
                 }
             }
         }
 
+        // If we exit the loop, all retries have failed or were interrupted.
+        // Now, we perform a full cleanup, including shutting down the worker.
+        cleanupResources();
         return this;
     }
 
     @Override
     public synchronized INetClient disconnect()
     {
-        isShuttingDown.set( true );
+        isStopping.set( true );
         cleanupResources();
-        isShuttingDown.set( false );
+        isStopping.set( false );
         return this;
     }
 
@@ -161,7 +160,7 @@ public final class WebSocketClient
             }
             catch( Exception e )
             {
-                forEachListener(l -> ((INetClient.IListener) l).onError( WebSocketClient.this, e ) );
+                sendError( e );
             }
         }
 
@@ -183,16 +182,16 @@ public final class WebSocketClient
     // hashCode() and equals(...)  are defined at super (parent class)
 
     //------------------------------------------------------------------------//
-    // PROTECTED SCOPE
+    // PACKAGE SCOPE
 
     /**
      * This method was created by needs of WebSocketServer.
      * @param webSocketChannel
      * @return
      */
-    protected synchronized boolean connect( WebSocketChannel webSocketChannel )
+    synchronized boolean connect( WebSocketChannel webSocketChannel )
     {
-        if( isShuttingDown.get() )
+        if( isStopping.get() )
             return false;
 
         try
@@ -205,7 +204,7 @@ public final class WebSocketClient
         catch( Exception e )
         {
             cleanupResources();
-            forEachListener(l -> ((INetClient.IListener) l).onError( WebSocketClient.this, e ) );
+            sendError( e );
             return false;
         }
     }
@@ -227,18 +226,26 @@ public final class WebSocketClient
                     }
                     catch( Exception e )
                     {
-                        if( ! isShuttingDown.get() )
-                            forEachListener(l -> l.onError( WebSocketClient.this, e ) );
+                        if( ! isStopping.get() )
+                            sendError( e );
                     }
+                }
+
+                @Override
+                protected void onClose( WebSocketChannel channel, StreamSourceFrameChannel sourceChannel )
+                {
+                    if( ! isStopping.get() )
+                        cleanupResources();
                 }
 
                 @Override
                 protected void onError( WebSocketChannel channel, Throwable error )
                 {
-                    if( ! isShuttingDown.get() )
+                    if( ! isStopping.get() )
                     {
                         Exception exception = (error instanceof Exception) ? (Exception) error : new Exception( error );
-                        forEachListener(l -> l.onError( WebSocketClient.this, exception ) );
+                        log( exception );
+                        sendError( exception );
                     }
                 }
             } );
@@ -256,11 +263,11 @@ public final class WebSocketClient
             }
             catch( Exception e )
             {
-                log( "Error closing WebSocket channel: " + e.getMessage() );
+                log( "Error closing WebSocket channel: ", e);
             }
             finally
             {
-                forEachListener(l -> ((INetClient.IListener) l).onDisconnected( WebSocketClient.this ) );
+                forEachListener( l -> ((INetClient.IListener) l).onDisconnected( WebSocketClient.this ) );
             }
         }
 
@@ -269,12 +276,17 @@ public final class WebSocketClient
             try
             {
                 worker.shutdownNow();
-                if( ! worker.awaitTermination( 2, TimeUnit.SECONDS ) )
-                    log( "Worker did not terminate" );
+
+                if( ! worker.awaitTermination( 10, TimeUnit.SECONDS ) )
+                {
+                    log( Level.INFO, "Worker did not terminate gracefully, forcing cleanup." );
+                    worker = null;   // Force cleanup by setting to null
+                }
             }
             catch( InterruptedException e )
             {
                 Thread.currentThread().interrupt();
+                log( Level.INFO, "Shutdown did not terminate gracefully" );
             }
         }
 

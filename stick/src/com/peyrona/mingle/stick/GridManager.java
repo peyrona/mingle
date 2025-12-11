@@ -131,7 +131,7 @@ final class GridManager
                 if( nInterval == -1 ) nInterval = 10 * 1000;
                 else                  nInterval = Math.max( 1000, nInterval );     // Not less tha 1 second
 
-                executor = UtilSys.executeAtFixed( getClass().getName(), nInterval, nInterval, () -> lstTargets.forEach( t -> t.connect() ) );
+                executor = UtilSys.executeWithDelay( getClass().getName(), nInterval, nInterval, () -> lstTargets.forEach( t -> t.connect() ) );
             }
         }
     }
@@ -139,13 +139,10 @@ final class GridManager
     synchronized void stop()
     {
         if( executor != null )
-            executor.cancel( true );
+            executor.cancel( true );   // true = may interrupt if running
 
         if( lstTargets != null )
-        {
-            for( Target t : lstTargets )
-                t.disconnect();
-        }
+            lstTargets.forEach( target -> target.disconnect() );
 
         lstTargets = null;
         executor   = null;

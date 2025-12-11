@@ -86,7 +86,12 @@ public final class Orchestrator
             {
                 System.out.println( "Creating..." );
 
-                if( serviceManager.create( component, null, (String[]) null ) )
+                List<String> jvmOptions = collectJVMParameters();
+
+                if( jvmOptions == null )
+                    return new ServiceOperationResult( false, "Creation of the Service was aborted by user.", null );
+
+                if( serviceManager.create( component, jvmOptions, (String[]) null ) )
                     System.out.println( "Service successfully created." );
                 else
                     return new ServiceOperationResult( false, "Error creating the Service.", null );
@@ -126,6 +131,11 @@ public final class Orchestrator
                     boolean confirmed = UtilUI.confirm( "Confirm to delete" );
                     success = confirmed ? serviceManager.delete( component ) : false;
                     message = component + " service file " + (success ? "deleted successfully." : "not deleted.");
+                    break;
+                case "showfile":
+                    UtilUI.clearScreen();
+                    success = serviceManager.showFile( component );
+                    message = component + " service file contents shown.";
                     break;
                 default:
                     return new ServiceOperationResult( false, "Unknown service action: " + action, null );
@@ -211,6 +221,70 @@ public final class Orchestrator
     // UTILITY FUNCTIONS
     //------------------------------------------------------------------------//
 
+    private List<String> collectJVMParameters()
+    {
+        List<String> jvmOptions = new ArrayList<>();
+
+        System.out.println( "\nJVM Parameters Configuration" );
+        System.out.println( "------------------------------" );
+
+        // Prompt for initial heap size with default
+        String xms = UtilUI.readInput( "Enter initial heap size (-Xms) [default: 16m]: " ).trim();
+
+        if( xms.isEmpty() )
+            xms = "16m";
+
+        if( ! xms.startsWith( "-Xms" ) )
+            xms = "-Xms" + xms;
+
+        if( ! checkUnit( xms ) )
+            return null;
+
+        jvmOptions.add( xms );
+
+        // Prompt for maximum heap size with default
+        String xmx = UtilUI.readInput( "Enter maximum heap size (-Xmx) [default: 64m]: " ).trim();
+
+        if( xmx.isEmpty() )
+            xmx = "64m";
+
+        if( ! xmx.startsWith( "-Xmx" ) )
+            xmx = "-Xmx" + xmx;
+
+        if( ! checkUnit( xms ) )
+            return null;
+
+        jvmOptions.add( xmx );
+
+        // Ask for additional JVM options
+        String additional = UtilUI.readInput( "Enter additional JVM options (comma-separated) or [Enter] for none: " ).trim();
+
+        if( ! additional.isEmpty() )
+        {
+            String[] options = additional.split( "," );
+
+            for( String option : options )
+            {
+                option = option.trim();
+
+                if( ! option.isEmpty() )
+                {
+                    if( ! option.startsWith( "-" ) )
+                        option = "-" + option;
+                    jvmOptions.add( option );
+                }
+            }
+        }
+
+        System.out.println( "\nJVM options to be used: " + String.join( " ", jvmOptions ) );
+        System.out.println();
+
+        if( UtilUI.confirm( "Do you agree?" ) )
+            return jvmOptions;
+
+        return null;
+    }
+
     private boolean isRunning( Process process )
     {
         if( process == null )
@@ -233,6 +307,27 @@ public final class Orchestrator
         }
 
         return process.isAlive();
+    }
+
+    /**
+     * Validates and extracts memory unit from JVM memory string.
+     *
+     * @param ram Input like "512m", "1g" (will never be empty).
+     * @return true if valid.
+     */
+    public static boolean checkUnit( String ram )
+    {
+        ram = ram.trim().toLowerCase();
+
+        char unit = ram.charAt( ram.length() - 1 );
+
+        if( "kmgt".indexOf( unit ) > -1 )
+            return true;
+
+        if( Character.isDigit( unit ) )  System.out.println( "JVM memory unit not provided." );
+        else                             System.out.println( "Invalid JVM memory unit '"+ unit +'\'' );
+
+        return false;
     }
 
     //------------------------------------------------------------------------//

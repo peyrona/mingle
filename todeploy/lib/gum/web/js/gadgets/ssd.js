@@ -50,7 +50,7 @@ class GumSSD extends GumGadget
 
         if( this._hasErrors() )
             return this;
-        
+
         let sId4SVG;
 
         if( ! this.wrapper )    // Is this the 1st time?
@@ -60,7 +60,7 @@ class GumSSD extends GumGadget
             let sHTML = '<svg id="'+ sId4SVG +'">'+
                         '</svg>';
 
-            this.getContainer()
+            this.getContentArea()
                 .empty()
                 .append( sHTML );
         }
@@ -71,9 +71,9 @@ class GumSSD extends GumGadget
 
         this.wrapper = new SevenSegmentDisplay( sId4SVG );
 
-        let svg = this.getContainer().find('svg')[0];
-            svg.setAttribute( "width" , this.getContainer().width()  );
-            svg.setAttribute( "height", this.getContainer().height() );
+        let svg = this.getContentArea().find('svg')[0];
+            svg.setAttribute( "width" , this.getContentArea().width()  );
+            svg.setAttribute( "height", this.getContentArea().height() );
 
         // This forces to recalculate the height and the segments -->
         this.wrapper.NumberOfDigits        = Math.min( 12, this.integers + this.decimals );    // Max total cells is 12
@@ -109,7 +109,7 @@ class GumSSD extends GumGadget
 
             let fn = function( action, payload )
                     {
-                        if( self._isProperValue( "Number", payload.value, payload.name ) )
+                        if( self._isValidValue( "Number", payload.value, payload.name ) )
                         {
                             let sValue = payload.value.toFixed( self.decimals );
 

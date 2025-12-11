@@ -465,7 +465,7 @@ public final class CommBridge implements WebSocketConnectionCallback
     }
 
     // Logging helper methods
-    private static void logInfo(String message)
+    private static void logInfo( String message )
     {
         ILogger logger = UtilSys.getLogger();
 
@@ -473,14 +473,40 @@ public final class CommBridge implements WebSocketConnectionCallback
             logger.log( ILogger.Level.INFO, message );
     }
 
-    private static void logWarning(String message, Throwable throwable)
+    private static void logWarning( String message, Throwable throwable )
     {
         UtilSys.getLogger().log( ILogger.Level.WARNING, throwable, message );
     }
 
-    private static void logError(String message, Throwable throwable)
+    private static void logError( String message, Throwable throwable )
     {
         UtilSys.getLogger().log( ILogger.Level.SEVERE, throwable, message );
+    }
+
+    /**
+     * Shuts down the CommBridge and cleans up all resources.
+     * This method should be called during application shutdown to prevent thread leaks.
+     */
+    public static void shutdown()
+    {
+        try
+        {
+            cleanupExecutor.shutdown();
+
+            if( ! cleanupExecutor.awaitTermination( 5, TimeUnit.SECONDS ) )
+            {
+                cleanupExecutor.shutdownNow();
+
+                if( ! cleanupExecutor.awaitTermination( 2, TimeUnit.SECONDS ) )
+                    logError( "ScheduledExecutorService did not terminate gracefully", null );
+            }
+        }
+        catch( InterruptedException e )
+        {
+            cleanupExecutor.shutdownNow();
+            Thread.currentThread().interrupt();
+            logError( "Interrupted while waiting for ScheduledExecutorService termination", e );
+        }
     }
 
     /**

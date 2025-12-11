@@ -93,10 +93,10 @@ public final class UtilSys
             if( UtilIO.mkdirs( fEtc ) )
                 Files.setPosixFilePermissions( fEtc.toPath(), permissions );
         }
-        catch( IOException ioe )
+        catch( Throwable twl )
         {
-            if( getLogger() == null )  ioe.printStackTrace( System.err );
-            else                       getLogger().log( ILogger.Level.WARNING, ioe );
+            if( getLogger() == null )  twl.printStackTrace( System.err );
+            else                       getLogger().log( ILogger.Level.WARNING, twl );
         }
     }
 
@@ -287,9 +287,9 @@ public final class UtilSys
      * @param sThreadName
      * @param r What to execute.
      */
-    public static void execute( String sThreadName, Runnable r )
+    public static ScheduledFuture execute( String sThreadName, Runnable r )
     {
-        execute( sThreadName, -1, r );
+        return execute( sThreadName, 0, r );
     }
 
     /**
@@ -326,12 +326,6 @@ public final class UtilSys
                                 Thread.currentThread().setName( original );
                             }
                         };
-
-        if( delay <= 0 )
-        {
-            pool.execute( run );
-            return null;
-        }
 
         return pool.schedule( run, delay, TimeUnit.MILLISECONDS );
     }
@@ -385,7 +379,7 @@ public final class UtilSys
      * @param r What to execute.
      * @return
      */
-    public static ScheduledFuture executeAtFixed( String sThreadName, long delay, long rate, Runnable r )
+    public static ScheduledFuture executeWithDelay( String sThreadName, long delay, long rate, Runnable r )
     {
         // Can not afford to have an execption inside r because the Scheduler stops.
         // Although we wrap r with a generic try catch, the r should have its own try catch.

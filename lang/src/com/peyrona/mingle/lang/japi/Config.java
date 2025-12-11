@@ -72,10 +72,10 @@ public final class Config implements IConfig
                 {
                     if( ja.get( n ).isObject() && ja.get( n ).asObject().names().contains( "Command_Line_Interface_Options" ) )
                     {
-                        JsonArray jaCli = ja.get( n ).asObject().get("Command_Line_Interface_Options").asArray();
+                        JsonArray jaCli = ja.get( n ).asObject().get( "Command_Line_Interface_Options" ).asArray();
                         String[]  asCli = new String[ jaCli.size() ];
 
-                        for( int x = 0; x < jaCli.size(); n++ )
+                        for( int x = 0; x < jaCli.size(); x++ )
                             asCli[n] = jaCli.get( x ).asString();
 
                         cli = new UtilCLI( asCli );

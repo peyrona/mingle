@@ -22,7 +22,12 @@ public abstract class MsgAbstractTwo extends MsgAbstractOne
      */
     public MsgAbstractTwo( String name, Object value )
     {
-        super( name );
+        this( name, value, true );
+    }
+
+    public MsgAbstractTwo( String name, Object value, boolean isOwn )
+    {
+        super( name, isOwn );
 
         this.value = value;
     }

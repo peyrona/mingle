@@ -14,7 +14,7 @@ import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import com.peyrona.mingle.lang.messages.MsgTrigger;
+import com.peyrona.mingle.lang.messages.MsgExecute;
 import java.io.IOException;
 import java.net.URISyntaxException;
 import java.util.Arrays;
@@ -41,7 +41,6 @@ public final class      Script
     private final boolean    isInline;          // This inf. is not part of the language, it is provided by the transpiler (True when Une source code FROM clause contents (SCRIPT command) is in between brackets ({...}))
     private final String     call;              // Function or method to call (invoke) inside FROM (can be null for some languages (not for Java))
     private final String[]   asFrom;            // URI(s) or Code
-    private       boolean    is4Controller = false;
     private ICandi.ILanguage langMgr       = null;   // Language manager
     private ICandi.IPrepared prepared      = null;
 
@@ -123,7 +122,7 @@ public final class      Script
         // Stick (which is a higher level entity and has a broader vision) is responsible for invoking ::execute()
 
         if( isOnStart && canExecute() )
-            getRuntime().bus().post( new MsgTrigger( name(), false ) );
+            getRuntime().bus().post(new MsgExecute( name(), false ) );
     }
 
     @Override
@@ -132,7 +131,7 @@ public final class      Script
         if( ! isStarted() )
             return;
 
-        if( isOnStop && canExecute() )    // Because bus could be stopped, can't do following --> getRuntime().bus().post( new MsgTrigger( getName() ) );
+        if( isOnStop && canExecute() )    // Because bus could be stopped, can't do following --> getRuntime().bus().post( new MsgExecute( getName() ) );
         {
             try
             {
@@ -179,11 +178,6 @@ public final class      Script
     @Override
     public IController newController()
     {
-        synchronized( this )
-        {
-            is4Controller = true;
-        }
-
         if( canExecute() )
         {
             try
@@ -210,7 +204,7 @@ public final class      Script
 
     /**
      * Checks if the script can be executed.
-     * 
+     *
      * @return true if the script has been successfully prepared and has no compilation errors,
      *         false otherwise. Logs a SEVERE error if the script cannot be executed due to errors.
      * @throws AssertionError if the script has not been started
@@ -227,10 +221,10 @@ public final class      Script
 
     /**
      * Determines if the script is allowed to execute based on language type and configuration.
-     * 
-     * Une scripts are always allowed. For other languages, checks the 'allow_native_code' 
+     *
+     * Une scripts are always allowed. For other languages, checks the 'allow_native_code'
      * configuration flag. Scripts used by Drivers are also allowed regardless of the flag.
-     * 
+     *
      * @return true if execution is allowed, false otherwise
      */
     private boolean isAllowed2Exec()
@@ -253,7 +247,7 @@ public final class      Script
 
     /**
      * Prepares the script for execution by building the language manager and compiling/preparing the source code.
-     * 
+     *
      * This method is synchronized to ensure thread-safe preparation. It:
      * 1. Checks if execution is allowed via isAllowed2Exec()
      * 2. Builds the appropriate language manager
@@ -261,7 +255,7 @@ public final class      Script
      * 4. For file-based scripts, prepares the source code via the language manager
      * 5. Validates compilation errors and logs them if found
      * 6. Binds the prepared script to the language manager
-     * 
+     *
      * If preparation fails due to errors, both langMgr and prepared are set to null.
      */
     private synchronized void prepare()

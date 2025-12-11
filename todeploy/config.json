@@ -24,13 +24,14 @@
     # Excution Environment configuration
     {
       "module"                 : "exen",
-      "write_disk"             : true,             # Is it allowed to use disk (read and write)? By default, true, true, unless HD is not writable.
-      "faked_drivers"          : false,            # A hint for the drivers. By default: false
-      "downtimed_interval"     : 180,              # Seconds between invocations to find downtimed devices (0 to disable). By default 0
-      "downtimed_report_device": null,             # The name of the device that will contain the list of downtimed devices
-      "model"                  : null,             # Local or remote (http) file (or array of files: first valid will be used) to be executed. By default null
-      "update_models"          : false,            # Update local model if a more recent one was retrieved from HTTP. By default, false
-      "allow_native_code"      : true,             # Allow executing code in other languages, besides Une (drivers are an exception). By default true.
+      "bus_capacity"           : 4096,        # Max amount of messages that can be stored peding to be dispatched. By default 16000. Bus starts small and grows up to this amount: an exception is the thrown.
+      "write_disk"             : true,        # Is it allowed to use disk (read and write)? By default, true, true, unless HD is not writable.
+      "faked_drivers"          : false,       # A hint for the drivers. By default: false
+      "downtimed_interval"     : 180,         # Seconds between invocations to find downtimed devices (0 to disable). By default 0
+      "downtimed_report_device": null,        # The name of the device that will contain the list of downtimed devices
+      "model"                  : null,        # Local or remote (http) file (or array of files: first valid will be used) to be executed. By default null
+      "update_models"          : false,       # Update local model if a more recent one was retrieved from HTTP. By default, false
+      "allow_native_code"      : true,        # Allow executing code in other languages, besides Une (drivers are an exception). By default true.
       "languages"              : [ {"name": "Une"       , "class": "com.peyrona.mingle.candi.unescript.UneScriptRT", "uris": ["file://{*home.lib*}candi.jar"] },
                                    {"name": "Java"      , "class": "com.peyrona.mingle.candi.javac.JavaRT"         , "uris": ["file://{*home.lib*}candi.jar"] },
                                    {"name": "JavaScript", "class": "com.peyrona.mingle.candi.javascript.NashornRT" , "uris": ["file://{*home.lib*}candi.jar"] },
@@ -40,18 +41,18 @@
     # Monitoring (HTTP Server and ExEn Bridge) module
     # See The_Mingle_Standard_Platform.pdf for more info
     {
-      "module"        : "monitoring",
-      "host"          : null,                                               # Host name (by default local IPV4)
-      "port"          : null,                                               # Port to attend HTTP (by default 8080)
-      "timeout"       : 1800,                                               # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
-      "max_sessions"  : 64,                                                 # Maxium amount of sessions
-      "allow"         : "intranet",                                         # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-      "user_files_dir": "../balata/",                                       # By default "[home]/etc/"
-      "client"        : "com.peyrona.mingle.network.socket.SocketClient",   # Client used by the bridge to connect with ExEns (Intranet)
-      "uris"          : ["file://{*home.lib*}network.jar"]                  # Needed JARs
-     #"ssl"           : { "port": null,                                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
-     #                    "path": "{*home*}keystore.jks",                   # Path to "keystore.jks" file (can not be null)
-     #                    "pwd" : "adminadmin"  },                          # Password for the "keystore.jks" file (can not be null)
+      "module"      : "monitoring",
+      "host"        : null,                                               # Host name (by default local IPV4)
+      "port"        : null,                                               # Port to attend HTTP (by default 8080)
+      "timeout"     : 1800,                                               # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
+      "max_sessions": 64,                                                 # Maxium amount of sessions
+      "allow"       : "intranet",                                         # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+      "user_base"   : null,                                               # Folder for Dashboards and static content (erved via HTTP/S). By default "{*home*}/etc/gum_user_files"
+      "client"      : "com.peyrona.mingle.network.socket.SocketClient",   # Client used by the bridge to connect with ExEns (Intranet)
+      "uris"        : ["file://{*home.lib*}network.jar"]                  # Needed JARs
+     #"ssl"         : { "port": null,                                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
+     #                  "path": "{*home*}keystore.jks",                   # Path to "keystore.jks" file (can not be null)
+     #                  "pwd" : "adminadmin" },                           # Password for the "keystore.jks" file (can not be null)
     },
 
     # Arithmetic and Logical Expression Evaluator to be used (loaded at run-time)
@@ -81,139 +82,161 @@
 
         "servers": [
                       {
-                          "name"       : "Plain Socket Server",                              # Mandatory
-                          "description": "TCP socket connection without encryption",         # Optional but recommened
-                          "init"       : { "port"  : 55880,                                  # By default, 55880 for plain sockets and 55881 for SSL
-                                           "allow" : "intranet" },                           # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-                          "builder"    : "com.peyrona.mingle.network.socket.SocketServer",   # How to create the server that accept connections
-                          "uris"       : ["file://{*home.lib*}network.jar"]
+                        "name"       : "Plain Socket Server",                                  # Mandatory
+                        "description": "TCP socket connection without encryption",             # Optional but recommened
+                        "init"       : { "port"  : 55880,                                      # By default, 55880 for plain sockets and 55881 for SSL
+                                         "allow" : "intranet" },                               # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                        "builder"    : "com.peyrona.mingle.network.socket.SocketServer",       # How to create the server that accept connections
+                        "uris"       : ["file://{*home.lib*}network.jar"]
+                      },
+                    # {
+                    #   "name"       : "SSL Socket Server",                                    # Mandatory
+                    #   "description": "TCP socket connection with TLS encryption",            # Optional but recommened
+                    #   "init"       : { "port"    : 55881,                                    # By default, 55881 for plain sockets and 55881 for SSL
+                    #                    "certFile": "./certificate.p12",                      # SSL Certificate file
+                    #                    "keyFile" : "./private.key",                          # Private Key File
+                    #                    "password": "mypass",                                 # Certificate password
+                    #                    "allow"   : "any" },                                  # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                    #   "builder"    : "com.peyrona.mingle.network.socket.SocketServer",       # How to create the server that accept connections
+                    #   "uris"       : ["file://{*home.lib*}network.jar"]
+                    # },
+                      {
+                        "name"       : "Plain WebSocket Server",                               # Mandatory
+                        "description": "WebSocket connection without encryption",              # Optional but recommened
+                        "init"       : { "port"  : 55882,                                      # By default, 55882 for plain sockets and 55881 for SSL
+                                         "allow" : "intranet",                                 # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                                         "ssl"   : false },                                    # Use SSL or not. By default false.
+                        "builder"    : "com.peyrona.mingle.network.websocket.WebSocketServer", # How to create the server that accept connections
+                        "uris"       : ["file://{*home.lib*}network.jar",
+                                        "file://{*home.lib*}gum/*.jar"]
                       }
                     # ,
                     # {
-                    #     "name"       : "SSL Socket Server",                                # Mandatory
-                    #     "description": "TCP socket connection with TLS encryption",        # Optional but recommened
-                    #     "init"       : { "port"    : 55881,                                # By default, 55880 for plain sockets and 55881 for SSL
-                    #                      "certFile": "./certificate.p12",                  # SSL Certificate file
-                    #                      "keyFile" : "./private.key",                      # Private Key File
-                    #                      "password": "mypass",                             # Certificate password
-                    #                      "allow"   : "any" },                              # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-                    #     "builder"    : "com.peyrona.mingle.network.socket.SocketServer",   # How to create the server that accept connections
-                    #     "uris"       : ["file://{*home.lib*}network.jar"]
-                    #  }
-                  ],
+                    #   "name"       : "SSL WebSocket Server",                                 # Mandatory
+                    #   "description": "TCP socket connection with TLS encryption",            # Optional but recommened
+                    #   "init"       : { "port"    : 55883,                                    # By default, 55883 for plain sockets and 55881 for SSL
+                    #                    "certFile": "./certificate.p12",                      # SSL Certificate file
+                    #                    "keyFile" : "./private.key",                          # Private Key File
+                    #                    "password": "mypass",                                 # Certificate password
+                    #                    "allow"   : "any" },                                  # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+                    #   "builder"    : "com.peyrona.mingle.network.websocket.WebSocketServer", # How to create the server that accept connections
+                    #   "uris"       : ["file://{*home.lib*}network.jar",
+                    #                   "file://{*home.lib*}gum/*.jar"]
+                    # }
+                   ],
 
         # Transport channels to create clients that will send requests to servers (mainly used by Gum).
         # Note: the Server IP is provided at run-time.
 
         "clients": [
                       {
-                          "name"       : "Plain Sockets Client",                            # Mandatory
-                          "description": "TCP socket connection without encryption",        # Optional but recommened
-                          "init"       : { "host"    : null,                                # By default 'localhost'
-                                           "port"    : 55880,                               # By default, 55880 for plain sockets and 55881 for websockets
-                                           "timeout" : 30 },                                # Seconds to wait to stablish the connection. By default 0 (wait forever)
-                          "builder"    : "com.peyrona.mingle.network.socket.SocketClient",  # How to create the client
-                          "uris"       : ["file://{*home.lib*}network.jar"],
-                          "ui"         :
-                                         [
-                                            {
-                                              "key": "host",
-                                              "type": "string",
-                                              "label": "Host",
-                                              "tooltip": "",
-                                              "default": "localhost",
-                                              "required": true,
-                                              "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
-                                            },
-                                            {
-                                              "key": "port",
-                                              "type": "integer",
-                                              "label": "Port",
-                                              "tooltip": "",
-                                              "default": 55880,
-                                              "required": true,
-                                              "validation": {"min": 1024, "max": 65535}
-                                            },
-                                            {
-                                              "key": "timeout",
-                                              "type": "integer",
-                                              "label": "Timeout (seconds)",
-                                              "tooltip": "",
-                                              "default": 30,
-                                              "required": false,
-                                              "validation": {"min": 1, "max": 300}
-                                            }
-                                        ]
+                        "name"       : "Plain Sockets Client",                                 # Mandatory
+                        "description": "TCP socket connection without encryption",             # Optional but recommened
+                        "init"       : { "host"    : null,                                     # By default 'localhost'
+                                         "port"    : 55880,                                    # By default, 55880 for plain sockets and 55881 for websockets
+                                         "timeout" : 30 },                                     # Seconds to wait to stablish the connection. By default 0 (wait forever)
+                        "builder"    : "com.peyrona.mingle.network.socket.SocketClient",       # How to create the client
+                        "uris"       : ["file://{*home.lib*}network.jar"],
+                        "ui"         :
+                                       [
+                                          {
+                                            "key": "host",
+                                            "type": "string",
+                                            "label": "Host",
+                                            "tooltip": "",
+                                            "default": "localhost",
+                                            "required": true,
+                                            "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
+                                          },
+                                          {
+                                            "key": "port",
+                                            "type": "integer",
+                                            "label": "Port",
+                                            "tooltip": "",
+                                            "default": 55880,
+                                            "required": true,
+                                            "validation": {"min": 1024, "max": 65535}
+                                          },
+                                          {
+                                            "key": "timeout",
+                                            "type": "integer",
+                                            "label": "Timeout (seconds)",
+                                            "tooltip": "",
+                                            "default": 30,
+                                            "required": false,
+                                            "validation": {"min": 1, "max": 300}
+                                          }
+                                      ]
                       },
                       {
-                          "name"       : "SSL Socket Client",                                  # Mandatory
-                          "description": "TCP socket connection with TLS encryption",          # Optional but recommened
-                          "init"       : { "host"    : null,                                   # By default 'localhost'
-                                           "port"    : 55881,                                  # By default, 55880 for plain sockets and 55881 for SSL
-                                           "timeout" : 30 },                                   # Seconds to wait to stablish the connection. By default 0 (wait forever)
-                          "builder"    : "com.peyrona.mingle.network.socket.SSLSocketClient",  # How to create the client
-                          "uris"       : ["file://{*home.lib*}network.jar"],
-                          "ui"         :
-                                         [
-                                            {
-                                              "key": "host",
-                                              "type": "string",
-                                              "label": "Host",
-                                              "tooltip": "",
-                                              "default": "localhost",
-                                              "required": true,
-                                              "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
-                                            },
-                                            {
-                                              "key": "port",
-                                              "type": "integer",
-                                              "label": "Port",
-                                              "tooltip": "",
-                                              "default": 55881,
-                                              "required": true,
-                                              "validation": {"min": 1024, "max": 65535}
-                                            },
-                                            {
-                                              "key": "timeout",
-                                              "type": "integer",
-                                              "label": "Timeout (seconds)",
-                                              "tooltip": "",
-                                              "default": 30,
-                                              "required": false,
-                                              "validation": {"min": 1, "max": 300}
-                                            },
-                                            {
-                                              "key": "cert_file",
-                                              "type": "file",
-                                              "label": "Certificate File",
-                                              "tooltip": "",
-                                              "required": true,
-                                              "accept": [".pem", ".crt", ".cer"]
-                                            },
-                                            {
-                                              "key": "key_file",
-                                              "type": "file",
-                                              "label": "Key File",
-                                              "tooltip": "",
-                                              "required": true,
-                                              "accept": [".key", ".pem"]
-                                            },
-                                            {
-                                              "key": "password",
-                                              "type": "password",
-                                              "label": "Certificate Password",
-                                              "tooltip": "",
-                                              "required": false
-                                            }
-                                        ]
+                        "name"       : "SSL Socket Client",                                  # Mandatory
+                        "description": "TCP socket connection with TLS encryption",          # Optional but recommened
+                        "init"       : { "host"    : null,                                   # By default 'localhost'
+                                         "port"    : 55881,                                  # By default, 55880 for plain sockets and 55881 for SSL
+                                         "timeout" : 30 },                                   # Seconds to wait to stablish the connection. By default 0 (wait forever)
+                        "builder"    : "com.peyrona.mingle.network.socket.SSLSocketClient",  # How to create the client
+                        "uris"       : ["file://{*home.lib*}network.jar"],
+                        "ui"         :
+                                       [
+                                          {
+                                            "key": "host",
+                                            "type": "string",
+                                            "label": "Host",
+                                            "tooltip": "",
+                                            "default": "localhost",
+                                            "required": true,
+                                            "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
+                                          },
+                                          {
+                                            "key": "port",
+                                            "type": "integer",
+                                            "label": "Port",
+                                            "tooltip": "",
+                                            "default": 55881,
+                                            "required": true,
+                                            "validation": {"min": 1024, "max": 65535}
+                                          },
+                                          {
+                                            "key": "timeout",
+                                            "type": "integer",
+                                            "label": "Timeout (seconds)",
+                                            "tooltip": "",
+                                            "default": 30,
+                                            "required": false,
+                                            "validation": {"min": 1, "max": 300}
+                                          },
+                                          {
+                                            "key": "cert_file",
+                                            "type": "file",
+                                            "label": "Certificate File",
+                                            "tooltip": "",
+                                            "required": true,
+                                            "accept": [".pem", ".crt", ".cer"]
+                                          },
+                                          {
+                                            "key": "key_file",
+                                            "type": "file",
+                                            "label": "Key File",
+                                            "tooltip": "",
+                                            "required": true,
+                                            "accept": [".key", ".pem"]
+                                          },
+                                          {
+                                            "key": "password",
+                                            "type": "password",
+                                            "label": "Certificate Password",
+                                            "tooltip": "",
+                                            "required": false
+                                          }
+                                      ]
                       },
                       {
                         "name"       : "WebSocket",
                         "description": "WebSocket connection for real-time web communication",
-                        "init"       : { "host"    : null,                                   # By default: "ws://localhost:55882/ws"
+                        "init"       : { "host"    : null,                                   # By default: "ws://localhost:55882/"
                                          "headers" : null },                                 # By default, null
                         "builder"    : "com.peyrona.mingle.network.websocket.WebSocketClient",
-                        "uris"       : ["file://{*home.lib*}network.jar", "file://{*home.lib*}websocket.jar"],
+                        "uris"       : ["file://{*home.lib*}network.jar", "file://{*home.lib*}gum/*.jar"],
                         "ui"         :
                                        [
                                           {
@@ -221,7 +244,7 @@
                                             "type": "url",
                                             "label": "WebSocket URL",
                                             "tooltip": "",
-                                            "default": "ws://localhost:55882/ws",
+                                            "default": "ws://localhost:55882/",
                                             "required": true,
                                             "validation": {"pattern": "^wss?://.+"}
                                           },

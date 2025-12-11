@@ -61,16 +61,16 @@ class GumGauge extends GumGadget
         if( isOngoing )
             return this;
 
-        this.getContainer()
+        this.getContentArea()
             .empty()
             .append('<canvas id="'+ this.id +'"></canvas>');
 
-        this.getContainer()
-            .attr('width' , Math.max( this.getContainer().width() , 48 ))
-            .attr('height', Math.max( this.getContainer().height(), 48 ));
+        this.getContentArea()
+            .attr('width' , Math.max( this.getContentArea().width() , 48 ))
+            .attr('height', Math.max( this.getContentArea().height(), 48 ));
 
-        $('#'+this.id).width(  this.getContainer().width()  )
-                      .height( this.getContainer().height() );
+        $('#'+this.id).width(  this.getContentArea().width()  )
+                      .height( this.getContentArea().height() );
 
         if( this.wrapper )
             this.wrapper.del();
@@ -104,7 +104,7 @@ class GumGauge extends GumGadget
 
             let fn = function( action, payload )
                     {
-                        if( self._isProperValue( "Number", payload.value, payload.name ) )
+                        if( self._isValidValue( "Number", payload.value, payload.name ) )
                         {
                             self._hasErrors( false );
                             self.wrapper.set( payload.value );
@@ -116,7 +116,6 @@ class GumGauge extends GumGadget
     }
 }
 
-//------------------------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------------------------------------------------------------------------------------------//
 

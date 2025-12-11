@@ -44,6 +44,7 @@ public final class ServiceManagerFactory
         @Override public String  getStatus( String c )                                              { return "Unsupported OS"; }
         @Override public boolean isRunning( String c )                                              { return false; }
         @Override public boolean showLog( String c )                                                { return false; }
+        @Override public boolean showFile( String c )                                               { return false; }
         @Override public boolean delete( String service )                                           { return false; }
     }
 }

@@ -1,7 +1,7 @@
 
 package com.peyrona.mingle.glue.gswing;
 
-import com.peyrona.mingle.glue.ConfigManager;
+import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Main;
 import java.awt.BorderLayout;
@@ -40,7 +40,7 @@ public final class GTip
                   .closeOnEsc()
                   .onClose( JFrame.DISPOSE_ON_CLOSE )
                   .onClose((GFrame g) -> GTip.save( msg, chk.isSelected() ) )
-                  .put( new JLabel( JTools.getIcon( "wizard.png", 94, 94 ) ), BorderLayout.WEST )
+                  .put( new JLabel( JTools.getIcon( "wizard-256x256.png", 94, 94 ) ), BorderLayout.WEST )
                   .put( txt, BorderLayout.CENTER )
                   .put( pnl, BorderLayout.SOUTH )
                   .setVisible()
@@ -51,7 +51,7 @@ public final class GTip
 
     public static void reset()
     {
-        ConfigManager.resetTips();
+        SettingsManager.resetTips();
     }
 
     //------------------------------------------------------------------------//
@@ -59,12 +59,12 @@ public final class GTip
     private static void save( final String msg, boolean bDoNotShow )
     {
         if( bDoNotShow )                                   // User does not want to see the tip again
-            ConfigManager.addHiddenTip( toUUID( msg ) );
+            SettingsManager.addHiddenTip( toUUID( msg ) );
     }
 
     private static boolean canShow( final String msg )
     {
-        return ! ConfigManager.getHiddenTips().contains( toUUID( msg ) );    // If tips list contains the msg, it can not be shown
+        return ! SettingsManager.getHiddenTips().contains( toUUID( msg ) );    // If tips list contains the msg, it can not be shown
     }
 
     private static String toUUID( String msg )

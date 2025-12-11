@@ -15,8 +15,8 @@ import com.peyrona.mingle.lang.messages.MsgAbstractTwo;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
 import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
 import com.peyrona.mingle.lang.messages.MsgDeviceReaded;
+import com.peyrona.mingle.lang.messages.MsgExecute;
 import com.peyrona.mingle.lang.messages.MsgReadDevice;
-import com.peyrona.mingle.lang.messages.MsgTrigger;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -60,9 +60,9 @@ public class ExEnComm
 
     //------------------------------------------------------------------------//
 
-    public final Request       request;
-    public final JsonValue     payload;   // Can be null
-    public       ICmdEncDecLib pclBuilder = null;
+    public final    Request       request;
+    public final    JsonValue     payload;   // Can be null
+    public volatile ICmdEncDecLib pclBuilder = null;
 
     //------------------------------------------------------------------------//
     // STATIC INTERFACE
@@ -114,9 +114,9 @@ public class ExEnComm
 
     public ExEnComm( Message msg )
     {
-             if( msg instanceof MsgChangeActuator ) request = ExEnComm.Request.Change;
-        else if( msg instanceof MsgDeviceChanged  ) request = ExEnComm.Request.Changed;
-        else if( msg instanceof MsgTrigger        ) request = ExEnComm.Request.Execute;
+             if( msg instanceof MsgDeviceChanged  ) request = ExEnComm.Request.Changed;  // Most frecuent
+        else if( msg instanceof MsgChangeActuator ) request = ExEnComm.Request.Change;
+        else if( msg instanceof MsgExecute        ) request = ExEnComm.Request.Execute;
         else if( msg instanceof MsgReadDevice     ) request = ExEnComm.Request.Read;     // This two are
         else if( msg instanceof MsgDeviceReaded   ) request = ExEnComm.Request.Readed;   // less frequent
         else throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
@@ -222,7 +222,7 @@ public class ExEnComm
             synchronized( this )
             {
                 if( pclBuilder == null )
-                    this.pclBuilder = UtilSys.getConfig().newCILBuilder();
+                    pclBuilder = UtilSys.getConfig().newCILBuilder();
             }
         }
 

@@ -8,6 +8,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -201,13 +202,21 @@ public class UtilStr
      */
     public static boolean contains( Object o, char... chars )
     {
-        if( o != null )
-        {
-            String s = o.toString();
+        if( o == null || chars == null || chars.length == 0 )
+            return false;
 
-            for( char c : chars )
-                if( s.indexOf( c ) > -1 )
-                    return true;
+        String str = o.toString();
+
+        if( str == null || str.isEmpty() )    // Defensive check: Handle rare case where toString() returns null or is empty
+            return false;
+
+        // Performance: String.indexOf(char) is an intrinsic method in the JVM.
+        // It is often SIMD-optimized (AVX) and much faster than manually iterating the string.
+
+        for( char c : chars )
+        {
+            if( str.indexOf( c ) >= 0 )
+                return true;
         }
 
         return false;
@@ -228,17 +237,21 @@ public class UtilStr
         if( UtilColls.isEmpty( strs ) )
             return false;
 
-        String str = obj.toString().toLowerCase();
+        // Use Locale.ROOT to avoid unexpected behavior in languages like Turkish
+        String searchStr = obj.toString().toLowerCase( Locale.ROOT );
 
         for( String s : strs )
         {
             if( s == null )
-                return false;
+                continue;                           // Continue with next str
 
             if( s.isEmpty() )
-                return true;     // Empty string is always contained
+                return true;
 
-            if( str.contains( s.toLowerCase() ) )
+            if( searchStr.length() < s.length() )
+                continue;                           // Continue with next str
+
+            if( searchStr.contains( s.toLowerCase( Locale.ROOT ) ) )
                 return true;
         }
 

@@ -29,12 +29,18 @@ public abstract class Message
     /**
      * Unix time stamp (in milliseconds).
      */
-    public final long when = System.currentTimeMillis();
+    public final long when  = System.currentTimeMillis();
 
     //------------------------------------------------------------------------//
+
     // NOTE: methods ::serialize() and ::deserialize(...) exist to be used by third parties.
-    //       As MSP is build using Eclipse Minimal JSON library, I do not need to use these
-    //       methods, but other (which use other libs) would need them.
+    //       As MSP is built using Eclipse Minimal JSON library, I do not need to use these
+    //       methods, but others (which use different libs) would need them.
+
+    public String serialize()             // Only needed here (not needed in subclasses)
+    {
+        return toJSON().toString();
+    }
 
     public static Object deserialize( String sJSON )
     {
@@ -58,14 +64,6 @@ public abstract class Message
         }
     }
 
-    //------------------------------------------------------------------------//
-
-    protected Message()
-    {
-    }
-
-    //------------------------------------------------------------------------//
-
     public JsonObject toJSON()
     {
         try
@@ -88,14 +86,15 @@ public abstract class Message
         }
     }
 
-    public String serialize()             // Only needed here (not needed in subclasses)
-    {
-        return toJSON().toString();
-    }
-
     @Override
     public String toString()              // Only needed here (not needed in subclasses)
     {
         return toJSON().toString();
+    }
+
+    //------------------------------------------------------------------------//
+
+    protected Message()
+    {
     }
 }

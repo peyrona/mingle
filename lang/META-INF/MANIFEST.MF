@@ -6,7 +6,7 @@ Agent-Class: com.peyrona.mingle.lang.japi.JarLoader
 Can-Redefine-Classes: true
 Can-Retransform-Classes: true
 Bundle-Name: Lang module
-Bundle-Date: 2025-11-26 11:54:21 CET
+Bundle-Date: 2025-12-11 07:50:55 CET
 Implementation-Title: Mingle
 Implementation-URL: https://github.com/peyrona/mingle
 

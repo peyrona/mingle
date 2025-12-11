@@ -14,6 +14,7 @@ import java.nio.charset.Charset;
 import java.util.List;
 
 /**
+ * Mingle transpiler text UI.
  *
  * @author Francisco José Morero Peyrona
  *

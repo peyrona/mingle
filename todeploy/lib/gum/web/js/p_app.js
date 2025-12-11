@@ -206,25 +206,25 @@ var p_app =
         const $dialogContent = $(`<div>
                                     <input type="text" class="input" />
                                   </div>`);
-        
+
         const $input = $dialogContent.find('input');
               $input.val(initialValue).select();
 
         // 2. Define the function to be called on confirmation
-        const onConfirm = () => 
+        const onConfirm = () =>
         {
             const value = $input.val().trim();
-            
+
             if( (value.length > 0) && p_base.isFunction( callback ) )   // If value is empty, callback is not invoked
                 callback( value );
-            
+
             $dialogContent.dialog('close');
         };
 
         // 3. Handle the 'Enter' key press on the input field
-        $input.on('keydown', (event) => 
+        $input.on('keydown', (event) =>
         {
-            if (event.key === 'Enter') 
+            if (event.key === 'Enter')
             {
                 event.preventDefault();
                 onConfirm();
@@ -281,39 +281,45 @@ var p_app =
      */
     showEventError : function( error, title = "Event error", fnOnClosed = null )
     {
-        const props = [];
-        
-        // Get all enumerable properties
-        for( const key in error ) 
+        if( p_base.isString( error ) )
         {
-            try 
+            this.alert( error, title, fnOnClosed );
+            return;
+        }
+
+        const props = [];
+
+        // Get all enumerable properties
+        for( const key in error )
+        {
+            try
             {
                 let value = error[key];
-                
+
                 // Handle different value types
-                if( (value !== null) && (typeof value === 'object') ) 
+                if( (value !== null) && (typeof value === 'object') )
                 {
                     if( value.constructor && value.constructor.name )
                         value = `[${value.constructor.name}]`;
-                    else 
+                    else
                         value = JSON.stringify( value );
-                } 
-                // else if (typeof value === 'function') 
+                }
+                // else if (typeof value === 'function')
                 // {
                 //     value = '[Function]';
                 // }
-                
+
                 if( value.length > 80 )
                     value = value.substring( 0, 80 ) + "...";
 
                 props.push(`${key}: ${value}`);
-            } 
-            catch( err ) 
+            }
+            catch( err )
             {
                 props.push(`${key}: [Error accessing property]`);
             }
         }
-        
+
         let msg = props.join('\n');
 
         this.alert( msg, String( title ), fnOnClosed );
@@ -341,7 +347,7 @@ var p_app =
         let uid    = p_base.uuid();
         let html   = "<div id='"+ uid +"'  style='position:absolute; z-index:99999; top:"+ top +"px; left:"+ left +"px; width:"+ width +"px; height:"+ height +"px;'>"+
                      "   <div style='top:"+ parseInt( (height/2)-50 ) +"px; left:"+ parseInt( (width/2)-50 ) +"px; position:relative;'>"+
-                     "      <span><i class='fa fa-spinner fa-pulse fa-3x fa-fw'></i></span>"+
+                     "      <span><i class='ti ti-loader-2 ti-spin ti-3x'></i></span>"+
                      "   </div>"+
                      "</div>";
 

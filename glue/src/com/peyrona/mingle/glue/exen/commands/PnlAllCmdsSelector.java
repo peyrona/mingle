@@ -69,7 +69,7 @@ public class PnlAllCmdsSelector
         refreshButtons();
 
         this.exenClient.add( new ClientListener() );
-        this.exenClient.sendList();
+        this.exenClient.sendList();                  // Only after adding the listener, the list is requested
     }
 
     //------------------------------------------------------------------------//
@@ -186,8 +186,6 @@ public class PnlAllCmdsSelector
                 ltbDriver.clear();
                 ltbRule.clear();
                 ltbDevice.clear();
-
-                exenClient.sendList();
             }
         }
     }

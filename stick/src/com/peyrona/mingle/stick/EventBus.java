@@ -9,7 +9,6 @@ import com.peyrona.mingle.lang.japi.Dispatcher;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.messages.Message;
-import java.util.Iterator;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
@@ -39,11 +38,11 @@ public class EventBus implements IEventBus
 
     //----------------------------------------------------------------------------//
 
-    public EventBus()
+    public EventBus( int nMaxMsgs )
     {
         this.dispatcher = new Dispatcher<>( (msg) -> trigger( msg ),
                                             (exc) -> UtilSys.getLogger().log( ILogger.Level.SEVERE, exc ),
-                                            getClass().getSimpleName() );
+                                            512, nMaxMsgs );
     }
 
     //----------------------------------------------------------------------------//
@@ -169,71 +168,68 @@ public class EventBus implements IEventBus
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
+    /**
+     * Core processing logic.
+     * Refactored to separate iteration logic from exception handling logic.
+     */
     private void trigger( final Message msg )
     {
         try
         {
-            // Notify listeners for specific event type with exception handling
-            Set<IEventBus.Listener> specificListeners = mapListeners.get( msg.getClass() );
+            // 1. Notify listeners registered for the specific message class
+            notifyListeners( msg, mapListeners.get( msg.getClass() ) );
 
-            if( specificListeners != null )
-            {
-                for( IEventBus.Listener listener : specificListeners )
-                {
-                    try
-                    {
-                        listener.onMessage( msg );
-                    }
-                    catch( Exception exc )
-                    {
-                        // The iterator for CopyOnWriteArraySet does not support remove().
-                        // Instead, we remove the listener directly from the set, which is a thread-safe operation.
-                        specificListeners.remove( listener );
-                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to exception: " + exc.getMessage() );
-                    }
-                }
-            }
-
-            // Similar pattern for general listeners...
+            // 2. Notify listeners registered for the generic Message class (if different)
+            // This maintains the existing logic: Specific Class + Root Class only.
             if( msg.getClass() != Message.class )
             {
-                Set<IEventBus.Listener> generalListeners = mapListeners.get( Message.class );
-
-                if( generalListeners != null )
-                {
-                    for( IEventBus.Listener listener : generalListeners )
-                    {
-                        try
-                        {
-                            listener.onMessage( msg );
-                        }
-                        catch( Exception exc )
-                        {
-                            // The iterator for CopyOnWriteArraySet does not support remove().
-                            // Instead, we remove the listener directly from the set, which is a thread-safe operation.
-                            generalListeners.remove( listener );
-                            UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to exception: " + exc.getMessage() );
-                        }
-                    }
-                }
+                notifyListeners( msg, mapListeners.get( Message.class ) );
             }
         }
-        catch( Exception exc )
-        {
+        catch( Throwable exc )    // Catch-all to prevent the dispatcher thread from dying if something unexpected
+        {                         // happens outside the listener loops (e.g. map corruption, OOM).
             String sMsg;
 
             try
             {
                 sMsg = msg.toString();
             }
-            catch( Exception err )
+            catch( Throwable err )
             {
-                sMsg = "Error in 'message.toString()'" + err.getMessage();
-                err.printStackTrace( System.err );
+                sMsg = "Error in 'message.toString()': " + err.getMessage();
             }
 
             UtilSys.getLogger().log( ILogger.Level.SEVERE,
-                                     new MingleException( "Error '" + exc.getMessage() + "' while dispatching message: " + sMsg, exc ) );
+                                     new MingleException( "Error '" + exc.getMessage() + "' while dispatching message: " + sMsg, new Exception(exc) ) );
+        }
+    }
+
+    /**
+     * Helper to iterate and notify a set of listeners safely.
+     *
+     * @param msg The message to dispatch
+     * @param listeners The set of listeners (can be null)
+     */
+    @SuppressWarnings("unchecked")
+    private void notifyListeners( Message msg, Set<IEventBus.Listener> listeners )
+    {
+        if( listeners == null || listeners.isEmpty() )
+            return;
+
+        for( IEventBus.Listener listener : listeners )
+        {
+            try
+            {
+                listener.onMessage( msg );
+            }
+            catch( Throwable exc )
+            {
+                // Catch Throwable to handle Errors (e.g. NoClassDefFound) as well as Exceptions.
+                // Remove faulty listener to prevent repeated failures.
+                listeners.remove( listener );
+
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to: " + exc.toString() );
+            }
         }
     }
 

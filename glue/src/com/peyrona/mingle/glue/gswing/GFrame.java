@@ -79,9 +79,10 @@ public class GFrame extends JFrame
         setTitle( tittle );
         return this;
     }
+
     public GFrame icon( String iconName )
     {
-        setIconImage( JTools.getImage( iconName ) );
+        JTools.setIconImages( this, iconName );
         return this;
     }
 

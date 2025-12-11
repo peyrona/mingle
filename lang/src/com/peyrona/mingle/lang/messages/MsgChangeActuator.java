@@ -10,14 +10,19 @@ package com.peyrona.mingle.lang.messages;
  */
 public class MsgChangeActuator extends MsgAbstractTwo
 {
+    public MsgChangeActuator( String device, Object newValue )
+    {
+        super( device, newValue, true );
+    }
+
     /**
      * Constructor.
      *
      * @param device Device's deviceName.
      * @param newValue Any valid Une data newValue.
      */
-    public MsgChangeActuator( String device, Object newValue )
+    public MsgChangeActuator( String device, Object newValue, boolean isOWn )
     {
-        super( device, newValue );
+        super( device, newValue, isOWn );
     }
 }

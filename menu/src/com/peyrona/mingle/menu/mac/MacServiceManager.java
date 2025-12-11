@@ -170,6 +170,38 @@ public class MacServiceManager extends AbstractServiceManager
     }
 
     @Override
+    public boolean showFile( String service )
+    {
+        try
+        {
+            Path plistPath = Paths.get( getPlistFilePath( service ) );
+
+            if( ! Files.exists( plistPath ) )
+            {
+                System.out.println( "Service plist file does not exist for " + service + "." );
+                return false;
+            }
+
+            String content = Files.readString( plistPath );
+
+            System.out.println( "===============================================" );
+            System.out.println( "      " + service.substring( 0, 1 ).toUpperCase() + service.substring( 1 ) + " Service File Contents" );
+            System.out.println( "===============================================" );
+            System.out.println( "File: " + plistPath.toString() );
+            System.out.println();
+            System.out.println( content );
+            System.out.println( "===============================================" );
+
+            return true;
+        }
+        catch( IOException e )
+        {
+            System.err.println( "Failed to read service plist file: " + e.getMessage() );
+            return false;
+        }
+    }
+
+    @Override
     protected String getLogContent( String service ) throws IOException
     {
         String logPath = buildLogPath( service );

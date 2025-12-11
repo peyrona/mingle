@@ -9,6 +9,7 @@ import java.nio.file.Files;
 import java.util.List;
 import java.util.logging.ConsoleHandler;
 import java.util.logging.FileHandler;
+import java.util.logging.Formatter;
 import java.util.logging.LogRecord;
 
 /**
@@ -303,6 +304,7 @@ public final class Logger implements ILogger
             try
             {
                 FileHandler fh = new FileHandler( fLog.getAbsolutePath() +"-%u.%g"+ sLOG_EXT, 5 * UtilUnit.MEGA_BYTE, 9, true );
+                            fh.setFormatter( new MyXMLFormatter() );
 
                 logger.addHandler( fh );
             }
@@ -350,6 +352,39 @@ public final class Logger implements ILogger
             else if( record.getLevel().equals( java.util.logging.Level.WARNING ) )  UtilANSI.outYellow( msg );
             else if( record.getLevel().equals( java.util.logging.Level.FINE    ) )  UtilANSI.outCyan(   msg );   // RULE     (changed in ::myLevel2javaLevel)
             else if( record.getLevel().equals( java.util.logging.Level.FINEST  ) )  UtilANSI.outPurple( msg );   // MESSAGE  (changed in ::myLevel2javaLevel)
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+    private final class MyXMLFormatter extends Formatter
+    {
+        @Override
+        public String format( LogRecord record )
+        {
+            StringBuilder sb = new StringBuilder();
+                          sb.append( "<record>\n" );
+                          sb.append( "  <date>" ).append( record.getInstant() ).append( "</date>\n" );
+                          sb.append( "  <level>" ).append( record.getLevel() ).append( "</level>\n" );
+                          sb.append( "  <class>" ).append( record.getSourceClassName() ).append( "</class>\n" );
+                          sb.append( "  <method>" ).append( record.getSourceMethodName() ).append( "</method>\n" );
+                          sb.append( "  <thread>" ).append( record.getThreadID() ).append( "</thread>\n" );
+                          sb.append( "  <message>" ).append( escapeXml( record.getMessage() ) ).append( "</message>\n" );
+                          sb.append( "</record>\n" );
+            return sb.toString();
+        }
+
+        private String escapeXml( String input )
+        {
+            if( input == null )
+                return "";
+
+            return input.replace( "&", "&amp;" )
+                        .replace( "<", "&lt;" )
+                        .replace( ">", "&gt;" )
+                        .replace( "\"", "&quot;" )
+                        .replace( "'", "&apos;" );
         }
     }
 }

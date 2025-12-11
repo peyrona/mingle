@@ -9,10 +9,7 @@ import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.updater.Updater;
-import java.awt.AWTException;
 import java.awt.BorderLayout;
-import java.awt.Robot;
-import java.awt.event.KeyEvent;
 import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.io.File;
@@ -106,13 +103,13 @@ public class Main
         if( UtilSys.isDevEnv )
             return false;
 
-        String lastCheckDate = ConfigManager.getLastUpdateCheck();
+        String lastCheckDate = SettingsManager.getLastUpdateCheck();
         String todayDate     = LocalDate.now().format( java.time.format.DateTimeFormatter.ISO_LOCAL_DATE );
 
         if( todayDate.equals( lastCheckDate ) )
             return false;
 
-        ConfigManager.setLastUpdateCheckToToday();
+        SettingsManager.setLastUpdateCheckToToday();
         return true;
     }
 
@@ -131,8 +128,9 @@ public class Main
         {
             setTitle( "Glue ::: Mission Control tool" );
             setAutoRequestFocus( true );
-            setIconImage( JTools.getImage( "glue.png" ) );
             setDefaultCloseOperation( JFrame.DO_NOTHING_ON_CLOSE );
+
+            JTools.setIconImages( this, "glue.png" );
         }
 
         //------------------------------------------------------------------------//
@@ -173,21 +171,21 @@ public class Main
 
             if( UtilSys.isDevEnv )
             {
-                UtilSys.execute( getClass().getName(),
-                                 500,
-                                 () ->
-                                    {
-                                        try
-                                        {
-                                            Robot robot = new Robot();
-                                                  robot.keyPress( KeyEvent.VK_F4 );
-                                                  robot.keyRelease( KeyEvent.VK_F4 );
-                                        }
-                                        catch( AWTException ex )
-                                        {
-                                            JTools.error( ex );
-                                        }
-                                    } );
+//                UtilSys.execute( getClass().getName(),
+//                                 500,
+//                                 () ->
+//                                    {
+//                                        try
+//                                        {
+//                                            Robot robot = new Robot();
+//                                                  robot.keyPress( KeyEvent.VK_F4 );
+//                                                  robot.keyRelease( KeyEvent.VK_F4 );
+//                                        }
+//                                        catch( AWTException ex )
+//                                        {
+//                                            JTools.error( ex );
+//                                        }
+//                                    } );
             }
         }
 
@@ -206,7 +204,10 @@ public class Main
                 SwingUtilities.invokeLater( () -> JTools.showWaitFrame( "Exiting..." ) );
 
                 if( ! toolBar.close() )    // This allows user to close ExEn and Gum the user started.
+                {
+                    SwingUtilities.invokeLater( () -> JTools.hideWaitFrame() );
                     return;
+                }
 
                 tabExEn.close();
 

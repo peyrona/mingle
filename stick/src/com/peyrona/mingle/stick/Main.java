@@ -1,7 +1,6 @@
 
 package com.peyrona.mingle.stick;
 
-import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
@@ -23,6 +22,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.ListIterator;
 
@@ -62,7 +62,7 @@ public final class Main
 
                 stick = new Stick( sJSON, config ).start( sName );
             }
-            catch( Exception exc )
+            catch( Throwable exc )
             {
                 String msg = exc.getMessage() +"\nStick can not continue.\n"+ UtilStr.toString( exc );
 
@@ -100,13 +100,17 @@ public final class Main
 
         try
         {
-            String[] asModel = config.get( "exen", "model", new String[0] );     // First we try considering it is an Aone single item
+            String[] as = config.get( "exen", "model", new String[0] );   // First we try considering it is an array (an exception is thrown if is not an array)
 
-            for( String s : asModel )
-                if( ! UtilStr.isMeaningless( s ) )
-                    lstModel.add( s );
+            Arrays.asList( as ).forEach( sModel ->
+                                         {
+                                             if( ! UtilStr.isMeaningless( sModel ) )
+                                                 lstModel.add( sModel );
+                                         } );
+
+            // UtilIO.expandPath(...) is not needed because it is done later by UtilIO.getAsText(...)
         }
-        catch( Exception ex )                                      // If this is not the case, lets consider it is an array
+        catch( Exception ex )    // If this is not the case, lets assume it is one single item
         {
             String sModel = config.get( "exen", "model", "" );
 
@@ -118,13 +122,15 @@ public final class Main
         {
             String sModel = itera.next();
 
+            if( UtilStr.isLastChar( sModel, '?' ) ||
+                UtilStr.isLastChar( sModel, '*' ) )
+                continue;
+
             if( UtilStr.endsWith( sModel, ".une" ) )
-                sModel = UtilStr.removeLast( sModel, 4 );
+                itera.set( UtilStr.removeLast( sModel, 4 ) );
 
             if( ! UtilStr.endsWith( sModel, ".model" ) )
-                sModel = sModel + ".model";
-
-            itera.set( sModel );
+                itera.set( sModel + ".model" );
         }
 
         return lstModel.toArray( String[]::new );
@@ -253,21 +259,14 @@ public final class Main
      *         if the "generated" field is not found, the content is invalid,
      *         or an error occurs.
      */
-    private static String extractGeneratedTimestamp( String jsonContent )
+    private static String extractModelTimestamp( String jsonContent )
     {
-        try
-        {
-            if( UtilStr.isEmpty( jsonContent ) )
-                return null;
+        if( UtilStr.isEmpty( jsonContent ) )
+            return null;
 
-            UtilJson uj = new UtilJson( jsonContent );
+        UtilJson uj = new UtilJson( jsonContent );
 
-            return uj.getString( "generated", null );
-        }
-        catch( Exception exc )
-        {
-            throw new MingleException( exc );
-        }
+        return uj.getString( "generated", null );
     }
 
     /**
@@ -287,8 +286,7 @@ public final class Main
     {
         try
         {
-            String sRemoteContent   = UtilIO.getAsText( httpUri );
-            String sRemoteGenerated = extractGeneratedTimestamp( sRemoteContent );
+            String sRemoteGenerated = extractModelTimestamp( UtilIO.getAsText( httpUri ) );
 
             if( sRemoteGenerated == null )
                 return false;   // Can't compare, don't update
@@ -299,24 +297,17 @@ public final class Main
             if( ! localFile.exists() )
                 return true;    // Local doesn't exist, download remote
 
-            String sLocalContent = UtilIO.getAsText( localPath );
-            String sLocalGenerated = extractGeneratedTimestamp( sLocalContent );
+            String sLocalContent   = UtilIO.getAsText( localPath );
+            String sLocalGenerated = extractModelTimestamp( sLocalContent );
 
             if( sLocalGenerated == null )
                 return true;    // Local has no timestamp, prefer remote
 
             // Compare timestamps
-            try
-            {
-                Instant remoteTime = Instant.parse( sRemoteGenerated );
-                Instant localTime  = Instant.parse( sLocalGenerated  );
+            Instant remoteTime = Instant.parse( sRemoteGenerated );
+            Instant localTime  = Instant.parse( sLocalGenerated  );
 
-                return remoteTime.isAfter( localTime );
-            }
-            catch( Exception exc )
-            {
-                return false;   // Invalid timestamp format, don't update
-            }
+            return remoteTime.isAfter( localTime );
         }
         catch( Exception exc )
         {

@@ -2,9 +2,8 @@
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
+import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -12,13 +11,20 @@ import java.util.function.Consumer;
 
 /**
  * Dispatcher class manages a queue of items which are processed asynchronously.
+ * <p>
+ * Improved for Zero-Allocation and Concurrency Safety.
  *
  * @param <T> the type of task to be processed.
  */
 public final class Dispatcher<T>
 {
-    private final    BlockingQueue<T>    queue     = new LinkedBlockingQueue<>();
-    private final    AtomicInteger       pause     = new AtomicInteger( 0 );    // Accumulative calls to ::pause()
+    // Use ArrayBlockingQueue.
+    // 1. It is bounded (prevents OOM).
+    // 2. It is backed by a single array (no Node object allocation per item).
+
+    private volatile BlockingQueue<T>    queue;
+    private final    int                 maxCapacity;
+    private volatile boolean             paused    = false;
     private final    AtomicLong          msgCount  = new AtomicLong( 0 );
     private final    Consumer<T>         consumer;
     private final    String              thrName;
@@ -31,39 +37,48 @@ public final class Dispatcher<T>
     //------------------------------------------------------------------------//
 
     /**
-     * Constructs a Dispatcher with the specified consumer, error manager and thread name.
+     * Constructs a Dispatcher with specific capacity.
      *
      * @param consumer   the consumer to process tasks
      * @param onError    to be invoked in case of the 'consumer' raises an exception.
-     * @param threadName the name of the thread (optional)
+     * @param initialCapacity The initial size of the internal buffer.
+     * @param maxCapacity The max size of the internal buffer.
      */
-    public Dispatcher( Consumer<T> consumer, Consumer<Exception> onError, String threadName )
+    public Dispatcher( Consumer<T> consumer, Consumer<Exception> onError, int initialCapacity, int maxCapacity )
     {
-        assert consumer != null && onError != null;
+        this( consumer, onError, initialCapacity, maxCapacity, null );
+    }
+
+    /**
+     * Constructs a Dispatcher with specific capacity.
+     *
+     * @param consumer   the consumer to process tasks
+     * @param onError    to be invoked in case of the 'consumer' raises an exception.
+     * @param initialCapacity The initial size of the internal buffer.
+     * @param maxCapacity The max size of the internal buffer.
+     * @param threadName the name of the thread.
+     */
+    public Dispatcher( Consumer<T> consumer, Consumer<Exception> onError, int initialCapacity, int maxCapacity, String threadName )
+    {
+        assert consumer != null && onError != null && initialCapacity > 0 && maxCapacity >= initialCapacity;
 
         if( UtilStr.isEmpty( threadName ) )
-            threadName = UtilReflect.getCallerClass( 3 ).getSimpleName();    // This can return null
+            threadName = UtilReflect.getCallerClass( 3 ).getSimpleName() +":"+ UtilReflect.getCallerMethodName( 3 );
 
-        if( threadName == null )
-            threadName = "Unknown";
-
-        this.consumer = consumer;
-        this.onError  = onError;
-        this.thrName  = getClass().getSimpleName() +':'+ threadName.trim();
+        this.consumer    = consumer;
+        this.onError     = onError;
+        this.thrName     = threadName;
+        this.queue       = new ArrayBlockingQueue<>( initialCapacity );
+        this.maxCapacity = maxCapacity;
     }
 
     //------------------------------------------------------------------------//
 
-    /**
-     * Starts the dispatcher thread if it's not already running.
-     *
-     * @return this Dispatcher instance
-     */
     public synchronized Dispatcher<T> start()
     {
         if( thrQueue == null )
         {
-            pause.set( 0 );
+            paused = false; // Reset state on start
             thrQueue = new Thread( this::execute, thrName );
             thrQueue.start();
         }
@@ -71,18 +86,13 @@ public final class Dispatcher<T>
         return this;
     }
 
-    /**
-     * Stops the dispatcher thread, interrupting it if necessary.
-     *
-     * @return this Dispatcher instance
-     */
     public synchronized Dispatcher<T> stop()
     {
         if( thrQueue != null )
         {
             thrQueue.interrupt();
             thrQueue = null;
-            pause.set( 0 );
+            paused = false;
             queue.clear();
         }
 
@@ -91,38 +101,25 @@ public final class Dispatcher<T>
 
     /**
      * Returns true if the dispatcher is paused.
-     * @return true if the dispatcher is paused.
      */
     public boolean isPaused()
     {
-        return pause.get() > 0;
+        return paused;
     }
 
     /**
-     * Pauses the dispatcher thread, stopping it from processing tasks.
-     *
-     * @return this Dispatcher instance
+     * Pauses the dispatcher thread.
+     * Strategy C: Idempotent operation. Calling this multiple times has no side effect.
      */
     public Dispatcher<T> pause()
     {
-        pauseLock.lock();
-
-        try
-        {
-            pause.incrementAndGet();
-        }
-        finally
-        {
-            pauseLock.unlock();
-        }
-
+        this.paused = true;   // No lock needed to set a volatile boolean
         return this;
     }
 
     /**
-     * Resumes the dispatcher thread, allowing it to continue processing tasks.
-     *
-     * @return this Dispatcher instance
+     * Resumes the dispatcher thread.
+     * Strategy C: Idempotent operation.
      */
     public Dispatcher<T> resume()
     {
@@ -130,8 +127,8 @@ public final class Dispatcher<T>
 
         try
         {
-            if( pause.decrementAndGet() == 0 )
-                unpaused.signalAll();
+            this.paused = false;
+            unpaused.signalAll();
         }
         finally
         {
@@ -143,36 +140,42 @@ public final class Dispatcher<T>
 
     /**
      * Adds passed item to the internal queue of items.
+     * The queue grows automatically if it is 85% full.
+     * Since we are now using a bounded ArrayBlockingQueue, we must handle the 'full' case.
      *
-     * @param item the item to add to the internal queue.
-     * @return this Dispatcher instance.
+     * @param item Item to add to the queue.
+     * @return Itself.
      */
-    public Dispatcher<T> add( T item )
+    public synchronized Dispatcher<T> add( T item )
     {
-        if( item == null )
-            onError.accept( new MingleException( "Can not add null to queue" ) );
-        else
-            queue.offer( item );
+        assert item != null;
+
+        if( ! queue.offer( item ) )   // If offer fails, it means the queue is full.
+        {
+            checkAndGrow();           // Tries to increment
+
+            if( ! queue.offer( item ) )
+                onError.accept( new MingleException( "Dispatcher queue is at max capacity (" + maxCapacity + "). Event dropped." ) );
+        }
 
         return this;
     }
 
     /**
-     * Returns current message processing speed (messages per minute).
+     * Returns the approximate amount of messages dispatched per minute.
      *
-     * @return Current message processing speed (messages per minute).
+     * @return The approximate amount of messages dispatched per minute.
      */
     public int getSpeed()
     {
         long minutes  = UtilSys.elapsed() / UtilUnit.MINUTE;
-
         return (int) Math.round( msgCount.get() / Math.max( 1, minutes ) );
     }
 
     /**
-     * Returns the amount of messages waiting in the queue (pending to be processed).
+     * Returns the amount of messages pending to be delivered,
      *
-     * @return The amount of messages waiting in the queue (pending to be processed).
+     * @return The amount of messages pending to be delivered,
      */
     public int getPending()
     {
@@ -182,28 +185,53 @@ public final class Dispatcher<T>
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    /**
-     * Executes the dispatcher loop, processing tasks from the queue.<br>
-     * This method is intended to be run on a separate thread.
-     */
+    private void checkAndGrow()
+    {
+        int currentCapacity = queue.size() + queue.remainingCapacity();
+
+        if( currentCapacity >= maxCapacity )
+            return;
+
+        if( queue.size() >= currentCapacity * 0.85 )   // Grow if queue is at least 85% full
+        {
+            int newCapacity = (int) Math.ceil( currentCapacity * 1.15 );
+
+            if( newCapacity > maxCapacity )
+                newCapacity = maxCapacity;
+
+            if( newCapacity <= currentCapacity )       // Ensure growth for small capacities
+                newCapacity = currentCapacity + 1;
+
+            if( newCapacity > maxCapacity )            // Re-check after ensuring growth
+                newCapacity = maxCapacity;
+
+            if( newCapacity > currentCapacity )
+            {
+                BlockingQueue<T> newQueue = new ArrayBlockingQueue<>( newCapacity );
+                queue.drainTo( newQueue );
+                this.queue = newQueue;
+            }
+        }
+    }
+
     private void execute()
     {
         Thread tCurrent = Thread.currentThread();
 
-        while( ! tCurrent.isInterrupted() )
+        while( !tCurrent.isInterrupted() )
         {
             T val = null;
 
             try
             {
-                if( isPaused() )
+                if( paused )
                 {
                     pauseLock.lock();
 
                     try
                     {
-                        while( isPaused() && (! tCurrent.isInterrupted()) )
-                            unpaused.await();                                // Sleeps until signaled by resume()
+                        while( paused && ! tCurrent.isInterrupted() )    // Check paused again inside lock to avoid race conditions
+                            unpaused.await();
                     }
                     finally
                     {
@@ -214,22 +242,27 @@ public final class Dispatcher<T>
                 if( tCurrent.isInterrupted() )
                     break;
 
-                val = queue.take();           // take() blocks until an item is available
+                val = queue.take();    // ArrayBlockingQueuE::take() is cleaner on memory
 
                 consumer.accept( val );
-                msgCount.incrementAndGet();   // It would take too many years until this dispatches more than Long.MAX_VALUE messages
+                msgCount.incrementAndGet();
             }
             catch( InterruptedException ie )
             {
                 tCurrent.interrupt();
                 break;
             }
-            catch( Exception exc )     // An Exception was thrown inside Consumer
+
+            // Catch Throwable, not just Exception.
+            // This catches NoClassDefFoundError, OutOfMemoryError (if recoverable), etc.
+            catch( Throwable exc )
             {
-                String sErr = "Error in " + tCurrent.getName() +", using value: "+
+                String sErr = "Error in " + tCurrent.getName() + ", using value: " +
                               (val == null ? "N/A" : val.toString());
 
-                onError.accept( new MingleException( sErr, exc ) );
+                // We must wrap Throwable in an Exception to match the Consumer<Exception> signature
+                // or assume MingleException can wrap Throwable.
+                onError.accept( new MingleException( sErr, new Exception(exc) ) );
             }
         }
     }

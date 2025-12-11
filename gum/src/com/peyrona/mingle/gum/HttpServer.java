@@ -111,25 +111,6 @@ final class HttpServer
 //    }
 
     //----------------------------------------------------------------------------------------------------------------------------------------//
-    // CARE: I WROTE THESE TWO METHODS JUST FOR MY HOUSE: IT IS NOT NEEDED BESIDES IT.
-
-    private boolean isBalataValid( HttpServerExchange xchg ) throws SocketException
-    {
-        // Example: http://192.168.1.111:8080/gum/user-files/balata/index.html?net=7
-
-        if( xchg.getRequestPath().contains( "gum/user-files/balata" ) &&
-            xchg.getQueryParameters().containsKey( "net" ) )
-        {
-            sessionMgr.getSession( xchg, sessionCfg )
-                      .setAttribute( KEY_USER_ID, "balata_room" );
-
-            return true;
-        }
-
-        return false;
-    }
-
-    //----------------------------------------------------------------------------------------------------------------------------------------//
 
     /**
      * Class constructor.
@@ -204,11 +185,12 @@ final class HttpServer
 
         String sServer = "http://" + host +':'+ httpPort +"/gum/";
 
-        String sMsg = "Gum (editor and player) : "+ sServer + "index.html    (also 'localhost')\n" +
-                      "Dashboard's folder      : "+ Util.getBoardsDir().getCanonicalPath()      +"/\n" +
-                      "Serving user files from : "+ Util.getServedFilesDir().getCanonicalPath() +"/\n" +
-                      "    * at context        : "+ Util.appendUserFilesCtxTo( sServer )        +'\n' +
-                      "    * UI manager        : "+ Util.appendFileMgrCtxTo(   sServer ) + "index.html\n";
+        String sMsg = "Dashboards editor and player + File Manager + Server for static content.\n\n" +
+                      "Dashboards manager : "+ sServer + "index.html    (also 'localhost')\n" +
+                      "Dashboard's folder : "+ Util.getBoardsDir().getCanonicalPath()      +"/\n" +
+                      "Serving files from : "+ Util.getServedFilesDir().getCanonicalPath() +"/\n" +
+                      "    * at context   : "+ Util.appendUserFilesCtxTo( sServer )        +'\n' +
+                      "    * UI manager   : "+ Util.appendFileMgrCtxTo(   sServer ) + "index.html\n";
 
         UtilSys.getLogger().say( sMsg );
 
@@ -221,9 +203,7 @@ final class HttpServer
         server.start();
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
-
         String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum started...";
-
         UtilSys.getLogger().say( msg );
 
         return this;
@@ -231,16 +211,21 @@ final class HttpServer
 
     HttpServer stop()
     {
-        sessionMgr.getAllSessions()
-                  .forEach( (name) -> sessionMgr.getSession( name ).invalidate( null ) );    // Passing null because we don't need an exchange
+        try
+        {
+            sessionMgr.getAllSessions()
+                      .forEach( (name) -> sessionMgr.getSession( name ).invalidate( null ) );    // Passing null because we don't need an exchange
 
-        server.stop();
+            server.stop();
 
-        DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
-
-        String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum stopped.";
-
-        UtilSys.getLogger().say( msg );
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
+            String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum stopped.";
+            UtilSys.getLogger().say( msg );
+        }
+        catch( Exception e )
+        {
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error during server stop: " + e.getMessage() );
+        }
 
         return this;
     }
@@ -257,7 +242,7 @@ final class HttpServer
     private HttpHandler newAuthHandler( PathHandler pathHandler )
     {
         return (HttpServerExchange xchg) ->
-                {isBalataValid( xchg );
+                {
                     Session session = sessionMgr.getSession( xchg, sessionCfg );
                     boolean isValid = (session != null) && UtilStr.isNotEmpty( session.getAttribute( KEY_USER_ID ) );    // Is user is already authenticated?
 
@@ -272,10 +257,6 @@ final class HttpServer
                         if( isClientAllowed( xchg ) )
                         {
                             session.setAttribute( KEY_USER_ID, "local_client" );
-                        }
-                        else if( isBalataValid( xchg ) )                         // This line is just for my house and useless under any other scenarios
-                        {
-                            pathHandler.handleRequest( xchg );
                         }
                         else
                         {
@@ -522,7 +503,7 @@ final class HttpServer
 
     private static void sendErrAndLogIt( HttpServerExchange xchg, Exception exc )
     {
-        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc.getMessage() );
+        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
 
         if( xchg != null && xchg.isResponseChannelAvailable() )
         {
@@ -589,7 +570,21 @@ final class HttpServer
                 int    length = Integer.parseInt( xchg.getRequestHeaders().getFirst( Headers.CONTENT_LENGTH ) );
                 byte[] buffer = new byte[length];
 
-                xchg.getInputStream().read( buffer );
+                // Set read timeout to prevent indefinite blocking
+                xchg.getConnection();
+
+                int bytesRead = 0;
+                int totalRead = 0;
+
+                while( totalRead < length && bytesRead != -1 )
+                {
+                    bytesRead = xchg.getInputStream().read( buffer, totalRead, length - totalRead );
+                    if( bytesRead > 0 )
+                        totalRead += bytesRead;
+                }
+
+                if( totalRead != length )
+                    throw new IOException( "Incomplete request data received" );
 
                 String   sj   = new String( buffer, StandardCharsets.UTF_8 );
                 UtilJson uj   = new UtilJson( sj );
@@ -611,7 +606,7 @@ final class HttpServer
             String  requestedWith = xchg.getRequestHeaders().getFirst( HttpString.tryFromString( "X-Requested-With" ) );
             boolean isAJAXRequest = "XMLHttpRequest".equals( requestedWith );
 
-            if( isAJAXRequest && authenticateUser( username, password ) )
+            if( isAJAXRequest && isAdmin( username, password ) )
             {
                 sessionMgr.getSession( xchg, sessionCfg )
                           .setAttribute( KEY_USER_ID, username );
@@ -628,19 +623,24 @@ final class HttpServer
             }
         }
 
+        private boolean isAdmin( String username, String password ) throws IOException
+        {
+            return "admin".equalsIgnoreCase( authenticateUser( username, password ) );
+        }
+
         /**
-         * Authenticate a user (implement your actual auth logic here)
+         * Authenticate a user.
          *
          * @param username The username
          * @param password The password
-         * @return true if authentication succeeds
+         * @return The user role or null if file or user does not exists.
          */
-        private boolean authenticateUser( String username, String password ) throws IOException
+        private String authenticateUser( String username, String password ) throws IOException
         {
             File fUsers = new File( Util.getServedFilesDir(), "users.json" );
 
-            if( ! fUsers.exists() )
-                return false;
+            if( UtilIO.canRead( fUsers ) != null )
+                return null;                       // File can not be read
 
             String    sJSON  = UtilStr.removeComments( UtilIO.getAsText( fUsers ) );
             JsonArray jArray = Json.parse( sJSON ).asArray();
@@ -648,28 +648,22 @@ final class HttpServer
             for( int n = 0; n < jArray.size(); n++ )
             {
                 JsonObject jObj = jArray.get( n ).asObject();
+                String     name = jObj.getString( "user", "" );
+                String     pwd  = jObj.getString( "pwd" , "" );
 
-                String role = jObj.getString( "role", "" );
-
-                if( "admin".equalsIgnoreCase( role ) )
+                if( Language.hasMacro( pwd ) )
                 {
-                    String name = jObj.getString( "name", "" );
-                    String pwd  = jObj.getString( "pwd" , "" );
+                    LocalDateTime ldt = LocalDateTime.now();
 
-                    if( Language.hasMacro( pwd ) )
-                    {
-                        LocalDateTime ldt = LocalDateTime.now();
-
-                        pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "d" ), String.valueOf( ldt.getDayOfMonth() ) );
-                        pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "h" ), String.valueOf( ldt.getHour()       ) );
-                    }
-
-                    if( name.equalsIgnoreCase( username ) && pwd.equals( password ) )
-                        return true;
+                    pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "d" ), String.valueOf( ldt.getDayOfMonth() ) );
+                    pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "h" ), String.valueOf( ldt.getHour()       ) );
                 }
+
+                if( name.equalsIgnoreCase( username ) && pwd.equals( password ) )
+                    return jObj.getString( "role", "" );
             }
 
-            return false;
+            return null;
         }
     }
 

@@ -2,6 +2,7 @@
 package com.peyrona.mingle.glue;
 
 import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.glue.codeditor.UneMultiEditorPanel;
 import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.glue.gswing.GDialog;
@@ -172,12 +173,17 @@ final class ToolbarPanel extends javax.swing.JPanel
         final ConnectDlg dlg = new ConnectDlg( jaClients );
                          dlg.setVisible();
 
-        if( dlg.getSelection() == null )
+        final String     sConnName  = dlg.getConnName();
+        final JsonObject joProtocol = dlg.getSelectedProtocol();
+
+        dlg.dispose();
+
+        if( joProtocol == null )
             return;
 
-        JTools.showWaitFrame( "Connecting to " + dlg.getConnName() );
+        JTools.showWaitFrame( "Connecting to " + sConnName );
 
-        final ExEnClient client = new ExEnClient( dlg.getSelection(), dlg.getConnName() );
+        final ExEnClient client = new ExEnClient( joProtocol, sConnName );
 
         SwingWorker<Void, Void> worker = new SwingWorker<Void, Void>()
         {
@@ -205,7 +211,7 @@ final class ToolbarPanel extends javax.swing.JPanel
 
                 if( connectionError == null )
                 {
-                    Main.frame.getExEnsTabPane().add( dlg.getConnName(), client );
+                    Main.frame.getExEnsTabPane().add( sConnName, client );
                     validate();
                 }
                 else
@@ -213,8 +219,6 @@ final class ToolbarPanel extends javax.swing.JPanel
                     UtilSys.getLogger().log( ILogger.Level.WARNING, connectionError );
                     JTools.error( connectionError );
                 }
-
-                dlg.dispose();
             }
         };
 
@@ -238,7 +242,7 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     private void onRunStopExEn()
     {
-        if( procExEn != null )     // The icon now is not a "play" but a "stop"
+        if( procExEn != null )     // Internal ExEn is running (the icon now is not a "play" but a "stop")
         {
             if( JTools.confirm( "Internal Stick (ExEn) is running.\nDo you want to stop it?" ) )
             {
@@ -256,7 +260,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                 btnExEn.setToolTipText( "Executes internally a local Stick (ExEn) using its configuration file" );
             }
         }
-        else
+        else                       // Internal ExEn is not running (the icon now is not a "stop" but a "play")
         {
             JTools.showWaitFrame( "Starting internal local Stick (ExEn)" );
 
@@ -266,35 +270,36 @@ final class ToolbarPanel extends javax.swing.JPanel
             {
                 JTools.hideWaitFrame();
                 JTools.error( "Unable to start local internal ExEn.\nIt could be there is another instance of ExEn already running." );
-                return;
             }
+            else
+            {
+                wndExEn = new GFrame()
+                              .title( "'Stick (ExEn)' console" )
+                              .icon( "exen-256x256.png" )
+                              .closeOnEsc()
+                              .onClose( JFrame.DISPOSE_ON_CLOSE )
+                              .onClose( (frm) -> onRunStopExEn() )
+                              .setContent( new ConsolePanel() )
+                              .setVisible()                       // Has to be before to setSize(...)
+                              .size( 800, 500 );
 
-            wndExEn = new GFrame()
-                          .title( "'Stick (ExEn)' console" )
-                          .closeOnEsc()
-                          .onClose( JFrame.DISPOSE_ON_CLOSE )
-                          .onClose( (frm) -> { if( JTools.confirm( "Stop also Stick?", wndExEn ) ) onRunStopExEn(); } )
-                          .setContent( new ConsolePanel() )
-                          .setVisible()                       // Has to be before to setSize(...)
-                          .size( 800, 500 );
+                Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
 
-            Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
-
-            UtilSys.execute(getClass().getName(),
-                             1500,
-                             () ->     // Stick needs some time to be ready
-                                {
-                                    ////////////////////////////////////////////////////////////////////////////////////////////////////////////Main.frame.getExEnsTabPane().add( "Internal ExEn", null );
-
-                                    SwingUtilities.invokeLater(() ->
-                                        {
-                                            btnExEn.setIcon( IconFontSwing.buildIcon( FontAwesome.STOP, 16, JTools.getIconColor() ) );
-                                            btnExEn.setToolTipText( "Stops local internal Stick (ExEn)" );
-                                            GTip.show( "After the ExEn is running, you can:\n\n"+
-                                                      "   * Load a '.model' file (click 'folder' icon in toolbar)\n\n"+
-                                                      "   * Create new commands using this application (Glue)" );
-                                        } );
-                                } );
+                UtilSys.execute( getClass().getName(),
+                                 1500,
+                                 () ->     // Stick needs some time to be ready
+                                    {
+                                        SwingUtilities.invokeLater(() ->
+                                            {
+                                                btnExEn.setIcon( IconFontSwing.buildIcon( FontAwesome.STOP, 16, JTools.getIconColor() ) );
+                                                btnExEn.setToolTipText( "Stops local internal Stick (ExEn)" );
+                                                JTools.hideWaitFrame();
+                                                GTip.show( "After the ExEn is running, you can:\n\n"+
+                                                           "   * Load a '.model' file (click 'folder' icon in toolbar)\n\n"+
+                                                           "   * Create new commands using this application (Glue)" );
+                                            } );
+                                    } );
+            }
         }
     }
 
@@ -307,7 +312,7 @@ final class ToolbarPanel extends javax.swing.JPanel
     {
         frmEditor = new GFrame()
                           .title( "Editor for the Mingle Standard Platform (MSP)" )
-                          .icon( "editor.png" )
+                          .icon( "editor-256x256.png" )
                           .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
                           .onClose( GFrame.DISPOSE_ON_CLOSE )
                           .setVisible()
@@ -348,6 +353,7 @@ final class ToolbarPanel extends javax.swing.JPanel
 
             wndGum = new GFrame()
                          .title( "'Gum' console" )
+                         .icon( "gum-256x256.png" )
                          .closeOnEsc()
                          .onClose( JFrame.DISPOSE_ON_CLOSE )
                          .onClose( (frm) -> { if( JTools.confirm( "Stop also Gum?", wndGum ) ) onRunStopGum(); } )

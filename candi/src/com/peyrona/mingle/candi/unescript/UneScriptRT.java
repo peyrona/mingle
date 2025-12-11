@@ -20,7 +20,7 @@ import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Lexeme;
 import com.peyrona.mingle.lang.lexer.Lexer;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
-import com.peyrona.mingle.lang.messages.MsgTrigger;
+import com.peyrona.mingle.lang.messages.MsgExecute;
 import java.io.IOException;
 import java.net.URI;
 import java.util.ArrayList;
@@ -169,7 +169,7 @@ public class UneScriptRT implements ICandi.ILanguage
                     break;
 
                 case RuleOrScript:
-                    runtime.bus().post( new MsgTrigger( action.getTargetName(), false ), action.getDelay() );
+                    runtime.bus().post(new MsgExecute( action.getTargetName(), false ), action.getDelay() );
                     break;
             }
 

@@ -14,6 +14,12 @@ public class MsgReadDevice extends MsgAbstractOne
 {
     public MsgReadDevice( String device )
     {
-        super( device );
+        super( device, true );
     }
+
+    public MsgReadDevice( String device, boolean isOwn )
+    {
+        super( device, isOwn );
+    }
+
 }

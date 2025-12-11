@@ -5,6 +5,7 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.UtilComm;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.network.BaseClient4IP;
 import java.io.BufferedReader;
@@ -14,9 +15,8 @@ import java.io.PrintWriter;
 import java.net.InetSocketAddress;
 import java.net.Socket;
 import java.nio.charset.StandardCharsets;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * This class exposes a socket service (port is configurable) that can be used
@@ -41,9 +41,8 @@ public final class SocketClient
     private volatile Socket          client = null;
     private volatile BufferedReader  input  = null;
     private volatile PrintWriter     output = null;
-    private volatile ExecutorService exec   = null;
-    private volatile boolean isShuttingDown = false;
-    private final    Object  connectionLock = new Object();
+    private volatile ScheduledFuture future   = null;
+    private volatile AtomicBoolean   isStopping = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
 
@@ -54,48 +53,45 @@ public final class SocketClient
      * @return Itself
      */
     @Override
-    public INetClient connect( String sCfgAsJSON )
+    public synchronized INetClient connect( String sCfgAsJSON )
     {
-        synchronized( connectionLock )
+        if( isConnected() )
+            return this;
+
+        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT ) )
+            return this;
+
+        for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )
         {
-            if( isConnected() )
-                return this;
-
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT ) )
-                return this;
-
-            for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )
+            try
             {
+                Socket            socket = new Socket();
+                InetSocketAddress addr   = new InetSocketAddress( getHost(), getPort() );
+
+                socket.setKeepAlive( true );
+                socket.setTcpNoDelay( true );           // Disable Nagle's algorithm
+                socket.connect( addr, getTimeout() );   // Throws an IOException if timeout: connection is blocked until connected or timeout
+             // socket.setSoTimeout( READ_TIMEOUT );    -> Can not use this because a client can be days without requesting inf. from server
+
+                if( connect( socket ) )
+                    return this;
+            }
+            catch( IOException ioe )
+            {
+                if( attempt == MAX_RETRIES - 1 )
+                {
+                    sendError( ioe );
+                    break;
+                }
+
                 try
                 {
-                    Socket            socket = new Socket();
-                    InetSocketAddress addr   = new InetSocketAddress( getHost(), getPort() );
-
-                    socket.setKeepAlive( true );
-                    socket.setTcpNoDelay( true );             // Disable Nagle's algorithm
-                    socket.connect( addr, getTimeout() );     // Throws an IOException if timeout: connection is blocked until connected or timeout
-                 // socket.setSoTimeout( READ_TIMEOUT );      -> Can not use this because a client can be days without requesting inf. from server
-
-                    if( connect( socket ) )
-                        return this;
+                    Thread.sleep( RETRY_DELAY );
                 }
-                catch( IOException ioe )
+                catch( InterruptedException ie )
                 {
-                    if( attempt == MAX_RETRIES - 1 )
-                    {
-                        forEachListener(l -> ((INetClient.IListener) l).onError(SocketClient.this, ioe ) );
-                        break;
-                    }
-
-                    try
-                    {
-                        Thread.sleep( RETRY_DELAY );
-                    }
-                    catch( InterruptedException ie )
-                    {
-                        Thread.currentThread().interrupt();
-                        break;
-                    }
+                    Thread.currentThread().interrupt();
+                    break;
                 }
             }
         }
@@ -106,9 +102,9 @@ public final class SocketClient
     @Override
     public synchronized INetClient disconnect()
     {
-        isShuttingDown = true;
+        isStopping.set( true );
         cleanupResources();
-        isShuttingDown = false;
+        isStopping.set( false );
         return this;
     }
 
@@ -148,7 +144,7 @@ public final class SocketClient
      */
     protected synchronized boolean connect( Socket socket )
     {
-        if( isShuttingDown )
+        if( isStopping.get() )
             return false;
 
         try
@@ -156,16 +152,15 @@ public final class SocketClient
             client = socket;
             input  = new BufferedReader( new InputStreamReader( client.getInputStream(), StandardCharsets.UTF_8 ) );
             output = new PrintWriter( client.getOutputStream(), true );
-            exec   = Executors.newCachedThreadPool();
-            exec.submit( new ThreadReader() );
+            future = UtilSys.execute( "socketclient-reader", new ThreadReader() );
 
-            forEachListener(l -> ((INetClient.IListener) l).onConnected(SocketClient.this ) );
+            forEachListener( l -> ((INetClient.IListener) l).onConnected( SocketClient.this ) );
             return true;
         }
         catch( IOException ioe )
         {
             cleanupResources();
-            forEachListener(l -> ((INetClient.IListener) l).onError(SocketClient.this, ioe ) );
+            sendError( ioe );
             return false;
         }
     }
@@ -175,21 +170,36 @@ public final class SocketClient
 
     private void cleanupResources()    // Invoked from a synchronized method
     {
-        if( exec != null )
+        // Close streams before socket to prevent resource leaks
+        if( input != null )
         {
-            exec.shutdownNow();
-
             try
             {
-                if( ! exec.awaitTermination( 2, TimeUnit.SECONDS ) )
-                    log( "Thread pool did not terminate" );
+                input.close();
             }
-            catch( InterruptedException e )
+            catch( IOException e )
             {
-                Thread.currentThread().interrupt();
+                log( "Error closing input stream: ", e );
             }
         }
 
+        if( output != null )
+        {
+            try
+            {
+                output.close();
+            }
+            catch( Exception e )
+            {
+                log( "Error closing output stream: ", e );
+            }
+        }
+
+        // Shutdown executor service first
+        if( future != null )
+            future.cancel( true );
+
+        // Close socket last
         if( client != null )
         {
             try
@@ -198,7 +208,7 @@ public final class SocketClient
             }
             catch( IOException ioe )
             {
-                log( "Error closing socket: " + ioe.getMessage() );    // Log error but don't throw
+                log( "Error closing socket: ", ioe );
             }
             finally
             {
@@ -206,6 +216,7 @@ public final class SocketClient
             }
         }
 
+        // Clear listeners before nullifying fields
         clearListenersList();
 
         synchronized( this )
@@ -213,7 +224,7 @@ public final class SocketClient
             client = null;
             input  = null;
             output = null;
-            exec   = null;
+            future   = null;
         }
     }
 
@@ -227,7 +238,7 @@ public final class SocketClient
         {
             Thread.currentThread().setName(SocketClient.class.getSimpleName() +"_Reader-" + client.getRemoteSocketAddress() );
 
-            while( (! isShuttingDown) && isConnected() && (! Thread.currentThread().isInterrupted()) )
+            while( (! isStopping.get()) && isConnected() && (! Thread.currentThread().isInterrupted()) )
             {
                 try
                 {
@@ -235,8 +246,8 @@ public final class SocketClient
 
                     if( message == null )    // 'message' is null when thread is interrupted or when the communication channel is closed
                     {
-                        if( ! Thread.interrupted() && ! isConnected() && ! isShuttingDown )
-                            forEachListener(l -> l.onError(SocketClient.this, new MingleException( "Server was closed cleanly" ) ) );
+                        if( ! Thread.interrupted() && ! isConnected() && ! isStopping.get() )
+                            sendError( new MingleException( "Server was closed cleanly" ) );
 
                         break;
                     }
@@ -247,8 +258,17 @@ public final class SocketClient
                 }
                 catch( IOException exc )
                 {
-                    if( ! isShuttingDown )
-                        forEachListener(l -> l.onError(SocketClient.this, exc ) );
+                    // A "Connection reset" or "Broken pipe" is a common exception when the client abruptly closes the connection.
+                    // We don't need to treat it as a server-side error. We'll just break the loop,
+                    // and the disconnect() call below will handle the cleanup.
+
+                    boolean isCommonDisconnect = exc instanceof java.net.SocketException &&
+                                                 UtilStr.contains( exc.getMessage(), "Connection reset", "Broken pipe" );
+
+                    if( ! isStopping.get() && ! isCommonDisconnect )
+                        sendError( exc );
+
+                    break;   // For any IOException (reset or other), the connection is no longer viable, so we break the loop.
                 }
                 catch( Throwable th )
                 {
@@ -256,7 +276,7 @@ public final class SocketClient
                 }
             }
 
-            if( ! isShuttingDown )
+            if( ! isStopping.get() )
                 disconnect();
         }
     }

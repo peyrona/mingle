@@ -1,32 +1,22 @@
 package com.peyrona.mingle.network.websocket;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilJson;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.network.BaseServer4IP;
 import io.undertow.Handlers;
 import io.undertow.Undertow;
 import io.undertow.server.handlers.PathHandler;
+import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
 import io.undertow.websockets.core.WebSocketChannel;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.security.KeyStore;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
 import org.xnio.Options;
 
 /**
@@ -42,11 +32,9 @@ import org.xnio.Options;
 public final class WebSocketServer
              extends BaseServer4IP
 {
-    private       ServerThread    server = null;
-    private       ExecutorService exec   = null;
-    private final Object          locker = new Object();
-    private final AtomicBoolean   isStopping = new AtomicBoolean(false);
-    private       String          path;
+    private final AtomicBoolean             isStopping  = new AtomicBoolean( false );
+    private final AtomicReference<Undertow> undertowRef = new AtomicReference<>( null );
+    private       String path;
 
     //------------------------------------------------------------------------//
 
@@ -60,20 +48,52 @@ public final class WebSocketServer
      * @throws MingleException if the server is already running or fails to start.
      */
     @Override
-    public INetServer start( String sCfgAsJSON )
+    public synchronized INetServer start( String sCfgAsJSON )
     {
-        synchronized( locker )
+        if( isRunning() )
+            return this;
+
+        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
+            return this;
+
+        // Latch to enforce deterministic startup wait
+        CountDownLatch             startupLatch = new CountDownLatch( 1 );
+        AtomicReference<Exception> startupError = new AtomicReference<>( null );
+
+        try
         {
-            if( isRunning() )
-                return this;
+            // We use a Runnable instead of extending Thread
+            ServerRunner runner = new ServerRunner( startupLatch, startupError );
 
-            if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
-                return this;
+            // Execute the runner. We don't need to keep the future because
+            // the runner finishes as soon as Undertow.start() returns (non-blocking).
+            // The Undertow instance itself is what keeps the app alive.
+            UtilSys.execute( getClass().getSimpleName() + ":boot", runner );
 
-            startServer();
+            // Wait up to 5 seconds for the server to actually boot
+            boolean started = startupLatch.await( 5, TimeUnit.SECONDS );
+
+            if( startupError.get() != null )
+                throw startupError.get();
+
+            if( ! started )
+                throw new MingleException( "Server failed to initialize within timeout period" );
+
+            // Validate that the reference was actually set
+            if( undertowRef.get() == null )
+                throw new MingleException( "Server initialization failed (Instance null)" );
+
+        }
+        catch( Exception e )
+        {
+            MingleException me = new MingleException( "Failed to start server", e );
+            stop(); // Ensure cleanup
+            log( me );
+            notifyError( (INetClient) null, me );
+            throw me;
         }
 
-        return this;
+        return super.start( sCfgAsJSON );
     }
 
     /**
@@ -84,47 +104,33 @@ public final class WebSocketServer
      * @return The server instance.
      */
     @Override
-    public INetServer stop()
+    public synchronized INetServer stop()
     {
-        synchronized( locker )
+        isStopping.set( true );
+
+        try
         {
-            isStopping.set( true );
-            cleanup();
-            setRunning( false );
+            // 1. Stop the generic IP server components
+            super.stop();
+
+            // 2. Explicitly stop Undertow to release ports and threads
+            Undertow server = undertowRef.getAndSet( null );
+            if( server != null )
+            {
+                server.stop();
+                log( Level.INFO, "Undertow server stopped" );
+            }
+        }
+        catch( Exception e )
+        {
+            log( new MingleException( "Error stopping Undertow server", e ) );
+        }
+        finally
+        {
             isStopping.set( false );
         }
 
         return this;
-    }
-
-    /**
-     * Broadcasts a message to all connected clients.
-     *
-     * @param message The message to be sent.
-     * @return The server instance.
-     * @throws IllegalStateException if the server is not running.
-     */
-    @Override
-    public INetServer broadcast( String message )
-    {
-        if( ! isRunning() )
-            forEachListener(l -> l.onError(WebSocketServer.this, null, new MingleException( "Attempting to use a closed server-socket" ) ) );
-
-        if( server != null )
-            server.broadcast( message );
-
-        return this;
-    }
-
-    /**
-     * Checks if the server has any active client connections.
-     *
-     * @return true if there is at least one connected client, false otherwise.
-     */
-    @Override
-    public boolean hasClients()
-    {
-        return ((server != null) && (! server.lstClients.isEmpty()));
     }
 
     //------------------------------------------------------------------------//
@@ -145,242 +151,64 @@ public final class WebSocketServer
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private void cleanup()
-    {
-        if( exec != null )
-        {
-            exec.shutdownNow();
-
-            try
-            {
-                exec.awaitTermination( 5, TimeUnit.SECONDS );
-            }
-            catch( InterruptedException e )
-            {
-                MingleException me = new MingleException( "Attempting to use a closed server-socket" );
-
-                log( me );
-                Thread.currentThread().interrupt();
-                forEachListener(l -> l.onError(WebSocketServer.this, null, me ) );    // Last to in case it throws an exception
-            }
-        }
-
-        if( server != null )
-            server.clean();
-
-        exec   = null;
-        server = null;
-    }
-
-    private void startServer()
-    {
-        try
-        {
-            server = new ServerThread();
-            exec   = Executors.newCachedThreadPool();
-            exec.submit( server );
-
-            setRunning( true );
-        }
-        catch( Exception e )
-        {
-            MingleException me = new MingleException( "Failed to start server", e );
-
-            cleanup();
-            log( me );
-            throw me;
-        }
-    }
-
-    private SSLContext createSSLContext() throws Exception
-    {
-        if( getSSLCert() == null )
-            throw new MingleException( "SSL certificate file is required for SSL server" );
-
-        KeyStore keyStore = KeyStore.getInstance( "PKCS12" );
-        char[] password = getSSLPassword();
-
-        try( InputStream is = new FileInputStream( getSSLCert() ) )
-        {
-            keyStore.load( is, password );
-        }
-
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance(
-                KeyManagerFactory.getDefaultAlgorithm() );
-        keyManagerFactory.init( keyStore, password );
-
-        SSLContext sslContext = SSLContext.getInstance( "TLS" );
-        sslContext.init(
-                keyManagerFactory.getKeyManagers(),
-                null,
-                null
-        );
-
-        return sslContext;
-    }
-
     //------------------------------------------------------------------------//
     // INNER CLASS
-    // Server Thread
+    // Server Runner
     //------------------------------------------------------------------------//
-    private class ServerThread extends Thread
+    private final class ServerRunner implements Runnable
     {
-        protected final Undertow server;
-        private   final Set<WebSocketClient> lstClients = ConcurrentHashMap.newKeySet();
-        private   final ScheduledExecutorService maintenanceExecutor = Executors.newSingleThreadScheduledExecutor();
+        private final CountDownLatch             startupLatch;
+        private final AtomicReference<Exception> errorRef;
 
-        //------------------------------------------------------------------------//
-
-        ServerThread() throws IOException
+        ServerRunner( CountDownLatch latch, AtomicReference<Exception> errorRef )
         {
-            super( WebSocketServer.class.getSimpleName() +":Server" );
-
-            log( String.format( "Starting WebSocket server on %s:%d%s (SSL: %s)",
-                                getHost(), getPort(), path, getSSLCert() != null ) );
-
-            Undertow.Builder builder = Undertow.builder()
-                    .setServerOption( Options.BACKLOG, 10000 )
-                    .setHandler( new PathHandler()
-                            .addPrefixPath( path, Handlers.websocket(
-                                    ( exchange, channel ) ->
-                                    {
-                                        handleNewConnection( channel );
-                                    }
-                            ) ) );
-
-            if( getSSLCert() != null )
-            {
-                try
-                {
-                    SSLContext sslContext = createSSLContext();
-                    builder.addHttpsListener( getPort(), getHost(), sslContext );
-                }
-                catch( Exception e )
-                {
-                    throw new IOException( "Failed to create SSL context", e );
-                }
-            }
-            else
-            {
-                builder.addHttpListener( getPort(), getHost() );
-            }
-
-            this.server = builder.build();
-
-            // Schedule periodic maintenance task
-            maintenanceExecutor.scheduleAtFixedRate( this::performMaintenance, 30, 30, TimeUnit.SECONDS );
+            this.startupLatch = latch;
+            this.errorRef     = errorRef;
         }
-
-        //------------------------------------------------------------------------//
 
         @Override
         public void run()
         {
             try
             {
+                log( Level.INFO,
+                     String.format( "Starting WebSocket server on %s:%d%s (SSL: %s)",
+                                    getHost(), getPort(), path, getSSLCert() != null ) );
+
+                WebSocketProtocolHandshakeHandler wsphh = Handlers.websocket( (exchange, channel) -> handleNewConnection( channel ) );
+
+                Undertow.Builder builder = Undertow.builder()
+                        .setServerOption( Options.BACKLOG, 10000 )
+                        .setHandler( new PathHandler().addPrefixPath( path, wsphh ) );
+
+                if( getSSLCert() == null )
+                {
+                    builder.addHttpListener( getPort(), getHost() );
+                    log( Level.INFO, "Plain WebSocket because the Certificate file was not provided" );
+                }
+                else
+                {
+                    builder.addHttpsListener( getPort(), getHost(), createSSLContext() );
+                    log( Level.INFO, "SSL WebSocket initialized" );
+                }
+
+                Undertow server = builder.build();
+
+                // Critical: Assign to the AtomicReference so stop() can access it
+                undertowRef.set( server );
+
                 server.start();
-                log( "WebSocket server started successfully" );
+                log( Level.INFO, "WebSocket server started successfully" );
             }
             catch( Exception e )
             {
-                MingleException me = new MingleException( "Failed to start WebSocket server", e );
-                log( me );
-                forEachListener( l -> l.onError( WebSocketServer.this, null, me ) );
+                cleanupClients( true );
+                errorRef.set( e );
             }
-        }
-
-        //------------------------------------------------------------------------//
-
-        void broadcast(String message)
-        {
-            // First cleanup any disconnected clients
-            cleanupDisconnectedClients();
-
-            if( lstClients.isEmpty() )
-                return;
-
-            // Create a snapshot of clients to avoid concurrent modification
-            List<WebSocketClient>         clientSnapshot = new ArrayList<>( lstClients );
-            List<CompletableFuture<Void>> futures        = new ArrayList<>();
-            List<WebSocketClient>         failedClients  = new ArrayList<>();
-
-            for( WebSocketClient client : clientSnapshot )
+            finally
             {
-                CompletableFuture<Void> future = CompletableFuture.runAsync(() ->
-                {
-                    try
-                    {
-                        if( client.isConnected() )
-                        {
-                            client.send( message );
-                        }
-                        else
-                        {
-                            synchronized( failedClients )
-                            {
-                                failedClients.add( client );
-                            }
-                        }
-                    }
-                    catch( Exception e )
-                    {
-                        forEachListener( l -> l.onError( WebSocketServer.this, client, e ) );
-
-                        synchronized( failedClients )
-                        {
-                            failedClients.add( client );
-                        }
-                    }
-                }, exec );
-
-                futures.add( future );
-            }
-
-            try
-            {
-                CompletableFuture.allOf( futures.toArray( CompletableFuture[]::new ) ).get( 5000, TimeUnit.MILLISECONDS );
-            }
-            catch( Exception e )
-            {
-                forEachListener( l -> l.onError( WebSocketServer.this, null, e ) );
-            }
-
-            // Remove failed clients after all async operations complete
-            if( ! failedClients.isEmpty() )
-            {
-                for( WebSocketClient client : failedClients )
-                {
-                    removeClient( client );
-                }
-            }
-        }
-
-        void clean()
-        {
-            maintenanceExecutor.shutdownNow();
-
-            List<WebSocketClient> clientsToClose = new ArrayList<>( lstClients );
-
-            for( WebSocketClient client : clientsToClose )
-            {
-                forEachListener( l -> l.onDisconnected( WebSocketServer.this, client ) );
-
-                if( client.isConnected() )
-                    client.disconnect();
-            }
-
-            lstClients.clear();
-
-            if( server != null )
-            {
-                try
-                {
-                    server.stop();
-                }
-                catch( Exception e )
-                {
-                    // Ignore stop errors
-                }
+                // Always count down so the main thread stops waiting
+                startupLatch.countDown();
             }
         }
 
@@ -388,34 +216,38 @@ public final class WebSocketServer
 
         private void handleNewConnection( WebSocketChannel channel )
         {
-            AtomicReference<WebSocketClient> clientRef = new AtomicReference<>( null );
+            WebSocketClient client = null;
 
             try
             {
                 if( isAllowed( channel.getSourceAddress().getAddress() ) )
                 {
-                    WebSocketClient newClient = new WebSocketClient();
-                                      newClient.add( new ClientListener() );
+                    client = new WebSocketClient();
+                    client.add( newClientListener() );
 
-                    if( newClient.connect( channel ) )
+                    // Note: Assuming WebSocketClient.connect maps to a boolean success/fail
+                    if( client.connect( channel ) )
                     {
-                        clientRef.set( newClient );
-                        lstClients.add( newClient );
-                        forEachListener( l -> l.onConnected( WebSocketServer.this, newClient ) );
+                        add( client );
+                    }
+                    else
+                    {
+                        // Explicitly close if connect logic failed but threw no exception
+                        closeChannel( channel );
                     }
                 }
                 else
                 {
                     MingleException me = new MingleException( channel.getSourceAddress().getAddress() + ": address not allowed" );
 
-                    forEachListener( l -> l.onError( WebSocketServer.this, clientRef.get(), me ) );
+                    notifyError( client, me );
                     closeChannel( channel );
                 }
             }
             catch( Exception exc )
             {
                 if( ! isStopping.get() )
-                    handleConnectionError( clientRef.get(), channel, exc );
+                    handleConnectionError( client, channel, exc );
             }
         }
 
@@ -424,19 +256,14 @@ public final class WebSocketServer
             if( client != null )
                 client.disconnect();
 
-            forEachListener( l -> l.onError( WebSocketServer.this, client, exc ) );
+            del( client );
+            notifyError( client, exc );
             closeChannel( channel );
-        }
-
-        private void removeClient( WebSocketClient client )
-        {
-            if( lstClients.remove( client ) )
-                forEachListener( l -> l.onDisconnected( WebSocketServer.this, client ) );
         }
 
         private void closeChannel( WebSocketChannel channel )
         {
-            if( channel != null )
+            if( channel != null && channel.isOpen() )
             {
                 try
                 {
@@ -444,66 +271,9 @@ public final class WebSocketServer
                 }
                 catch( Exception e )
                 {
-                    // Ignore close errors
+                    // Ignore close errors, but log trace if needed for debugging
                 }
             }
-        }
-
-        private void cleanupDisconnectedClients()
-        {
-            lstClients.removeIf( client -> ! client.isConnected() );
-        }
-
-        private void performMaintenance()
-        {
-            List<WebSocketClient> disconnectedClients = new ArrayList<>();
-
-            for( WebSocketClient client : lstClients )
-            {
-                if( ! client.isConnected() )
-                    disconnectedClients.add( client );
-            }
-
-            for( WebSocketClient client : disconnectedClients )
-                removeClient( client );
-        }
-    }
-
-    //------------------------------------------------------------------------//
-    // INNER CLASS
-    //------------------------------------------------------------------------//
-    private final class ClientListener implements INetClient.IListener
-    {
-        @Override
-        public void onConnected(INetClient origin)
-        {
-        }
-
-        @Override
-        public void onDisconnected(INetClient origin)
-        {
-            ServerThread currentServer = server;
-
-            if( currentServer != null )
-            {
-                currentServer.lstClients.remove( origin );
-                forEachListener( l -> l.onDisconnected( WebSocketServer.this, origin ) );
-            }
-        }
-
-        @Override
-        public void onMessage( INetClient origin, String msg )
-        {
-            forEachListener( l -> l.onMessage( WebSocketServer.this, origin, msg ) );
-        }
-
-        @Override
-        public void onError(INetClient origin, Exception exc)
-        {
-            ServerThread currentServer = server;
-
-            if( currentServer != null )
-                currentServer.removeClient( (WebSocketClient) origin );
         }
     }
 }

@@ -784,6 +784,7 @@ public final class StdXprFns
         return search( find, within, 1 );
     }
 
+    @SuppressWarnings("unused")
     /**
     * Converts the given {@code codePoint} object into a {@link String}
     * representing the Unicode character.
@@ -815,6 +816,7 @@ public final class StdXprFns
         return new String( Character.toChars( code ) );
     }
 
+    @SuppressWarnings("unused")
     /**
      * Returns the system-dependent line separator string.<br>
      * On UNIX systems, it returns "\n"; on Microsoft Windows systems it returns "\r\n".

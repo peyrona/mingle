@@ -1,0 +1,192 @@
+<!-- A fixed text or a text linked with a device -->
+
+<div id="properties-text" style="display:none;">
+    <div class="box">
+        <p>This gadget can display an image, static text, a device value (using the <code>{*device*}</code> macro), or any combination —e.g., "The value is <code>{*device*}</code> Celsius."</p>
+        <ul>
+            <li><strong>Multi-line text</strong>: Supported when "Number of rows" is greater than 0. If the text includes the <code>{*device*}</code> macro, you can choose how many recent values to show.</li>
+            <li><strong>Single-line mode</strong> (rows = 0): Text can include valid HTML5 and supports alignment (left, center, right) and styling (bold, italic, underline).</li>
+            <li><strong>Images</strong>: Add a background image via the <strong>Style</strong> tab—images and text can appear together.</li>
+        </ul>
+        <br>
+        <b>Observe that this gadget has 2 texts and both are optional: a "Gadget title" and a "Text (optional)"</b>
+    </div>
+    <form onsubmit="return false;">
+        <div class="container">
+
+            <div class="box" id="grid-fields">
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Gadget title (optional)</label>
+                            <div class="control">
+                                <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgText.geh.changed(this)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <label class="label">Title location</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="north" onchange="dlgText.geh.changed(this)" checked>
+                                North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="south" onchange="dlgText.geh.changed(this)">
+                                South
+                              </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column is-one-third">
+                    <div class="field">
+                        <label class="label">Target ExEn</label>
+                        <div class="control is-expanded">
+                            <div class="select">
+                                <select name="exen" onchange="dlgText.geh.changed(this)">
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-one-third">
+                    <div class="field">
+                        <label class="label">Device</label>
+                        <div class="control is-expanded">
+                            <div class="select">
+                                <select name="device" onchange="dlgText.geh.changed(this)">
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Rows</label>
+                        <div class="control">
+                            <input class="input" type="number" name="rows" min="1" max="999" value="1" onchange="dlgText._onRowsChanged_()">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Keep last rows</label>
+                        <div class="control">
+                            <input class="input" type="number" name="keep" min="1" max="99999" value="1" onchange="dlgText.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="field">
+                <label class="label">Text (optional)</label>
+                <div class="control">
+                    <textarea class="textarea" name="label" rows="1" placeholder="HTML is allowed, i.e.: <b>{*device*}</b>" onkeyup="dlgText.geh.changed(this)"></textarea>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column is-one-fifth">
+                    <div class="field">
+                        <label class="label">Relative size (%)</label>
+                        <div class="control">
+                            <input class="input" type="number" name="size" min="5" max="995" step="5" onchange="dlgText.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-one-fifth">
+                    <div class="field">
+                        <label class="label">Color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="color" >  <!-- onchange does not work for inputs of type color -->
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="control">
+                        <label class="label">Effects</label>
+                        <div class="field is-grouped">
+                            <p class="control">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="bold" onchange="dlgText.geh.changed(this)"> Bold
+                                </label>
+                            </p>
+                            <p class="control">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="italic" onchange="dlgText.geh.changed(this)"> Italic
+                                </label>
+                            </p>
+                            <p class="control">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="underline" onchange="dlgText.geh.changed(this)"> Underline
+                                </label>
+                            </p>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="control">
+                        <label class="label">Alignment</label>
+                        <label class="radio">
+                          <input type="radio" name="align" value="left" onchange="dlgText.geh.changed(this)">
+                          Left
+                        </label>
+                        <label class="radio">
+                          <input type="radio" name="align" value="center" onchange="dlgText.geh.changed(this)">
+                          Center
+                        </label>
+                        <label class="radio">
+                          <input type="radio" name="align" value="right" onchange="dlgText.geh.changed(this)">
+                          Right
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+if( typeof dlgText === "undefined" )
+{
+    // Has to be done in this way beacuse 'onchange' does not work for inputs of type color.
+    // Has to be here to be added just once.
+    $('#properties-text [name="color"]')[0]
+        .addEventListener( 'input', function(e) { dlgText.geh.changed( e.target ); } );
+
+var dlgText =
+{
+    geh : null,
+
+    setup : function( gadget, fnOnChanged, fnOnEditEnd )
+    {
+        this.geh = new GadgetEditorHelperSingleExEn( "properties-text", gadget, fnOnChanged, fnOnEditEnd );
+
+        this._onRowsChanged_();
+
+        return this;
+    },
+
+    show()
+    {
+        this.geh.showDialog();
+    },
+
+    //---------------------------------------------------------------------------------------//
+
+    _onRowsChanged_ : function()
+    {
+        let input = $('#properties-text [name="rows"]');
+        let nRows = parseInt( input.val() );
+
+        $('#properties-text [name="label"]').attr( 'rows', nRows );
+        $('#properties-text [name="align"]').prop( 'disabled', (nRows > 1) );
+
+        this.geh.changed( input );
+    }
+};
+}
+</script>

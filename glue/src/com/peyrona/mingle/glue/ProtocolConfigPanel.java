@@ -213,7 +213,7 @@ public final class ProtocolConfigPanel extends JPanel
         GTextField txt = new GTextField();
                    txt.setColumns( 15 );
                    txt.setEditable( false );
-                   txt.setPlaceholder( "Use '...' to select a file" );
+                   txt.setPlaceholder( "Use [...] to select a file" );
                    txt.setToolTipText( joField.getString( "tooltip", null ) );
         JButton    btn = new JButton( "..." );
                    btn.setToolTipText( joField.getString( "tooltip", null ) );

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Gum</title>
+        <link href="/gum/images/app-logo.png" rel="icon" type="image/png">
+
+        <!-- JQuery ============================= -->
+        <link   href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.css" rel="stylesheet">
+        <script src ="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script src ="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+
+        <!-- Gum ================================ -->
+        <link href="/gum/gum.css" rel="stylesheet">  <!-- FontAwesome and Bulma, are inside CSS -->
+    </head>
+    <body>
+        <!-- Used only when in design mode (for Grid and for Free layouts) -->
+        <div id="gum-toolbar" class="gum-toolbar is-pulled-right">
+        </div>
+
+        <!-- Used for the general Dashboard configuration (HTML name, Background, ExEns, etc) -->
+        <div id="div-dlg_options" style="display:none;">
+        </div>
+
+        <!-- Used for the every Gadget Dashboard configuration (gadget's properties) -->
+        <div id="div-dlg_properties">
+        </div>
+
+        <script src="/gum/js/p_polyfill.js"       ></script>    <!-- ¡ Do not change the order ! -->
+        <script src="/gum/js/p_base.js"           ></script>
+        <script src="/gum/js/p_app.js"            ></script>
+        <script src="/gum/js/p_ws-wrap.js"        ></script>
+        <script src="/gum/js/p_tableditor.js"     ></script>
+        <script src="/gum/js/gum_ws_boards.js"    ></script>    <!-- From here down, all were created just for Gum -->
+        <script src="/gum/js/gum_tools.js"        ></script>
+        <script src="/gum/js/free.js"             ></script>
+        <script src="/gum/js/grid.js"             ></script>
+        <script src="/gum/js/gum.js"              ></script>
+        <script src="/gum/js/gadgets/help2edit.js"></script>
+        <script src="/gum/js/gadgets/gadget.js"   ></script>
+        <script src="/gum/js/gadgets/button.js"   ></script>
+        <script src="/gum/js/gadgets/chart.js"    ></script>
+        <script src="/gum/js/gadgets/check.js"    ></script>
+        <script src="/gum/js/gadgets/gauge.js"    ></script>
+        <script src="/gum/js/gadgets/ssd.js"      ></script>
+        <script src="/gum/js/gadgets/text.js"     ></script>
+
+        <script>
+            $(document).ready( () => gum.run( getConfig() ) );    // Do not move this block
+
+            // START MARK TO INSERT getConfig()
+            function getConfig()
+            {
+                return {"background":null,"password":"","exens":[{"host":"localhost","port":55880,"ssl":false}],"layout":{"type":"free","contents":{"bodysize":{"width":"925.556","height":"1436.330"},"gadgets":[{"_sValue_":"3","fnOnEditEnd":null,"class":"gauge","width":520,"height":316,"x":35,"y":37,"z":0,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"cpu","min":0,"max":100,"angle":0,"radius":95,"thick":38,"zones":[],"ticks":true,"ticks_pos":"0,25,50,75,100","decimals":0,"style":{"border-top-style":"None","border-top-width":{"width":"10","unit":"px"},"border-top-color":"#000000","padding-top":{"width":"0","unit":"px"},"border-left-style":"None","border-left-width":{"width":"10","unit":"px"},"border-left-color":"#000000","padding-left":{"width":"0","unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":"10","unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":"0","unit":"px"},"border-right-style":"None","border-right-width":{"width":"10","unit":"px"},"border-right-color":"#000000","padding-right":{"width":"0","unit":"px"}},"card_title":"<b>CPU</b>","card_title_location":"center"},{"_sValue_":"41.79392","fnOnEditEnd":null,"class":"gauge","width":520,"height":316,"x":31,"y":388,"z":0,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"ram","min":0,"max":100,"angle":0,"radius":95,"thick":38,"zones":[],"ticks":true,"ticks_pos":"0,25,50,75,100","decimals":0,"style":{"border-top-style":"Solid","border-top-width":{"width":"2","unit":"px"},"border-top-color":"#000000","padding-top":{"width":"0","unit":"px"},"border-left-style":"Solid","border-left-width":{"width":"2","unit":"px"},"border-left-color":"#000000","padding-left":{"width":"0","unit":"px"},"border-bottom-style":"Solid","border-bottom-width":{"width":"2","unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":"0","unit":"px"},"border-right-style":"Solid","border-right-width":{"width":"2","unit":"px"},"border-right-color":"#000000","padding-right":{"width":"0","unit":"px"}},"card_title":"<b>RAM</b>","card_title_location":"center"},{"_sValue_":"370","fnOnEditEnd":null,"class":"ssd","width":200,"height":102,"x":630,"y":167,"z":"100","exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"msgs_speed","color":"lcd","integers":5,"decimals":null,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"card_title":"<b>msgs/min</b>","card_title_location":"south"},{"_sValue_":null,"fnOnEditEnd":null,"class":"check","width":132,"height":133,"x":700,"y":376,"z":"100","exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":null,"icon_on":"alarm_on.png","icon_off":"alarm_off.png","actuable":true,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"card_title_location":"south","card_title":""},{"_sValue_":null,"fnOnEditEnd":null,"class":"text","width":164,"height":20,"x":694,"y":504,"z":"100","exen":null,"device":null,"label":"You can also click me","align":"left","rows":1,"keep":0,"size":100,"color":"#000000","bold":false,"italic":false,"underline":false,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"card_title":""},{"_sValue_":null,"fnOnEditEnd":null,"class":"button","width":null,"height":null,"x":693,"y":540,"z":100,"devices":[],"label":"Set alarm On/Off","color":"is-info","size":"is-normal","style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}}}]}}};
+            }
+           // END MARK TO INSERT getConfig()
+        </script>
+    </body>
+</html>

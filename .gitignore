@@ -25,26 +25,34 @@ dist/
 .DS_Store
 Thumbs.db
 
-# Otros ficheros y dirs
-.*
-!/.gitignore
+# Otros ficheros y dirs to ignore
+.*             # ignore all hidden files
+.*/            # ignore all hidden folders
+!/.gitignore   # do not ignore this hidden file
+
 *.graphml
 *.txt
 *.odt
 *.odg
 *.model
 *.zip          # Ignore all .zip files
-!javadocs.zip  # EXCEPT for javadocs.zip
+!javadocs.zip  # Except for javadocs.zip
+
 GEMINI.md
 count_lines.sh
 generate_javadocs.sh
 release.sh
+
 !/todeploy/**/*.jar
 /todeploy/examples/9*
 /todeploy/log/
 /todeploy/tmp/
-/todeploy/etc/gum_user_files/
+/todeploy/etc/glue-settings.json
 /0.PhD/
 /balata/
+/build/
+/docs/
+/javadocs/
 /website/
 /menu/nbproject/private/
+/gum_undertow/nbproject/private/

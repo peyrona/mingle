@@ -19,7 +19,7 @@ public abstract class ExtraTypeCollection<T>
                 extends ExtraType
                 implements Iterable
 {
-    private PropertyChangeSupport support;
+    private volatile PropertyChangeSupport support;
 
     //------------------------------------------------------------------------//
     // PUBLIC ABSTRACT
@@ -68,10 +68,13 @@ public abstract class ExtraTypeCollection<T>
 
     public void addPropertyChangeListener( PropertyChangeListener pcl )
     {
-        synchronized( this )
+        if( support == null )
         {
-            if( support == null )
-                support = new PropertyChangeSupport( this );
+            synchronized( this )
+            {
+                if( support == null )
+                    support = new PropertyChangeSupport( this );
+            }
         }
 
         support.addPropertyChangeListener( pcl );

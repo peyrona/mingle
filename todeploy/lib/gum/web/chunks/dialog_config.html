@@ -19,16 +19,16 @@
     <label class="label">Background image</label>
     <div class="field has-addons">
         <p class="control" title="Clear text" style="cursor:pointer;" onclick="$('#div-dlg_options [name=\'back_image\']').val(''); dlgCfg._onBackgroundChanged_();">
-            <a class="button is-static"><i class="fa fa-times"></i></a>
+            <a class="button is-static"><i class="ti ti-x"></i></a>
         </p>
         <p class="control is-expanded">
             <input class="input" name="back_image" type="text" readonly title="Select an image (optional)" placeholder="Choose one or leave empty" onchange="dlgCfg._onBackgroundChanged_()">
         </p>
         <p class="control" title="Select an image" style="cursor:pointer;" onclick="gt.selectImg4Text($('#div-dlg_options [name=\'back_image\']'))">
-            <a class="button is-static"><i class="fa fa-folder-open-o"></i></a>
+            <a class="button is-static"><i class="ti ti-folder-open"></i></a>
         </p>
         <p class="control" title="Upload an image" style="cursor:pointer;" onclick="gt.uploadImage()">
-            <a class="button is-static"><i class="fa fa-cloud-upload"></i></a>
+            <a class="button is-static"><i class="ti ti-cloud-upload"></i></a>
         </p>
     </div>
 </div>
@@ -66,7 +66,7 @@
         <label class="label">Start&nbsp;</label>
         <div class="field">
             <p class="control">
-                <input class="input" type="color" name="color_from" value="#F8FBFC">
+                <input class="input" type="color" name="color_from" value="#F8FBFC" onchange="dlgCfg._onBackgroundChanged_()">
             </p>
         </div>
     </div>
@@ -74,7 +74,7 @@
         <label class="label">End&nbsp;</label>
         <div class="field">
             <p class="control">
-                <input class="input" type="color"  name="color_to" value="#F8FBFC">
+                <input class="input" type="color"  name="color_to" value="#F8FBFC" onchange="dlgCfg._onBackgroundChanged_()">
             </p>
         </div>
     </div>
@@ -98,12 +98,12 @@
         </p>
         <p class="control">
             <a class="button is-primary" onclick="dlgCfg._onAddExEn_()">
-                <span class="icon"><i class="fa fa-plus"></i></span>
+                <span class="icon"><i class="ti ti-plus"></i></span>
             </a>
         </p>
         <p class="control">
             <a class="button is-danger" onclick="dlgCfg._onDelExEn_()">
-                <span class="icon"><i class="fa fa-minus"></i></span>
+                <span class="icon"><i class="ti ti-minus"></i></span>
             </a>
         </p>
     </div>
@@ -137,8 +137,8 @@ var dlgCfg =
         {
             $('#div-dlg_options [name="back_image"]').val(   oBg.getImageURL()      );
             $('#div-dlg_options [name="image_mode"][value='+ oBg.getImageMode() +']').prop('checked', true);
-            $('#div-dlg_options [name="color_from"]').val(   oBg.getColorFrom()     );
-            $('#div-dlg_options [name="color_to"  ]').val(   oBg.getColorTo()       );
+            $('#div-dlg_options [name="color_from"]').val(   oBg.getColorFrom() || '#F8FBFC' );
+            $('#div-dlg_options [name="color_to"  ]').val(   oBg.getColorTo()   || '#F8FBFC' );
             $('#div-dlg_options [name="color_deg" ]').val(   oBg.getColorDegrees()  );
         }
 

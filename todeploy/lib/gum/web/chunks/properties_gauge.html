@@ -8,7 +8,7 @@
                 <div class="columns">
                     <div class="column">
                         <div class="field">
-                            <label class="label">Card title</label>
+                            <label class="label">Gadget title (optional)</label>
                             <div class="control">
                                 <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgGauge.geh.changed(this)">
                             </div>
@@ -20,6 +20,10 @@
                             <label class="radio">
                                 <input type="radio" name="card_title_location" value="north" onchange="dlgGauge.geh.changed(this)" checked>
                                 North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="center" onchange="dlgGauge.geh.changed(this)">
+                                Center
                               </label>
                               <label class="radio">
                                 <input type="radio" name="card_title_location" value="south" onchange="dlgGauge.geh.changed(this)">

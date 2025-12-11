@@ -2,7 +2,7 @@ package com.peyrona.mingle.glue.gswing;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.glue.ConfigManager;
+import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.Main;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilStr;
@@ -63,7 +63,7 @@ public final class WndBoundsPersist
     public static void handlePack( Window window )
     {
         String     wndKey = getWindowKey( window );
-        JsonObject bounds = ConfigManager.getWindowBounds( wndKey );
+        JsonObject bounds = SettingsManager.getWindowBounds( wndKey );
 
         if( bounds != null )   // Window exists: use saved bounds
         {
@@ -85,7 +85,7 @@ public final class WndBoundsPersist
 
     public static void reset()
     {
-        ConfigManager.resetBounds();
+        SettingsManager.resetBounds();
     }
 
     //------------------------------------------------------------------------//
@@ -170,7 +170,7 @@ public final class WndBoundsPersist
                                 .add( "width" , now.width  )
                                 .add( "height", now.height );
 
-                ConfigManager.setWindowBounds( WndBoundsPersist.getWindowKey( window ), jo );
+                SettingsManager.setWindowBounds( WndBoundsPersist.getWindowKey( window ), jo );
         }
 
         @Override

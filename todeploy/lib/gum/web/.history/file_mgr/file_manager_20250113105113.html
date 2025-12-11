@@ -1,0 +1,383 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Gum :: Static files manager</title>
+        <link href="/gum/images/folder.png" rel="icon" type="image/png">
+
+        <!-- JQuery ============================= -->
+        <link  href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+        <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+
+        <!-- Gum ================================ -->
+        <link href="../index.css" rel="stylesheet">  <!-- FontAwesome and Bulma, are inside CSS -->
+
+        <!-- JsTree ============================= -->
+        <link href="jstree/themes/default/style.min.css" rel="stylesheet">
+        <script src="jstree/jstree.min.js"></script>
+    </head>
+    <body>
+        <div>
+            <div class="buttons">
+                <button class="button is-primary is-responsive" onclick="onUpload()" title="Upload file"          ><i class="fa fa-upload"></i></button>
+                <button class="button is-primary is-responsive" onclick="onNewDir()" title="Create folder"        ><i class="fa fa-plus"  ></i></button>
+                <button class="button is-primary is-responsive" onclick="onRename()" title="Rename item"          ><i class="fa fa-pencil"></i></button>
+                <button class="button is-primary is-responsive" onclick="onView()"   title="Show file [Dbl-Click]"><i class="fa fa-eye"   ></i></button>
+                <button class="button is-danger  is-responsive" onclick="onDelete()" title="Delete item"          ><i class="fa fa-trash" ></i></button>
+            </div>
+            <div id="div-tree">
+            </div>
+            <div id="div-bottom-note" style="padding-top:26px;">
+                <span class="tag">When deleting files, multiple-selection is allowed</span>
+            </div>
+        </div>
+
+        <script src="../js/p_base.js"   ></script>
+        <script src="../js/p_app.js"    ></script>
+        <script src="../js/gum_tools.js"></script>
+        <script src="../js/gum.js"      ></script>
+
+        <script>
+            var aSelected = [];
+
+            $(document).ready( () => { loadTree(); setTimeout( () => $("#div-bottom-note").hide(1000), 4000 ); } );
+
+            function onUpload()
+            {
+                if( ! checkOnlyOneIsSelected() )
+                    return;
+
+                if( ! checkIsFolder( aSelected[0] ) )
+                    return;
+
+                let sFolder = isRoot( aSelected[0] ) ? null
+                                                     : aSelected[0].substring( 1 );     // Removes '*' (it is already checked that it is a folder);
+
+                gt.uploadFile( sFolder, reload );
+            }
+
+            function onNewDir()
+            {
+                if( ! checkOnlyOneIsSelected() )
+                    return;
+
+                if( ! checkIsFolder( aSelected[0] ) )
+                    return;
+
+                let sName = prompt( "Enter a folder name:" );
+
+                if( sName )   // empty string "" == false
+                {
+                    let sParent = isRoot( aSelected[0] ) ? null
+                                                         : aSelected[0].substring( 1 );     // Removes '*' (it is already checked that it is a folder);
+
+                    $.ajax( { url    : "../ws/files",
+                              type   : "PUT",
+                              data   : { parent: sParent, name: sName },
+                              error  : (xhr) => p_app.showAjaxError( xhr ),
+                              success: reload } );
+                }
+            }
+
+            function onRename()
+            {
+                if( ! checkOnlyOneIsSelected() )
+                    return;
+
+                if( isRoot( aSelected[0] ) )
+                {
+                    p_app.alert( "Root can not be renamed" );
+                    return;
+                }
+
+                let sOld = (isFolder( aSelected[0] ) ? aSelected[0].substring(1) : aSelected[0]);
+                let sNew = prompt( "Enter new name:", getFileName( sOld ) );
+
+                if( sNew )
+                {
+                    sNew = getFilePath( sOld ) +'/'+ sNew;
+
+                    let sPost = (isFolder( aSelected[0] ) ? '*' : '') + sNew;
+
+                    $.ajax( { url        : "ws/files",
+                              type       : "POST",
+                              data       : JSON.stringify( { "old": sOld, "new": sNew } ),    // My POST at server side expects JSON
+                              contentType: "application/json; charset=UTF-8",
+                              error      : (xhr) => p_app.showAjaxError( xhr ),
+                              success    : () => { aSelected[0] = sPost; reload(); } } );
+                }
+            }
+
+            function onView()
+            {
+                if( ! checkOnlyOneIsSelected() )
+                    return;
+
+                if( isFolder( aSelected[0] ) )
+                {
+                    p_app.alert( "Folders have no contents to be shown" );
+                    return;
+                }
+
+                if( isImage( aSelected[0] ) )
+                {
+                    $('<div><img src="' + getBaseDir() + aSelected[0] + '" style="width:auto%; height:auto;"></div>')
+                        .dialog( {
+                                    title: getBaseDir() + aSelected[0],
+                                    autoOpen: true,
+                                    resizable: true,
+                                    width: 800,
+                                    height: 600,
+                                    modal: true,
+                                 } );
+                }
+                else
+                {
+                    $.ajax( { url    : "../ws/files",
+                            type   : "GET",
+                            data   : { "file": aSelected[0] },
+                            error  : (xhr) => p_app.showAjaxError( xhr ),
+                            success: (txt) => showFile( aSelected[0], txt ) } );
+                }
+            }
+
+            function onDelete()
+            {
+                if( ! checkSomethingIsSelected() )
+                    return;
+
+                p_app.confirm( 'Delete highlighted file(s) and folder(s)?',
+                                function()
+                                {
+                                    for( let n = 0; n < aSelected.length; n++ )
+                                    {
+                                        if( isRoot( aSelected[n] ) )
+                                        {
+                                            aSelected.splice( n, 1 );
+                                            break;
+                                        }
+                                    }
+
+                                    if( aSelected.length === 0 )
+                                    {
+                                        p_app.alert( "Can not delete 'root' node" );
+                                    }
+                                    else
+                                    {
+                                        for( let n = 0; n < aSelected.length; n++ )
+                                        {
+                                            if( aSelected[n].charAt(0) === '*' )
+                                                aSelected[n] = aSelected[n].substring(1);
+                                        }
+
+                                        $.ajax( { url    : "../ws/files?"+ $.param( { paths: aSelected.join(';') } ),
+                                                  type   : "DELETE",
+                                                  error  : (xhr) => p_app.showAjaxError( xhr ),
+                                                  success: () => { aSelected = []; reload(); } } );
+                                    }
+                                }
+                             );
+            }
+
+            //------------------------------------------------------------------------------------------------------//
+            // AUXILIARY FUNCTIONS
+            //------------------------------------------------------------------------------------------------------//
+
+            function loadTree()
+            {
+                let uuid = p_app.showLoading();
+
+                $.ajax( {   url     : "../ws/files",
+                            type    : "GET",
+                            error   : (xhr)  => self.showAjaxError( xhr ),
+                            complete: p_app.hideLoading( uuid ),
+                            success : (ja) => {                                  // ja == JsonArray
+                                                let sTree = json2UL( ja );
+                                                    sTree = '<ul><li id="*_root_">Gum user files'+ sTree +'</li></ul>'
+
+                                                $("#div-tree").html( sTree )
+                                                              .on('dblclick.jstree', '.jstree-anchor',
+                                                                    function(evt)
+                                                                    {
+                                                                        if( ! isRoot( aSelected[0] ) && ! isFolder( aSelected[0] ) )
+                                                                            onView();
+                                                                    } )
+                                                              .on('changed.jstree', function( e, data )
+                                                                    {
+                                                                        aSelected = [];
+
+                                                                        for( let n = 0; n < data.selected.length; n++ )
+                                                                            aSelected.push( data.instance.get_node( data.selected[n] ).id );
+                                                                    })
+                                                              .jstree();
+
+                                                $('#div-tree').jstree('select_node', '*_root_')                 // 1st we select and open root node
+                                                              .jstree('open_node'  , '*_root_');
+
+                                                if( retrieveSavedNode() !== null )                              // Now we try to select and open saved node
+                                                {                                                               // (it could be that this is not found: at least root is selected)
+                                                    $('#div-tree').jstree('select_node', retrieveSavedNode());
+                                                    $('#div-tree').jstree('open_node'  , retrieveSavedNode());
+                                                }
+                                              } } );
+            }
+
+            function json2UL( ja )    // ja == JsonArray is transformed in nested <ul></ul>
+            {
+                let sUL = '<ul>';
+
+                ja.sort( (a, b) =>
+                        {
+                            if(   isFolder( a ) && ! isFolder( b ) )  return -1;
+                            if( ! isFolder( a ) &&   isFolder( b ) )  return  1;
+
+                            let pathA = a.path.toUpperCase();
+                            let pathB = b.path.toUpperCase();
+
+                            pathA = (pathA.charAt(0) === '*') ? pathA.substring( 1 ) : pathA;
+                            pathB = (pathB.charAt(0) === '*') ? pathB.substring( 1 ) : pathB;
+
+                            return (pathA > pathB) ? 1 : (pathA < pathB ? -1 : 0);
+                        } );
+
+                ja.forEach( item =>
+                            {
+                                let isDir = isFolder( item );
+
+                                sUL += '<li id="'+ (isDir ? '*' : '') + item.path +'" '+
+                                       (isDir ? '' : 'data-jstree=\'{"icon":"fa '+ getIcon( item.path ) +'"}\'') +'>'+
+                                       getFileName( item.path );
+
+                                if( isDir )
+                                    sUL += json2UL( item.files );
+
+                                sUL += '</li>';
+                            } );
+
+                return sUL +'</ul>';
+            }
+
+            function isRoot( name )
+            {
+                return name === "*_root_" || name === "_root_";
+            }
+
+            function isFolder( name )
+            {
+                if( p_base.isObject( name ) )
+                    return name.files !== null;
+
+                return name && name.charAt(0) === '*';
+            }
+
+            function getFilePath( file )
+            {
+                let ndx = file.lastIndexOf('/');
+
+                return (ndx === 0) ? "" : file.substring( 0, ndx );
+            }
+
+            function getFileName( file )
+            {
+                let ndx = file.lastIndexOf('/');
+
+                return (ndx === 0) ? file : file.substring( ndx + 1 );
+            }
+
+            function isImage( file )
+            {
+                const imageExtensions = ['png', 'gif', 'svg', 'jpg', 'jpeg'];
+                let ext = file.split('.').pop().toLowerCase();
+                return imageExtensions.includes(ext);
+            }
+
+            function getIcon( file )
+            {
+                switch( file.split('.').pop() )
+                {
+                    case 'une'  :
+                    case 'model': return 'fa-cog';
+                    case 'txt'  : return 'fa-file-text-o';
+                    case 'html' : return 'fa-file-code-o';
+                    case 'css'  : return 'fa-css3';
+                    case 'js'   : return 'fa-file-code-o';
+                    case 'png'  :
+                    case 'gif'  :
+                    case 'svg'  :
+                    case 'jpg'  :
+                    case 'jpeg' : return 'fa-file-image-o';
+                    default     : return 'fa-file-o';
+                }
+            }
+
+            function checkIsFolder( name )
+            {
+                if( ! isFolder( name ) )
+                {
+                    p_app.alert( "Highlighted (parent) is a file but has to be a folder" );
+                    return false;
+                }
+
+                return true;
+            }
+
+            function checkSomethingIsSelected()
+            {
+                if( aSelected.length === 0 )
+                {
+                    p_app.alert( "No node is selected" );
+                    return false;
+                }
+
+                return true;
+            }
+
+            function checkOnlyOneIsSelected()
+            {
+                if( checkSomethingIsSelected )
+                {
+                    if( aSelected.length == 1 )
+                        return true;
+                    else
+                        p_app.alert( "There is more than one node selected" );
+                }
+
+                return false;
+            }
+
+            function retrieveSavedNode()
+            {
+                return sessionStorage.getItem('_SelectedNode_');
+            }
+
+            function reload()
+            {
+                sessionStorage.setItem('_SelectedNode_', (p_base.isEmpty( aSelected ) ? null : aSelected[0]));
+
+                location.reload();
+            }
+
+            function showFile( fileName, fileContent )
+            {
+                $('<div><textarea style="width:100%; height:95%; padding:7px; font-family:monospace;">'+ fileContent +'</textarea></div>')
+                    .dialog( {
+                                title    : getBaseDir() + fileName,
+                                autoOpen : true,
+                                resizable: true,
+                                width    : 800,
+                                height   : 600,
+                                modal    : true,
+                              } );
+            }
+
+            function getBaseDir()
+            {
+                let base = window.location.href;
+
+                return base.substring( 0, base.indexOf('/file_mgr/') ) + '/user-files/';
+            }
+        </script>
+    </body>
+</html>

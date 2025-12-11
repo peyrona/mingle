@@ -17,6 +17,8 @@ var grid =
     _isChanged_  : false,          // Just a flag
     _title_      : "",             // Dashboard big title at top of the page
     _$focused_   : null,           // Selected card (the one with blue border)
+    _aCardsSelected_  : [],           // Selected cards (the one with blue border)
+    _aCardsSelectedPos_: [],           // Position of selected cards when starting a drag operation
     _stack_      : null,
 
     //---------------------------------------------------------------------------------------------//
@@ -29,6 +31,10 @@ var grid =
     saved : function()
     {
         this._isChanged_ = false;
+        
+        // Reset all gadget changed flags
+        for( const gadget of this._getGadgets_() )
+            gadget._isChanged_ = false;
     },
 
     isChanged : function()
@@ -117,9 +123,9 @@ var grid =
         return this;
     },
 
-    addCard : function( card = null )     // null == add new card
+    addCard: function(card = null)     // null == add new card
     {
-        let oData = card ? card.widget : {
+        let oData = card ? card.widget :{
                                             x: 0,
                                             y: 0,
                                             w: 4,
@@ -129,14 +135,31 @@ var grid =
                                             maxW: 12,
                                             minH: 1,
                                             maxH: 12
-                                         };
+                                        };
 
-        const widget = this._stack_.addWidget( oData );    // This adds at top, because it is very complex to add at bottom
+        // Calculate bottom position
+        if( ! card )
+        {
+            // Get all existing cards
+            const cards = this._stack_.getGridItems();
+            let maxY = 0;
 
-        this._setFocus_( widget );     // Must be before 'addGadget' because ::addGadget() and ::setTitle() uses '_$focused_'
+            cards.forEach(card =>
+                {
+                    const y = parseInt(card.getAttribute('gs-y'));
+                    const h = parseInt(card.getAttribute('gs-h'));
+                    maxY = Math.max(maxY, y + h);
+                } );
 
-        if( card && card.gadget )      // Card could be empty
-            this.addGadget( GumGadget.instantiate( card.gadget ) );
+            // Set new card's y position to be after the last card
+            oData.y = maxY;
+        }
+
+        const widget = this._stack_.addWidget(oData);
+        this._setFocus_(widget);
+
+        if( card && card.gadget )
+            this.addGadget(GumGadget.instantiate(card.gadget));
 
         this._isChanged_ = true;
         this._updateButtonsState_();
@@ -187,28 +210,18 @@ var grid =
 
     delCard : function()
     {
-        if( ! gum.isInDesignMode() || ! this._$focused_ )
+        if( ! gum.isInDesignMode() || this._aCardsSelected_.length === 0 )
             return this;
 
-        p_app.confirm( "Do you want to delete selected card?", () =>
+        p_app.confirm( "Do you want to delete selected cards?", () =>
         {
-            const cards = grid._stack_.getGridItems();
-            const idx   = cards.indexOf( grid._$focused_[0] );
+            for( const $card of grid._aCardsSelected_ )
+                grid._stack_.removeWidget( $card[0] );
 
-            grid._stack_.removeWidget( grid._$focused_[0] );
-
-            const remaining = grid._stack_.getGridItems();
-            if( remaining.length > 0 )
-            {
-                grid._setFocus_( remaining[ Math.min( idx, remaining.length - 1 ) ] );
-            }
-            else
-            {
-                grid._$focused_ = null;
-                grid._updateButtonsState_();
-            }
-
-            grid._isChanged_ = true;
+            grid._aCardsSelected_ = [];
+            grid._$focused_       = null;
+            grid._updateButtonsState_();
+            grid._isChanged_      = true;
         });
 
         return this;
@@ -313,6 +326,9 @@ var grid =
                                             animate: true
                                         } );
 
+        grid._stack_.on('dragstart', (evt, el) => grid._onGadgetDragStart_(evt, el));
+        grid._stack_.on('dragstop', (evt, el) => grid._onGadgetDragStop_(evt, el));
+
         grid._stack_.on('resizestop', (evt, div) =>
                         {
                             grid._isChanged_ = true;
@@ -327,19 +343,20 @@ var grid =
         {
             $('body').on( 'mousedown',
                           '.grid-stack-item',
-                          function() { grid._setFocus_( this ); } );   // Cant use lambda here
+                          function(e) { grid._setFocus_( this, e ); } );   // Cant use lambda here
 
             $('body').on( 'dblclick',
                           '.grid-stack-item',
-                          function() { grid.editCard(); } );     // Cant use lambda here
+                          function() { if( grid._aCardsSelected_.length === 1 ) grid.editCard(); } );     // Cant use lambda here
 
             $(document).on( 'keydown', function(evt) { grid._onKeyPressed_(evt); } );
 
             $('#gum-toolbar').append( $('<br>'+
                                         '<div style="display:flex; justify-content:flex-end; align-items:center;">'+
-                                            '<i class="gum-mini-btn fa fa-plus"   id="grid-btn-add"   title="Add a new card"          onclick="grid.addCard()"  ></i>'+
-                                            '<i class="gum-mini-btn fa fa-copy"   id="grid-btn-clone" title="Clone highlighted card"  onclick="grid.cloneCard()"></i>'+
-                                            '<i class="gum-mini-btn fa fa-trash"  id="grid-btn-del"   title="Delete highlighted card" onclick="grid.delCard()"  ></i>'+
+                                            '<i class="gum-mini-btn ti ti-plus"   id="grid-btn-add"   title="Add a new card"             onclick="grid.addCard()"  ></i>'+
+                                            '<i class="gum-mini-btn ti ti-copy"   id="grid-btn-clone" title="Clone highlighted card"     onclick="grid.cloneCard()"></i>'+
+                                            '<i class="gum-mini-btn ti ti-trash"  id="grid-btn-del"   title="Delete highlighted card"    onclick="grid.delCard()"  ></i>'+
+                                            '<i class="gum-mini-btn ti ti-code"                       title="HTML and JavaScript editor" onclick="gum._coder_()"   ></i>'+
                                         '</div>') );
 
             grid._updateButtonsState_();
@@ -374,16 +391,40 @@ var grid =
         return aGadgets;
     },
 
-    _setFocus_ : function( card )
+    _setFocus_ : function( card, e )
     {
-        if( gum.isInDesignMode() && this._$focused_ )
-            this._$focused_.find('.grid-stack-item-content').removeClass('grid-widget-focus');    // Removes blue (highligth) border
+        const bShift = e && e.shiftKey;
+
+        if( ! bShift )
+        {
+            for( const $card of this._aCardsSelected_ )
+                $card.find('.grid-stack-item-content').removeClass('grid-widget-focus');
+
+            this._aCardsSelected_ = [];
+        }
 
         this._$focused_ = $(card);
 
         if( gum.isInDesignMode() )
         {
-            this._$focused_.find('.grid-stack-item-content').addClass('grid-widget-focus');
+            const nIdx = this._aCardsSelected_.findIndex( $c => $c[0] === this._$focused_[0] );
+
+            if( nIdx >= 0 )
+            {
+                if( bShift )
+                {
+                    this._aCardsSelected_[ nIdx ].find('.grid-stack-item-content').removeClass('grid-widget-focus');
+                    this._aCardsSelected_.splice( nIdx, 1 );
+                }
+            }
+            else
+            {
+                this._aCardsSelected_.push( this._$focused_ );
+            }
+
+            for( const $card of this._aCardsSelected_ )
+                $card.find('.grid-stack-item-content').addClass('grid-widget-focus');
+
             this._updateButtonsState_();
         }
     },
@@ -409,7 +450,7 @@ var grid =
         if( gadget && gadget.isEditing() )
             return;
 
-        if( evt.keyCode === 45 ) // Insert
+        if( evt.keyCode === 45 && this._aCardsSelected_.length === 1 ) // Insert
         {
             evt.preventDefault();
             grid.cloneCard();
@@ -423,12 +464,54 @@ var grid =
 
     _updateButtonsState_ : function()
     {
-        const hasFocusedWidget = this._$focused_ !== null;
+        const nSelected = this._aCardsSelected_.length;
+        const bCanClone = nSelected === 1;
+        const bCanDel   = nSelected > 0;
 
      // $('#grid-btn-add'      ).prop('disabled', ! hasFocusedWidget);  --> is always enabled
-        $('#grid-btn-clone'    ).prop('disabled', ! hasFocusedWidget);
-        $('#grid-btn-del'      ).prop('disabled', ! hasFocusedWidget);
-        $('#gum-toolbar select').prop('disabled', ! hasFocusedWidget);
+        $('#grid-btn-clone'    ).prop('disabled', ! bCanClone);
+        $('#grid-btn-del'      ).prop('disabled', ! bCanDel);
+        $('#gum-toolbar select').prop('disabled', ! bCanClone);
+    },
+
+    _onGadgetDragStart_ : function( evt, el )
+    {
+        this._aCardsSelectedPos_ = [];
+
+        if( this._aCardsSelected_.length > 1 )
+            for( const $card of this._aCardsSelected_ )
+                this._aCardsSelectedPos_.push( { card: $card,
+                                                 x   : parseInt( $card.attr('gs-x') ),
+                                                 y   : parseInt( $card.attr('gs-y') ) } );
+    },
+
+    _onGadgetDragStop_ : function( evt, el )
+    {
+        grid._isChanged_ = true;
+
+        if( this._aCardsSelectedPos_.length > 1 )
+        {
+            const $dragged = $(el);
+            const nNewX    = parseInt( $dragged.attr('gs-x') );
+            const nNewY    = parseInt( $dragged.attr('gs-y') );
+            let   oPos     = null;
+
+            for( const o of this._aCardsSelectedPos_ )
+                if( o.card[0] == el )
+                {
+                    oPos = o;
+                    break;
+                }
+
+            const nDeltaX = nNewX - oPos.x;
+            const nDeltaY = nNewY - oPos.y;
+
+            for( const o of this._aCardsSelectedPos_ )
+                if( o.card[0] != el )
+                    grid._stack_.update( o.card[0], { x: o.x + nDeltaX, y: o.y + nDeltaY } );
+        }
+
+        this._aCardsSelectedPos_ = [];
     }
 };
 }

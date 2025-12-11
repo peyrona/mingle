@@ -503,29 +503,29 @@ class TableEditor
                 '<td>Edits cell under mouse pointer</i></td>'+
             '</tr>'+
             '<tr>'+
-                '<td><i class="fa fa-plus"></i></td>'+
+                '<td><i class="ti ti-plus"></i></td>'+
                 '<td>Appends a new row at bottom of table</td>'+
             '</tr>'+
             '<tr>'+
-                '<td><i class="fa fa-copy"></i></td>'+
+                '<td><i class="ti ti-copy"></i></td>'+
                 '<td>Clones highlighted row</td>'+
             '</tr>'+
             (this.onSave === null ? '' :
             '<tr>'+
-                '<td><i class="fa fa-save"></i></td>'+
+                '<td><i class="ti ti-device-floppy"></i></td>'+
                 '<td>Saves current data</td>'+
             '</tr>') +
             '<tr>'+
-                '<td><i class="fa fa-trash"></i></td>'+
+                '<td><i class="ti ti-trash"></i></td>'+
                 '<td>Deletes highlighted row</td>'+
             '</tr>'+
             (this.onPrint === null ? '' :
             '<tr>'+
-                '<td><i class="fa fa-print"></i></td>'+
+                '<td><i class="ti ti-printer"></i></td>'+
                 '<td>Prints current data</td>'+
             '</tr>')+
             '<tr>'+
-                '<td><i class="fa fa-question-circle"></i></td>'+
+                '<td><i class="ti ti-help-circle"></i></td>'+
                 '<td>Shows/Hides help</td>'+
             '</tr>'+
         '</table>';
@@ -1380,14 +1380,14 @@ class TableEditor
         if( this.isEditable() )         // CARE: can not use use <button> because when a button has focus or is the default button and user press [Enter] its action is executed
         {
             // NEXT: definir la class mini-btn de algun modo en este fichero
-            toolbar += '<i class="mini-btn fa fa-plus"  id="'+ this.btnAppendId +'" title="Appends a new row"></i>'+
-                       '<i class="mini-btn fa fa-copy"  id="'+ this.btnCloneId  +'" title="Clones highlighted row"></i>'+
-                       '<i class="mini-btn fa fa-save"  id="'+ this.btnSaveId   +'" title="Save current data"></i>'+
-                       '<i class="mini-btn fa fa-trash" id="'+ this.btnDeleteId +'" title="Deletes highlighted row"></i>';
+            toolbar += '<i class="mini-btn ti ti-plus"  id="'+ this.btnAppendId +'" title="Appends a new row"></i>'+
+                       '<i class="mini-btn ti ti-copy"  id="'+ this.btnCloneId  +'" title="Clones highlighted row"></i>'+
+                       '<i class="mini-btn ti ti-device-floppy"  id="'+ this.btnSaveId   +'" title="Save current data"></i>'+
+                       '<i class="mini-btn ti ti-trash" id="'+ this.btnDeleteId +'" title="Deletes highlighted row"></i>';
         }
 
-        toolbar += '<i class="mini-btn fa fa-print"           id="'+ this.btnPrintId +'" title="Prints current data"></i>'+
-                   '<i class="mini-btn fa fa-question-circle" id="'+ this.btnHelpId  +'" title="Shows help"></i>';
+        toolbar += '<i class="mini-btn ti ti-printer"           id="'+ this.btnPrintId +'" title="Prints current data"></i>'+
+                   '<i class="mini-btn ti ti-help-circle" id="'+ this.btnHelpId  +'" title="Shows help"></i>';
 
         $(this.toolbar).append( $('<div>'+ toolbar +'</div>') );
 

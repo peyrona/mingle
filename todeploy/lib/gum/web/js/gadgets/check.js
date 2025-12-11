@@ -49,12 +49,12 @@ class GumCheck extends GumGadget
 
         let img = '<img id="'+ this.id +'"src="images/'+ this.icon_off +'">';
 
-        this.getContainer()
+        this.getContentArea()
             .empty()
             .append( img );
 
-        $('#'+this.id).attr('width' , Math.max( this.getContainer().width() , 16 ))
-                      .attr('height', Math.max( this.getContainer().height(), 16 ))
+        $('#'+this.id).attr('width' , Math.max( this.getContentArea().width() , 16 ))
+                      .attr('height', Math.max( this.getContentArea().height(), 16 ))
                       .attr('src'   , 'images/'+ this.icon_off )
                       .css ('cursor', (this.actuable ? 'pointer' : 'default'));
 
@@ -75,10 +75,11 @@ class GumCheck extends GumGadget
             let $id  = $('#'+this.id);
             let sOn  = "images/"+ this.icon_on;
             let sOff = "images/"+ this.icon_off;
+            let self = this;
 
             let fn = function( action, payload )
                     {
-                        if( self._isProperValue( "Boolean", payload.value, payload.name ) )
+                        if( self._isValidValue( "Boolean", payload.value, payload.name ) )
                         {
                             self._hasErrors( false );
                             $id.attr('src', (payload.value ? sOn : sOff) );
