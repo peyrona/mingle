@@ -1,0 +1,63 @@
+# NetBeans specific (any project)
+nbproject/private/
+build/
+dist/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# IDE files
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Otros ficheros y dirs to ignore
+.*
+.*/
+**/.*           # ignore all hidden files in all tree
+**/.*/          # ignore all hidden folders in all tree
+!/.gitignore    # do not ignore this hidden file
+
+/.cache/
+/.config/
+/todeploy/lib/gum/web/.history/
+/todeploy/lib/gum/web/.GEMINI.md
+
+*.graphml
+*.txt
+*.odt
+*.odg
+*.model
+*.zip           # Ignore all .zip files
+
+GEMINI.md
+count_lines.sh
+generate_javadocs.sh
+release.sh
+
+!/todeploy/**/*.jar
+/todeploy/examples/9*
+/todeploy/log/
+/todeploy/tmp/
+/todeploy/etc/glue-settings.json
+/0.PhD/
+/balata/
+/build/
+/docs/
+/javadocs/
+/website/
+/menu/nbproject/private/
+/gum_undertow/nbproject/private/
