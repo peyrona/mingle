@@ -62,4 +62,4 @@
 
 > Following the Open Source tradition, the mascot for the _Une_ language is an animal, in this case, an electric anguilla named **Tune**. You are allowed to use it anywhere, as long as it's related to **Mingle** or _Une_.
 
-![Une language logo](https://github.com/peyrona/mingle/blob/main/todeploy/docs/images/mingle-logo-64x64.png)
+![Une language logo](https://github.com/peyrona/mingle/blob/main/todeploy/docs/mingle-logo-64x64.png)
