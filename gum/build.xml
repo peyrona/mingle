@@ -70,7 +70,8 @@
     nbproject/build-impl.xml file.
 
     -->
-    <!-- Mingle -->
+
+     <!-- Mingle -->
     <target name="-post-jar">
         <copy file="${dist.jar}" todir="../todeploy/" failonerror="true"/>
     </target>

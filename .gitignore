@@ -61,3 +61,5 @@ release.sh
 /website/
 /menu/nbproject/private/
 /gum_undertow/nbproject/private/
+/gumjetty/nbproject/private/
+/gum/nbproject/private/

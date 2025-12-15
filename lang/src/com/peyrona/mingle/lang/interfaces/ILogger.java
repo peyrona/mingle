@@ -75,7 +75,7 @@ public interface ILogger
      * Unconditionally logs the message and shows it the console if ::isPrintable() returns true.
      *
      * @param msg Message to log.
-     * @return Itself.
+     * @return Always true.
      */
     public boolean say( String msg );
     public boolean log( Level l, String msg );

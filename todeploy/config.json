@@ -42,7 +42,7 @@
     # See The_Mingle_Standard_Platform.pdf for more info
     {
       "module"      : "monitoring",
-      "host"        : null,                                               # Host name (by default local IPV4)
+      "host"        : null,                                               # Host name (by default 'localhost')
       "port"        : null,                                               # Port to attend HTTP (by default 8080)
       "timeout"     : 1800,                                               # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
       "max_sessions": 64,                                                 # Maxium amount of sessions

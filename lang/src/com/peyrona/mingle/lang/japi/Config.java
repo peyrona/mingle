@@ -16,7 +16,6 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.time.LocalTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -385,9 +384,7 @@ public final class Config implements IConfig
                         "\nURIs: "+ Arrays.toString( asURIs ) +
                         "\nCan not continue.";
 
-            if( UtilSys.getLogger() == null )   System.err.println( "[" + LocalTime.now() +"] Warning: "+ msg +"\n\nException:\n"+ UtilStr.toStringBrief( exc ) );
-            else                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc, msg );
-
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, exc, msg );
             System.exit( 1 );
         }
 

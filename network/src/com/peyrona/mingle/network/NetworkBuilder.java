@@ -119,11 +119,13 @@ public final class NetworkBuilder
 
     /**
      * Builds network entities (servers or clients) from the given JSON string.
+     * Supports both single object and array formats in the JSON input.
      *
      * @param <T> the type of network entity (INetServer or INetClient)
      * @param sJSON the JSON string containing network configurations
      * @param networkType the class of the network entity
      * @return a map of network entities and their initialization parameters
+     * @throws MingleException if building fails for any reason
      */
     private static <T> Map<T, String> build( String sJSON, Class<T> networkType )
     {

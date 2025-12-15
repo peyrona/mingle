@@ -2,112 +2,76 @@
 package com.peyrona.mingle.network.socket;
 
 import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.network.BaseServer4IP;
 import java.io.IOException;
-import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 
 /**
+
  * SSL-enabled socket server implementation.
+
  * This class provides secure socket communication using SSL/TLS.
+
  *
+
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
+
 final class SSLSocketServer
       extends BaseServer4IP
 {
-    private       ScheduledFuture future = null;
-    private final AtomicBoolean   isStopping = new AtomicBoolean( false );
-
-    //------------------------------------------------------------------------//
-
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
         if( isRunning() )
             return this;
 
-        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL ) )
-            return this;
+        super.start( sCfgAsJSON );
 
-        if( getSSLCert() == null || getSSLKey() == null )
-            throw new MingleException( "SSL certificate and key files are required for SSL server" );
+        CountDownLatch             latch    = new CountDownLatch( 1 );
+        AtomicReference<Exception> errorRef = new AtomicReference<>( null );
 
-        startServerSSL();
-
-        return this;
+        return super.run( new ServerThread( latch, errorRef ), latch, errorRef );
     }
 
+    //------------------------------------------------------------------------//
+    // PROTECTED SCOPE
+
     @Override
-    public INetServer stop()
+    public int getDefaultPort()
     {
-        isStopping.set( true );
-
-        if( future != null )
-            future.cancel( true );
-
-        future = null;
-
-        isStopping.set( false );
-
-        return this;
+        return UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL;
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private void startServerSSL()
-    {
-        try
-        {
-            SSLServerSocketFactory ssf = createSSLContext().getServerSocketFactory();
-
-            future = UtilSys.execute( getClass().getSimpleName() +":server", new ServerThread( getPort(), ssf ) );
-        }
-        catch( Exception exc )
-        {
-            String msg = "Failed to start server";
-
-            if( exc instanceof BindException )
-                msg += ": apparently the port "+ getPort() +" is already in use.";
-
-            MingleException me = new MingleException( msg, exc );
-
-            log( me );
-            notifyError( (INetClient) null, me );
-            throw me;
-        }
-    }
-
     //------------------------------------------------------------------------//
     // INNER CLASS
     // Server Socket Thread
     //------------------------------------------------------------------------//
-    private final class ServerThread extends Thread
+
+    private final class ServerThread implements Runnable
     {
-        private final ServerSocket ss;
+        private final CountDownLatch             latch;
+        private final AtomicReference<Exception> errRef;
 
         //------------------------------------------------------------------------//
 
-        ServerThread( int nPort, SSLServerSocketFactory sslSocketFactory ) throws IOException
+        ServerThread( CountDownLatch latch, AtomicReference<Exception> errRef )
         {
-            super( SSLSocketServer.class.getSimpleName() +":Server" );
-
-            ss = createServerSocket( nPort, sslSocketFactory );
-            ss.setReuseAddress(true);
+            this.latch  = latch;
+            this.errRef = errRef;
         }
 
         //------------------------------------------------------------------------//
@@ -115,39 +79,54 @@ final class SSLSocketServer
         @Override
         public void run()
         {
-            while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
+            try
             {
-                Socket                        socket = null;
-                AtomicReference<SocketClient> client = new AtomicReference<>( null );
+                SSLServerSocketFactory ssf = createSSLContext().getServerSocketFactory();
 
-                try
+                try( ServerSocket ss = createServerSocket( getPort(), ssf ) )
                 {
-                    socket = ss.accept();
+                    ss.setReuseAddress(true);
+                    latch.countDown();
 
-                    if( isAllowed( socket.getInetAddress() ) )
+                    while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
                     {
-                        handleNewConnection( socket, client );
-                    }
-                    else
-                    {
-                        MingleException me = new MingleException( socket.getInetAddress() + ": address not allowed" );
+                        Socket                        socket = null;
+                        AtomicReference<SocketClient> client = new AtomicReference<>( null );
 
-                        notifyError( client.get(), me );
-                        closeSocket( socket );
+                        try
+                        {
+                            socket = ss.accept();
+
+                            if( isAllowed( socket.getInetAddress() ) )
+                            {
+                                handleNewConnection( socket, client );
+                            }
+                            else
+                            {
+                                MingleException me = new MingleException( socket.getInetAddress() + ": address not allowed" );
+
+                                notifyError( client.get(), me );
+                                closeSocket( socket );
+                            }
+                        }
+                        catch( SocketTimeoutException ste )
+                        {
+                            // Normal timeout, continue listening
+                        }
+                        catch( IOException exc )
+                        {
+                            if( ! isStopping.get() )
+                                handleConnectionError( client.get(), socket, exc );
+                        }
                     }
-                }
-                catch( SocketTimeoutException ste )
-                {
-                    // Normal timeout, continue listening
-                }
-                catch( IOException exc )
-                {
-                    if( ! isStopping.get() )
-                        handleConnectionError( client.get(), socket, exc );
                 }
             }
+            catch( Exception e )
 
-            cleanupClients( true );
+            {
+                errRef.set( e );
+                latch.countDown();
+            }
         }
 
         //------------------------------------------------------------------------//
@@ -155,8 +134,8 @@ final class SSLSocketServer
         private ServerSocket createServerSocket( int nPort, SSLServerSocketFactory sslSocketFactory ) throws IOException
         {
             SSLServerSocket sslServerSocket = (SSLServerSocket) sslSocketFactory.createServerSocket(nPort);
-            sslServerSocket.setReuseAddress(true);
-            sslServerSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
+                            sslServerSocket.setReuseAddress(true);
+                            sslServerSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
 
             return sslServerSocket;
         }
@@ -164,7 +143,7 @@ final class SSLSocketServer
         private void handleNewConnection( Socket socket, AtomicReference<SocketClient> clientRef ) throws IOException
         {
             SocketClient newClient = new SocketClient();
-                         newClient.add( newClientListener() );
+                         newClient.add( newDefaultClientListener() );
 
             if( newClient.connect( socket ) )
             {

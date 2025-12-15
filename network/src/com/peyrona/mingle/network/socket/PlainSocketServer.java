@@ -2,113 +2,77 @@
 package com.peyrona.mingle.network.socket;
 
 import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.network.BaseServer4IP;
 import java.io.IOException;
-import java.net.BindException;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketTimeoutException;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
+
  * Plain socket server implementation for non-secure communication.
+
  * This class provides basic socket functionality without SSL/TLS encryption.
+
  *
+
  * @author Francisco José Morero Peyrona
+
  *
+
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+
  */
+
 final class PlainSocketServer
       extends BaseServer4IP
 {
-    private       ServerThread    server = null;
-    private       ScheduledFuture future = null;
-    private final AtomicBoolean   isStopping = new AtomicBoolean(false);
-
-    //------------------------------------------------------------------------//
-
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
         if( isRunning() )
             return this;
 
-        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_SOCKET_PORT ) )
-            return this;
+        super.start( sCfgAsJSON );
 
-        startServerPlain();
+        CountDownLatch             latch    = new CountDownLatch( 1 );
+        AtomicReference<Exception> errorRef = new AtomicReference<>( null );
 
-        return super.start( sCfgAsJSON );
+        return super.run( new ServerThread( latch, errorRef ), latch, errorRef );
     }
 
+    //------------------------------------------------------------------------//
+    // PROTECTED SCOPE
+
     @Override
-    public synchronized INetServer stop()
+    public int getDefaultPort()
     {
-        isStopping.set( true );
-        super.stop();
-
-        if( future != null )
-            future.cancel( true );
-
-        future = null;
-        server = null;
-
-        isStopping.set( false );
-
-        return this;
+        return UtilComm.MINGLE_DEFAULT_SOCKET_PORT;
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private void startServerPlain()
-    {
-        try
-        {
-            future = UtilSys.execute( getClass().getSimpleName() +":server", new ServerThread( getPort() ) );
-        }
-        catch( Exception exc )
-        {
-            String msg = "Failed to start server";
-
-            if( exc instanceof BindException )
-                msg += ": apparently the port "+ getPort() +" is already in use.";
-
-            MingleException me = new MingleException( msg, exc );
-
-            log( me );
-            notifyError( (INetClient) null, me );
-            throw me;
-        }
-    }
-
     //------------------------------------------------------------------------//
     // INNER CLASS
     // Server Socket Thread
     //------------------------------------------------------------------------//
-    private final class ServerThread extends Thread
+
+    private final class ServerThread implements Runnable
     {
-        private final ServerSocket ss;
+        private final CountDownLatch             latch;
+        private final AtomicReference<Exception> errRef;
 
         //------------------------------------------------------------------------//
 
-        ServerThread( int nPort ) throws IOException
+        ServerThread( CountDownLatch latch, AtomicReference<Exception> errRef )
         {
-            super( PlainSocketServer.class.getSimpleName() +":Server" );
-
-            ss = createServerSocket( nPort );
-            ss.setReuseAddress(true);
-         // ss.setSoTimeout( SERVER_TIMEOUT ); --> Can not use it because a client can last days in attempting to connect
-        }
-
-        protected ServerSocket createServerSocket( int nPort ) throws IOException
-        {
-            return new ServerSocket( nPort );
+            this.latch  = latch;
+            this.errRef = errRef;
         }
 
         //------------------------------------------------------------------------//
@@ -116,43 +80,53 @@ final class PlainSocketServer
         @Override
         public void run()
         {
-            while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
+            try( ServerSocket ss = new ServerSocket( getPort() ) )
             {
-                Socket       socket = null;
-                SocketClient client = null;
+                ss.setReuseAddress(true);
 
-                try
+                latch.countDown();
+
+                while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
                 {
-                    socket = ss.accept();
+                    Socket       socket = null;
+                    SocketClient client = null;
 
-                    if( isAllowed( socket.getInetAddress() ) )
+                    try
                     {
-                        client = new SocketClient();
-                        client.add( newClientListener() );
+                        socket = ss.accept();
 
-                        if( client.connect( socket ) )
-                            add( client );
+                        if( isAllowed( socket.getInetAddress() ) )
+                        {
+                            client = new SocketClient();
+                            client.add( newDefaultClientListener() );
+
+                            if( client.connect( socket ) )
+                                add( client );
+                        }
+                        else
+                        {
+                            MingleException me = new MingleException( socket.getInetAddress() + ": address not allowed" );
+
+                            notifyError( client, me );
+                            closeSocket( socket );
+                        }
                     }
-                    else
+                    catch( SocketTimeoutException ste )
                     {
-                        MingleException me = new MingleException( socket.getInetAddress() + ": address not allowed" );
-
-                        notifyError( client, me );
-                        closeSocket( socket );
+                        // Normal timeout, continue listening
                     }
-                }
-                catch( SocketTimeoutException ste )
-                {
-                    // Normal timeout, continue listening
-                }
-                catch( IOException exc )
-                {
-                    if( ! isStopping.get() )
-                        handleConnectionError( client, socket, exc );
+                    catch( IOException exc )
+                    {
+                        if( ! isStopping.get() )
+                            handleConnectionError( client, socket, exc );
+                    }
                 }
             }
-
-            cleanupClients( true );
+            catch( Exception e )
+            {
+                errRef.set( e );
+                latch.countDown();
+            }
         }
 
         //------------------------------------------------------------------------//
@@ -160,6 +134,7 @@ final class PlainSocketServer
         private void handleConnectionError( SocketClient client, Socket socket, Exception exc )
         {
             if( client != null )
+
                 client.disconnect();
 
             del( client );

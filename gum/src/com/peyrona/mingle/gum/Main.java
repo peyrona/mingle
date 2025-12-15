@@ -4,7 +4,7 @@ package com.peyrona.mingle.gum;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.interfaces.IConfig;
-import com.peyrona.mingle.lang.interfaces.ILogger.Level;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
 import com.peyrona.mingle.lang.japi.UtilCLI;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -51,7 +51,7 @@ public class Main
 
         try
         {
-            String     host    = config.get( "monitoring", "host", "" );
+            String     host    = config.get( "monitoring", "host", null );
             int        port    = config.get( "monitoring", "port", 8080 );
             int        maxSess = config.get( "monitoring", "max_sessions", 64 );
             String     allow   = config.get( "monitoring", "allow", "intranet" );
@@ -60,17 +60,15 @@ public class Main
 
             checkPreRequisites( joSSL );
 
-            ServiceUtil.setSessionTimeout( (UtilSys.isDevEnv ? 180 : timeout) );
-
-            if( UtilStr.isEmpty( host ) || UtilSys.isDocker() )    // For info when running inside a Docker:
+            if( UtilStr.isEmpty( host ) )
             {
                 try
                 {
-                    host = InetAddress.getLocalHost().getHostAddress();    // https://stackoverflow.com/questions/41647948/how-to-run-undertow-java-app-with-docker
+                    host = InetAddress.getLocalHost().getHostAddress();
                 }
                 catch( UnknownHostException uhe )
                 {
-                    host = null;
+                    host = "localhost";
                 }
             }
 
@@ -79,6 +77,7 @@ public class Main
                                                  port,
                                                  maxSess,
                                                  allow,
+                                                 timeout,
                                                  (juSSL == null) ?   -1 : juSSL.getInt(    "port",   -1 ),
                                                  (juSSL == null) ? null : juSSL.getString( "path", null ),
                                                  (juSSL == null) ? null : juSSL.getString( "pwd" , null ) )
@@ -110,7 +109,7 @@ public class Main
                     }
                     catch( Exception e )
                     {
-                        UtilSys.getLogger().log( Level.SEVERE, "Error during shutdown: " + e.getMessage() );
+                        UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error during shutdown: " + e.getMessage() );
                     }
                 }
             } );
@@ -127,7 +126,7 @@ public class Main
 
     private static void showHelp()
     {
-        System.out.println( getLogo() +
+        System.out.println(getLogo() +
                             "Version: "+ UtilSys.getVersion( Main.class ) +'\n'+
                             '\n'+
                             "Syntax:\n"+
@@ -190,24 +189,28 @@ public class Main
                 throw new IOException( "Can not attend SSL without a 'keystore.jks' password" );
         }
 
-        File fReadMe = new File( Util.getServedFilesDir(), "READ_ME.txt" );
-
-        if( ! fReadMe.exists() )
+        if( Util.getServedFilesDir().isDirectory() &&
+            UtilColls.isEmpty( Util.getServedFilesDir().list() ) )
         {
-            UtilIO.newFileWriter()
-                  .setFile( fReadMe )
-                  .append( "The files shown here are served by Gum from context 'gum/user_files'.\nFor full files URL, refer to Gum startup info.\n\n"+
-                           "Dashboards are stored under '"+ Util.getBoardsDir().getName() +"' folder: every Dashboard is stored in a folder having the same name as the Dashboard itself.");
-        }
+            File fReadMe = new File( Util.getServedFilesDir(), "READ_ME.txt" );
 
-        File fUsers = new File( Util.getServedFilesDir(), "users.json" );
+            if( ! fReadMe.exists() )
+            {
+                UtilIO.newFileWriter()
+                      .setFile( fReadMe )
+                      .append( "The files shown here are served by Gum from context 'gum/user_files'.\nFor full files URL, refer to Gum startup info.\n\n"+
+                               "Dashboards are stored under '"+ Util.getBoardsDir().getName() +"' folder: every Dashboard is stored in a folder having the same name as the Dashboard itself.");
+            }
 
-        if( ! fUsers.exists() )
-        {
-            InputStream  is = Main.class.getResourceAsStream( "users.json" );
-            OutputStream os = new FileOutputStream( fUsers );
+            File fUsers = new File( Util.getServedFilesDir(), "users.json" );
 
-            UtilIO.copy(  is, os );
+            if( ! fUsers.exists() )
+            {
+                InputStream  is = Main.class.getResourceAsStream( "users.json" );
+                OutputStream os = new FileOutputStream( fUsers );
+
+                UtilIO.copy(  is, os );
+            }
         }
     }
  }

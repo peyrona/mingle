@@ -7,17 +7,13 @@ import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.form.FormData;
-import io.undertow.server.handlers.form.FormDataParser;
-import io.undertow.server.handlers.form.FormParserFactory;
-import io.undertow.util.HttpString;
-import io.undertow.util.StatusCodes;
+import java.io.BufferedReader;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.nio.charset.StandardCharsets;
-import java.util.Deque;
 import java.util.function.Consumer;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  *
@@ -27,15 +23,17 @@ import java.util.function.Consumer;
  */
 abstract class ServiceBase
 {
-    protected final HttpServerExchange xchg;
+    protected final HttpServletRequest  request;
+    protected final HttpServletResponse response;
 
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
     // CONSTRUCTOR
-    protected ServiceBase( HttpServerExchange xchg )
+    protected ServiceBase( HttpServletRequest request, HttpServletResponse response )
     {
-        this.xchg = xchg;
+        this.request  = request;
+        this.response = response;
     }
 
     protected void dispatch( String method )
@@ -64,16 +62,22 @@ abstract class ServiceBase
 
     protected boolean isFromLocalhost()
     {
-        InetAddress addr = xchg.getSourceAddress().getAddress();
-
-        return ((addr != null) && addr.isLoopbackAddress());
+        try
+        {
+            InetAddress addr = InetAddress.getByName( request.getRemoteAddr() );
+            return ((addr != null) && addr.isLoopbackAddress());
+        }
+        catch( Exception e )
+        {
+            return false;
+        }
     }
 
     // GET REQUEST PARAMETER
 
     protected boolean hasParam( String name )
     {
-        return xchg.getQueryParameters().get( name ) != null;
+        return request.getParameter( name ) != null;
     }
 
     /**
@@ -157,27 +161,50 @@ abstract class ServiceBase
      */
     protected void asJSON( final Consumer<JsonObject> onSuccess )
     {
-        xchg.getRequestReceiver().receiveFullBytes((reqEx, data) ->
+        try
+        {
+            StringBuilder sb      = new StringBuilder();
+            String        line;
+
+            try( BufferedReader reader = request.getReader() )
             {
-                try
+                while( (line = reader.readLine()) != null )
                 {
-                    String sData = new String( data, StandardCharsets.UTF_8 );   // ALWAYS specify charset for byte[] to String conversion
-                    onSuccess.accept( Json.parse( sData ).asObject() );
-                    sendOK();
+                    sb.append( line );
                 }
-                catch( ParseException e )
-                {
-                    sendError( "Invalid JSON format", StatusCodes.BAD_REQUEST );
-                }
-                catch( Exception exc )
-                {
-                    sendError("Internal server error", StatusCodes.BAD_REQUEST );
-                }
-                catch( Throwable t )
-                {
-                    sendError( "Unexpected error", StatusCodes.INTERNAL_SERVER_ERROR );
-                }
-            } );
+            }
+
+            String sData = sb.toString();
+
+            if( UtilStr.isEmpty( sData ) )
+            {
+                sendError( "Empty request body", HttpServletResponse.SC_BAD_REQUEST );
+                return;
+            }
+
+            try
+            {
+                JsonObject json = Json.parse( sData ).asObject();
+                onSuccess.accept( json );
+                sendOK();
+            }
+            catch( ParseException e )
+            {
+                sendError( "Invalid JSON format", HttpServletResponse.SC_BAD_REQUEST );
+            }
+            catch( Exception exc )
+            {
+                sendError( "Internal server error", HttpServletResponse.SC_BAD_REQUEST );
+            }
+            catch( Throwable t )
+            {
+                sendError( "Unexpected error", HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+            }
+        }
+        catch( IOException ioe )
+        {
+            sendError( "Failed to read request body", HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -185,45 +212,44 @@ abstract class ServiceBase
 
     protected ServiceBase sendHTML( String str )
     {
-        xchg.getResponseHeaders()
-            .put( HttpString.tryFromString( "Content-Type" ), "text/html" );
+        response.setContentType( "text/html" );
+        response.setCharacterEncoding( StandardCharsets.UTF_8.name() );
 
-        return send( str, StatusCodes.OK );
+        return send( str, HttpServletResponse.SC_OK );
     }
 
     protected ServiceBase sendJSON( String str )
     {
-        xchg.getResponseHeaders()
-            .put( HttpString.tryFromString( "Content-Type" ), "application/json" );
+        response.setContentType( "application/json" );
+        response.setCharacterEncoding( StandardCharsets.UTF_8.name() );
 
-        return send( str, StatusCodes.OK );
+        return send( str, HttpServletResponse.SC_OK );
     }
 
     protected ServiceBase sendText( String str )
     {
-        xchg.getResponseHeaders()
-            .put( HttpString.tryFromString( "Content-Type" ), "text/plain" );
+        response.setContentType( "text/plain" );
+        response.setCharacterEncoding( StandardCharsets.UTF_8.name() );
 
-        return send( str, StatusCodes.OK );
+        return send( str, HttpServletResponse.SC_OK );
     }
 
     protected ServiceBase sendOK()
     {
-        xchg.setStatusCode( StatusCodes.OK );
-        xchg.endExchange(); // End the exchange without sending any response body
+        response.setStatus( HttpServletResponse.SC_OK );
 
         return this;
     }
 
     protected ServiceBase sendError( Exception exc )
     {
-        return sendError( exc.getMessage(), StatusCodes.INTERNAL_SERVER_ERROR );
+        return sendError( exc.getMessage(), HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
     }
 
     protected ServiceBase sendError( String msg, int code )
     {
-        xchg.getResponseHeaders()
-            .put( HttpString.tryFromString( "Content-Type" ), "text/plain" );
+        response.setContentType( "text/plain" );
+        response.setCharacterEncoding( StandardCharsets.UTF_8.name() );
 
         return send( msg, code );
     }
@@ -231,29 +257,33 @@ abstract class ServiceBase
     //------------------------------------------------------------------------//
     // PRIVATE
 
-    String getParam( String name )
+    private String getParam( String name )
     {
-        Deque<String> queue = xchg.getQueryParameters().get( name );
+        String value = request.getParameter( name );
 
-        if( (queue != null) && (! queue.isEmpty()) )
-            return queue.getFirst();
+        if( value != null )
+            return value;
 
-        // If parameter is not in Query, lets seach inside the 'request body'
+        // Check if it's in the query string separately (in case of POST with query params)
+        String queryString = request.getQueryString();
 
-        FormDataParser parser = FormParserFactory.builder().build().createParser( xchg );
-
-        if( parser != null )
+        if( queryString != null )
         {
-            try
+            for( String param : queryString.split( "&" ) )
             {
-                FormData.FormValue fv = parser.parseBlocking().getFirst( name );
+                String[] pair = param.split( "=", 2 );
 
-                if( fv != null )
-                    return fv.getValue();
-            }
-            catch( IOException ex )
-            {
-                // Nothing to do
+                if( pair.length == 2 && pair[0].equals( name ) )
+                {
+                    try
+                    {
+                        return java.net.URLDecoder.decode( pair[1], StandardCharsets.UTF_8.name() );
+                    }
+                    catch( Exception e )
+                    {
+                        return pair[1];
+                    }
+                }
             }
         }
 
@@ -262,9 +292,27 @@ abstract class ServiceBase
 
     private ServiceBase send( String str, int code )
     {
-        xchg.setStatusCode( code )
-            .getResponseSender()
-            .send( str );
+        try
+        {
+            response.setStatus( code );
+            response.getWriter().write( str );
+            response.getWriter().flush();
+        }
+        catch( IOException e )
+        {
+            // Log but don't throw - response may already be committed
+            try
+            {
+                if( !response.isCommitted() )
+                {
+                    response.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+                }
+            }
+            catch( Exception ex )
+            {
+                // Ignore - already in error state
+            }
+        }
 
         return this;
     }

@@ -1,650 +1,883 @@
 <!DOCTYPE html>
-<html>
-
+<html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Gum :: User's files manager</title>
-    <link href="/gum/images/folder.png" rel="icon" type="image/png">
+    <title>File Manager</title>
 
-    <!-- JQuery ============================= -->
-    <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet">
-    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
-    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
+    <!-- Bulma CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/bulma/0.9.4/css/bulma.min.css">
 
-    <!-- Gum ================================ -->
-    <link href="../index.css" rel="stylesheet"> <!-- Tabler Icons and Bulma, are inside CSS -->
+    <!-- Tabler Icons -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@2.47.0/tabler-icons.min.css">
 
-    <!-- JsTree ============================= -->
-    <link href="jstree/themes/default/style.min.css" rel="stylesheet">
-    <script src="jstree/jstree.min.js"></script>
+    <!-- jsTree CSS -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css">
+
+    <!-- jQuery (required by jsTree) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+    <!-- jsTree -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
 
     <style>
-        html, body
+        body
         {
-            background-color: #252523;
-            color: #968655;
+            padding: 20px;
         }
 
-        .ti /* Size for all Tabler icons for this web page (dashboards uses the same css but different size) */
-        {
-            font-size: 1.5rem;
+        #fileTree {
+            margin-top: 20px;
+            border: 1px solid #dbdbdb;
+            border-radius: 4px;
+            padding: 15px;
+            background: #fafafa;
+            min-height: 500px;
+            max-height: 70vh;
+            overflow: auto;
         }
 
-        .button-container {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 0.5rem;
+        #fileTree .jstree-themeicon {
+            background-image: none !important;
+            width: auto !important;
+            height: auto !important;
+            line-height: normal !important;
+            text-indent: 0 !important;
+            background-position: 0 0 !important;
+            display: inline-block !important;
+            margin-right: 4px; /* Space between icon and text */
         }
 
-        .button {
-            min-height: 2.5rem;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
+        /* Ensure proper font application */
+        #fileTree .jstree-anchor > .jstree-themeicon.ti {
+            font-family: 'tabler-icons' !important;
+            speak: never;
+            font-style: normal;
+            font-weight: normal;
+            font-variant: normal;
+            text-transform: none;
+            line-height: 1;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            font-size: 1.2rem;
         }
 
-        .button:focus {
-            outline: 2px solid #968655;
-            outline-offset: 2px;
+        .toolbar {
+            margin-bottom: 20px;
         }
 
-        @media (max-width: 768px) {
-            .button-container {
-                justify-content: center;
-            }
-
-            .button {
-                flex: 1 1 calc(50% - 0.5rem);
-                min-width: 120px;
-            }
+        .modal-card {
+            width: 500px;
         }
 
-        @media (max-width: 480px) {
-            .button {
-                flex: 1 1 100%;
-                min-width: auto;
-            }
+        #editorContent {
+            font-family: 'Courier New', monospace;
+            min-height: 400px;
         }
     </style>
 </head>
 
 <body>
-    <div class="button-container" style="padding: 1rem;">
-        <button class="button is-primary is-responsive" onclick="onUpload()"  title="Upload a file to the server" aria-label="Upload file">        <i class="ti ti-cloud-upload"></i></button>
-        <button class="button is-primary is-responsive" onclick="onNewDir()"  title="Create a new folder at server side" aria-label="Create new folder"> <i class="ti ti-folder-plus" ></i></button>
-        <button class="button is-primary is-responsive" onclick="onNewFile()" title="Create a new file at server side" aria-label="Create new file">   <i class="ti ti-file-plus"   ></i></button>
-        <button class="button is-primary is-responsive" onclick="onRename()"  title="Rename files and folders" aria-label="Rename">           <i class="ti ti-pencil"      ></i></button>
-        <button class="button is-primary is-responsive" onclick="onView()"    title="Show/Edit file contents [Dbl-Click]" aria-label="View/Edit file"><i class="ti ti-edit"        ></i></button>
-        <button class="button is-primary is-responsive" onclick="loadTree()"  title="Refresh (reload) whole tree" aria-label="Refresh">        <i class="ti ti-refresh"     ></i></button>
-        <button class="button is-danger  is-responsive" onclick="onDelete()"  title="Delete files and folders" aria-label="Delete">           <i class="ti ti-trash"       ></i></button>
-        <button class="button is-info    is-responsive" onclick="onExit()"    title="Close session and exit" aria-label="Exit">             <i class="ti ti-logout"      ></i></button>
+    <div class="container">
+        <div class="toolbar">
+            <div class="buttons">
+                <button class="button is-info"    title="Upload a file to the server"         onclick="onUploadFile()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-upload"></i></span>
+                </button>
+                <button class="button is-info"    title="Create a new folder at server side"  onclick="onCreateFolder()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-folder-plus"></i></span>
+                </button>
+                <button class="button is-info"    title="Create a new file at server side"    onclick="onCreateFile()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-file-plus"></i></span>
+                </button>
+                <button class="button is-info"    title="Rename files and folders"            onclick="onRenameNode()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-edit"></i></span>
+                </button>
+                <button class="button is-info"    title="Show/Edit file contents [Dbl-Click]" onclick="onEditFile()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-file-text"></i></span>
+                </button>
+                <button class="button is-success" title="Refresh (reload) whole tree"         onclick="onRefreshTree()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-refresh"></i></span>
+                </button>
+                <button class="button is-danger"  title="Delete files and folders"            onclick="onDeleteNode()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-trash"></i></span>
+                </button>
+            </div>
+        </div>
+
+        <!-- File Tree -->
+        <div id="fileTree"></div>
+
+        <!-- Hidden file input for upload -->
+        <input type="file" id="fileInput" style="display: none;" onchange="handleFileUpload(event)" multiple>
     </div>
 
-    <div class="is-divider"></div>
-
-    <!-- =============================================================== -->
-    <div id="div-tree" style="margin-top:1rem;" role="tree" aria-label="File manager tree">
+    <!-- Modal for Create Folder -->
+    <div id="modalCreateFolder" class="modal">
+        <div class="modal-background" onclick="closeModal('modalCreateFolder')"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Create Folder</p>
+                <button class="delete" onclick="closeModal('modalCreateFolder')"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="field">
+                    <label class="label">Folder Name</label>
+                    <div class="control">
+                        <input id="folderName" class="input" type="text" placeholder="Enter folder name">
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" onclick="createFolder()">Create</button>
+                <button class="button" onclick="closeModal('modalCreateFolder')">Cancel</button>
+            </footer>
+        </div>
     </div>
-    <!-- =============================================================== -->
 
-    <!-- =============================================================== -->
-    <div id="login-dialog" style="display:none;">
+    <!-- Modal for Create File -->
+    <div id="modalCreateFile" class="modal">
+        <div class="modal-background" onclick="closeModal('modalCreateFile')"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Create File</p>
+                <button class="delete" onclick="closeModal('modalCreateFile')"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="field">
+                    <label class="label">File Name</label>
+                    <div class="control">
+                        <input id="fileName" class="input" type="text" placeholder="Enter file name (e.g., document.txt)">
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" onclick="createFile()">Create</button>
+                <button class="button" onclick="closeModal('modalCreateFile')">Cancel</button>
+            </footer>
+        </div>
     </div>
-    <!-- =============================================================== -->
 
-    <script src="../js/p_base.js"   ></script>
-    <script src="../js/p_app.js"    ></script>
-    <script src="../js/gum_tools.js"></script>
+    <!-- Modal for Rename -->
+    <div id="modalRename" class="modal">
+        <div class="modal-background" onclick="closeModal('modalRename')"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Rename</p>
+                <button class="delete" onclick="closeModal('modalRename')"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="field">
+                    <label class="label">New Name</label>
+                    <div class="control">
+                        <input id="newName" class="input" type="text" placeholder="Enter new name">
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" onclick="renameNode()">Rename</button>
+                <button class="button" onclick="closeModal('modalRename')">Cancel</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Modal for Edit File -->
+    <div id="modalEditFile" class="modal">
+        <div class="modal-background" onclick="closeModal('modalEditFile')"></div>
+        <div class="modal-card" style="width: 800px;">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Edit File: <span id="editFileName"></span></p>
+                <button class="delete" onclick="closeModal('modalEditFile')"></button>
+            </header>
+            <section class="modal-card-body">
+                <div class="field">
+                    <div class="control">
+                        <textarea id="editorContent" class="textarea"></textarea>
+                    </div>
+                </div>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" onclick="saveFile()">Save</button>
+                <button class="button" onclick="closeModal('modalEditFile')">Cancel</button>
+            </footer>
+        </div>
+    </div>
+
+    <!-- Modal for Confirmation -->
+    <div id="modalConfirm" class="modal">
+        <div class="modal-background" onclick="closeModal('modalConfirm')"></div>
+        <div class="modal-card">
+            <header class="modal-card-head">
+                <p class="modal-card-title">Confirm Action</p>
+                <button class="delete" onclick="closeModal('modalConfirm')"></button>
+            </header>
+            <section class="modal-card-body">
+                <p id="confirmMessage"></p>
+            </section>
+            <footer class="modal-card-foot">
+                <button class="button is-success" id="confirmYes">Yes</button>
+                <button class="button" id="confirmNo" onclick="closeModal('modalConfirm')">No</button>
+            </footer>
+        </div>
+    </div>
+
 
     <script>
-        var aSelected = [];
+        // Constants
+        const API_BASE  = window.location.origin + '/gum/ws/files';
+        const aSelected = [];
+        const EDITABLE_EXTENSIONS = ['txt', 'json', 'une', 'model', 'html', 'css', 'js', 'java', 'py'];
 
-        // Declare authService in broader scope
-        let authService = null;
+        // Variables
+        let currentEditPath = null;
 
-        $(document).ready(function ()
-                            {
-                                $('.button').prop('disabled', true);
+        //------------------------------------------------------------------------//
+        // INITIALIZATION
 
-                                // Initialize the authentication service with proper configuration
-                                authService = new AuthenticationService({
-                                                        container: "#login-dialog",    // TODO: esto no funciona bien, no se ve el dialog
-                                                        title: "File Manager",
-                                                        success: loadTree
-                                                     });
-                                authService.start();
-
-                                // Add keyboard shortcuts
-                                $(document).on('keydown', function(e) {
-                                    if (e.ctrlKey || e.metaKey) {
-                                        switch(e.key) {
-                                            case 'r':
-                                                e.preventDefault();
-                                                loadTree();
-                                                break;
-                                            case 'n':
-                                                e.preventDefault();
-                                                onNewFile();
-                                                break;
-                                            case 'd':
-                                                e.preventDefault();
-                                                onNewDir();
-                                                break;
-                                            case 'Delete':
-                                                e.preventDefault();
-                                                onDelete();
-                                                break;
-                                        }
-                                    } else if (e.key === 'Delete') {
-                                        e.preventDefault();
-                                        onDelete();
-                                    } else if (e.key === 'F2') {
-                                        e.preventDefault();
-                                        onRename();
-                                    } else if (e.key === 'Enter' && aSelected.length === 1) {
-                                        e.preventDefault();
-                                        onView();
-                                    }
-                                });
-
-                                loadTree();
-                            } );
-
-        //------------------------------------------------------------------------------------------------------//
-
-        function onUpload()
+        $(document).ready( function()
         {
-            if( ! checkOnlyOneIsSelected() )
+            showNotification('WARN: this tool is for internal use.<br>'+
+                             'It is unsafe for public access', 'is-warning')
+            initializeTree();
+            loadFileTree();
+        });
+
+        function initializeTree()
+        {
+            $('#fileTree').jstree(
+            {
+                'core': {
+                            'data': [],
+                            'check_callback': true,
+                            'themes': { 'icons': true  }
+                        }
+            });
+
+            $('#fileTree')
+                .on('ready.jstree', function( e, data )
+                    {
+                        data.instance.select_node('');
+                        data.instance.open_node('');
+                    })
+                .on('select_node.jstree', function( e, data )
+                    {
+                        aSelected.length = 0;
+
+                        for( let n = 0; n < data.selected.length; n++ )
+                            aSelected.push( data.instance.get_node(data.selected[n]) ) ;
+                    })
+                .on('dblclick.jstree', '.jstree-anchor', function(evt)
+                    {
+                        if( aSelected.length > 0 )
+                            onEditFile();
+                    });
+        }
+
+        //------------------------------------------------------------------------//
+        // API CALLS
+
+        async function loadFileTree()
+        {
+            try
+            {
+                const response = await fetchIt( API_BASE, { method: 'GET' });
+                const treeData = convertToJsTreeFormat( JSON.parse( response ) );
+                const $tree    = $('#fileTree');
+
+                $tree.jstree( true ).settings.core.data = treeData;
+                $tree.jstree( true ).refresh();
+            }
+            catch( error )
+            {
+                showNotification( 'Error loading file tree: ' + error.message, 'is-danger' );
+            }
+        }
+
+        async function getFileContent( sFilePath )
+        {
+            try
+            {
+                return await fetchIt( API_BASE + '?file=' + encodeURIComponent( sFilePath ));
+            }
+            catch( error )
+            {
+                showNotification( 'Error loading file: ' + error.message, 'is-danger' );
+                return null;
+            }
+        }
+
+        async function createResource( sType, sParent, sName, sContent )
+        {
+            try
+            {
+                const params = new URLSearchParams({ type: sType, name: sName });
+
+                if( sParent )
+                    params.append( 'parent', sParent );
+
+                if( sContent )
+                    params.append( 'content', sContent );
+
+                const response = await fetchIt( API_BASE + '?' + params.toString(), { method: 'PUT' });
+
+                if( ! response.ok )
+                    throw new Error( 'Failed to create ' + sType );
+
+                showNotification( sType.charAt(0).toUpperCase() + sType.slice(1) + ' created successfully', 'is-success' );
+                loadFileTree();
+            }
+            catch( error )
+            {
+                showNotification( 'Error creating ' + sType + ': ' + error.message, 'is-danger' );
+            }
+        }
+
+        async function renameResource( sOldPath, sNewPath )
+        {
+            try
+            {
+                const params   = new URLSearchParams({ old: sOldPath, new: sNewPath });
+                const response = await fetchIt( API_BASE + '?' + params.toString(), { method: 'POST' });
+
+                if( ! response.ok )
+                    throw new Error( 'Failed to rename' );
+
+                showNotification( 'Renamed successfully', 'is-success' );
+                loadFileTree();
+            }
+            catch( error )
+            {
+                showNotification( 'Error renaming: ' + error.message, 'is-danger' );
+            }
+        }
+
+        async function deleteResource( sPaths )
+        {
+            try
+            {
+                const params   = new URLSearchParams({ paths: sPaths });
+                const response = await fetchIt( API_BASE + '?' + params.toString(), { method: 'DELETE' });
+
+                if( ! response.ok )
+                    throw new Error( 'Failed to delete' );
+
+                showNotification( 'Deleted successfully', 'is-success' );
+                loadFileTree();
+            }
+            catch( error )
+            {
+                showNotification( 'Error deleting: ' + error.message, 'is-danger' );
+            }
+        }
+
+        //------------------------------------------------------------------------//
+        // BUTTON ACTIONS
+
+        function onUploadFile()
+        {
+            if( isFolder() || getSelected() === null || isRoot() )  document.getElementById( 'fileInput' ).click();
+            else              showNotification( 'Please select a folder first or nothing to upload to root', 'is-warning' );
+        }
+
+        async function handleFileUpload( event )
+        {
+            const files = event.target.files;
+
+            if( !files || files.length === 0 )
                 return;
 
-            if( ! checkIsFolder(aSelected[0]) )
+            const sParent  = getSelected() ? getSelected().path : '';
+            const uploadButton = document.querySelector('.ti-upload').closest('button');
+
+            // Visually indicate that an upload is in progress
+            uploadButton.classList.add('is-loading');
+
+            for (const file of files) {
+                if (!isValidFileName(file.name)) {
+                    // isValidFileName shows its own notification, so we just skip.
+                    continue;
+                }
+                try {
+                    // Sequentially upload each file as requested
+                    await uploadFile( sParent, file );
+                } catch (error) {
+                    // Log the error and continue with the next file
+                    console.error("Upload failed for file:", file.name, error);
+                    // The notification is already shown by uploadFile, so we just log here.
+                    // If one file fails, we stop to avoid unintended consequences
+                    showNotification(`Upload failed for ${file.name}. Aborting further uploads.`, 'is-danger');
+                    break; // Stop the loop on first failure
+                }
+            }
+
+            // Clean up after all uploads are done or aborted
+            event.target.value = ''; // Reset the file input
+            uploadButton.classList.remove('is-loading');
+        }
+
+        async function uploadFile( sParent, file )
+        {
+            try
+            {
+                const params = new URLSearchParams({ type: 'file', name: file.name });
+                if (sParent) {
+                    params.append('parent', sParent);
+                }
+
+                // Use fetch directly to send binary data in the body
+                const response = await fetch(API_BASE + '?' + params.toString(), {
+                    method: 'PUT',
+                    body: file
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to upload file. Server responded with ${response.status}: ${errorText}`);
+                }
+
+                showNotification('File uploaded successfully', 'is-success');
+                loadFileTree();
+            }
+            catch (error)
+            {
+                showNotification('Error uploading file: ' + error.message, 'is-danger');
+                throw error; // Re-throw the error to be caught by the caller
+            }
+        }
+
+        async function updateFileContent( sFilePath, sContent )
+        {
+            try
+            {
+                const params = new URLSearchParams({ file: sFilePath });
+                const response = await fetch(API_BASE + '?' + params.toString(), {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'text/plain' // Specify content type for text
+                    },
+                    body: sContent
+                });
+
+                if (!response.ok) {
+                    const errorText = await response.text();
+                    throw new Error(`Failed to save file. Server responded with ${response.status}: ${errorText}`);
+                }
+
+                showNotification('File saved successfully', 'is-success');
+                // No need to refresh tree here, as file name/structure hasn't changed.
+                // loadFileTree(); // Uncomment if file creation/deletion should also happen here (not typical for 'save content')
+            }
+            catch (error)
+            {
+                showNotification('Error saving file: ' + error.message, 'is-danger');
+                throw error;
+            }
+        }
+
+        function onCreateFolder()
+        {
+            if( isFolder() || getSelected() === null || isRoot() )  openModal( 'modalCreateFolder' );
+            else              showNotification( 'Please select a folder or nothing to create in root', 'is-warning' );
+        }
+
+        async function createFolder()
+        {
+            const sFolderName = document.getElementById( 'folderName' ).value.trim();
+
+            if( ! isValidFileName( sFolderName ) )
+            {
                 return;
+            }
 
-            let sFolder = isRoot(aSelected[0]) ? null
-                                               : aSelected[0].substring(1);     // Removes '*' (it is already checked that it is a folder);
+            const sParent = getSelected() ? getSelected().path : '';
 
-            const loadingId = p_app.showLoading();
-            gt.uploadFile( sFolder, () => {
-                p_app.hideLoading(loadingId);
-                reload();
+            await createResource( 'dir', sParent, sFolderName, null );
+
+            closeModal( 'modalCreateFolder' );
+            document.getElementById( 'folderName' ).value = '';
+        }
+
+        function onCreateFile()
+        {
+            if( isFolder() || getSelected() === null || isRoot() )  openModal( 'modalCreateFile' );
+            else              showNotification( 'Please select a folder or nothing to create in root', 'is-warning' );
+        }
+
+        async function createFile()
+        {
+            const sFileName = document.getElementById( 'fileName' ).value.trim();
+
+            if( ! isValidFileName( sFileName ) )
+            {
+                return;
+            }
+
+            const sParent = getSelected() ? getSelected().path : '';
+
+            await createResource( 'file', sParent, sFileName, '' );
+
+            closeModal( 'modalCreateFile' );
+            document.getElementById( 'fileName' ).value = '';
+        }
+
+        function onRenameNode()
+        {
+            if( ! getSelected() || aSelected.length > 1 )
+            {
+                showNotification( 'Please select exactly one file or folder to rename', 'is-warning' );
+                return;
+            }
+
+            const sCurrentName = getNodeName( getSelected().path );
+            document.getElementById( 'newName' ).value = sCurrentName;
+
+            openModal( 'modalRename' );
+        }
+
+        async function renameNode()
+        {
+            const sNewName = document.getElementById( 'newName' ).value.trim();
+
+            if( ! isValidFileName( sNewName ) )
+            {
+                return;
+            }
+
+            const sOldPath    = getSelected().path;
+            const sParentPath = getParentPath( sOldPath );
+            const sNewPath    = sParentPath ? sParentPath + '/' + sNewName : sNewName;
+
+            await renameResource( sOldPath, sNewPath );
+
+            closeModal( 'modalRename' );
+        }
+
+        async function onEditFile()
+        {
+            if( ! getSelected() || aSelected.length > 1 )
+            {
+                showNotification( 'Please select exactly one file to edit', 'is-warning' );
+                return;
+            }
+
+            if( ! isFile() )
+            {
+                showNotification( 'Please select a file, not a folder', 'is-warning' );
+                return;
+            }
+
+            const sFilePath = getSelected().path;
+            const ext = getFileExtension(sFilePath).toLowerCase();
+
+            if( ! EDITABLE_EXTENSIONS.includes( ext ) )
+            {
+                showNotification('Only these file types can be edited: ' + EDITABLE_EXTENSIONS.join(', ') + '.<br>You can upload a new version to replace other file types.', 'is-info');
+                return;
+            }
+
+            const sContent = await getFileContent( sFilePath );
+
+            if( sContent !== null )
+            {
+                currentEditPath = sFilePath;
+                document.getElementById( 'editFileName' ).textContent = getNodeName( sFilePath );
+                document.getElementById( 'editorContent' ).value = sContent;
+                openModal( 'modalEditFile' );
+            }
+        }
+
+        async function saveFile()
+        {
+            const sContent = document.getElementById( 'editorContent' ).value;
+            // currentEditPath already holds the full path of the file being edited
+            await updateFileContent( currentEditPath, sContent );
+
+            closeModal( 'modalEditFile' );
+        }
+
+        function onRefreshTree()
+        {
+            loadFileTree();
+            showNotification( 'Tree refreshed', 'is-info' );
+        }
+
+        async function onDeleteNode()
+        {
+            if( !getSelected() || aSelected.length > 1 )
+            {
+                showNotification( 'Please select exactly one file or folder to delete', 'is-warning' );
+                return;
+            }
+
+            const itemName = getNodeName( getSelected().path );
+            showConfirmDialog( 'Are you sure you want to delete "' + itemName + '"?', async ( confirmed ) =>
+            {
+                if( confirmed )
+                {
+                    await deleteResource( getSelected().path );
+                }
             });
         }
 
-        function onNewDir()
+        //------------------------------------------------------------------------//
+        // UTILITY FUNCTIONS
+
+        async function fetchIt( url, options = {}, retryCount = 0 )
         {
-            if( ! checkOnlyOneIsSelected() )
-                return;
+            const maxRetries = 2;
+            const baseDelay  = 500;
 
-            if( ! checkIsFolder( aSelected[0] ) )
-                return;
+            try
+            {
+                const response = await fetch( url, { ...options, timeout: 9000 } );
 
-            const onOK = (sName) =>
-                            {
-                                if (!sName || sName.trim() === '') {
-                                    p_app.alert("Folder name cannot be empty");
-                                    return;
-                                }
+                if( ! response.ok )
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
 
-                                if (!/^[a-zA-Z0-9._-]+$/.test(sName)) {
-                                    p_app.alert("Folder name contains invalid characters. Use only letters, numbers, dots, hyphens, and underscores.");
-                                    return;
-                                }
+                const responseText = await response.text();
 
-                                let sParent = isRoot(aSelected[0]) ? null
-                                    : aSelected[0].substring(1);     // Removes '*' (it is already checked that it is a folder);
+                if( ! responseText || ! responseText.trim() )
+                    throw new Error('Empty response from server');
 
-                                $.ajax({
-                                            url: "/gum/ws/files",
-                                            type: "PUT",
-                                            data: { parent: sParent, name: sName.trim(), type: "dir" },
-                                            error: (xhr) => {
-                                                if (xhr.status === 409) {
-                                                    p_app.alert("A folder with this name already exists");
-                                                } else {
-                                                    p_app.showAjaxError(xhr);
-                                                }
-                                            },
-                                            success: reload
-                                        } );
+                return responseText;
+            }
+            catch( error )
+            {
+                if( retryCount < maxRetries &&
+                    (error.message.includes('Empty response') ||
+                     error.message.includes('Failed to fetch')) )
+                {
+                    const delay = baseDelay * Math.pow( 2, retryCount );
+                    await new Promise(resolve => setTimeout(resolve, delay));
+                    return fetchIt( url, options, retryCount + 1 );
+                }
+
+                throw error;
+            }
+        }
+
+        function convertToJsTreeFormat( aData )
+        {
+            const aResult = [];
+            const aItems = Array.isArray( aData ) ? aData : [ aData ];
+
+            for( const item of aItems )
+            {
+                // Guard against null entries in the array
+                if( ! item )
+                    continue;
+
+                const idClean  = item.path.replace(/[!"#$%&'()*+,.\/:;<=>?@[\\\]^`{|}~]/g, "\\$&");  // Universal ID sanitizer for jstree/jQuery
+                const isFolder = item.nodes !== null;
+
+                // Logic: Extract the file/folder name from the relative path
+                // e.g. "docs/manuals/index.html" -> "index.html"
+
+                let sText = item.path;
+
+                if( sText.indexOf( '/' ) !== -1 )
+                    sText = sText.substring( sText.lastIndexOf( '/' ) + 1 );
+
+                if( sText === '' )    // Handle root case (empty path)
+                    sText = '/';
+
+                const node ={
+                                id    : idClean,
+                                text  : sText,
+                                type  : isFolder ? 'folder' : 'file',
+                                icon  : getIconForPath( item.path, isFolder ),
+                                path  : item.path,
+                                isFile: ! isFolder
                             };
 
-            p_app.prompt( "Enter a valid folder name", "", onOK );
-        }
+                // Recursive call: item.nodes is already an Array
+                if( isFolder )
+                    node.children = convertToJsTreeFormat( item.nodes );
 
-        function onNewFile()
-        {
-            if( ! checkOnlyOneIsSelected() )
-                return;
-
-            if( ! checkIsFolder( aSelected[0] ) )
-                return;
-
-            const onOK = (sName) => {
-                                        if (!sName || sName.trim() === '') {
-                                            p_app.alert("File name cannot be empty");
-                                            return;
-                                        }
-
-                                        if (!/^[a-zA-Z0-9._-]+$/.test(sName)) {
-                                            p_app.alert("File name contains invalid characters. Use only letters, numbers, dots, hyphens, and underscores.");
-                                            return;
-                                        }
-
-                                        let sParent = isRoot(aSelected[0]) ? null
-                                                                           : aSelected[0].substring(1);     // Removes '*' (it is already checked that it is a folder);
-
-                                        saveFile(sParent, sName.trim(), "");
-                                    };
-
-            p_app.prompt("Enter a valid file name", "", onOK);
-        }
-
-        function onRename()
-        {
-            if( ! checkOnlyOneIsSelected() )
-                return;
-
-            if( isRoot(aSelected[0]))
-            {
-                p_app.alert("Root can not be renamed");
-                return;
+                aResult.push( node );
             }
 
-            let sOld = (isFolder(aSelected[0]) ? aSelected[0].substring(1) : aSelected[0]);
-
-            const onOK = (sNew) => {
-                if (!sNew || sNew.trim() === '') {
-                    p_app.alert("New name cannot be empty");
-                    return;
-                }
-
-                if (!/^[a-zA-Z0-9._-]+$/.test(sNew)) {
-                    p_app.alert("New name contains invalid characters. Use only letters, numbers, dots, hyphens, and underscores.");
-                    return;
-                }
-
-                sNew = sNew.trim();
-                let sNewPath = getParent(sOld) + '/' + sNew;
-
-                let sPost = (isFolder(aSelected[0]) ? '*' : '') + sNewPath;
-
-                $.ajax({
-                    url: "/gum/ws/files",
-                    type: "POST",
-                    data: JSON.stringify({ "old": sOld, "new": sNewPath }),    // My POST at server side expects JSON
-                    contentType: "application/json; charset=UTF-8",
-                    error: (xhr) => {
-                        if (xhr.status === 409) {
-                            p_app.alert("A file or folder with this name already exists");
-                        } else {
-                            p_app.showAjaxError(xhr);
-                        }
-                    },
-                    success: () => { aSelected[0] = sPost; reload(); }
-                });
-            };
-
-            p_app.prompt("Enter new name:", getFileName(sOld), onOK);
+            return aResult;
         }
 
-        function onView()
+        function getIconForPath( sPath, isFolder )
         {
-            if( ! checkOnlyOneIsSelected() )
-                return;
+            if( isFolder )
+                return 'ti ti-folder';
 
-            if( isFolder(aSelected[0]) )
+            switch( getFileExtension( sPath ).toLowerCase() )
             {
-                p_app.alert("Folders have no contents to be shown");
-                return;
-            }
-
-            if( isImage(aSelected[0]) )
-            {
-                const sanitizedFileName = aSelected[0].replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                const sanitizedBaseDir  = getBaseDir().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-
-                $('<div style="display: flex; justify-content: center; align-items: center; height: 100%; overflow: hidden;">' +
-                    '<img src="' + sanitizedBaseDir + sanitizedFileName + '" style="max-width: 100%; max-height: 100%; object-fit: contain;" alt="' + sanitizedFileName + '">' +
-                    '</div>')
-                    .dialog({
-                                title: sanitizedBaseDir + sanitizedFileName,
-                                autoOpen: true,
-                                resizable: true,
-                                width: 800,
-                                height: 600,
-                                modal: true,
-                            });
-            }
-            else
-            {
-                $.ajax( {
-                            url: "/gum/ws/files",
-                            type: "GET",
-                            data: { "file": aSelected[0] },
-                            error: (xhr) => p_app.showAjaxError(xhr),
-                            success: (txt) => showTextFileContents(aSelected[0], txt)
-                        });
+                case 'md'  : return 'ti ti-markdown';
+                case 'pdf' : return 'ti ti-file-type-pdf';
+                case 'doc' :
+                case 'docx': return 'ti ti-file-word';
+                case 'xls' :
+                case 'xlsx': return 'ti ti-file-spreadsheet';
+                case 'ppt' :
+                case 'pptx': return 'ti ti-presentation';
+                case 'jpg' :
+                case 'jpeg':
+                case 'png' :
+                case 'gif' :
+                case 'svg' : return 'ti ti-photo';
+                case 'zip' :
+                case 'rar' :
+                case '7z'  : return 'ti ti-file-zip';
+                case 'html': return 'ti ti-brand-html5';
+                case 'css' : return 'ti ti-brand-css3';
+                case 'xml' : return 'ti ti-file-type-xml';
+                case 'js'  :
+                case 'json':
+                case 'java':
+                case 'py'  :
+                case 'cpp' :
+                case 'c'   :
+                case 'h'   : return 'ti ti-code';
+                default:
+                             return 'ti ti-file';
             }
         }
 
-        function onDelete()
+        function getFileExtension( sPath )
         {
-            if( ! checkSomethingIsSelected() )
-                return;
+            const nDotIndex = sPath.lastIndexOf( '.' );
 
-            const filteredSelection = aSelected.filter( item => ! isRoot( item ) );
-
-            if( filteredSelection.length === 0 )
-            {
-                p_app.alert('Root can not be deleted');
-                return;
-            }
-
-            p_app.confirm( 'Delete highlighted file(s) and folder(s)?',
-                            function ()
-                            {
-                                const loadingId = p_app.showLoading();
-                                const pathsToDelete = filteredSelection.map( item => { return isFolder(item) ? item.substring(1) : item; });
-
-                                $.ajax( {
-                                            url: '/gum/ws/files?' + $.param({ paths: pathsToDelete.join(';') }),
-                                            type: 'DELETE',
-                                            error: (xhr) => {
-                                                p_app.hideLoading(loadingId);
-                                                p_app.showAjaxError(xhr);
-                                            },
-                                            success: () => {
-                                                p_app.hideLoading(loadingId);
-                                                aSelected = [];
-                                                reload();
-                                            }
-                                        } );
-                            }
-            );
-        }
-
-        function onExit()
-        {
-            $.ajax( {
-                        url: "/gum/logout",
-                        type: "POST",
-                        error: (xhr) => p_app.showAjaxError(xhr),
-                        success: $("body").html("<h2>You are logged out: hope to see you soon...</h2>")
-                    } );
-        }
-
-        //------------------------------------------------------------------------------------------------------//
-        // AUXILIARY FUNCTIONS
-        //------------------------------------------------------------------------------------------------------//
-
-        let $tree = null; // Cache tree element
-
-        function loadTree()
-        {
-            let uuid = p_app.showLoading();
-
-            $.ajax( {   url     : '/gum/ws/files',
-                        type    : "GET",
-                        error   : (xhr) => authService.doDefaultOnAjaxError(xhr), // The error has to be managed by the authenticator
-                        complete: () => p_app.hideLoading(uuid),
-                        success : (ja) =>  // ja == JsonArray
-                                {
-                                    const sTree = '<ul><li id="*_root_">Gum user files' + json2UL(ja) + '</li></ul>';
-                                    $tree = $("#div-tree");    // Cache the jQuery object for efficiency
-
-                                    $tree.jstree('destroy')
-                                         .html(sTree)
-                                         .on('dblclick.jstree', '.jstree-anchor', function(evt)
-                                         {
-                                             if( aSelected.length > 0 && !isRoot(aSelected[0]) && ! isFolder(aSelected[0]) )
-                                                 onView();
-                                         })
-                                         .on('changed.jstree', function(evt, data)
-                                         {
-                                             aSelected = [];
-                                             const selected = data.selected;
-                                             for( let n = 0; n < selected.length; n++ )
-                                                 aSelected.push( data.instance.get_node(selected[n]).id) ;
-                                         })
-                                         .on('ready.jstree', function(e, data)   // --- All API calls go inside this 'ready' handler ---
-                                         {
-                                             const treeInstance = data.instance; // Or $tree.jstree(true);
-
-                                             // 1. Select and open the root node first.
-                                             treeInstance.select_node('*_root_');
-                                             treeInstance.open_node('*_root_');
-
-                                             // 2. Cache the saved node ID
-                                             const savedNodeId = retrieveSavedNode();
-
-                                             // 3. Try to select and open the saved node if it exists
-                                             if (savedNodeId !== null && treeInstance.get_node(savedNodeId))
-                                             {
-                                                 // Open all parents of the saved node to make sure it's visible
-                                                 treeInstance.open_node(savedNodeId, null, { no_animation: true });
-                                                 treeInstance.select_node(savedNodeId);
-                                             }
-
-                                             // 4. Enable buttons only after the tree is fully loaded and configured
-                                             $('.button').prop('disabled', false);
-                                         })
-                                         .jstree(); // Initialize the tree
-                                }
-                    } );
-        }
-
-        function json2UL(ja)    // ja == JsonArray is transformed in nested <ul></ul>
-        {
-            if( p_base.isEmpty( ja ) )
-            {
-                p_app.alert('No files/folders found at server side');
+            if( nDotIndex === -1 || nDotIndex === sPath.length - 1 )
                 return '';
-            }
 
-            let sUL = '<ul>';
-
-            ja.sort( ( a,b ) =>
-                                {
-                                    const aIsFolder = isFolder(a);
-                                    const bIsFolder = isFolder(b);
-
-                                    if (aIsFolder && !bIsFolder) return -1;
-                                    if (!aIsFolder && bIsFolder) return  1;
-
-                                    let pathA = a.path.toUpperCase();
-                                    let pathB = b.path.toUpperCase();
-
-                                    pathA = (pathA.charAt(0) === '*') ? pathA.substring(1) : pathA;
-                                    pathB = (pathB.charAt(0) === '*') ? pathB.substring(1) : pathB;
-
-                                    return (pathA > pathB) ? 1 : (pathA < pathB ? -1 : 0);
-                                });
-
-            const fragment = document.createDocumentFragment();
-
-            ja.forEach( item =>
-                        {
-                            const isDir = isFolder(item);
-                            const fileName = getFileName(item.path);
-                            const sanitizedFileName = fileName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-                            const iconAttr = isDir ? '' : ' data-jstree=\'{"icon":"' + getIcon(item.path) + '"}\'';
-
-                            sUL += '<li id="' + (isDir ? '*' : '') + item.path + '"' + iconAttr + '>' +
-                                sanitizedFileName;
-
-                            if (isDir && item.files)
-                                sUL += json2UL(item.files);
-
-                            sUL += '</li>';
-                        } );
-
-            return sUL + '</ul>';
+            return sPath.substring( nDotIndex + 1 );
         }
 
-        function isRoot(name)
+        function getSelected()
         {
-            return name === "*_root_" || name === "_root_";
+            if( Array.isArray( aSelected ) && aSelected.length > 0 )
+                return aSelected[0];
+
+            return null;
         }
 
-        function isFolder( name )
+        function isRoot( node = getSelected() )
         {
-            if( p_base.isObject( name ) )
-                return name.files !== null;
-
-            return name && name.charAt(0) === '*';
+            return node             &&
+                   node.path === '' &&
+                   node.text === '/';
         }
 
-        function getParent( file )
+        function isFile( node = getSelected() )
         {
-            let ndx = file.lastIndexOf('/');
-
-            return (ndx === 0) ? "" : file.substring(0, ndx);
+            return node && node.isFile;
         }
 
-        function getFileName( file )
+        function isFolder( node = getSelected() )
         {
-            let ndx = file.lastIndexOf('/');
-
-            return (ndx === 0) ? file : file.substring(ndx + 1);
+            return ! isFile( node );
         }
 
-        function isImage( file )
+        function getNodeName( sPath )
         {
-            const imageExtensions = ['png', 'gif', 'svg', 'jpg', 'jpeg'];
-            let ext = file.split('.').pop().toLowerCase();
-            return imageExtensions.includes( ext );
+            const nSlashIndex = sPath.lastIndexOf( '/' );
+
+            if( nSlashIndex === -1 )
+                return sPath;
+
+            return sPath.substring( nSlashIndex + 1 );
         }
 
-        function getIcon( file )
+        function getParentPath( sPath )
         {
-            switch( file.split('.').pop().toLowerCase() )
-            {
-                case 'une'  :
-                case 'model': return 'ti ti-code';
-                case 'txt'  : return 'ti ti-file-text';
-                case 'html' : return 'ti ti-brand-html5';
-                case 'css'  : return 'ti ti-brand-css3';
-                case 'js'   : return 'ti ti-code';
-                case 'json' : return 'ti ti-file-code';
-                case 'png'  :
-                case 'gif'  :
-                case 'svg'  :
-                case 'jpg'  :
-                case 'jpeg' : return 'ti ti-photo';
-                default     : return 'ti ti-file';
-            }
+            const nSlashIndex = sPath.lastIndexOf( '/' );
+
+            if( nSlashIndex === -1 )
+                return '';
+
+            return sPath.substring( 0, nSlashIndex );
         }
 
-        function checkIsFolder( name )
+        function isValidFileName( name )
         {
-            if( ! isFolder( name ) )
-            {
-                p_app.alert("Highlighted (parent) is a file but has to be a folder");
+            if( ! name || name.trim() === '' ) {
+                showNotification( 'Name cannot be empty', 'is-warning' );
                 return false;
             }
-
+            // Basic validation for common invalid characters in file paths (e.g., /, \, :, *, ?, ", <, >, |)
+            const invalidChars = /[\\/:\*\?"<>|\x00-\x1f]/; // Also includes control characters
+            if( invalidChars.test( name ) ) {
+                showNotification( 'Name contains invalid characters (e.g., \\ / : * ? " < > |)', 'is-warning' );
+                return false;
+            }
+            if( name.length > 255 ) { // Common OS limit for file names
+                showNotification( 'Name is too long (max 255 characters)', 'is-warning' );
+                return false;
+            }
+            // Prevent names that are just dots (e.g., ".", "..") which can have special meanings
+            if( name === '.' || name === '..' ) {
+                 showNotification( 'Name cannot be "." or ".."', 'is-warning' );
+                 return false;
+            }
             return true;
         }
 
-        function checkIsFile( name )
-        {
-            if( isFolder( name ) )
-            {
-                p_app.alert("Highlighted node is a folder but has to be a file");
-                return false;
-            }
+        //------------------------------------------------------------------------//
+        // MODAL FUNCTIONS
 
-            return true;
+        function openModal( sModalId )
+        {
+            document.getElementById( sModalId ).classList.add( 'is-active' );
         }
 
-        function checkSomethingIsSelected()
+        function closeModal( sModalId )
         {
-            if( aSelected.length === 0 )
-            {
-                p_app.alert("No node is selected");
-                return false;
-            }
-
-            return true;
+            document.getElementById( sModalId ).classList.remove( 'is-active' );
         }
 
-        function checkOnlyOneIsSelected()
+        let confirmCallback = null; // Global to store the callback for the confirm modal
+
+        function showConfirmDialog( message, onConfirm )
         {
-            if( ! checkSomethingIsSelected() )
-                return false;
+            document.getElementById( 'confirmMessage' ).innerHTML = message;
+            confirmCallback = onConfirm;
+            openModal( 'modalConfirm' );
 
-            if( aSelected.length > 1 )
-            {
-                p_app.alert("There is more than one node selected");
-                return false;
-            }
+            // Remove existing listeners to prevent multiple bindings
+            const yesButton = document.getElementById( 'confirmYes' );
+            const noButton  = document.getElementById( 'confirmNo' );
 
-            return true;
+            yesButton.onclick = () => {
+                closeModal( 'modalConfirm' );
+                if (confirmCallback) {
+                    confirmCallback(true);
+                }
+            };
+            noButton.onclick = () => {
+                closeModal( 'modalConfirm' );
+                if (confirmCallback) {
+                    confirmCallback(false);
+                }
+            };
         }
 
-        function retrieveSavedNode()
+        //------------------------------------------------------------------------//
+        // NOTIFICATION
+
+        function showNotification( sMessage, sType )
         {
-            return sessionStorage.getItem('_SelectedNode_');
-        }
+            const div = document.createElement( 'div' );
+                  div.className = 'notification ' + sType;
+                  div.style.position = 'fixed';
+                  div.style.top = '20px';
+                  div.style.right = '20px';
+                  div.style.zIndex = '9999';
+                  div.style.minWidth = '300px';
+                  div.innerHTML = '<button class="delete"></button>' + sMessage;
 
-        function reload()
-        {
-            sessionStorage.setItem('_SelectedNode_', (p_base.isEmpty(aSelected) ? null : aSelected[0]));
-            loadTree();
-        }
+                  div.querySelector( '.delete' ).onclick = () => div.remove();
 
-        function showTextFileContents( fileName, fileContent )
-        {
-            const sanitizedContent  = fileContent.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const sanitizedFileName = fileName.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-            const sanitizedBaseDir  = getBaseDir().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            document.body.appendChild( div );
 
-            $('<div><textarea id="file-editor" style="width:100%; height:95%; padding:7px; font-family:monospace;">'+ sanitizedContent +'</textarea></div>')
-                .dialog(
-                    {
-                        title    : sanitizedBaseDir + sanitizedFileName,
-                        autoOpen : true,
-                        resizable: true,
-                        width    : p_app.getBestWidth('70%', 400, 1200),
-                        height   : p_app.getBestWidth('85%', 300, 1200),
-                        modal    : true,
-                        buttons  : {
-                                        "Save": {
-                                                    text : "Save",
-                                                    click: function ()
-                                                    {
-                                                        let textarea = $(this).find("textarea");
-                                                        const content = textarea.val();
-                                                        saveFile( getParent(aSelected[0]), fileName, content );
-                                                    }
-                                                }
-                                   }
-                    } );
+            let time = parseInt( sMessage.length / 14 );
+                time = Math.max( 2, time ) * 1000;
 
-            $('.ui-dialog-buttonpane button:contains("Save")')
-                .prepend('<i class="ti ti-device-floppy" style="margin-right:6px"></i>');
-        }
-
-        function saveFile( parentFolder, fileName, fileContent )
-        {
-            let uid = p_app.showLoading();
-
-            $.ajax( {
-                        url: "/gum/ws/files",
-                        type: "PUT",
-                        data: { parent: parentFolder, name: fileName, type: "file", content: fileContent },
-                        error: (xhr) => p_app.showAjaxError(xhr),
-                        success: reload,
-                        complete: () => p_app.hideLoading(uid)
-                    } );
-        }
-
-        function getBaseDir()
-        {
-            let href = window.location.href;
-
-            return href.substring(0, href.indexOf('/file_mgr/')) + '/user-files/';
+            setTimeout( () =>  div.remove(), time );
         }
     </script>
 </body>

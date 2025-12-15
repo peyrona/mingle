@@ -6,6 +6,7 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilIO;
@@ -14,48 +15,45 @@ import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Language;
-import io.undertow.Handlers;
-import io.undertow.Undertow;
-import io.undertow.server.HttpHandler;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.server.handlers.PathHandler;
-import io.undertow.server.handlers.form.EagerFormParsingHandler;
-import io.undertow.server.handlers.form.FormData;
-import io.undertow.server.handlers.form.FormDataParser;
-import io.undertow.server.handlers.resource.FileResourceManager;
-import io.undertow.server.handlers.resource.PathResourceManager;
-import io.undertow.server.handlers.resource.ResourceHandler;
-import io.undertow.server.handlers.resource.ResourceManager;
-import io.undertow.server.session.InMemorySessionManager;
-import io.undertow.server.session.Session;
-import io.undertow.server.session.SessionAttachmentHandler;
-import io.undertow.server.session.SessionConfig;
-import io.undertow.server.session.SessionCookieConfig;
-import io.undertow.server.session.SessionManager;
-import io.undertow.util.HeaderMap;
-import io.undertow.util.Headers;
-import io.undertow.util.HttpString;
-import io.undertow.util.StatusCodes;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.OutputStream;
 import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
-import java.security.SecureRandom;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import javax.net.ssl.KeyManager;
-import javax.net.ssl.KeyManagerFactory;
-import javax.net.ssl.SSLContext;
+import javax.servlet.MultipartConfigElement;
+import javax.servlet.ServletException;
+import javax.servlet.http.HttpServlet;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
+import javax.servlet.http.HttpSession;
+import javax.servlet.http.Part;
+import org.eclipse.jetty.server.Handler;
+import org.eclipse.jetty.server.Request;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
+import org.eclipse.jetty.server.handler.ContextHandler;
+import org.eclipse.jetty.server.handler.ContextHandlerCollection;
+import org.eclipse.jetty.server.handler.ErrorHandler;
+import org.eclipse.jetty.server.handler.HandlerWrapper;
+import org.eclipse.jetty.server.handler.ResourceHandler;
+import org.eclipse.jetty.server.session.SessionHandler;
+import org.eclipse.jetty.servlet.ServletContextHandler;
+import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.eclipse.jetty.websocket.servlet.WebSocketServlet;
+import org.eclipse.jetty.websocket.servlet.WebSocketServletFactory;
 
 /**
- * This is a basic HTTP 2.0 Server using: https://undertow.io/
+ * This is a basic HTTP 2.0 Server using: https://www.eclipse.org/jetty/
  *
  * @author Francisco José Morero Peyrona
  *
@@ -63,54 +61,26 @@ import javax.net.ssl.SSLContext;
  */
 final class HttpServer
 {
-    private static final String         KEY_USER_ID     = "mingle_user_id";
-    private static final String[]       asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", Util.appendFileMgrCtxTo("/gum/"), Util.appendUserFilesCtxTo("/gum/") };
-    private static final String[]       asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico" };    // Models have to be always available to avoid ExEns to be logged-in. JSON files can not be available because "users.json"
-    private static final SessionConfig  sessionCfg      = new SessionCookieConfig().setCookieName( "_Mingle::Gum_" );
-    private        final Undertow       server;
-    private        final SessionManager sessionMgr;
-    private        final short          nClientAllow;
+    public static class GumWebSocketServlet extends WebSocketServlet
+    {
+        @Override
+        public void configure( WebSocketServletFactory factory )
+        {
+            factory.register( CommBridge.class );
+            factory.getPolicy().setMaxTextMessageSize( 64 * 1024 );
+        }
+    }
 
     //------------------------------------------------------------------------//
 
-// UN-COMMENT TO DEBUGG
-//    static
-//    {
-//        java.util.logging.Level level = java.util.logging.Level.INFO;
-//
-//        try
-//        {
-//            // Set JBoss Logging to use Java Logger
-//            System.setProperty( "org.jboss.logging.provider", "jdk" );
-//
-//            // Root logger setup
-//            java.util.logging.Logger rootLogger = java.util.logging.Logger.getLogger( "" );
-//                                     rootLogger.setLevel( level );
-//
-//            // Configure ConsoleHandler to show all logs
-//            java.util.logging.ConsoleHandler consoleHandler = new java.util.logging.ConsoleHandler();
-//            consoleHandler.setLevel( level );
-//            consoleHandler.setFormatter( new java.util.logging.SimpleFormatter() ); // Use simple formatting
-//            rootLogger.addHandler( consoleHandler );
-//
-//            // Optionally, log to a file
-//         // java.util.logging.FileHandler fileHandler = new java.util.logging.FileHandler( "undertow_server.log", true ); // Append to log file
-//         // fileHandler.setLevel( level );
-//         // fileHandler.setFormatter( new java.util.logging.SimpleFormatter() );
-//         // rootLogger.addHandler( fileHandler );
-//
-//            // Configure Undertow-specific loggers
-//            java.util.logging.Logger.getLogger( "io.undertow" ).setLevel( level );
-//            java.util.logging.Logger.getLogger( "org.xnio" ).setLevel( level );
-//
-//        }
-//        catch( Exception e )
-//        {
-//            e.printStackTrace();
-//        }
-//    }
+    private static final String   KEY_USER_ID     = "mingle_user_id";
+    private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/file_mgr", "/gum/user-files" };
+    private static final String[] asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico" };
+    private        final Server   server;
+    private        final short    nClientAllow;
+    private        final int      timeout;
 
-    //----------------------------------------------------------------------------------------------------------------------------------------//
+    //------------------------------------------------------------------------//
 
     /**
      * Class constructor.
@@ -122,70 +92,100 @@ final class HttpServer
      * @param keystorePassword Password for the keystore
      * @throws Exception if there's an error setting up the server
      */
-    HttpServer( String host, int httpPort, int maxSessions, String allowed, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
+    HttpServer( String host, int httpPort, int maxSessions, String allowed, int timeout, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
     {
-        sessionMgr = new InMemorySessionManager( "MINGLE_SESSION_MANAGER", maxSessions, true );
-        sessionMgr.setDefaultSessionTimeout( (int) ServiceUtil.getSessionTimeout() );    // In secs, not in millis
-
-        nClientAllow = UtilComm.clientScope( allowed, null );
-
-        // Create the main handlers for different paths
-        ResourceManager rmGum = new FileResourceManager( Util.getAppDir() );
-        ResourceHandler rhGum = new ResourceHandler( rmGum ).setWelcomeFiles( "index.html" );
-
-        ResourceManager rmBoard = new FileResourceManager( Util.getBoardsDir() );
-        ResourceHandler rhBoard = new ResourceHandler( rmBoard );
-
-        boolean bFollow = UtilSys.isDevEnv;    // Follow Symbolic Links?
-        ResourceManager rmStatic = new PathResourceManager( Util.getServedFilesDir().toPath(), Long.MAX_VALUE, bFollow, new String[] {} );
-        ResourceHandler rhStatic = Handlers.resource( rmStatic ).setDirectoryListingEnabled( true );
-
-        // Create the path handler for different endpoints
-        String sUserFilesCtx = UtilStr.removeLast( Util.appendUserFilesCtxTo("/gum/"), 1 );    // This ends with '/' because Undertow's PathHandler treats paths with and without trailing slashes as distinct paths by default
-
-        PathHandler pathHandler = new PathHandler()
-                                        .addPrefixPath( "/gum/bridge", Handlers.websocket( new CommBridge() ) )
-                                        .addPrefixPath( "/gum/upload", newUploader() )
-                                        .addPrefixPath( "/gum/ws"    , new WsHandler() )
-                                        .addPrefixPath( "/gum/board" , rhBoard )
-                                        .addPrefixPath( "/gum/login" , new LoginHandler() )
-                                        .addPrefixPath( "/gum/logout", newLogoutHandler() )
-                                        .addPrefixPath( "/gum"       , rhGum )
-                                        .addPrefixPath( sUserFilesCtx, rhStatic );
-
-        // Wrap the authenticated handler with session management
-        SessionAttachmentHandler sah = new SessionAttachmentHandler( sessionMgr, sessionCfg )
-                                            .setNext( newAuthHandler( pathHandler ) );
+        this.nClientAllow = UtilComm.clientScope( allowed, null );
+        this.timeout = timeout;
 
         host     = UtilStr.isEmpty( host ) ? "localhost" : host.toLowerCase();
         httpPort = UtilUnit.setBetween( 1, httpPort , 65535 );
 
-        Undertow.Builder builder = Undertow.builder()
-                                           .addHttpListener( httpPort, host );    // Regular HTTP
+        server = new Server();
 
+        // HTTP Connector
+        ServerConnector httpConnector = new ServerConnector( server );
+                        httpConnector.setHost( host );
+                        httpConnector.setPort( httpPort );
+        server.addConnector( httpConnector );
+
+        // Additional localhost connector if host is not localhost
         if( ! "localhost".equals( host ) )
-            builder.addHttpListener( httpPort, "localhost" );                     // Regular HTTP on localhost
+        {
+            ServerConnector localhostConnector = new ServerConnector( server );
+                            localhostConnector.setHost( "localhost" );
+                            localhostConnector.setPort( httpPort );
+            server.addConnector( localhostConnector );
+        }
 
+        // HTTPS Connector (if configured)
         if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
         {
             httpsPort = UtilUnit.setBetween( 1, httpsPort, 65535 );
 
-            SSLContext sslContext = createSSLContext( keystorePath, keystorePassword );
+            SslContextFactory.Server sslContextFactory = createSslContextFactory( keystorePath, keystorePassword );
 
-            builder.addHttpsListener( httpsPort, host, sslContext );              // HTTPS
+            ServerConnector httpsConnector = new ServerConnector( server, sslContextFactory );
+                            httpsConnector.setHost( host );
+                            httpsConnector.setPort( httpsPort );
+            server.addConnector( httpsConnector );
 
             if( ! "localhost".equals( host ) )
-                builder.addHttpsListener( httpsPort, "localhost", sslContext );   // HTTPS on localhost
+            {
+                ServerConnector httpsLocalhostConnector = new ServerConnector( server, sslContextFactory );
+                                httpsLocalhostConnector.setHost( "localhost" );
+                                httpsLocalhostConnector.setPort( httpsPort );
+                server.addConnector( httpsLocalhostConnector );
+            }
+
+            UtilSys.getLogger().say( "\nHTTPS services available at port "+ httpsPort );
         }
 
-        server = builder.setHandler( newErrorHandler( sah ) )
-                        .build();
+        // Setup handlers - ORDER MATTERS: Most specific paths FIRST
+        ContextHandlerCollection contexts = new ContextHandlerCollection();
 
-        // Shows GUM configuration ----------------------------------------
+        // CRITICAL: Add handlers from MOST specific to LEAST specific paths
+        // More specific paths (/gum/file_mgr) MUST come before less specific (/gum)
 
+        // WebSocket handler for /gum/bridge
+        contexts.addHandler( createWebSocketHandler() );
+
+        // Upload handler for /gum/upload (remove individual session handler)
+        contexts.addHandler( createUploadHandler() );
+
+        // Web services handler for /gum/ws (remove individual session handler)
+        contexts.addHandler( createWsHandler() );
+
+        // Board resources handler for /gum/board
+        contexts.addHandler( createBoardHandler() );
+
+        // Login handler for /gum/login (remove individual session handler)
+        contexts.addHandler( createLoginHandler() );
+
+        // Logout handler for /gum/logout (remove individual session handler)
+        contexts.addHandler( createLogoutHandler() );
+
+        // User files handler for /gum/user-files
+        contexts.addHandler( createUserFilesHandler() );
+
+        // File Manager UI handler for /gum/file_mgr
+        contexts.addHandler( createFileMgrHandler() );
+
+        // Main GUM handler for /gum (MUST be LAST - catches all remaining /gum/* requests)
+        contexts.addHandler( createGumHandler() );
+
+        // Create auth wrapper - directly wrap the contexts (no SessionHandler in between)
+        HandlerWrapper authWrapper = createAuthWrapper();
+        authWrapper.setHandler( contexts );
+
+        server.setHandler( authWrapper );
+
+        // Custom error handler
+        server.setErrorHandler( new CustomErrorHandler() );
+
+        // Shows GUM configuration
         String sServer = "http://" + host +':'+ httpPort +"/gum/";
 
-        String sMsg = "Dashboards editor and player + File Manager + Server for static content.\n\n" +
+        String sMsg = "Dashboards editor and player + File Manager + HTTP/S Server for static content.\n\n" +
                       "Dashboards manager : "+ sServer + "index.html    (also 'localhost')\n" +
                       "Dashboard's folder : "+ Util.getBoardsDir().getCanonicalPath()      +"/\n" +
                       "Serving files from : "+ Util.getServedFilesDir().getCanonicalPath() +"/\n" +
@@ -193,12 +193,9 @@ final class HttpServer
                       "    * UI manager   : "+ Util.appendFileMgrCtxTo(   sServer ) + "index.html\n";
 
         UtilSys.getLogger().say( sMsg );
-
-        if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
-            UtilSys.getLogger().say( "\nSame services are also available via HTTPS at port "+ httpsPort );
     }
 
-    HttpServer start()
+    HttpServer start() throws Exception
     {
         server.start();
 
@@ -206,16 +203,15 @@ final class HttpServer
         String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum started...";
         UtilSys.getLogger().say( msg );
 
+        server.join();
+
         return this;
     }
 
-    HttpServer stop()
+    HttpServer stop() throws Exception
     {
         try
         {
-            sessionMgr.getAllSessions()
-                      .forEach( (name) -> sessionMgr.getSession( name ).invalidate( null ) );    // Passing null because we don't need an exchange
-
             server.stop();
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
@@ -231,59 +227,252 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE SCOPE
+    // PRIVATE SCOPE - Handler Creation
 
     /**
-     * Create an authorization handler that checks for session existence.
-     *
-     * @param pathHandler
-     * @return
-     */
-    private HttpHandler newAuthHandler( PathHandler pathHandler )
+ * Creates an authentication wrapper that validates user sessions before allowing access.
+ * Public paths (static resources) and requests from allowed clients bypass authentication.
+ */
+    private HandlerWrapper createAuthWrapper()
     {
-        return (HttpServerExchange xchg) ->
+        return new HandlerWrapper()
+        {
+            @Override
+            public void handle( String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response )
+                    throws IOException, ServletException
+            {
+                // Skip if already handled by another handler
+                if( baseRequest.isHandled() )
+                    return;
+
+                Handler handler = getHandler();
+
+                // Fail fast if no handler is configured (should never happen)
+                if( handler == null )
                 {
-                    Session session = sessionMgr.getSession( xchg, sessionCfg );
-                    boolean isValid = (session != null) && UtilStr.isNotEmpty( session.getAttribute( KEY_USER_ID ) );    // Is user is already authenticated?
+                    UtilSys.getLogger().log( ILogger.Level.SEVERE, "No handler configured in auth wrapper for: " + target );
+                    sendUnauthorizedResponse( response, baseRequest, "Server configuration error" );
+                    return;
+                }
 
-                    if( isValid || isPublicPath( xchg.getRequestPath() ) )       // This is the 2nd fastest and has to be before the "websocket"
-                    {
-                        pathHandler.handleRequest( xchg );
-                    }
-                    else if( session == null )                                   // Creates a session to speed-up next requests
-                    {
-                        session = sessionMgr.createSession( xchg, sessionCfg );
+                try
+                {
+                    boolean isAllowed = false;
 
-                        if( isClientAllowed( xchg ) )
-                        {
-                            session.setAttribute( KEY_USER_ID, "local_client" );
-                        }
-                        else
-                        {
-                            xchg.setStatusCode( StatusCodes.UNAUTHORIZED );
-                            xchg.endExchange();
-                        }
+                    HttpSession session = request.getSession( false );
+
+                    if( session != null && session.getAttribute( KEY_USER_ID ) != null )    // Check 1: Valid session exists
+                    {
+                        isAllowed = true;
                     }
-                };
+                    else if( isPublicPath( target ) )                                       // Check 2: Public resource (static files, login page, etc.)
+                    {
+                        isAllowed = true;
+                    }
+                    else if( isClientAllowed( request ) )                                   // Check 3: Request from allowed client (localhost, configured IPs)
+                    {   // FIXME: activarlo -->
+                        // session = request.getSession( true );
+                        // session.setAttribute( KEY_USER_ID, "local_client" );
+                        isAllowed = true;
+                    }
+
+                    if( isAllowed )
+                    {
+                        if( UtilSys.getLogger() != null && UtilSys.getLogger().isLoggable( ILogger.Level.INFO ) )
+                        {
+                            UtilSys.getLogger().log( Level.INFO, String.format(
+                                                                                "Access granted: %s %s from %s",
+                                                                                request.getMethod(),
+                                                                                target,
+                                                                                request.getRemoteAddr() ) );
+                        }
+
+                        handler.handle( target, baseRequest, request, response );   // Delegate to the next handler in the chain
+                    }
+                    else    // Access denied - log security event
+                    {
+                        if( UtilSys.getLogger() != null && UtilSys.getLogger().isLoggable( ILogger.Level.WARNING ) )
+                        {
+                            UtilSys.getLogger().log( ILogger.Level.WARNING, String.format(
+                                                                                "Unauthorized access attempt: %s %s from %s",
+                                                                                request.getMethod(),
+                                                                                target,
+                                                                                request.getRemoteAddr() ) );
+                        }
+
+                        sendUnauthorizedResponse( response, baseRequest, "Authentication required" );
+                    }
+                }
+                catch( Exception exc )
+                {
+                    if( UtilSys.getLogger() != null )
+                        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc, "Error in authentication handler" );
+
+                    if( ! response.isCommitted() )
+                    {
+                        response.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+                        response.setContentType( "application/json" );
+                        response.getWriter().write( "{\"error\":\"Authentication error\"}" );
+                    }
+
+                    baseRequest.setHandled( true );
+                }
+            }
+
+            /**
+             * Sends a standardized 401 Unauthorized response with proper headers and body.
+             */
+            private void sendUnauthorizedResponse( HttpServletResponse response, Request baseRequest, String message )
+                    throws IOException
+            {
+                if( response.isCommitted() )
+                    return;
+
+                response.setStatus( HttpServletResponse.SC_UNAUTHORIZED );
+                response.setContentType( "application/json; charset=utf-8" );
+                response.setHeader( "Cache-Control", "no-store, no-cache, must-revalidate" );
+                response.setHeader( "WWW-Authenticate", "FormBased" );
+
+                JsonObject jsonResponse = Json.object()
+                                              .add( "error", message )
+                                              .add( "status", 401 )
+                                              .add( "loginUrl", "/gum/login.html" );
+
+                response.getWriter().write( jsonResponse.toString() );
+                baseRequest.setHandled( true );
+            }
+        };
     }
 
-    private HttpHandler newLogoutHandler()
+    private SessionHandler createSessionHandler( int timeout )
     {
-        return exchange ->
-                {
-                    Session session = sessionMgr.getSession( exchange, sessionCfg );
+        SessionHandler sessionHandler = new SessionHandler();
+        sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+        sessionHandler.getSessionCookieConfig().setName( "_Mingle__Gum_" );
 
-                    if( session != null )
-                        session.invalidate( exchange );
-
-                    exchange.endExchange();
-                };
+        return sessionHandler;
     }
 
-    private boolean isClientAllowed( HttpServerExchange xchg )
+    private ContextHandler createWebSocketHandler()
     {
-        HeaderMap   headers       = xchg.getRequestHeaders();
-        String      xForwardedFor = headers.getFirst( "X-Forwarded-For" );    // Check for the X-Forwarded-For header
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/bridge" );
+                              context.addServlet( new ServletHolder( new GumWebSocketServlet() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createUploadHandler()
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/upload" );
+                              context.setSessionHandler( createSessionHandler( timeout ) );
+
+        ServletHolder holder = new ServletHolder( new UploadServlet() );
+        holder.getRegistration().setMultipartConfig( new MultipartConfigElement( System.getProperty( "java.io.tmpdir" ) ) );
+
+        context.addServlet( holder, "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createWsHandler()
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/ws" );
+                              context.addServlet( new ServletHolder( new WsServlet() ), "/*" );
+                              context.setSessionHandler( createSessionHandler( timeout ) );
+
+        return context;
+    }
+
+    private ContextHandler createBoardHandler() throws IOException
+    {
+        ContextHandler context = new ContextHandler( "/gum/board" );
+
+        ResourceHandler resourceHandler = new ResourceHandler();
+                        resourceHandler.setResourceBase( Util.getBoardsDir().getAbsolutePath() );
+                        resourceHandler.setDirectoriesListed( false );
+
+        context.setHandler( resourceHandler );
+
+        return context;
+    }
+
+    private ContextHandler createLoginHandler()
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/login" );
+                              context.setSessionHandler( createSessionHandler( timeout ) );
+
+        ServletHolder holder = new ServletHolder( new LoginServlet() );
+
+        context.addServlet( new ServletHolder( new LoginServlet() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createLogoutHandler()
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/logout" );
+                              context.addServlet( new ServletHolder( new LogoutServlet() ), "/*" );
+                              context.setSessionHandler( createSessionHandler( timeout ) );
+
+        return context;
+    }
+
+    private ContextHandler createUserFilesHandler() throws IOException
+    {
+        ContextHandler context = new ContextHandler( "/gum/user-files" );
+        ResourceHandler resourceHandler = new ResourceHandler();
+                        resourceHandler.setResourceBase( Util.getServedFilesDir().getAbsolutePath() );
+                        resourceHandler.setDirectoriesListed( true );
+
+        boolean bFollow = UtilSys.isDevEnv;
+
+        if( bFollow )
+            resourceHandler.setAcceptRanges( true );
+
+        context.setHandler( resourceHandler );
+
+        return context;
+    }
+
+    private ContextHandler createFileMgrHandler() throws IOException
+    {
+        ContextHandler context = new ContextHandler("/gum/file_mgr");
+
+        ResourceHandler resourceHandler = new ResourceHandler();
+                        resourceHandler.setResourceBase( new File( Util.getAppDir(), "file_mgr" ).getAbsolutePath() );
+                        resourceHandler.setDirectoriesListed( false );
+                        resourceHandler.setWelcomeFiles( new String[] { "index.html" } );
+
+        context.setHandler(resourceHandler);
+
+        return context;
+    }
+
+    private ContextHandler createGumHandler()
+    {
+        ContextHandler context = new ContextHandler("/gum");
+
+        ResourceHandler resourceHandler = new ResourceHandler();
+                        resourceHandler.setResourceBase(Util.getAppDir().getAbsolutePath());
+                        resourceHandler.setDirectoriesListed(false);
+                        resourceHandler.setWelcomeFiles(new String[]{"index.html"});
+
+        context.setHandler(resourceHandler);
+
+        return context;
+    }
+
+    //------------------------------------------------------------------------//
+    // PRIVATE SCOPE - Utility Methods
+
+    private boolean isClientAllowed( HttpServletRequest request )
+    {
+        String      xForwardedFor = request.getHeader( "X-Forwarded-For" );
         InetAddress clientIP      = null;
 
         if( (xForwardedFor != null) && (! xForwardedFor.isEmpty()) )
@@ -291,7 +480,7 @@ final class HttpServer
             try
             {
                 String s = xForwardedFor.split( "," )[0].trim();
-                clientIP = Inet4Address.getByName( s );                       // The header can contain multiple IPs, the first one is the original client
+                clientIP = Inet4Address.getByName( s );
             }
             catch( UnknownHostException ex )
             {
@@ -300,7 +489,14 @@ final class HttpServer
         }
         else
         {
-            clientIP = xchg.getSourceAddress().getAddress();                  // Fallback to the source address if the header is not present
+            try
+            {
+                clientIP = InetAddress.getByName( request.getRemoteAddr() );
+            }
+            catch( UnknownHostException ex )
+            {
+                // Nothing to do
+            }
         }
 
         try
@@ -316,17 +512,10 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE STATIC INTERFACE
+    // PRIVATE STATIC METHODS
 
-    /**
-     * Creates an SSL context from a keystore file
-     *
-     * @param keystorePath Path to the keystore file
-     * @param keystorePassword Password for the keystore
-     * @return Configured SSLContext
-     * @throws Exception if there's an error loading the keystore
-     */
-    private static SSLContext createSSLContext(String keystorePath, String keystorePassword) throws Exception
+    private static SslContextFactory.Server createSslContextFactory( String keystorePath, String keystorePassword )
+            throws Exception
     {
         KeyStore keyStore = KeyStore.getInstance( "JKS" );
 
@@ -335,23 +524,13 @@ final class HttpServer
             keyStore.load( is, keystorePassword.toCharArray() );
         }
 
-        KeyManagerFactory keyManagerFactory = KeyManagerFactory.getInstance( KeyManagerFactory.getDefaultAlgorithm() );
-                          keyManagerFactory.init( keyStore, keystorePassword.toCharArray() );
+        SslContextFactory.Server sslContextFactory = new SslContextFactory.Server();
+        sslContextFactory.setKeyStore( keyStore );
+        sslContextFactory.setKeyStorePassword( keystorePassword );
 
-        KeyManager[] keyManagers = keyManagerFactory.getKeyManagers();
-
-        SSLContext sslContext = SSLContext.getInstance( "TLS" );
-                   sslContext.init( keyManagers, null, new SecureRandom() );
-
-        return sslContext;
+        return sslContextFactory;
     }
 
-    /**
-     * Check if the requested path is in the public paths list
-     *
-     * @param path The request path
-     * @return true if the path is public (no auth needed)
-     */
     private static boolean isPublicPath( String path )
     {
         if( path == null )
@@ -360,7 +539,7 @@ final class HttpServer
         if( ! path.startsWith( "/gum/" ) )
             return false;
 
-        if( path.contains( ".." ) || path.contains( "//" ) )   // Prevent directory traversal
+        if( path.contains( ".." ) || path.contains( "//" ) )
             return false;
 
         if( UtilColls.contains( asPublicFileExt, UtilIO.getExtension( path ).toLowerCase() ) )
@@ -375,251 +554,103 @@ final class HttpServer
         return true;
     }
 
-    private static HttpHandler newErrorHandler( HttpHandler next )
-    {
-        return (xchg) ->
-                {
-                    try
-                    {
-                        next.handleRequest( xchg );    // Delegate to the next handler
-                    }
-                    catch( Exception exc )
-                    {
-                        sendErrAndLogIt( xchg, exc );
-                    }
-                };
-    }
-
-    private static EagerFormParsingHandler newUploader()
-    {
-        return new EagerFormParsingHandler()
-                .setNext( new HttpHandler()
-                {
-                    @Override
-                    public void handleRequest( final HttpServerExchange xchg ) throws IOException
-                    {
-                        if( xchg.isInIoThread() )
-                        {
-                            xchg.dispatch( this );
-                            return;
-                        }
-
-                        FormData formData = xchg.getAttachment( FormDataParser.FORM_DATA );
-
-                        if( formData == null )
-                            return;
-
-                        String sTarget = formData.getFirst( "target" ).getValue();  // "board_images" --> used by dashboards
-                                                                                    // "user_files"   --> used by file manager
-                        for( String name : formData )
-                        {
-                            if( "file".equals( name ) )     // The file input field is "files"
-                            {
-                                for( FormData.FormValue fileValue : formData.get( name ) )
-                                {
-                                    if( fileValue.isFileItem() )
-                                    {
-                                        switch( sTarget )
-                                        {
-                                            case "user_files"  : saveUserFile(  formData, fileValue ); break;
-                                            case "board_images": saveImg4Board( formData, fileValue ); break;
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                } );
-    }
-
-    /**
-     * Image files associated with a certain dashboard.<br>
-     * Stored at: {*home*}/lib/gum/web/dashboards/<dashboard_name>/images/
-     *
-     * @param formData
-     * @param fileValue
-     * @throws IOException
-     */
-    private static void saveImg4Board( FormData formData, FormData.FormValue fileValue ) throws IOException
-    {
-        String fileName = fileValue.getFileName();
-
-        if( UtilStr.isEmpty( fileName ) )
-            throw new IOException( "Empty file name" );
-
-        String sBoardName = formData.getFirst( "board" ).getValue();
-
-        try( InputStream is = fileValue.getFileItem().getInputStream() )
-        {
-            File fDestination = ServiceImages.getImageFile( sBoardName, fileName );
-
-            try( FileOutputStream os = new FileOutputStream( fDestination ) )
-            {
-                byte[] buffer = new byte[1024 * 4];
-                int    nRead;
-
-                while( (nRead = is.read( buffer )) != -1 )
-                {
-                    os.write( buffer, 0, nRead );
-                }
-            }
-        }
-    }
-
-    /**
-     * User files are files of any type that exists in the server folder pointed by:
-     * File( UtilSys.getEtcFolder(), "gum_user_files" ).
-     *
-     * @param formData
-     * @param fileValue
-     * @throws IOException
-     */
-    private static void saveUserFile( FormData formData, FormData.FormValue fileValue ) throws IOException
-    {
-        String fBaseDir = formData.getFirst( "basedir" ).getValue();
-        String fileName = fileValue.getFileName();
-
-        if( UtilStr.isEmpty( fileName ) )
-        {
-            return;
-        }
-
-        try( InputStream is = fileValue.getFileItem().getInputStream() )
-        {
-            File fDestination = new File( new File( Util.getServedFilesDir(), fBaseDir ), fileName );
-
-            try( FileOutputStream os = new FileOutputStream( fDestination ) )
-            {
-                byte[] buffer = new byte[1024*4];
-                int    nRead;
-
-                while( (nRead = is.read( buffer )) != -1 )
-                {
-                    os.write( buffer, 0, nRead );
-                }
-            }
-        }
-    }
-
-    private static void sendErrAndLogIt( HttpServerExchange xchg, Exception exc )
+    private static void sendErrAndLogIt( HttpServletResponse response, Exception exc )
     {
         UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
 
-        if( xchg != null && xchg.isResponseChannelAvailable() )
+        if( response != null && !response.isCommitted() )
         {
-            xchg.getResponseHeaders().put( Headers.CONTENT_TYPE, "application/json" );
-            xchg.setStatusCode( StatusCodes.INTERNAL_SERVER_ERROR );
+            try
+            {
+                response.setContentType( "application/json" );
+                response.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
 
-            // Don't expose internal error details to client
-            String msg = (exc instanceof MingleException) ? exc.getMessage()
-                                                          : "An internal server error occurred";
+                String msg = (exc instanceof MingleException) ? exc.getMessage()
+                                                              : "An internal server error occurred";
 
-            xchg.getResponseSender().send( "{\"error\":\""+ Json.value( msg ).toString() + "\"}" );
-            xchg.endExchange();
+                response.getWriter().write( "{\"error\":\""+ Json.value( msg ).toString() + "\"}" );
+            }
+            catch( IOException e )
+            {
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Failed to send error response" );
+            }
         }
     }
 
     //------------------------------------------------------------------------//
-    // INNER CLASS
+    // INNER CLASSES - Servlets
     //------------------------------------------------------------------------//
 
-    /**
-     * Login handler for processing login requests
-     */
-    private final class LoginHandler implements HttpHandler
+    private class LoginServlet extends HttpServlet
     {
         @Override
-        public void handleRequest( HttpServerExchange xchg ) throws Exception
+        protected void doPost( HttpServletRequest request, HttpServletResponse response )
+                throws ServletException, IOException
         {
-            String sMethod = xchg.getRequestMethod().toString();
-
-            if( ! sMethod.equals( "POST" ) )
-                throw new IOException( "Bad use of MSP login framework" );
-
-            Runnable run = () ->
-                            {
-                                try
-                                {
-                                    handleLoginPost( xchg );
-                                }
-                                catch( IOException exc )
-                                {
-                                    HttpServer.sendErrAndLogIt( xchg, exc );
-                                }
-                            };
-
-            if( xchg.isInIoThread() )    // Check if we're on the IO thread
+            try
             {
-                xchg.dispatch( run );    // Dispatch to a worker thread for blocking operations
-            }
-            else                         // Already on a worker thread, proceed with handling the request
-            {
-                run.run();               // Inmediately executed in the current thread
-            }
-        }
+                String contentType = request.getContentType();
 
-        //------------------------------------------------------------------------//
-
-        private void handleLoginPost( HttpServerExchange xchg ) throws IOException
-        {
-            xchg.startBlocking();
-
-            if( xchg.getRequestHeaders().getFirst( Headers.CONTENT_TYPE ).startsWith( "application/json" ) )
-            {
-                // JSON login (for REST API/AJAX)
-                int    length = Integer.parseInt( xchg.getRequestHeaders().getFirst( Headers.CONTENT_LENGTH ) );
-                byte[] buffer = new byte[length];
-
-                // Set read timeout to prevent indefinite blocking
-                xchg.getConnection();
-
-                int bytesRead = 0;
-                int totalRead = 0;
-
-                while( totalRead < length && bytesRead != -1 )
+                if( contentType != null && contentType.startsWith( "application/json" ) )
                 {
-                    bytesRead = xchg.getInputStream().read( buffer, totalRead, length - totalRead );
-                    if( bytesRead > 0 )
-                        totalRead += bytesRead;
+                    int    length = request.getContentLength();
+                    byte[] buffer = new byte[length];
+
+                    try( InputStream is = request.getInputStream() )
+                    {
+                        int bytesRead = 0;
+                        int totalRead = 0;
+
+                        while( totalRead < length && bytesRead != -1 )
+                        {
+                            bytesRead = is.read( buffer, totalRead, length - totalRead );
+                            if( bytesRead > 0 )
+                                totalRead += bytesRead;
+                        }
+
+                        if( totalRead != length )
+                            throw new IOException( "Incomplete request data received" );
+                    }
+
+                    String   sj   = new String( buffer, StandardCharsets.UTF_8 );
+                    UtilJson uj   = new UtilJson( sj );
+                    String   user = uj.getString( "username", null );
+                    String   pwd  = uj.getString( "password", null );
+
+                    processLogin( request, response, user, pwd );
                 }
-
-                if( totalRead != length )
-                    throw new IOException( "Incomplete request data received" );
-
-                String   sj   = new String( buffer, StandardCharsets.UTF_8 );
-                UtilJson uj   = new UtilJson( sj );
-                String   user = uj.getString( "username", null );
-                String   pwd  = uj.getString( "password", null );
-
-                processLogin( xchg, user, pwd );
+                else
+                {
+                    response.setStatus( HttpServletResponse.SC_BAD_REQUEST );
+                    response.setContentType( "application/json" );
+                    response.getWriter().write( "{\"error\":\"Missing form data\"}" );
+                }
             }
-            else
+            catch( Exception exc )
             {
-                xchg.setStatusCode( StatusCodes.BAD_REQUEST );
-                xchg.getResponseHeaders().put( HttpString.tryFromString( "Content-Type" ), "application/json" );
-                xchg.getResponseSender().send( "{\"error\":\"Missing form data\"}" );
+                sendErrAndLogIt( response, exc );
             }
         }
 
-        private void processLogin( HttpServerExchange xchg, String username, String password ) throws IOException
+        private void processLogin( HttpServletRequest request, HttpServletResponse response,
+                                  String username, String password ) throws IOException
         {
-            String  requestedWith = xchg.getRequestHeaders().getFirst( HttpString.tryFromString( "X-Requested-With" ) );
+            String  requestedWith = request.getHeader( "X-Requested-With" );
             boolean isAJAXRequest = "XMLHttpRequest".equals( requestedWith );
 
             if( isAJAXRequest && isAdmin( username, password ) )
             {
-                sessionMgr.getSession( xchg, sessionCfg )
-                          .setAttribute( KEY_USER_ID, username );
+                HttpSession session = request.getSession( true );
+                session.setAttribute( KEY_USER_ID, username );
 
-                // Return JSON response for AJAX
-                xchg.setStatusCode( StatusCodes.OK );
-                xchg.getResponseHeaders().put( HttpString.tryFromString( "Content-Type" ), "application/json" );
-                xchg.getResponseSender().send( "{\"success\":true}" );
+                response.setStatus( HttpServletResponse.SC_OK );
+                response.setContentType( "application/json" );
+                response.getWriter().write( "{\"success\":true}" );
             }
             else
             {
-                xchg.setStatusCode( StatusCodes.UNAUTHORIZED );
-                xchg.getResponseSender().send( "Unauthorized: Access denied" );
+                response.setStatus( HttpServletResponse.SC_UNAUTHORIZED );
+                response.getWriter().write( "Unauthorized: Access denied" );
             }
         }
 
@@ -628,19 +659,12 @@ final class HttpServer
             return "admin".equalsIgnoreCase( authenticateUser( username, password ) );
         }
 
-        /**
-         * Authenticate a user.
-         *
-         * @param username The username
-         * @param password The password
-         * @return The user role or null if file or user does not exists.
-         */
         private String authenticateUser( String username, String password ) throws IOException
         {
             File fUsers = new File( Util.getServedFilesDir(), "users.json" );
 
             if( UtilIO.canRead( fUsers ) != null )
-                return null;                       // File can not be read
+                return null;
 
             String    sJSON  = UtilStr.removeComments( UtilIO.getAsText( fUsers ) );
             JsonArray jArray = Json.parse( sJSON ).asArray();
@@ -668,24 +692,171 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
-    // INNER CLASS
-    //------------------------------------------------------------------------//
-    private class WsHandler implements HttpHandler
+
+    private class LogoutServlet extends HttpServlet
     {
         @Override
-        public void handleRequest( HttpServerExchange xchg ) throws IOException
+        protected void doGet( HttpServletRequest request, HttpServletResponse response )
+                throws ServletException, IOException
         {
-            String      sPath   = xchg.getRequestPath();
-            ServiceBase service = null;
+            HttpSession session = request.getSession( false );
 
-                 if( sPath.contains( "ws/util"   ) )  service = new ServiceUtil(    xchg );    // Used by Balata and useful for others
-            else if( sPath.contains( "ws/board"  ) )  service = new ServiceBoard(   xchg );
-            else if( sPath.contains( "ws/db"     ) )  service = new ServiceDB(      xchg );
-            else if( sPath.contains( "ws/images" ) )  service = new ServiceImages(  xchg );
-            else if( sPath.contains( "ws/files"  ) )  service = new ServiceFileMgr( xchg );
+            if( session != null )
+                session.invalidate();
 
-            if( service == null )  throw new IOException( "Invalid path: " + sPath );
-            else                   service.dispatch( xchg.getRequestMethod().toString() );
+            response.setStatus( HttpServletResponse.SC_OK );
+        }
+
+        @Override
+        protected void doPost( HttpServletRequest request, HttpServletResponse response )
+                throws ServletException, IOException
+        {
+            doGet( request, response );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+
+    private class UploadServlet extends HttpServlet
+    {
+        @Override
+        protected void doPost( HttpServletRequest request, HttpServletResponse response )
+                throws ServletException, IOException
+        {
+            try
+            {
+                String sTarget = request.getParameter( "target" );
+
+                for( Part part : request.getParts() )
+                {
+                    if( "file".equals( part.getName() ) )
+                    {
+                        String fileName = getFileName( part );
+
+                        if( UtilStr.isNotEmpty( fileName ) )
+                        {
+                            switch( sTarget )
+                            {
+                                case "user_files"  : saveUserFile(  request, part, fileName ); break;
+                                case "board_images": saveImg4Board( request, part, fileName ); break;
+                            }
+                        }
+                    }
+                }
+
+                response.setStatus( HttpServletResponse.SC_OK );
+            }
+            catch( Exception exc )
+            {
+                sendErrAndLogIt( response, exc );
+            }
+        }
+
+        private String getFileName( Part part )
+        {
+            String contentDisposition = part.getHeader( "content-disposition" );
+
+            if( contentDisposition != null )
+            {
+                for( String token : contentDisposition.split( ";" ) )
+                {
+                    if( token.trim().startsWith( "filename" ) )
+                    {
+                        return token.substring( token.indexOf( '=' ) + 1 ).trim().replace( "\"", "" );
+                    }
+                }
+            }
+
+            return null;
+        }
+
+        private void saveImg4Board( HttpServletRequest request, Part part, String fileName ) throws IOException
+        {
+            String sBoardName = request.getParameter( "board" );
+
+            try( InputStream is = part.getInputStream() )
+            {
+                File fDestination = ServiceImages.getImageFile( sBoardName, fileName );
+
+                try( FileOutputStream os = new FileOutputStream( fDestination ) )
+                {
+                    copyStream( is, os );
+                }
+            }
+        }
+
+        private void saveUserFile( HttpServletRequest request, Part part, String fileName ) throws IOException
+        {
+            String fBaseDir = request.getParameter( "basedir" );
+
+            try( InputStream is = part.getInputStream() )
+            {
+                File fDestination = new File( new File( Util.getServedFilesDir(), fBaseDir ), fileName );
+
+                try( FileOutputStream os = new FileOutputStream( fDestination ) )
+                {
+                    copyStream( is, os );
+                }
+            }
+        }
+
+        private void copyStream( InputStream is, OutputStream os ) throws IOException
+        {
+            byte[] buffer = new byte[1024 * 4];
+            int    nRead;
+
+            while( (nRead = is.read( buffer )) != -1 )
+            {
+                os.write( buffer, 0, nRead );
+            }
+        }
+    }
+
+    //------------------------------------------------------------------------//
+
+    private class WsServlet extends HttpServlet
+    {
+        @Override
+        protected void service( HttpServletRequest request, HttpServletResponse response )
+                throws ServletException, IOException
+        {
+            try
+            {
+                String      sPath   = request.getPathInfo();
+                ServiceBase service = null;
+
+                     if( sPath.contains( "/board"  ) )  service = new ServiceBoard(   request, response );
+                else if( sPath.contains( "/db"     ) )  service = new ServiceDB(      request, response );
+                else if( sPath.contains( "/images" ) )  service = new ServiceImages(  request, response );
+                else if( sPath.contains( "/files"  ) )  service = new ServiceFileMgr( request, response );
+
+                if( service == null )   throw new IOException( "Invalid path: " + sPath );
+                else                    service.dispatch( request.getMethod() );
+            }
+            catch( Exception exc )
+            {
+                sendErrAndLogIt( response, exc );
+            }
+        }
+    }
+
+    //------------------------------------------------------------------------//
+
+    private static class CustomErrorHandler extends ErrorHandler
+    {
+        @Override
+        public void handle( String target, Request baseRequest, HttpServletRequest request,
+                           HttpServletResponse response ) throws IOException
+        {
+            if( !response.isCommitted() )
+            {
+                response.setContentType( "application/json" );
+
+                String msg = "An error occurred";
+                response.getWriter().write( "{\"error\":\""+ Json.value( msg ).toString() + "\"}" );
+            }
+
+            baseRequest.setHandled( true );
         }
     }
 }

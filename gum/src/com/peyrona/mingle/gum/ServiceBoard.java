@@ -1,14 +1,13 @@
 
 package com.peyrona.mingle.gum;
 
+
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.japi.OneToMany;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.util.StatusCodes;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +15,8 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * ServiceBoard class extends ServiceBase to provide operations related to boards
@@ -57,9 +58,9 @@ final class ServiceBoard extends ServiceBase
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
 
-    ServiceBoard( HttpServerExchange xchg )
+    ServiceBoard( HttpServletRequest request, HttpServletResponse response )
     {
-        super( xchg );
+        super( request, response );
     }
 
     //------------------------------------------------------------------------//
@@ -111,17 +112,6 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPost() throws IOException    // UPDATE  (used to update master password and also to update dashboard contents)
     {
-        if( xchg.isInIoThread() )
-        {
-            xchg.dispatch( () ->
-                            {
-                                try{ doPost(); }
-                                catch( IOException ioe )
-                                { sendError( ioe ); }
-                            } );
-            return;
-        }
-
         asJSON( (JsonObject jo) ->
                 {
                     UtilJson   uj = new UtilJson( jo );
@@ -143,7 +133,7 @@ final class ServiceBoard extends ServiceBase
                         else if( sName    != null && oRest    != null )  writeContents( getBoardFile( sName ), oRest );
                         else if( sCurrent != null && sTarget  != null )  cloneBoard(  sCurrent, sTarget  );
                         else if( sNameOld != null && sNameNew != null )  renameBoard( sNameOld, sNameNew );
-                        else                                             sendError("Invalid parameters", StatusCodes.BAD_REQUEST );
+                        else                                             sendError("Invalid parameters", HttpServletResponse.SC_BAD_REQUEST );
                     }
                     catch( IOException ioe )
                     {
@@ -318,7 +308,7 @@ final class ServiceBoard extends ServiceBase
         }
         else
         {
-            sendError( "Invalid old master password.", StatusCodes.UNAUTHORIZED );
+            sendError( "Invalid old master password.", HttpServletResponse.SC_UNAUTHORIZED );
         }
     }
 

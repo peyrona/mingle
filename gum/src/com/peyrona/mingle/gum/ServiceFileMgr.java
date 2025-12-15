@@ -4,11 +4,16 @@ package com.peyrona.mingle.gum;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import io.undertow.server.HttpServerExchange;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.util.Arrays;
+import java.util.Comparator;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * ServiceFileMgr class extends ServiceBase to provide file management operations
@@ -49,9 +54,9 @@ final class ServiceFileMgr extends ServiceBase
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
-    ServiceFileMgr( HttpServerExchange xchg ) throws IOException
+    ServiceFileMgr( HttpServletRequest request, HttpServletResponse response ) throws IOException
     {
-        super( xchg );
+        super( request, response );
 
         this.fRoot = Util.getServedFilesDir();
     }
@@ -62,9 +67,16 @@ final class ServiceFileMgr extends ServiceBase
         String sFile  = asString( "file", null );
 
         if( sFile != null )
+        {
             sendText( UtilIO.getAsText( new File( fRoot, sFile ) ) );
+        }
         else
-            sendJSON( getFileTree( fRoot, new JsonArray() ).toString() );
+        {
+            String response = buildFileTree( fRoot, fRoot.toPath().toRealPath() ).toString();
+
+            if( UtilStr.isNotEmpty( response ) )  sendJSON( response );
+            else                                  throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
+        }
     }
 
     /**
@@ -137,27 +149,72 @@ final class ServiceFileMgr extends ServiceBase
 
     //------------------------------------------------------------------------//
 
-    private JsonArray getFileTree( File fDir, JsonArray ja )
+    /**
+     * Recursive method to build the tree.
+     */
+    private JsonObject buildFileTree( File currentDir, Path rootPathObj )
     {
-        File[] aFiles = fDir.listFiles();
-        int    nLen   = fRoot.getPath().length();
-
-        if( aFiles != null )
+        try
         {
-            for( File file : aFiles )
-            {
-                if( ! file.isHidden() )
-                {
-                    JsonObject jo = new JsonObject().add( "path" , file.getPath().substring( nLen + 1 ) )
-                                                    .add( "files", file.isDirectory() ? new JsonArray() : Json.NULL );
-                    ja.add( jo );
+            // 1. Resolve canonical/real path for security (handle symlinks)
+            Path currentPathObj = currentDir.toPath().toRealPath();
 
-                    if( file.isDirectory() )
-                        getFileTree( file, jo.get( "files" ).asArray() );
+            // 2. Security Check: Ensure current node is actually inside the root
+            // (Prevents following symlinks that point outside the base folder)
+            if( !currentPathObj.startsWith( rootPathObj ) )
+            {
+                return null;
+            }
+
+            // 3. Create Relative Path string (e.g., "css/styles.css")
+            // Relativize handles separator boundaries correctly unlike substring()
+            String relativePath = rootPathObj.relativize( currentPathObj )
+                                             .toString()
+                                             .replace( '\\', '/' ); // Enforce JSON standard
+
+            JsonObject node = new JsonObject();
+            node.add( "path", relativePath );
+
+            // 4. Handle File (Leaf node)
+            if( ! currentDir.isDirectory() )
+            {
+                node.add( "nodes", Json.NULL );
+                return node;
+            }
+
+            // 5. Handle Directory
+            JsonArray childrenArray = new JsonArray();
+            File[] files = currentDir.listFiles();
+
+            if( files != null )
+            {
+                // 6. Sort files: Directories first, then alphabetical
+                Arrays.sort( files, Comparator.comparing( File::isDirectory ).reversed()
+                             .thenComparing( File::getName, String.CASE_INSENSITIVE_ORDER ) );
+
+                for( File file : files )
+                {
+                    if( file.isHidden() || !file.canRead() )
+                    {
+                        continue;
+                    }
+
+                    // Recurse
+                    JsonObject childNode = buildFileTree( file, rootPathObj );
+                    if( childNode != null )
+                    {
+                        childrenArray.add( childNode );
+                    }
                 }
             }
-        }
 
-        return ja;
+            node.add( "nodes", childrenArray );
+            return node;
+        }
+        catch( IOException e )
+        {
+            // If we can't read the real path of a specific node, skip it
+            return null;
+        }
     }
 }

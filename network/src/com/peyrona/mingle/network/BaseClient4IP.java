@@ -20,6 +20,8 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 
 /**
+ * Base class for IP-based network clients.
+ * Extends BaseClient with IP-specific functionality including SSL support.
  *
  * @author francisco
  */
@@ -36,36 +38,71 @@ public abstract class BaseClient4IP extends BaseClient
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
 
+    /**
+     * Gets the host address this client is configured to connect to.
+     *
+     * @return the host address
+     */
     public String getHost()
     {
         return sHost;
     }
 
+    /**
+     * Gets the port number this client is configured to connect to.
+     *
+     * @return the port number
+     */
     public int getPort()
     {
         return nPort;
     }
 
+    /**
+     * Gets the connection timeout in milliseconds.
+     *
+     * @return the timeout value
+     */
     public int getTimeout()
     {
         return nTimeout;
     }
 
+    /**
+     * Gets the SSL certificate file for secure connections.
+     *
+     * @return the SSL certificate file or null if not configured
+     */
     public File getSSLCert()
     {
         return fCert;
     }
 
+    /**
+     * Gets the SSL private key file for secure connections.
+     *
+     * @return the SSL key file or null if not configured
+     */
     public File getSSLKey()
     {
         return fKey;
     }
 
+    /**
+     * Gets the password for the SSL certificate.
+     *
+     * @return the SSL certificate password or null if not configured
+     */
     public char[] getSSLPassword()
     {
         return acPass;
     }
 
+    /**
+     * Checks if SSL/TLS is enabled for this client.
+     *
+     * @return true if SSL is enabled, false otherwise
+     */
     public boolean isSSLEnabled()
     {
         return bSSL;
@@ -99,17 +136,31 @@ public abstract class BaseClient4IP extends BaseClient
 //               Objects.equals( getHost(), other.getHost() );
 //    }
 
+    /**
+     * Returns a string representation of this client including host, port, and timeout.
+     *
+     * @return string representation
+     */
     @Override
     public String toString()
     {
-        String str = getClass().getSimpleName() +" at "+ sHost +":"+ nPort +", Timeout="+ nTimeout;
-
-        return str;
+        return getClass().getSimpleName() +" at "+ sHost +":"+ nPort +", Timeout="+ nTimeout;
     }
 
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
+    /**
+     * Initializes the client configuration from JSON parameters.
+     * Can be in the form: {"host":"localhost:65534", "cert_path":null, "key_path":null, "timeout":"5s"|5000}
+     * or in the form:     {"host":"localhost", "port": 65534, ... }
+     *
+     * @param sCfgAsJSON the JSON configuration string
+     * @param nDefPort the default port to use if not specified in configuration
+     * @return true if initialization was successful, false if client is already connected
+     * @throws IllegalArgumentException if port is invalid
+     * @throws MingleException if SSL configuration is invalid
+     */
     protected boolean init( String sCfgAsJSON, int nDefPort )    // Can be in the form: {"host":"localhost:65534", "cert_path":null, "key_path":null, "timeout":"5s"|5000}
     {                                                            // or in the form:     {"host":"localhost", "port": 65534, ... }
         if( isConnected() )
@@ -176,6 +227,16 @@ public abstract class BaseClient4IP extends BaseClient
         return true;
     }
 
+    /**
+     * Creates an SSL context for secure connections.
+     * Loads SSL certificate and key, validates certificate expiration, and initializes the SSL context.
+     *
+     * @return configured SSL context
+     * @throws GeneralSecurityException if SSL context creation fails
+     * @throws IOException if certificate file cannot be read
+     * @throws SecurityException if certificate is expired or invalid
+     * @throws IllegalArgumentException if key store access fails
+     */
     protected SSLContext createSSLContext() throws GeneralSecurityException, IOException
     {
         SSLContext sslContext = SSLContext.getInstance( "TLS" );

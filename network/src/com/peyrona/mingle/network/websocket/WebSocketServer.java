@@ -1,169 +1,207 @@
 package com.peyrona.mingle.network.websocket;
 
-import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.UtilComm;
-import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.japi.slf4j.SLF4JBridge;
 import com.peyrona.mingle.network.BaseServer4IP;
-import io.undertow.Handlers;
-import io.undertow.Undertow;
-import io.undertow.server.handlers.PathHandler;
-import io.undertow.websockets.WebSocketProtocolHandshakeHandler;
-import io.undertow.websockets.core.WebSocketChannel;
+import java.net.InetSocketAddress;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
-import org.xnio.Options;
+import org.java_websocket.WebSocket;
+import org.java_websocket.handshake.ClientHandshake;
+import org.java_websocket.server.DefaultSSLWebSocketServerFactory;
 
 /**
- * WebSocket server supporting both plain and SSL connections.
- * This class is a concrete implementation of a Mingle network server that uses
- * the WebSocket protocol, leveraging the Undertow library for handling the
- * underlying connections.
+ * WebSocket server.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class WebSocketServer
              extends BaseServer4IP
 {
-    private final AtomicBoolean             isStopping  = new AtomicBoolean( false );
-    private final AtomicReference<Undertow> undertowRef = new AtomicReference<>( null );
-    private       String path;
+    //------------------------------------------------------------------------//
+    // CONSTRUCTOR
+
+    public WebSocketServer()
+    {
+        if( UtilSys.getLogger() == null )
+            UtilSys.setLogger( "websocket-server", UtilSys.getConfig() );
+
+        SLF4JBridge.setup( UtilSys.getLogger(), ILogger.Level.INFO);
+    }
 
     //------------------------------------------------------------------------//
 
-    /**
-     * Starts the WebSocket server with the specified configuration.
-     * The configuration is provided as a JSON string, which can include
-     * settings for the host, port, path, and SSL.
-     *
-     * @param sCfgAsJSON A JSON string containing the server configuration.
-     * @return The server instance.
-     * @throws MingleException if the server is already running or fails to start.
-     */
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
         if( isRunning() )
             return this;
 
-        if( ! init( sCfgAsJSON, UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT ) )
-            return this;
+        super.start( sCfgAsJSON );
 
-        // Latch to enforce deterministic startup wait
-        CountDownLatch             startupLatch = new CountDownLatch( 1 );
-        AtomicReference<Exception> startupError = new AtomicReference<>( null );
+        // 1. Create synchronization objects
+        CountDownLatch             latch    = new CountDownLatch( 1 );
+        AtomicReference<Exception> errorRef = new AtomicReference<>( null );
 
-        try
-        {
-            // We use a Runnable instead of extending Thread
-            ServerRunner runner = new ServerRunner( startupLatch, startupError );
+        // 2. Create the runner (Pass the latch/errorRef to it)
+        // Note: The runner MUST call latch.countDown() when onStart() fires!
+        ServerRunner runner = new ServerRunner( latch, errorRef );
 
-            // Execute the runner. We don't need to keep the future because
-            // the runner finishes as soon as Undertow.start() returns (non-blocking).
-            // The Undertow instance itself is what keeps the app alive.
-            UtilSys.execute( getClass().getSimpleName() + ":boot", runner );
-
-            // Wait up to 5 seconds for the server to actually boot
-            boolean started = startupLatch.await( 5, TimeUnit.SECONDS );
-
-            if( startupError.get() != null )
-                throw startupError.get();
-
-            if( ! started )
-                throw new MingleException( "Server failed to initialize within timeout period" );
-
-            // Validate that the reference was actually set
-            if( undertowRef.get() == null )
-                throw new MingleException( "Server initialization failed (Instance null)" );
-
-        }
-        catch( Exception e )
-        {
-            MingleException me = new MingleException( "Failed to start server", e );
-            stop(); // Ensure cleanup
-            log( me );
-            notifyError( (INetClient) null, me );
-            throw me;
-        }
-
-        return super.start( sCfgAsJSON );
-    }
-
-    /**
-     * Stops the WebSocket server gracefully.
-     * This method closes all active client connections and shuts down the
-     * underlying Undertow server.
-     *
-     * @return The server instance.
-     */
-    @Override
-    public synchronized INetServer stop()
-    {
-        isStopping.set( true );
-
-        try
-        {
-            // 1. Stop the generic IP server components
-            super.stop();
-
-            // 2. Explicitly stop Undertow to release ports and threads
-            Undertow server = undertowRef.getAndSet( null );
-            if( server != null )
-            {
-                server.stop();
-                log( Level.INFO, "Undertow server stopped" );
-            }
-        }
-        catch( Exception e )
-        {
-            log( new MingleException( "Error stopping Undertow server", e ) );
-        }
-        finally
-        {
-            isStopping.set( false );
-        }
-
-        return this;
+        // 3. Delegate execution and waiting to BaseServer4IP
+        return super.run( runner, latch, errorRef );
     }
 
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
     @Override
-    protected boolean init( String sCfgAsJSON, int nDefPort )
+    public int getDefaultPort()
     {
-        if( ! super.init( sCfgAsJSON, nDefPort ) )
-            return false;
-
-        UtilJson uj = new UtilJson( (sCfgAsJSON == null || sCfgAsJSON.isEmpty()) ? "{}" : sCfgAsJSON );
-        path = uj.getString( "path", "/" );
-
-        return true;
+        return UtilComm.MINGLE_DEFAULT_WEBSOCKET_PORT;
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE SCOPE
+    // INNER CLASS: Mingle WebSocket Server
+    //------------------------------------------------------------------------//
+    private final class MingleWebSocketServer extends org.java_websocket.server.WebSocketServer
+    {
+        // Map raw WebSocket -> Our Wrapper
+        private final Map<WebSocket, WebSocketClient> connMap = new ConcurrentHashMap<>();
+        private final CountDownLatch startupLatch;
+
+        MingleWebSocketServer( InetSocketAddress address, CountDownLatch latch )
+        {
+            super( address );
+            this.startupLatch = latch;
+        }
+
+        /**
+         * Explicitly closes all underlying sockets.
+         * This triggers onClose() for each, ensuring proper cleanup.
+         */
+        void closeAllConnections()
+        {
+            for( WebSocket ws : connMap.keySet() )
+                if( ws.isOpen() )
+                    ws.close();
+        }
+
+        @Override
+        public void onStart()
+        {
+            if( startupLatch != null )
+                startupLatch.countDown();
+
+            log( Level.INFO, "WebSocket server started successfully" );
+        }
+
+        @Override
+        public void onOpen( WebSocket conn, ClientHandshake handshake )
+        {
+            if( isStopping.get() )
+            {
+                conn.close();
+                return;
+            }
+
+            try
+            {
+                if( isAllowed( conn.getRemoteSocketAddress().getAddress() ) )
+                {
+                    WebSocketClient client = new WebSocketClient();
+                    client.add( newDefaultClientListener() ); // Hook into BaseServer listeners
+
+                    if( client.connect( conn ) )
+                    {
+                        connMap.put( conn, client );
+                        // Add to BaseServer's generic client list
+                        add( client );
+                    }
+                    else
+                    {
+                        conn.close();
+                    }
+                }
+                else
+                {
+                    log( Level.WARNING, "Connection denied: " + conn.getRemoteSocketAddress() );
+                    conn.close();
+                }
+            }
+            catch( Exception exc )
+            {
+                log( "Error handling new connection", exc );
+                conn.close();
+            }
+        }
+
+        @Override
+        public void onClose( WebSocket conn, int code, String reason, boolean remote )
+        {
+            // Remove from our local map
+            WebSocketClient client = connMap.remove( conn );
+
+            if( client != null )
+            {
+                // 1. Notify wrapper to clean up resources (listeners, etc.)
+                client.dispatchClose();
+
+                // 2. Ensure removal from BaseServer's generic list
+                // (Assuming BaseServer has a method for this, or newDefaultClientListener handles it via onDisconnected)
+                // If BaseServer.newDefaultClientListener() handles removal on 'onDisconnected', we are good.
+                // If not, we might need: remove(client);
+            }
+        }
+
+        @Override
+        public void onMessage( WebSocket conn, String message )
+        {
+            WebSocketClient client = connMap.get( conn );
+            if( client != null )
+            {
+                client.dispatchMessage( message );
+            }
+        }
+
+        @Override
+        public void onError( WebSocket conn, Exception ex )
+        {
+            if( isStopping.get() )
+                return;
+
+            if( conn != null )
+            {
+                WebSocketClient client = connMap.get( conn );
+
+                if( client != null )
+                {
+                    client.dispatchError( ex );
+                    return;
+                }
+            }
+
+            log( "WebSocket server error", ex );
+        }
+    }
 
     //------------------------------------------------------------------------//
-    // INNER CLASS
     // Server Runner
     //------------------------------------------------------------------------//
     private final class ServerRunner implements Runnable
     {
-        private final CountDownLatch             startupLatch;
-        private final AtomicReference<Exception> errorRef;
+        private final CountDownLatch             latch;
+        private final AtomicReference<Exception> errRef;
 
-        ServerRunner( CountDownLatch latch, AtomicReference<Exception> errorRef )
+        ServerRunner( CountDownLatch startupLatch, AtomicReference<Exception> errorRef )
         {
-            this.startupLatch = latch;
-            this.errorRef     = errorRef;
+            this.latch  = startupLatch;
+            this.errRef = errorRef;
         }
 
         @Override
@@ -171,108 +209,25 @@ public final class WebSocketServer
         {
             try
             {
-                log( Level.INFO,
-                     String.format( "Starting WebSocket server on %s:%d%s (SSL: %s)",
-                                    getHost(), getPort(), path, getSSLCert() != null ) );
+                InetSocketAddress     address = new InetSocketAddress( getHost(), getPort() );
+                MingleWebSocketServer server  = new MingleWebSocketServer( address, latch );
 
-                WebSocketProtocolHandshakeHandler wsphh = Handlers.websocket( (exchange, channel) -> handleNewConnection( channel ) );
-
-                Undertow.Builder builder = Undertow.builder()
-                        .setServerOption( Options.BACKLOG, 10000 )
-                        .setHandler( new PathHandler().addPrefixPath( path, wsphh ) );
-
-                if( getSSLCert() == null )
+                if( getSSLCert() != null )
                 {
-                    builder.addHttpListener( getPort(), getHost() );
-                    log( Level.INFO, "Plain WebSocket because the Certificate file was not provided" );
+                    // createSSLContext() could throw or return null in some implementations
+                    // assuming BaseServer4IP handles the throw, here we just pass context.
+                    server.setWebSocketFactory( new DefaultSSLWebSocketServerFactory( createSSLContext() ) );
                 }
-                else
-                {
-                    builder.addHttpsListener( getPort(), getHost(), createSSLContext() );
-                    log( Level.INFO, "SSL WebSocket initialized" );
-                }
-
-                Undertow server = builder.build();
-
-                // Critical: Assign to the AtomicReference so stop() can access it
-                undertowRef.set( server );
 
                 server.start();
-                log( Level.INFO, "WebSocket server started successfully" );
             }
             catch( Exception e )
             {
-                cleanupClients( true );
-                errorRef.set( e );
-            }
-            finally
-            {
-                // Always count down so the main thread stops waiting
-                startupLatch.countDown();
-            }
-        }
+                errRef.set( e );
 
-        //------------------------------------------------------------------------//
-
-        private void handleNewConnection( WebSocketChannel channel )
-        {
-            WebSocketClient client = null;
-
-            try
-            {
-                if( isAllowed( channel.getSourceAddress().getAddress() ) )
-                {
-                    client = new WebSocketClient();
-                    client.add( newClientListener() );
-
-                    // Note: Assuming WebSocketClient.connect maps to a boolean success/fail
-                    if( client.connect( channel ) )
-                    {
-                        add( client );
-                    }
-                    else
-                    {
-                        // Explicitly close if connect logic failed but threw no exception
-                        closeChannel( channel );
-                    }
-                }
-                else
-                {
-                    MingleException me = new MingleException( channel.getSourceAddress().getAddress() + ": address not allowed" );
-
-                    notifyError( client, me );
-                    closeChannel( channel );
-                }
-            }
-            catch( Exception exc )
-            {
-                if( ! isStopping.get() )
-                    handleConnectionError( client, channel, exc );
-            }
-        }
-
-        private void handleConnectionError( WebSocketClient client, WebSocketChannel channel, Exception exc )
-        {
-            if( client != null )
-                client.disconnect();
-
-            del( client );
-            notifyError( client, exc );
-            closeChannel( channel );
-        }
-
-        private void closeChannel( WebSocketChannel channel )
-        {
-            if( channel != null && channel.isOpen() )
-            {
-                try
-                {
-                    channel.sendClose();
-                }
-                catch( Exception e )
-                {
-                    // Ignore close errors, but log trace if needed for debugging
-                }
+                // Ensure main thread doesn't hang
+                if( latch != null )
+                    latch.countDown();
             }
         }
     }

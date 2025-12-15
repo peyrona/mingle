@@ -142,8 +142,7 @@ public final class StdXprFns
         {
             MingleException me = new MingleException( "Error executing " + toInvocation( clazz, sFnName, actualArgs ), exc.getCause() );
 
-            if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
-            else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
 
             throw me;
         }
@@ -162,8 +161,7 @@ public final class StdXprFns
         {
             MingleException me = new MingleException( "Error executing " + sFnName + "()", exc.getCause() );
 
-            if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
-            else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
 
             throw me;
         }
@@ -181,8 +179,7 @@ public final class StdXprFns
         {
             MingleException me = new MingleException( "Error executing " + target.getClass().getSimpleName() + ":" + sFnName + "()", exc.getCause() );
 
-            if( UtilSys.getLogger() == null )  me.printStackTrace( System.err );
-            else                               UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
+            UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
 
             throw me;
         }

@@ -216,8 +216,7 @@ public final class SocketClient
             }
         }
 
-        // Clear listeners before nullifying fields
-        clearListenersList();
+        // Do not clear listeners: they will be needed if socket is reconnected.
 
         synchronized( this )
         {

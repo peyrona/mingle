@@ -95,8 +95,7 @@ public final class UtilSys
         }
         catch( Throwable twl )
         {
-            if( getLogger() == null )  twl.printStackTrace( System.err );
-            else                       getLogger().log( ILogger.Level.WARNING, twl );
+            getLogger().log( ILogger.Level.WARNING, twl );
         }
     }
 
@@ -159,7 +158,7 @@ public final class UtilSys
      */
     public static ILogger getLogger()
     {
-        return logger;
+        return (logger == null ? new DefaultLogger() : logger);
     }
 
     /**
@@ -185,9 +184,12 @@ public final class UtilSys
             expire    = config.get( "common", "log_expire", -1 );
         }
 
-        logger = new Logger().init( name.trim(), bDisk, b2Console )
+        synchronized( fHomeDir )
+        {
+            logger = new Logger().init( name.trim(), bDisk, b2Console )
                              .setLevel( sLogLevel )
                              .deleteOlderThan( (UtilSys.isDevEnv ? 21 : expire) );
+        }
 
         return logger;
     }
@@ -307,8 +309,8 @@ public final class UtilSys
 
         Runnable run = () ->
                         {
-                            String original = Thread.currentThread().getName();    // TODO: esto no funciona
-                            Thread.currentThread().setName( sThreadName );
+                            Thread.currentThread()
+                                  .setName( sThreadName );
 
                             try
                             {
@@ -316,14 +318,7 @@ public final class UtilSys
                             }
                             catch( Exception exc )
                             {
-                                if( UtilSys.getLogger() == null )
-                                    exc.printStackTrace( System.err );
-                                else
-                                    UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
-                            }
-                            finally
-                            {
-                                Thread.currentThread().setName( original );
+                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
                             }
                         };
 
@@ -355,10 +350,7 @@ public final class UtilSys
                             }
                             catch( Exception exc )
                             {
-                                if( UtilSys.getLogger() == null )
-                                    exc.printStackTrace( System.err );
-                                else
-                                    UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
+                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
                             }
                             finally
                             {
@@ -395,10 +387,7 @@ public final class UtilSys
                             }
                             catch( Exception exc )
                             {
-                                if( UtilSys.getLogger() == null )
-                                    exc.printStackTrace( System.err );
-                                else
-                                    UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
+                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
                             }
                             finally
                             {
@@ -796,10 +785,113 @@ public final class UtilSys
             String msg = "WARNING: Unable to verify filesystem write access. Assuming read-only.\n"+
                          UtilStr.toStringBrief( ioe );
 
-            if( getLogger() == null )   getLogger().log( ILogger.Level.SEVERE, msg );
-                                        System.err.println( msg );
+            System.err.println( msg );
 
             return false;   // Conservative: assume read-only on error
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    // A simplistic default logger that send msgs to console.
+    //------------------------------------------------------------------------//
+
+    private static final class DefaultLogger implements ILogger
+    {
+        private volatile Level level = Level.WARNING;
+
+        @Override
+        public ILogger init( String sFileName, boolean bUseDisk, boolean bUseConsole )
+        {
+            return this;
+        }
+
+        @Override
+        public String getName()
+        {
+            return getClass().getName();
+        }
+
+        @Override
+        public Level getLevel()
+        {
+            return level;
+        }
+
+        @Override
+        public ILogger setLevel( Level l )
+        {
+            level = l;
+            return this;
+        }
+
+        @Override
+        public ILogger setLevel( String s )
+        {
+            try
+            {
+                setLevel( ILogger.Level.fromName( s ) );
+            }
+            catch( Exception iae )
+            {
+                setLevel( Level.WARNING );
+            }
+
+            return this;
+        }
+
+        @Override
+        public boolean isLoggable( Level level )
+        {
+            return (level.weight >= this.level.weight);
+        }
+
+        @Override
+        public ILogger deleteOlderThan( int days )
+        {
+            return this;
+        }
+
+        @Override
+        public boolean say( String msg )
+        {
+            System.out.println( msg );
+            return true;
+        }
+
+        @Override
+        public boolean log( Level l, String msg )
+        {
+            return log( level, null, msg );
+        }
+
+        @Override
+        public boolean log( Level l, Throwable th )
+        {
+            return log( level, th, null );
+        }
+
+        @Override
+        public boolean log( Level level, Throwable th, String msg )
+        {
+            if( (msg == null) && (th == null) )
+            {
+                level = Level.WARNING;
+                msg   = "Invalid call: Message and Throwable are null";
+            }
+
+            if( level == null )
+                level = Level.WARNING;
+
+            if( isLoggable( level ) )
+            {
+                if( th != null )
+                    msg = ((msg == null) ? "" : msg +"\n") + UtilStr.toString( th );     // toString( th ) returns "null" when th is null
+
+                return say( "["+ level +"] "+ msg );
+            }
+
+            return false;
         }
     }
 }

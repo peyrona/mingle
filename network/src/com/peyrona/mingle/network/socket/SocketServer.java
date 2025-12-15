@@ -30,7 +30,7 @@ public final class SocketServer
         if( isRunning() )
             return this;
 
-        init( sCfgAsJSON, 0 ); // Port is determined by Plain or SSL server
+        super.start( sCfgAsJSON );
 
         if( getSSLCert() == null && getSSLKey() == null )
         {
@@ -74,6 +74,12 @@ public final class SocketServer
 
     // --- DELEGATED METHODS ---
 
+    @Override
+    public int getDefaultPort()
+    {
+        return impl.getDefaultPort();
+    }
+    
     @Override
     public boolean isRunning()
     {
@@ -120,4 +126,7 @@ public final class SocketServer
 
         return super.getClients();
     }
+
+    //------------------------------------------------------------------------//
+    // PROTECTED SCOPE
 }

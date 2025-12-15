@@ -22,6 +22,12 @@
         </manifest>
     </target>
 
+    <target name="-pre-jar">
+        <copy todir="${build.classes.dir}/META-INF">
+            <fileset dir="META-INF"/>
+        </copy>
+    </target>
+
     <!-- Copy JAR to deployment folder -->
     <target name="-post-jar">
         <copy file="${dist.jar}" todir="../todeploy/lib/" failonerror="true" />

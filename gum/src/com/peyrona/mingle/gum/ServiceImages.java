@@ -3,10 +3,10 @@ package com.peyrona.mingle.gum;
 
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import io.undertow.server.HttpServerExchange;
-import io.undertow.util.StatusCodes;
 import java.io.File;
 import java.io.IOException;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * ServiceImages class extends ServiceBase to provide image management operations
@@ -45,9 +45,9 @@ final class ServiceImages extends ServiceBase
 
     //------------------------------------------------------------------------//
 
-    ServiceImages( HttpServerExchange xchg )
+    ServiceImages(  HttpServletRequest request, HttpServletResponse response )
     {
-        super( xchg );
+        super( request, response );
     }
 
     //------------------------------------------------------------------------//
@@ -81,7 +81,7 @@ final class ServiceImages extends ServiceBase
     @Override   // POST == APPEND
     protected void doPost() throws IOException
     {
-        sendError( "Improper service", StatusCodes.NOT_FOUND );   // This is done at ::save
+        sendError( "Improper service", HttpServletResponse.SC_NOT_FOUND );   // This is done at ::save
     }
 
     /**
@@ -102,11 +102,11 @@ final class ServiceImages extends ServiceBase
         if( fImage.exists() )
         {
             if( ! fImage.delete() )
-                sendError( "Can not delete: "+ fImage.getName(), StatusCodes.UNAUTHORIZED );    // 401
+                sendError( "Can not delete: "+ fImage.getName(), HttpServletResponse.SC_UNAUTHORIZED );    // 401
         }
         else
         {
-            sendError( "Not found: "+ fImage.getName(), StatusCodes.NOT_FOUND );                // 404.
+            sendError( "Not found: "+ fImage.getName(), HttpServletResponse.SC_NOT_FOUND );                // 404.
         }
     }
 

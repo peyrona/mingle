@@ -9,10 +9,11 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
-import io.undertow.server.HttpServerExchange;
 import java.sql.Connection;
 import java.sql.DriverManager;
 import java.sql.PreparedStatement;
+import javax.servlet.http.HttpServletRequest;
+import javax.servlet.http.HttpServletResponse;
 
 /**
  * ServiceDB class extends ServiceBase to provide database access functionality
@@ -46,9 +47,9 @@ final class ServiceDB extends ServiceBase
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
 
-    ServiceDB( HttpServerExchange xchg )
+    ServiceDB( HttpServletRequest request, HttpServletResponse response )
     {
-        super( xchg );
+        super( request, response );
     }
 
     //------------------------------------------------------------------------//

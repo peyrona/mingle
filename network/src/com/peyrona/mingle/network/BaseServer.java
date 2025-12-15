@@ -25,6 +25,8 @@ import java.util.function.Consumer;
 import java.util.stream.Stream;
 
 /**
+ * Base class for all network server implementations.
+ * Provides common functionality for client management, broadcasting, and lifecycle management.
  *
  * @author francisco
  */
@@ -38,23 +40,29 @@ public abstract
     private final    Set<INetClient> lstClients  = ConcurrentHashMap.newKeySet();
     private final    Broadcaster     broadcaster = new Broadcaster();
     private final    ScheduledFuture maintenance = Executors.newSingleThreadScheduledExecutor().scheduleWithFixedDelay( () -> cleanupClients( false ),
-                                                                                                                        10,10, TimeUnit.SECONDS );
-    private final    ExecutorService ioExecutor  = new ThreadPoolExecutor( numOfThreads(),                                 // Core threads
-                                                                           200,                                            // Max threads
-                                                                           30, TimeUnit.SECONDS,                           // Keep-alive
-                                                                           new ArrayBlockingQueue<>(500),                  // Bounded queue
-                                                                           createThreadFactory( "network-server-", true ), // Custom factory
-                                                                           new ThreadPoolExecutor.CallerRunsPolicy() );    // Rejection policy (to provide backpressure)
-
+                                                                                                                         10,10, TimeUnit.SECONDS );
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
 
+    /**
+     * Checks if the server is currently running.
+     *
+     * @return true if the server is running, false otherwise
+     */
     @Override
     public boolean isRunning()
     {
         return isRunning;
     }
 
+    /**
+     * Starts the server with the given configuration.
+     * Once a server is stopped, it cannot be restarted.
+     *
+     * @param sCfgAsJSON the server configuration as JSON string
+     * @return this server instance for method chaining
+     * @throws MingleException if the server was previously stopped
+     */
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
@@ -65,50 +73,67 @@ public abstract
         return this;
     }
 
+    /**
+     * Stops the server and cleans up all resources.
+     * Disconnects all clients and stops the maintenance task.
+     *
+     * @return this server instance for method chaining
+     */
     @Override
     public synchronized INetServer stop()
     {
         wasStopped = true;
-
         maintenance.cancel( true );
 
         cleanupClients( true );
 
         broadcaster.shutdown();
-        ioExecutor.shutdown();
-
-        try
-        {
-            if( ! ioExecutor.awaitTermination( 10, TimeUnit.SECONDS ) )
-                ioExecutor.shutdownNow();
-        }
-        catch( InterruptedException ie )
-        {
-            ioExecutor.shutdownNow();
-        }
-
         isRunning = false;
+
         return this;
     }
 
+    /**
+     * Adds a client to this server.
+     *
+     * @param client the client to add
+     * @return true if the client was added, false if already present
+     */
     @Override
     public boolean add( INetClient client )
     {
         return lstClients.add( client );
     }
 
+    /**
+     * Removes a client from this server.
+     *
+     * @param client the client to remove
+     * @return true if the client was removed, false if not found
+     */
     @Override
     public boolean del( INetClient client )
     {
         return lstClients.remove( client );
     }
 
+    /**
+     * Checks if this server has any connected clients.
+     *
+     * @return true if there are connected clients, false otherwise
+     */
     @Override
     public boolean hasClients()
     {
         return ! lstClients.isEmpty();
     }
 
+    /**
+     * Gets a snapshot of all connected clients.
+     * Performs cleanup of disconnected clients before returning the list.
+     *
+     * @return a stream of connected clients
+     */
     @Override
     public Stream<INetClient> getClients()
     {
@@ -119,22 +144,33 @@ public abstract
         }
     }
 
+    /**
+     * Broadcasts a message to all connected clients.
+     * If the server is not running, an error is notified.
+     *
+     * @param message the message to broadcast
+     * @return this server instance for method chaining
+     */
     @Override
     public INetServer broadcast( String message )
     {
-        if( ! hasClients() || ! isRunning() )
+        if( ! isRunning() )
         {
-            if( ! isRunning() )
-                notifyError( (INetClient) null, new MingleException( "Attempting to use a closed " + getClass().getSimpleName() ) );
-
+            notifyError( (INetClient) null, new MingleException( "Attempting to use a closed " + getClass().getSimpleName() ) );
             return this;
         }
 
-        broadcaster.broadcast( message, lstClients, this::del, this::notifyError );
+        if( hasClients() )
+            broadcaster.broadcast( message, lstClients, this::del, this::notifyError );
 
         return this;
     }
 
+    /**
+     * Returns a string representation of this server.
+     *
+     * @return string representation
+     */
     @Override
     public String toString()
     {
@@ -143,13 +179,6 @@ public abstract
 
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
-
-    // If getClients() returns Collection<INetClient>
-    protected void cleanupClients( boolean bAll )
-    {
-        if( ! lstClients.isEmpty() )
-            lstClients.removeIf( client -> bAll || (! client.isConnected()) );
-    }
 
     /**
      * Notify all listeners: INetServer.IListener.onConnected.
@@ -208,38 +237,51 @@ public abstract
         return this;
     }
 
+    /**
+     * Logs a message with the specified log level.
+     *
+     * @param level the log level
+     * @param msg the message to log
+     * @return this server instance for method chaining
+     */
     protected INetServer log( ILogger.Level level, String msg )
     {
-        if( UtilSys.getLogger() == null )  System.err.println( "["+ level +"] "+ msg );
-        else                               UtilSys.getLogger().log( level, msg );
-
+        UtilSys.getLogger().log( level, msg );
         return this;
     }
 
+    /**
+     * Logs an exception.
+     *
+     * @param th the exception to log
+     * @return this server instance for method chaining
+     */
     protected INetServer log( Throwable th )
     {
         return log( null, th );
     }
 
+    /**
+     * Logs a message and/or exception.
+     * Uses system error output if no logger is available, otherwise uses the configured logger.
+     *
+     * @param msg the message to log (can be null)
+     * @param th the exception to log (can be null)
+     * @return this server instance for method chaining
+     */
     protected INetServer log( String msg, Throwable th )
     {
-        if( UtilSys.getLogger() == null )
-        {
-            if( msg != null )
-                System.err.println( msg );
-
-            if( th != null )
-                th.printStackTrace( System.err );
-        }
-        else if( msg != null )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, th, msg );
-        }
-
+        UtilSys.getLogger().log( ILogger.Level.SEVERE, th, msg );
         return this;
     }
 
-    protected INetClient.IListener newClientListener()
+    /**
+     * Creates a default client listener that forwards all client events to this server.
+     * This listener handles connection, disconnection, message, and error events.
+     *
+     * @return a new default client listener
+     */
+    protected INetClient.IListener newDefaultClientListener()
     {
         return new INetClient.IListener()
                     {
@@ -271,6 +313,13 @@ public abstract
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    // If getClients() returns Collection<INetClient>
+    private void cleanupClients( boolean bAll )
+    {
+        if( ! lstClients.isEmpty() )
+            lstClients.removeIf( client -> bAll || (! client.isConnected()) );
+    }
 
     // Helper method to create thread factory
     private static ThreadFactory createThreadFactory( String namePrefix, boolean daemon )
@@ -306,7 +355,7 @@ public abstract
         private final ExecutorService executor = new ThreadPoolExecutor( numOfThreads(),                                      // Core threads
                                                                          numOfThreads(),                                      // Max threads
                                                                          0L, TimeUnit.MILLISECONDS,                           // Keep-alive (0 beacuse is irrelevant when Core==Max)
-                                                                         new ArrayBlockingQueue<>( 512 ),                     // Bounded queue limits pending broadcasts (512 should be enough)
+                                                                         new ArrayBlockingQueue<>( 2048 ),                     // Bounded queue limits pending broadcasts (512 should be enough)
                                                                          createThreadFactory( "network-broadcaster-", true ), // Factory
                                                                          new ThreadPoolExecutor.CallerRunsPolicy() );         // Rejection policy: Run in caller thread if full
 

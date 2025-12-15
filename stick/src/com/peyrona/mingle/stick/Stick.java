@@ -264,8 +264,8 @@ public final class Stick
         boolean bUseDisk  = UtilSys.isFsWritable && config.get( "exen", "write_disk", true  );
         boolean bFakeDrvs = config.get( "exen", "faked_drivers", false );
         boolean bDocker   = UtilSys.isDocker();
-        String  sLogName  = UtilSys.getLogger() == null ? "No logger in use" : UtilSys.getLogger().getName();
-        String  sLogLevel = UtilSys.getLogger() == null ? "No logger in use" : UtilSys.getLogger().getLevel().toString();
+        String  sLogName  = UtilSys.getLogger().getName();
+        String  sLogLevel = UtilSys.getLogger().getLevel().toString();
 
         String sInfo = new StringBuilder()
                 .append( '\n' )
@@ -959,7 +959,7 @@ public final class Stick
 
 // TODO: quitar este synchronized y hacerlo con Executor(s)
 //       PROMPT:
-//       Inner Class 'private final class ServerListener implements INetServer.IListener' in class @stick/src/com/peyrona/mingle/stick/Stick.java is a listener; its methdos are invoked from a Socket-Server. Therefore many
+//       Inner Class 'private final class ServerListener implements INetServer.IListener' in class @stick/src/com/peyrona/mingle/stick/Stick.java. Its methods are invoked from a Socket-Server. Therefore many
 //       socket clients can make the same request almost at the same time, triggering the same Inner Class method (e.g. 'onMessage(...)') that can take long time to process.
 //       I need to know if current implementation can handle these sutuations gracefully and if not I want to know what to do to achieve it.
 
