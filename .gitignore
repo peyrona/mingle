@@ -33,8 +33,6 @@ Thumbs.db
 
 /.cache/
 /.config/
-/todeploy/lib/gum/web/.history/
-/todeploy/lib/gum/web/.GEMINI.md
 
 *.graphml
 *.txt
@@ -48,11 +46,7 @@ count_lines.sh
 generate_javadocs.sh
 release.sh
 
-!/todeploy/**/*.jar
-/todeploy/examples/9*
-/todeploy/log/
-/todeploy/tmp/
-/todeploy/etc/glue-settings.json
+/todeploy/
 /0.PhD/
 /balata/
 /build/
