@@ -121,17 +121,17 @@ public class UtilComm
                 (port <= TCP_PORT_MAX_ALLOWED));
     }
 
-    public static short clientScope( String sAllow, String sDefVal )
+    public static short clientScope( String sAllow )
     {
-        if( UtilStr.contains( "local"   , sAllow, sDefVal ) )  return ALLOW_IP_LOCAL;
-        if( UtilStr.contains( "subnet"  , sAllow, sDefVal ) )  return ALLOW_IP_SUBNET;
-        if( UtilStr.contains( "intranet", sAllow, sDefVal ) )  return ALLOW_IP_INTRANET;
-        if( UtilStr.contains( "any"     , sAllow, sDefVal ) )  return ALLOW_IP_ANY;
+        if( UtilStr.contains( "local"   , sAllow ) )  return ALLOW_IP_LOCAL;
+        if( UtilStr.contains( "subnet"  , sAllow ) )  return ALLOW_IP_SUBNET;
+        if( UtilStr.contains( "intranet", sAllow ) )  return ALLOW_IP_INTRANET;
+        if( UtilStr.contains( "any"     , sAllow ) )  return ALLOW_IP_ANY;
 
         throw new IllegalArgumentException( sAllow +": invalid value for 'allow'. Only 'local', 'intranet' or 'any' are accepted.");
     }
 
-    public static boolean isCLientAllowed( short nScope, InetAddress addr ) throws SocketException
+    public static boolean isClientAllowed( short nScope, InetAddress addr ) throws SocketException
     {
         switch( nScope )
         {

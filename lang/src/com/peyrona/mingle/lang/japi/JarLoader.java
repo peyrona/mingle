@@ -124,9 +124,7 @@ class JarLoader
             try
             {
                 if( isSupported() )
-                {
                     start = "reflection";
-                }
             }
             catch( Throwable t )
             {

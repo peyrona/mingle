@@ -19,7 +19,7 @@ import java.util.List;
  */
 final class Util
 {
-    private static final File fAppDir  = new File( UtilSys.getLibDir(), "/gum/web" );    // Cached in a var because it is heavily used
+    private static final File fAppDir  = new File( UtilSys.getLibDir(), "gum/web" );    // Cached in a var because it is heavily used
     private static       File fUserDir = null;
 
     //------------------------------------------------------------------------//
@@ -34,16 +34,6 @@ final class Util
         return fAppDir;
     }
 
-    static String appendFileMgrCtxTo( String prefix )
-    {
-        return prefix.concat( "file_mgr/" );
-    }
-
-    static String appendUserFilesCtxTo( String prefix )
-    {
-        return prefix.concat( "user-files/" );
-    }
-
     /**
      * Returns the folder containing static files uploaded by the user.<br>
      * An FTP like server but using HTTP protocol.
@@ -53,7 +43,47 @@ final class Util
      */
     static File getServedFilesDir() throws IOException
     {
-        return mkDirs( new File( getUserDir(), "served_files" ) );
+        File fDir = mkDirs( new File( getUserDir(), "served_files" ) );
+
+        if( ! fDir.exists() )
+            throw new IOException( fDir +" does not exist and can not be created" );
+
+        return fDir;
+    }
+
+    static String getServedFilesContext()
+    {
+        return "/gum/user-files";
+    }
+
+    static File getdFileManagerDir() throws IOException
+    {
+        File fDir = new File( Util.getAppDir(), "file_mgr" );
+
+        if( ! new File( fDir, "index.html" ).exists() )
+            throw new IOException( "FileMgr 'index.html' not found in: " + fDir );
+
+        return fDir.getCanonicalFile();
+    }
+
+    static String getFileManagerContext()
+    {
+        return "/gum/file_mgr";
+    }
+
+    static File getDashboardManagerDir() throws IOException
+    {
+        File fDir = Util.getAppDir(); // e.g. .../gum_user_base/dashboards/
+
+        if( ! new File( fDir, "index.html" ).exists() )
+            throw new IOException( "Dashboard 'index.html' not found in: " + fDir );
+
+        return fDir.getCanonicalFile();
+    }
+
+    static String getDashboardManagerContext() throws IOException
+    {
+        return "/gum";
     }
 
     /**
@@ -64,7 +94,12 @@ final class Util
      */
     static File getBoardsDir() throws IOException
     {
-        return mkDirs( new File( getUserDir(), "dashboards" ) );
+        File fDir = mkDirs( new File( getUserDir(), "dashboards" ) );
+
+        if( ! fDir.exists() )
+            throw new IOException( fDir +" does not exist and can not be created" );
+
+        return fDir.getCanonicalFile();
     }
 
     //------------------------------------------------------------------------//

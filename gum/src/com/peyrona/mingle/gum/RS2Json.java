@@ -1,209 +1,170 @@
-/*
- * Copyright (C) 2015 Francisco José Morero Peyrona. All Rights Reserved.
- *
- * Peyrona Commons is a set of basic classes that the author created to make
- * easier the development of other software.
- *
- * It is free software; you can redistribute it and/or modify it under the
- * terms of the GNU General Public License as published by the free Software
- * Foundation; either version 3, or (at your option) any later version.
- *
- * This app is distributed in the hope that it will be useful, but WITHOUT ANY
- * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
- * A PARTICULAR PURPOSE. See the GNU General Public License for more details.
- *
- * You should have received a copy of the GNU General Public License along with
- * this software; see the file COPYING.  If not, write to the Free Software
- * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA.
- */
 
 package com.peyrona.mingle.gum;
 
-import com.peyrona.mingle.lang.japi.UtilStr;
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
+import com.peyrona.mingle.lang.MingleException;
 import java.sql.ResultSet;
 import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
-import java.util.Arrays;
-import java.util.List;
+import java.sql.Types;
+import java.util.HashSet;
+import java.util.Set;
 
 /**
-  * Creates a welformed JSON string from passed ResultSet: the JSON is an array
-  * with two elements, being first element an array of Strings containing the
-  * column names and being second element an array which contais as many
-  * elements as rows were in the ResultSet, being rows elements the columns'
-  * values.
-  * <p>
-  * As an example
-  * <pre>
-  *    { "head": ["ColName_1", "ColName_2", ... , "ColName_N" ],
-  *      "body":[["Col_1_Val", "Col_2_Val", ... , "Col_N_Val" ],    Row 1
-  *              ["Col_1_Val", "Col_2_Val", ... , "Col_N_Val" ],    Row 2
-  *              ...........
-  *              ["Col_1_Val", "Col_2_Val", ... , "Col_1_Val" ]] }  Row N
-  * </pre>
-  */
-public final class RS2JsonStr
+ * Utility to convert a JDBC ResultSet into a standard JSON structure.
+ *
+ * <p>Output Format:
+ * <pre>
+ * {
+ * "head": ["ColName_1", "ColName_2", ... ],
+ * "body": [
+ * [ Value_1_1, Value_1_2, ... ],
+ * [ Value_2_1, Value_2_2, ... ]
+ * ]
+ * }
+ * </pre>
+ *
+ * @author Francisco José Morero Peyrona
+ */
+public final class RS2Json
 {
-    private final ResultSet         resultSet;
-    private final ResultSetMetaData rsmd;
-    private final List<String>      lstJsonCols;
-
-    //----------------------------------------------------------------------------//
-
     /**
-     * Constructor.
+     * Converts a ResultSet to a JSON string representation.
      *
-     * @param rs ResultSet to convert into JSON string.
-     * @throws java.sql.SQLException
+     * @param rs The JDBC ResultSet to process.
+     * @param jsonCols A list of column names that contain raw JSON strings (optional).
+     * If a column name is in this list, its content is parsed as JSON
+     * rather than treated as a string literal.
+     * @return A string containing the JSON object.
+     * @throws MingleException If SQL or JSON errors occur.
      */
-    public RS2JsonStr( ResultSet rs ) throws SQLException
+    public static JsonObject toJson( ResultSet rs )
     {
-        this( rs, (String[]) null );
-    }
-
-    /**
-     * Constructor.
-     *
-     * @param rs        ResultSet to convert into JSON string. It will remain open after the
-     *                  process is finished: it is caller responsability to close it.
-     * @param colNameWithJsonData All column's name for the columsn that contain JSON data:
-     *                  they have to be identified in order to be trated properly.
-     * @throws java.sql.SQLException
-     */
-    public RS2JsonStr( ResultSet rs, String... colNameWithJsonData ) throws SQLException
-    {
-        this.resultSet   = rs;
-        this.rsmd        = rs.getMetaData();
-        this.lstJsonCols = (colNameWithJsonData == null || colNameWithJsonData.length == 0) ? null : Arrays.asList( colNameWithJsonData );
-
-        if( this.lstJsonCols != null )
+        try
         {
-            this.lstJsonCols.replaceAll( String::toUpperCase );      // Col names are used by this class in uppercase
-        }
-    }
+            ResultSetMetaData rsmd    = rs.getMetaData();
+            int               nCols   = rsmd.getColumnCount();
+            Set<String>       jFields = new HashSet<>();
 
-    //----------------------------------------------------------------------------//
+            // 1. Build Header
+            JsonArray headArray = new JsonArray();
 
-    /**
-     * Returns head and body.
-     *
-     * @return "{\"head\": "+ getHead() +", \"body\": "+ getBody() +'}';
-     * @throws SQLException
-     */
-    public String getAll() throws SQLException
-    {
-        return "{\"head\": "+ getHead() +", \"body\": "+ getBody() +'}';
-    }
+            for( int n = 1; n <= nCols; n++ )
+                headArray.add( rsmd.getColumnLabel( n ) );
 
-    /**
-     * Returns the JSON representation of an array containing the columns name.
-     *
-     * @return A JSON representation of an array containing the columns name.
-     * @throws SQLException
-     */
-    public String getHead() throws SQLException
-    {
-        StringBuilder sbHead = new StringBuilder( 1024 * 2 );
-        int           cols   = rsmd.getColumnCount();
+            // 2. Build Body
+            JsonArray bodyArray = new JsonArray();
 
-        // Añado los nombres de las columnas
-        sbHead.append( '[' );
-
-        for( int n = 1; n <= cols; n++ )
-        {
-            sbHead.append( '\"' ).append( rsmd.getColumnLabel( n ) ).append( "\"," );  // Col Label para q use el AS si lo tiene
-        }
-
-        sbHead.deleteCharAt( sbHead.lastIndexOf( "," ) );
-        sbHead.append( ']' );
-
-        return sbHead.toString();
-    }
-
-    /**
-     * Returns rows only (not head).
-     *
-     * @return Rows only (not head).
-     * @throws SQLException
-     */
-    public String getBody() throws SQLException
-    {
-        if( resultSet.next() == false )
-        {
-            return "[]";
-        }
-
-        StringBuilder sbRows = new StringBuilder( 1024 * 64 );
-        int           cols   = rsmd.getColumnCount();
-        int[]         anType = new int[ cols ];          // Cargo los tipos de las columnas
-        boolean[]     abJson = new boolean[ cols ];      // Para saber si una col tiene o no JSON data
-
-        // Relleno los arrays para ir luego más rápido
-        for( int n = 0; n < cols; n++ )
-        {
-            anType[n] = rsmd.getColumnType( n + 1 );
-            abJson[n] = ((lstJsonCols == null) ? false : lstJsonCols.contains( rsmd.getColumnLabel( n+1 ).toUpperCase() ));
-        }
-
-        // Añado todas las columnas para cada fila
-        sbRows.append( '[' );
-
-        do                              // I have to do a do...while because I already made a resultSet.next(), and I can
-        {                               // not do a resultSet.beforeFirst() bacause I use (for speed) not scrollable RS
-            sbRows.append( '[' );
-
-            for( int n = 0; n < cols; n++ )
+            while( rs.next() )
             {
-                appendValue( sbRows, resultSet, n+1, anType[n], abJson[n] );
-                sbRows.append( ',' );
+                JsonArray rowArray = new JsonArray();
+
+                for( int i = 1; i <= nCols; i++ )
+                    rowArray.add( extractColumnValue( rs, rsmd, i, jFields ) );
+
+                bodyArray.add( rowArray );
             }
 
-            sbRows.deleteCharAt( sbRows.lastIndexOf( "," ) );
-            sbRows.append( ']' ).append( ',' );
-        } while( resultSet.next() );
+            // 3. Assemble Result
+            JsonObject root = new JsonObject();
+            root.add( "head", headArray );
+            root.add( "body", bodyArray );
 
-        if( sbRows.length() > 1 )     // Puede q el ResultSet estuviera vacío ( > 1 pq comienza añadiendo '[' )
-        {
-            UtilStr.removeLast( sbRows, 1 );
+            return root;
         }
-
-        sbRows.append( ']' );
-
-        return sbRows.toString();
+        catch( SQLException e )
+        {
+            throw new MingleException( "Error converting ResultSet to JSON", e );
+        }
     }
 
-    //----------------------------------------------------------------------------//
+    //------------------------------------------------------------------------//
+
+    private RS2Json()
+    {
+        // Prevent instantiation of utility class
+    }
 
     /**
-     * This method is just an instrumental one to make code clearer.
-     *
-     * @param   sbRows
-     * @param   rs
-     * @param   nCol
-     * @param   nType
-     * @boolean bJsonData true if the column is already stored in JSON format
-     * @throws SQLException
+     * Extracts a value from the ResultSet and converts it to the appropriate JsonValue.
      */
-    private void appendValue( StringBuilder sbRows, ResultSet rs, int nCol, int nType, boolean bJsonData ) throws SQLException
+    private static JsonValue extractColumnValue( ResultSet rs, ResultSetMetaData rsmd, int colIndex, Set<String> jsonFields )
+        throws SQLException
     {
-        Object obj = UtilDB.readCol( rs, nCol, nType, true );
+        int    colType  = rsmd.getColumnType( colIndex );
+        String colName  = rsmd.getColumnLabel( colIndex );
 
-        if( obj instanceof String )
+        // 1. Check for specific "Already JSON" columns first
+        if( jsonFields.contains( colName ) )
         {
-            String s = (String) obj;
-
-// SELL: Los datos siempre se envían desde el server hasta el client como JSON, así que es necesario escapar (doblemente) todos los caracteres
-//       especiales, pero esto hay que hacerlo una y otra vez en el server (cada vez que se pide un dato): lo suyo es enviar los datos desde el
-//       client ya "escapados". Una vez que yo haya hecho eso, hay que recorrer todos los campos VARCHAR de todas las tablas y hacer doble-escape.
-
-            if( bJsonData )  sbRows.append( s );
-            else             sbRows.append( '"' )
-                                   .append( s.replaceAll( "\\n", "\\\\n" ).replace( '"', '\'' ) )
-                                   .append( '"' );
+            String rawJson = rs.getString( colIndex );
+            return (rawJson == null || rawJson.isBlank()) ? Json.NULL : Json.parse( rawJson );
         }
-        else
+
+        // 2. Map JDBC Types to JSON Types
+        // Note: checking wasNull() is crucial for primitive getters (int, double, boolean)
+
+        switch( colType )
         {
-            sbRows.append( obj );      // Note: null is appended as "null"
+            case Types.INTEGER:
+            case Types.TINYINT:
+            case Types.SMALLINT:
+            {
+                int val = rs.getInt( colIndex );
+                return rs.wasNull() ? Json.NULL : Json.value( val );
+            }
+
+            case Types.BIGINT:
+            {
+                long val = rs.getLong( colIndex );
+                return rs.wasNull() ? Json.NULL : Json.value( val );
+            }
+
+            case Types.FLOAT:
+            case Types.REAL:
+            case Types.DOUBLE:
+            {
+                double val = rs.getDouble( colIndex );
+                return rs.wasNull() ? Json.NULL : Json.value( val );
+            }
+
+            case Types.DECIMAL:
+            case Types.NUMERIC:
+            {
+                // BigDecimal is safer for currency/precision
+                java.math.BigDecimal val = rs.getBigDecimal( colIndex );
+                // Minimal JSON treats big numbers as strings or requires specific handling.
+                // Using double is usually safe for display, but passing as String
+                // preserves precision if the client handles it.
+                // Here we stick to standard JSON number (double) behavior:
+                return val == null ? Json.NULL : Json.value( val.doubleValue() );
+            }
+
+            case Types.BOOLEAN:
+            case Types.BIT:
+            {
+                boolean val = rs.getBoolean( colIndex );
+                return rs.wasNull() ? Json.NULL : Json.value( val );
+            }
+
+            case Types.VARCHAR:
+            case Types.CHAR:
+            case Types.LONGVARCHAR:
+            case Types.CLOB:
+            {
+                String val = rs.getString( colIndex );
+                return val == null ? Json.NULL : Json.value( val );
+            }
+
+            default:
+            {
+                // Fallback for Dates, Timestamps, Blobs, etc. -> String
+                Object val = rs.getObject( colIndex );
+                return val == null ? Json.NULL : Json.value( val.toString() );
+            }
         }
     }
 }

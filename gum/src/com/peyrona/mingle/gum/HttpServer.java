@@ -29,25 +29,23 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
-import javax.servlet.MultipartConfigElement;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.servlet.http.HttpSession;
 import javax.servlet.http.Part;
-import org.eclipse.jetty.server.Handler;
 import org.eclipse.jetty.server.Request;
 import org.eclipse.jetty.server.Server;
 import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.server.handler.ContextHandler;
 import org.eclipse.jetty.server.handler.ContextHandlerCollection;
 import org.eclipse.jetty.server.handler.ErrorHandler;
-import org.eclipse.jetty.server.handler.HandlerWrapper;
-import org.eclipse.jetty.server.handler.ResourceHandler;
 import org.eclipse.jetty.server.session.SessionHandler;
+import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.ServletContextHandler;
 import org.eclipse.jetty.servlet.ServletHolder;
+import org.eclipse.jetty.util.resource.Resource;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
 import org.eclipse.jetty.websocket.servlet.WebSocketServlet;
 import org.eclipse.jetty.websocket.servlet.WebSocketServletFactory;
@@ -61,26 +59,12 @@ import org.eclipse.jetty.websocket.servlet.WebSocketServletFactory;
  */
 final class HttpServer
 {
-    public static class GumWebSocketServlet extends WebSocketServlet
-    {
-        @Override
-        public void configure( WebSocketServletFactory factory )
-        {
-            factory.register( CommBridge.class );
-            factory.getPolicy().setMaxTextMessageSize( 64 * 1024 );
-        }
-    }
+    private static final String  KEY_USER_ID = "mingle_user_id";
+    private static final ILogger logger      = UtilSys.getLogger();
+    private        final Server  server;
 
     //------------------------------------------------------------------------//
-
-    private static final String   KEY_USER_ID     = "mingle_user_id";
-    private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/file_mgr", "/gum/user-files" };
-    private static final String[] asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico" };
-    private        final Server   server;
-    private        final short    nClientAllow;
-    private        final int      timeout;
-
-    //------------------------------------------------------------------------//
+    // CONSTRUCTOR
 
     /**
      * Class constructor.
@@ -94,28 +78,19 @@ final class HttpServer
      */
     HttpServer( String host, int httpPort, int maxSessions, String allowed, int timeout, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
     {
-        this.nClientAllow = UtilComm.clientScope( allowed, null );
-        this.timeout = timeout;
+        ServerConfig.setClientIPScope( allowed );    // Store in shared configuration
 
         host     = UtilStr.isEmpty( host ) ? "localhost" : host.toLowerCase();
         httpPort = UtilUnit.setBetween( 1, httpPort , 65535 );
 
-        server = new Server();
+        // Configure the Server and it connectors
+        this.server = new Server();
 
         // HTTP Connector
         ServerConnector httpConnector = new ServerConnector( server );
                         httpConnector.setHost( host );
                         httpConnector.setPort( httpPort );
         server.addConnector( httpConnector );
-
-        // Additional localhost connector if host is not localhost
-        if( ! "localhost".equals( host ) )
-        {
-            ServerConnector localhostConnector = new ServerConnector( server );
-                            localhostConnector.setHost( "localhost" );
-                            localhostConnector.setPort( httpPort );
-            server.addConnector( localhostConnector );
-        }
 
         // HTTPS Connector (if configured)
         if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
@@ -128,80 +103,51 @@ final class HttpServer
                             httpsConnector.setHost( host );
                             httpsConnector.setPort( httpsPort );
             server.addConnector( httpsConnector );
-
-            if( ! "localhost".equals( host ) )
-            {
-                ServerConnector httpsLocalhostConnector = new ServerConnector( server, sslContextFactory );
-                                httpsLocalhostConnector.setHost( "localhost" );
-                                httpsLocalhostConnector.setPort( httpsPort );
-                server.addConnector( httpsLocalhostConnector );
-            }
-
-            UtilSys.getLogger().say( "\nHTTPS services available at port "+ httpsPort );
         }
 
-        // Setup handlers - ORDER MATTERS: Most specific paths FIRST
         ContextHandlerCollection contexts = new ContextHandlerCollection();
 
-        // CRITICAL: Add handlers from MOST specific to LEAST specific paths
-        // More specific paths (/gum/file_mgr) MUST come before less specific (/gum)
+        // Add Handlers to the collection
+        contexts.addHandler( createLoginHandler( timeout ) );        // /gum/login - NO AUTH FILTER
+        contexts.addHandler( createWsHandler( timeout ) );           // /gum/ws/* - WITH AUTH FILTER
+        contexts.addHandler( createBridgeHandler( timeout ) );       // /gum/bridge/* - WITH AUTH FILTER
+        contexts.addHandler( createUploadHandler( timeout ) );       // /gum/upload - WITH AUTH FILTER
+        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/file_mgr/* - WITH AUTH FILTER
+        contexts.addHandler( createServedFilesHandler( timeout ) );  // /gum/user-files/* - WITH AUTH FILTER
+        contexts.addHandler( createBoardHandler( timeout ) );        // /gum/board/* - WITH AUTH FILTER
+        contexts.addHandler( createGumHandler( timeout ) );          // /gum - WITH AUTH FILTER
+        contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout - WITH AUTH FILTER
 
-        // WebSocket handler for /gum/bridge
-        contexts.addHandler( createWebSocketHandler() );
-
-        // Upload handler for /gum/upload (remove individual session handler)
-        contexts.addHandler( createUploadHandler() );
-
-        // Web services handler for /gum/ws (remove individual session handler)
-        contexts.addHandler( createWsHandler() );
-
-        // Board resources handler for /gum/board
-        contexts.addHandler( createBoardHandler() );
-
-        // Login handler for /gum/login (remove individual session handler)
-        contexts.addHandler( createLoginHandler() );
-
-        // Logout handler for /gum/logout (remove individual session handler)
-        contexts.addHandler( createLogoutHandler() );
-
-        // User files handler for /gum/user-files
-        contexts.addHandler( createUserFilesHandler() );
-
-        // File Manager UI handler for /gum/file_mgr
-        contexts.addHandler( createFileMgrHandler() );
-
-        // Main GUM handler for /gum (MUST be LAST - catches all remaining /gum/* requests)
-        contexts.addHandler( createGumHandler() );
-
-        // Create auth wrapper - directly wrap the contexts (no SessionHandler in between)
-        HandlerWrapper authWrapper = createAuthWrapper();
-        authWrapper.setHandler( contexts );
-
-        server.setHandler( authWrapper );
-
-        // Custom error handler
+        // Set the Root Handler (NO SessionHandler wrapper, NO AuthWrapper!)
+        server.setHandler( contexts );
         server.setErrorHandler( new CustomErrorHandler() );
 
-        // Shows GUM configuration
-        String sServer = "http://" + host +':'+ httpPort +"/gum/";
+        // Show GUM configuration
+        String sServer = "http://" + host + ':' + httpPort + "/gum/";
 
         String sMsg = "Dashboards editor and player + File Manager + HTTP/S Server for static content.\n\n" +
-                      "Dashboards manager : "+ sServer + "index.html    (also 'localhost')\n" +
-                      "Dashboard's folder : "+ Util.getBoardsDir().getCanonicalPath()      +"/\n" +
-                      "Serving files from : "+ Util.getServedFilesDir().getCanonicalPath() +"/\n" +
-                      "    * at context   : "+ Util.appendUserFilesCtxTo( sServer )        +'\n' +
-                      "    * UI manager   : "+ Util.appendFileMgrCtxTo(   sServer ) + "index.html\n";
+                      "Dashboards manager : " + sServer + "index.html\n" +
+                      "Dashboard's folder : " + Util.getBoardsDir().getCanonicalPath() + "/\n" +
+                      "Serving files from : " + Util.getServedFilesDir().getCanonicalPath() + "/\n" +
+                      "    * at context   : " + sServer + "user-files/\n" +
+                      "    * UI manager   : " + sServer + "file_mgr/index.html\n";
 
-        UtilSys.getLogger().say( sMsg );
+        if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
+            logger.say( "HTTPS services available at port " + httpsPort + '\n' );
+
+        logger.say( sMsg );
     }
+
+    //------------------------------------------------------------------------//
+    // PACKAGE SCOPE
 
     HttpServer start() throws Exception
     {
         server.start();
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
-        String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum started...";
-        UtilSys.getLogger().say( msg );
+        String msg = "["+ LocalDateTime.now().format( formatter ) +"] Gum started...";
+        logger.say( msg );
 
         server.join();
 
@@ -216,299 +162,229 @@ final class HttpServer
 
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
             String msg = "["+ LocalDateTime.now().format(formatter) +"] Gum stopped.";
-            UtilSys.getLogger().say( msg );
+            logger.say( msg );
         }
         catch( Exception e )
         {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error during server stop: " + e.getMessage() );
+            logger.log( ILogger.Level.SEVERE, "Error during server stop: " + e.getMessage() );
         }
 
         return this;
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE SCOPE - Handler Creation
+    //  STATIC CONTENT HANDLERS (Refactored to use DefaultServlet)            //
+    //------------------------------------------------------------------------//
 
-    /**
- * Creates an authentication wrapper that validates user sessions before allowing access.
- * Public paths (static resources) and requests from allowed clients bypass authentication.
- */
-    private HandlerWrapper createAuthWrapper()
+    private ContextHandler createGumHandler( int timeout ) throws IOException
     {
-        return new HandlerWrapper()
-        {
-            @Override
-            public void handle( String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response )
-                    throws IOException, ServletException
-            {
-                // Skip if already handled by another handler
-                if( baseRequest.isHandled() )
-                    return;
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( Util.getDashboardManagerContext() );
+                              context.setBaseResource( Resource.newResource( Util.getDashboardManagerDir() ) );
+                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
-                Handler handler = getHandler();
-
-                // Fail fast if no handler is configured (should never happen)
-                if( handler == null )
-                {
-                    UtilSys.getLogger().log( ILogger.Level.SEVERE, "No handler configured in auth wrapper for: " + target );
-                    sendUnauthorizedResponse( response, baseRequest, "Server configuration error" );
-                    return;
-                }
-
-                try
-                {
-                    boolean isAllowed = false;
-
-                    HttpSession session = request.getSession( false );
-
-                    if( session != null && session.getAttribute( KEY_USER_ID ) != null )    // Check 1: Valid session exists
-                    {
-                        isAllowed = true;
-                    }
-                    else if( isPublicPath( target ) )                                       // Check 2: Public resource (static files, login page, etc.)
-                    {
-                        isAllowed = true;
-                    }
-                    else if( isClientAllowed( request ) )                                   // Check 3: Request from allowed client (localhost, configured IPs)
-                    {   // FIXME: activarlo -->
-                        // session = request.getSession( true );
-                        // session.setAttribute( KEY_USER_ID, "local_client" );
-                        isAllowed = true;
-                    }
-
-                    if( isAllowed )
-                    {
-                        if( UtilSys.getLogger() != null && UtilSys.getLogger().isLoggable( ILogger.Level.INFO ) )
-                        {
-                            UtilSys.getLogger().log( Level.INFO, String.format(
-                                                                                "Access granted: %s %s from %s",
-                                                                                request.getMethod(),
-                                                                                target,
-                                                                                request.getRemoteAddr() ) );
-                        }
-
-                        handler.handle( target, baseRequest, request, response );   // Delegate to the next handler in the chain
-                    }
-                    else    // Access denied - log security event
-                    {
-                        if( UtilSys.getLogger() != null && UtilSys.getLogger().isLoggable( ILogger.Level.WARNING ) )
-                        {
-                            UtilSys.getLogger().log( ILogger.Level.WARNING, String.format(
-                                                                                "Unauthorized access attempt: %s %s from %s",
-                                                                                request.getMethod(),
-                                                                                target,
-                                                                                request.getRemoteAddr() ) );
-                        }
-
-                        sendUnauthorizedResponse( response, baseRequest, "Authentication required" );
-                    }
-                }
-                catch( Exception exc )
-                {
-                    if( UtilSys.getLogger() != null )
-                        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc, "Error in authentication handler" );
-
-                    if( ! response.isCommitted() )
-                    {
-                        response.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
-                        response.setContentType( "application/json" );
-                        response.getWriter().write( "{\"error\":\"Authentication error\"}" );
-                    }
-
-                    baseRequest.setHandled( true );
-                }
-            }
-
-            /**
-             * Sends a standardized 401 Unauthorized response with proper headers and body.
-             */
-            private void sendUnauthorizedResponse( HttpServletResponse response, Request baseRequest, String message )
-                    throws IOException
-            {
-                if( response.isCommitted() )
-                    return;
-
-                response.setStatus( HttpServletResponse.SC_UNAUTHORIZED );
-                response.setContentType( "application/json; charset=utf-8" );
-                response.setHeader( "Cache-Control", "no-store, no-cache, must-revalidate" );
-                response.setHeader( "WWW-Authenticate", "FormBased" );
-
-                JsonObject jsonResponse = Json.object()
-                                              .add( "error", message )
-                                              .add( "status", 401 )
-                                              .add( "loginUrl", "/gum/login.html" );
-
-                response.getWriter().write( jsonResponse.toString() );
-                baseRequest.setHandled( true );
-            }
-        };
-    }
-
-    private SessionHandler createSessionHandler( int timeout )
-    {
+        // Configure session management for this context
         SessionHandler sessionHandler = new SessionHandler();
-        sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-        sessionHandler.getSessionCookieConfig().setName( "_Mingle__Gum_" );
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
 
-        return sessionHandler;
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter (runs before servlet)
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
+                      holder.setInitParameter( "dirAllowed", "false" );
+
+        context.addServlet( holder, "/" );
+
+        return context;
     }
 
-    private ContextHandler createWebSocketHandler()
+    private ContextHandler createBoardHandler( int timeout ) throws IOException
     {
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/bridge" );
-                              context.addServlet( new ServletHolder( new GumWebSocketServlet() ), "/*" );
+                              context.setContextPath( "/gum/board" );
+                              context.setBaseResource( Resource.newResource( Util.getBoardsDir() ) );
+                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
+
+        // Configure session management for this context
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter (runs before servlet)
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
+                      holder.setInitParameter( "dirAllowed", "false" );
+
+        context.addServlet( holder, "/" );
 
         return context;
     }
 
-    private ContextHandler createUploadHandler()
+    private ContextHandler createFileManagerHandler( int timeout ) throws IOException
     {
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/upload" );
-                              context.setSessionHandler( createSessionHandler( timeout ) );
+                              context.setContextPath( Util.getFileManagerContext() );
+                              context.setBaseResource( Resource.newResource( Util.getdFileManagerDir() ) );
+                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
-        ServletHolder holder = new ServletHolder( new UploadServlet() );
-        holder.getRegistration().setMultipartConfig( new MultipartConfigElement( System.getProperty( "java.io.tmpdir" ) ) );
+        // Configure session management for this context
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
 
-        context.addServlet( holder, "/*" );
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
+                      holder.setInitParameter( "dirAllowed", "false" );
+
+        context.addServlet( holder, "/" );
 
         return context;
     }
 
-    private ContextHandler createWsHandler()
+    private ContextHandler createServedFilesHandler( int timeout ) throws IOException
     {
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/ws" );
-                              context.addServlet( new ServletHolder( new WsServlet() ), "/*" );
-                              context.setSessionHandler( createSessionHandler( timeout ) );
+                              context.setContextPath( Util.getServedFilesContext() );
+                              context.setBaseResource( Resource.newResource( Util.getServedFilesDir() ) );
+                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
-        return context;
-    }
+        // Configure session management for this context
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
 
-    private ContextHandler createBoardHandler() throws IOException
-    {
-        ContextHandler context = new ContextHandler( "/gum/board" );
+        context.setSessionHandler( sessionHandler );
 
-        ResourceHandler resourceHandler = new ResourceHandler();
-                        resourceHandler.setResourceBase( Util.getBoardsDir().getAbsolutePath() );
-                        resourceHandler.setDirectoriesListed( false );
+        // Add authentication filter
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
 
-        context.setHandler( resourceHandler );
+        // Add servlet
+        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
+                      holder.setInitParameter( "dirAllowed", "true" );
 
-        return context;
-    }
-
-    private ContextHandler createLoginHandler()
-    {
-        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/login" );
-                              context.setSessionHandler( createSessionHandler( timeout ) );
-
-        ServletHolder holder = new ServletHolder( new LoginServlet() );
-
-        context.addServlet( new ServletHolder( new LoginServlet() ), "/*" );
-
-        return context;
-    }
-
-    private ContextHandler createLogoutHandler()
-    {
-        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/logout" );
-                              context.addServlet( new ServletHolder( new LogoutServlet() ), "/*" );
-                              context.setSessionHandler( createSessionHandler( timeout ) );
-
-        return context;
-    }
-
-    private ContextHandler createUserFilesHandler() throws IOException
-    {
-        ContextHandler context = new ContextHandler( "/gum/user-files" );
-        ResourceHandler resourceHandler = new ResourceHandler();
-                        resourceHandler.setResourceBase( Util.getServedFilesDir().getAbsolutePath() );
-                        resourceHandler.setDirectoriesListed( true );
-
-        boolean bFollow = UtilSys.isDevEnv;
-
-        if( bFollow )
-            resourceHandler.setAcceptRanges( true );
-
-        context.setHandler( resourceHandler );
-
-        return context;
-    }
-
-    private ContextHandler createFileMgrHandler() throws IOException
-    {
-        ContextHandler context = new ContextHandler("/gum/file_mgr");
-
-        ResourceHandler resourceHandler = new ResourceHandler();
-                        resourceHandler.setResourceBase( new File( Util.getAppDir(), "file_mgr" ).getAbsolutePath() );
-                        resourceHandler.setDirectoriesListed( false );
-                        resourceHandler.setWelcomeFiles( new String[] { "index.html" } );
-
-        context.setHandler(resourceHandler);
-
-        return context;
-    }
-
-    private ContextHandler createGumHandler()
-    {
-        ContextHandler context = new ContextHandler("/gum");
-
-        ResourceHandler resourceHandler = new ResourceHandler();
-                        resourceHandler.setResourceBase(Util.getAppDir().getAbsolutePath());
-                        resourceHandler.setDirectoriesListed(false);
-                        resourceHandler.setWelcomeFiles(new String[]{"index.html"});
-
-        context.setHandler(resourceHandler);
+        context.addServlet( holder, "/" );
 
         return context;
     }
 
     //------------------------------------------------------------------------//
-    // PRIVATE SCOPE - Utility Methods
+    //  DYNAMIC HANDLERS (WebSockets / API)                                   //
+    //------------------------------------------------------------------------//
 
-    private boolean isClientAllowed( HttpServletRequest request )
+    private ContextHandler createWsHandler( int timeout )
     {
-        String      xForwardedFor = request.getHeader( "X-Forwarded-For" );
-        InetAddress clientIP      = null;
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/ws" );
 
-        if( (xForwardedFor != null) && (! xForwardedFor.isEmpty()) )
-        {
-            try
-            {
-                String s = xForwardedFor.split( "," )[0].trim();
-                clientIP = Inet4Address.getByName( s );
-            }
-            catch( UnknownHostException ex )
-            {
-                // Nothing to do: clientIP is already null
-            }
-        }
-        else
-        {
-            try
-            {
-                clientIP = InetAddress.getByName( request.getRemoteAddr() );
-            }
-            catch( UnknownHostException ex )
-            {
-                // Nothing to do
-            }
-        }
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
 
-        try
-        {
-            return UtilComm.isCLientAllowed( nClientAllow, clientIP );
-        }
-        catch( SocketException ex )
-        {
-            // Nothing to do
-        }
+        context.setSessionHandler( sessionHandler );
 
-        return false;
+        // Add authentication filter
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        context.addServlet( new ServletHolder( new ServletWS() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createBridgeHandler( int timeout )
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/bridge" );
+
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add WebSocket servlet
+        context.addServlet( new ServletHolder( new GumWebSocketServlet() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createUploadHandler( int timeout )
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/upload" );
+
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        context.addServlet( new ServletHolder( new ServletUpload() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createLoginHandler( int timeout )
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/login" );
+
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // NO authentication filter here - login must be accessible without auth!
+        // Add servlet
+        context.addServlet( new ServletHolder( new ServletLogin() ), "/*" );
+
+        return context;
+    }
+
+    private ContextHandler createLogoutHandler( int timeout )
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( "/gum/logout" );
+
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter (must be logged in to logout)
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add servlet
+        context.addServlet( new ServletHolder( new ServletLogout() ), "/*" );
+
+        return context;
     }
 
     //------------------------------------------------------------------------//
@@ -531,32 +407,9 @@ final class HttpServer
         return sslContextFactory;
     }
 
-    private static boolean isPublicPath( String path )
-    {
-        if( path == null )
-            return false;
-
-        if( ! path.startsWith( "/gum/" ) )
-            return false;
-
-        if( path.contains( ".." ) || path.contains( "//" ) )
-            return false;
-
-        if( UtilColls.contains( asPublicFileExt, UtilIO.getExtension( path ).toLowerCase() ) )
-            return true;
-
-        for( String p : asPrivatePaths )
-        {
-            if( path.startsWith( p ) )
-                return false;
-        }
-
-        return true;
-    }
-
     private static void sendErrAndLogIt( HttpServletResponse response, Exception exc )
     {
-        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
+        logger.log( ILogger.Level.SEVERE, exc );
 
         if( response != null && !response.isCommitted() )
         {
@@ -572,7 +425,7 @@ final class HttpServer
             }
             catch( IOException e )
             {
-                UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Failed to send error response" );
+                logger.log( ILogger.Level.SEVERE, e, "Failed to send error response" );
             }
         }
     }
@@ -581,7 +434,7 @@ final class HttpServer
     // INNER CLASSES - Servlets
     //------------------------------------------------------------------------//
 
-    private class LoginServlet extends HttpServlet
+    private class ServletLogin extends HttpServlet
     {
         @Override
         protected void doPost( HttpServletRequest request, HttpServletResponse response )
@@ -692,8 +545,9 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
+    // INNER CLASS
 
-    private class LogoutServlet extends HttpServlet
+    private class ServletLogout extends HttpServlet
     {
         @Override
         protected void doGet( HttpServletRequest request, HttpServletResponse response )
@@ -716,8 +570,9 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
+    // INNER CLASS
 
-    private class UploadServlet extends HttpServlet
+    private class ServletUpload extends HttpServlet
     {
         @Override
         protected void doPost( HttpServletRequest request, HttpServletResponse response )
@@ -806,15 +661,15 @@ final class HttpServer
             int    nRead;
 
             while( (nRead = is.read( buffer )) != -1 )
-            {
                 os.write( buffer, 0, nRead );
-            }
         }
     }
 
     //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
 
-    private class WsServlet extends HttpServlet
+    private class ServletWS extends HttpServlet
     {
         @Override
         protected void service( HttpServletRequest request, HttpServletResponse response )
@@ -841,19 +696,284 @@ final class HttpServer
     }
 
     //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+
+    public static class GumWebSocketServlet extends WebSocketServlet
+    {
+        @Override
+        public void configure( WebSocketServletFactory factory )
+        {
+            factory.register( CommBridge.class );
+            factory.getPolicy().setMaxTextMessageSize( 64 * 1024 );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    // Authentication Filter
+    //------------------------------------------------------------------------//
+
+    /**
+ * Authentication filter that validates user sessions before allowing access.
+ * Must be added to each ServletContextHandler that requires authentication.
+ */
+    public static class AuthenticationFilter implements javax.servlet.Filter
+    {
+        private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/file_mgr", "/gum/user-files" };
+        private static final String[] asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico", "map" };
+
+        //------------------------------------------------------------------------//
+
+        @Override
+        public void init( javax.servlet.FilterConfig filterConfig ) throws ServletException
+        {
+            // Nothing to init?
+        }
+
+        @Override
+        public void doFilter( javax.servlet.ServletRequest request,
+                              javax.servlet.ServletResponse response,
+                              javax.servlet.FilterChain chain )
+                throws IOException, ServletException
+        {
+            HttpServletRequest  httpRequest  = (HttpServletRequest)  request;
+            HttpServletResponse httpResponse = (HttpServletResponse) response;
+
+            String target = httpRequest.getRequestURI();
+
+            try
+            {
+                boolean     isAllowed = false;
+                HttpSession session   = null;
+
+                try
+                {
+                    session = httpRequest.getSession( false );
+                }
+                catch( IllegalStateException e )
+                {
+                    logger.log( ILogger.Level.WARNING, "Session access failed: " + e.getMessage() );
+                }
+
+                if( session != null && session.getAttribute( KEY_USER_ID ) != null )
+                {
+                    isAllowed = true;
+                }
+                else if( isPublicPath( target ) )
+                {
+                    isAllowed = true;
+                }
+                else if( isClientAllowed( httpRequest ) )
+                {
+                    try
+                    {
+                        session = httpRequest.getSession( true );
+                        session.setAttribute( KEY_USER_ID, "local_client" );
+                        isAllowed = true;
+                    }
+                    catch( IllegalStateException e )
+                    {
+                        logger.log( ILogger.Level.WARNING, "Session creation failed: " + e.getMessage() );
+                    }
+                }
+
+                if( isAllowed )
+                {
+                    if( logger.isLoggable( ILogger.Level.INFO ) )
+                    {
+                        logger.log( Level.INFO, String.format( "Access granted: %s %s from %s",
+                                                               httpRequest.getMethod(), target, httpRequest.getRemoteAddr() ) );
+                    }
+
+                    chain.doFilter( request, response ); // Continue to servlet
+                }
+                else
+                {
+                    if( logger.isLoggable( ILogger.Level.WARNING ) )
+                    {
+                        logger.log( ILogger.Level.WARNING, String.format( "Unauthorized access attempt: %s %s from %s",
+                                                                          httpRequest.getMethod(), target, httpRequest.getRemoteAddr() ) );
+                    }
+
+                    sendUnauthorizedResponse( httpResponse, "Authentication required" );
+                }
+            }
+            catch( Exception exc )
+            {
+                logger.log( ILogger.Level.SEVERE, exc, "Error in authentication filter" );
+
+                if( ! httpResponse.isCommitted() )
+                {
+                    httpResponse.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+                    httpResponse.setContentType( "application/json" );
+                    httpResponse.getWriter().write( "{\"error\":\"Authentication error\"}" );
+                }
+            }
+        }
+
+        @Override
+        public void destroy()
+        {
+            // Nothing to cleanup?
+        }
+
+        //------------------------------------------------------------------------//
+
+        private boolean isPublicPath( String path )
+        {
+            if( path == null )
+                return false;
+
+            if( ! path.startsWith( "/gum/" ) )
+                return false;
+
+            if( path.contains( ".." ) || path.contains( "//" ) )
+                return false;
+
+            if( UtilColls.contains( asPublicFileExt, UtilIO.getExtension( path ).toLowerCase() ) )   // Returns just the extension (not including) the '.')
+                return true;
+
+            for( String p : asPrivatePaths )
+            {
+                if( path.startsWith( p ) )
+                    return false;
+            }
+
+            return true;
+        }
+
+        private boolean isClientAllowed( HttpServletRequest request )
+        {
+            String      xForwardedFor = request.getHeader( "X-Forwarded-For" );
+            InetAddress clientIP      = null;
+
+            if( (xForwardedFor != null) && (! xForwardedFor.isEmpty()) )
+            {
+                try
+                {
+                    String s = xForwardedFor.split( "," )[0].trim();
+                    clientIP = Inet4Address.getByName( s );
+                }
+                catch( UnknownHostException ex )
+                {
+                    // Nothing to do: clientIP is already null
+                }
+            }
+            else
+            {
+                try
+                {
+                    clientIP = InetAddress.getByName( request.getRemoteAddr() );
+                }
+                catch( UnknownHostException ex )
+                {
+                    // Nothing to do
+                }
+            }
+
+            try
+            {
+                return UtilComm.isClientAllowed( ServerConfig.getClientIPScope(), clientIP );
+            }
+            catch( SocketException ex )
+            {
+                // Nothing to do
+            }
+
+            return false;
+        }
+
+        private void sendUnauthorizedResponse( HttpServletResponse response, String message )
+                throws IOException
+        {
+            if( response.isCommitted() )
+            {
+                return;
+            }
+
+            response.setStatus( HttpServletResponse.SC_UNAUTHORIZED );
+            response.setContentType( "application/json; charset=utf-8" );
+            response.setHeader( "Cache-Control", "no-store, no-cache, must-revalidate" );
+            response.setHeader( "WWW-Authenticate", "FormBased" );
+
+            JsonObject jsonResponse = Json.object()
+                    .add( "error", message )
+                    .add( "status", 401 )
+                    .add( "loginUrl", "/gum/login.html" );
+
+            response.getWriter().write( jsonResponse.toString() );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+
+    /**
+ * Centralized server configuration shared between HttpServer and components.
+ * Thread-safe singleton pattern for managing server-wide settings.
+ */
+    private static final class ServerConfig
+    {
+        private static volatile short clientIPScope = -1;
+
+        public static void setClientIPScope( String scope )
+        {
+            clientIPScope = UtilComm.clientScope( scope );
+        }
+
+        public static short getClientIPScope()
+        {
+            if( clientIPScope == -1 )
+                throw new IllegalStateException();
+
+            return clientIPScope;
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
 
     private static class CustomErrorHandler extends ErrorHandler
     {
         @Override
-        public void handle( String target, Request baseRequest, HttpServletRequest request,
-                           HttpServletResponse response ) throws IOException
+        public void handle( String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response ) throws IOException
         {
-            if( !response.isCommitted() )
+            Throwable cause = (Throwable) request.getAttribute( "javax.servlet.error.exception" );
+            Integer statusCode = (Integer) request.getAttribute( "javax.servlet.error.status_code" );
+
+            System.err.println( "=== ERROR HANDLER TRIGGERED ===" );
+            System.err.println( "Target: " + target );
+            System.err.println( "Status: " + statusCode );
+            System.err.println( "Request URI: " + request.getRequestURI() );
+
+            if( cause != null )
+            {
+                System.err.println( "Exception: " + cause.getClass().getName() );
+                cause.printStackTrace( System.err );
+            }
+
+            cause = (Throwable) request.getAttribute( "javax.servlet.error.exception" );
+
+            if( cause != null )
+            {
+                System.err.println( "CRITICAL SERVER ERROR:\n" );
+                cause.printStackTrace( System.err );
+            }
+            else
+            {
+                System.err.println( "Server error with no exception attached. Target: " + target);
+            }
+
+            if( ! response.isCommitted() )
             {
                 response.setContentType( "application/json" );
 
-                String msg = "An error occurred";
-                response.getWriter().write( "{\"error\":\""+ Json.value( msg ).toString() + "\"}" );
+                String errorMsg = (cause != null) ? cause.getMessage() : "Unknown error on target: " + target;
+
+                response.getWriter().write( "{\"error\":"+ Json.value( errorMsg ).toString() + "}" );   // Safe JSON quoting
             }
 
             baseRequest.setHandled( true );

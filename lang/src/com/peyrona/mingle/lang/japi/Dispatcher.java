@@ -252,10 +252,7 @@ public final class Dispatcher<T>
                 tCurrent.interrupt();
                 break;
             }
-
-            // Catch Throwable, not just Exception.
-            // This catches NoClassDefFoundError, OutOfMemoryError (if recoverable), etc.
-            catch( Throwable exc )
+            catch( Exception exc )
             {
                 String sErr = "Error in " + tCurrent.getName() + ", using value: " +
                               (val == null ? "N/A" : val.toString());

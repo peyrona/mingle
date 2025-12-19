@@ -1,18 +1,16 @@
-
 package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.File;
 import java.io.IOException;
-import java.lang.ref.WeakReference;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URISyntaxException;
 import java.util.*;
@@ -31,11 +29,11 @@ import org.eclipse.jetty.websocket.api.WriteCallback;
  *
  * <h3>Usage Contract:</h3>
  * <ul>
- *   <li>One CommBridge instance per Jetty server</li>
- *   <li>Browser opens WebSocket to {@code ws://host/gum/bridge/{exen-hash}} where exen-hash identifies the target ExEn</li>
- *   <li>Multiple ExEn sessions can be multiplexed through a single WebSocket connection</li>
- *   <li>Clients must not rely on {@code wasClean} flag due to browser connection sharing behavior</li>
- *   <li>Automatic cleanup occurs when WebSocket closes or ExEn connections fail</li>
+ * <li>One CommBridge instance per Jetty server</li>
+ * <li>Browser opens WebSocket to {@code ws://host/gum/bridge/{exen-hash}} where exen-hash identifies the target ExEn</li>
+ * <li>Multiple ExEn sessions can be multiplexed through a single WebSocket connection</li>
+ * <li>Clients must not rely on {@code wasClean} flag due to browser connection sharing behavior</li>
+ * <li>Automatic cleanup occurs when WebSocket closes or ExEn connections fail</li>
  * </ul>
  *
  * <h3>Architecture:</h3>
@@ -62,7 +60,7 @@ public class CommBridge extends WebSocketAdapter
     /**
      * Message types supported by the bridge. Used instead of string literals for type safety and performance.
      */
-    public enum MessageType
+    private enum MessageType
     {
         LIST(    "List" ),
         LISTED(  "Listed" ),
@@ -102,7 +100,7 @@ public class CommBridge extends WebSocketAdapter
     /**
      * WebSocket close codes for different termination scenarios.
      */
-    public enum CloseCode
+    private enum CloseCode
     {
         NORMAL_CLOSURE(    StatusCode.NORMAL,      "Normal closure" ),
         GOING_AWAY(        StatusCode.SHUTDOWN,    "Server going away" ),
@@ -133,12 +131,12 @@ public class CommBridge extends WebSocketAdapter
         }
     }
 
-    // Thread-safe map: WebSocket → List of (ExEn client, ExEn address) pairs
-    private static final ConcurrentHashMap<WeakReference<Session>,
+    // Thread-safe map: WebSocket Session → List of (ExEn client, ExEn address)
+    private static final ConcurrentHashMap<Session,
                                            CopyOnWriteArrayList<Pair<INetClient,JsonObject>>> sessionToClients = new ConcurrentHashMap<>();
 
-    // Reverse lookup: ExEn client → (WebSocket, ExEn address)
-    private static final ConcurrentHashMap<INetClient, Pair<WeakReference<Session>, JsonObject>> clientToSession = new ConcurrentHashMap<>();
+    // Reverse lookup: ExEn client → (WebSocket Session, ExEn address)
+    private static final ConcurrentHashMap<INetClient, Pair<Session, JsonObject>> clientToSession = new ConcurrentHashMap<>();
 
     // Scheduled cleanup of dead WebSocket references
     private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor( r ->
@@ -148,6 +146,10 @@ public class CommBridge extends WebSocketAdapter
                                                                                                                     return t;
                                                                                                                 } );
 
+    private static final ILogger logger = UtilSys.getLogger();
+
+    //------------------------------------------------------------------------//
+
     static    // Start periodic cleanup of dead WebSocket references
     {
         cleanupExecutor.scheduleWithFixedDelay( CommBridge::cleanupDeadReferences,
@@ -156,27 +158,15 @@ public class CommBridge extends WebSocketAdapter
                                                 TimeUnit.MINUTES );
     }
 
+    //------------------------------------------------------------------------//
+
     @Override
     public void onWebSocketConnect( Session session )
     {
         super.onWebSocketConnect( session );
 
-        // Extract ExEn address from WebSocket path if provided
-        String uri  = session.getUpgradeRequest().getRequestURI().toString();
-        String path = uri.split( "\\?" )[0];
-
-        if( path != null && path.contains( "/bridge/" ) )
-        {
-            String exenHash = path.substring( path.lastIndexOf( File.separator ) + 1 );
-
-            if( ! exenHash.isEmpty() && !exenHash.equals( "bridge" ) )
-            {
-                // Store ExEn hash as user property for later use
-//                session.getUpgradeRequest().getServletAttributes().put( "exenHash", exenHash );
-            }
-        }
-
-        logInfo( "WebSocket connected: " + session + " (path: " + path + ")" );
+        if( logger.isLoggable( ILogger.Level.INFO ) )
+            logger.log( Level.INFO, "WebSocket connected: " + session );
     }
 
     @Override
@@ -215,7 +205,10 @@ public class CommBridge extends WebSocketAdapter
             INetClient client = findExEnClient( session, exenAddress );
 
             if( client == null )
+            {
+                // Attempt to create and connect
                 client = addExEnClient( session, exenAddress );
+            }
 
             if( client != null && client.isConnected() )    // Forward message to ExEn
             {
@@ -269,28 +262,45 @@ public class CommBridge extends WebSocketAdapter
      */
     private static INetClient addExEnClient( Session session, JsonObject exenAddress )
     {
+        INetClient client = null;
+
         try
         {
-            INetClient client = getNetClient();
-                       client.add( new ExEnListener() );
-                       client.connect( exenAddress.toString() );
-
-            // Add to both maps atomically
-            WeakReference<Session>       sessionRef = new WeakReference<>( session );
-            Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
-
-            sessionToClients.computeIfAbsent( sessionRef, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
-            clientToSession.put( client, new Pair<>( sessionRef, exenAddress ) );
-
-            logInfo( "Added ExEn client for session " + session + " → " + exenAddress );
-            return client;
-
+            // 1. Prepare and connect the client (Heavy operation outside locks)
+            client = getNetClient();
+            client.add( new ExEnListener() );
+            client.connect( exenAddress.toString() ); // May block or fail
         }
-        catch( MingleException me )
+        catch( Exception me )
         {
-            logError( "Failed to create ExEn client for " + exenAddress, me );
+            logError( "Failed to create/connect ExEn client for " + exenAddress, me );
+            // Clean up the partially created client if it exists
+            if( client != null )
+            {
+                try { client.disconnect(); } catch( Exception ignored ) {}
+            }
             return null;
         }
+
+        // 2. Add to maps safely (Quick atomic operation)
+        synchronized( session )
+        {
+            if( ! session.isOpen() )
+            {
+                try { client.disconnect(); } catch( Exception ignored ) {}
+                return null;
+            }
+
+            Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
+
+            sessionToClients.computeIfAbsent( session, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
+            clientToSession.put( client, new Pair<>( session, exenAddress ) );
+        }
+
+        if( logger.isLoggable( ILogger.Level.INFO ) )
+            logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
+
+        return client;
     }
 
     private static INetClient getNetClient()
@@ -311,15 +321,11 @@ public class CommBridge extends WebSocketAdapter
 
     /**
      * Finds an existing ExEn client for the given session and address.
+     * Optimized to O(1) for session lookup + list iteration.
      */
     private static INetClient findExEnClient( Session session, JsonObject exenAddress )
     {
-        WeakReference<Session> sessionRef = findSessionReference( session );
-
-        if( sessionRef == null )
-            return null;
-
-        CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.get( sessionRef );
+        CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.get( session );
 
         if( clients == null )
             return null;
@@ -337,17 +343,24 @@ public class CommBridge extends WebSocketAdapter
      */
     private static boolean removeExEnClient( Session session, INetClient client )
     {
-        WeakReference<Session> sessionRef = findSessionReference( session );
+        boolean removed = false;
 
-        if( sessionRef == null )
-            return false;
+        // Synchronize on session to ensure atomic removal from list
+        synchronized( session )
+        {
+            CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.get( session );
 
-        CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.get( sessionRef );
+            if( clients != null )
+            {
+                removed = clients.removeIf( pair -> pair.getKey().equals( client ) );
 
-        if( clients == null )
-            return false;
-
-        boolean removed = clients.removeIf( pair -> pair.getKey().equals( client ) );
+                // Cleanup map entry if empty to save memory
+                if( clients.isEmpty() )
+                {
+                    sessionToClients.remove( session );
+                }
+            }
+        }
 
         if( removed )
         {
@@ -364,18 +377,6 @@ public class CommBridge extends WebSocketAdapter
         }
 
         return removed;
-    }
-
-    /**
-     * Finds the WeakReference for a given WebSocket session.
-     */
-    private static WeakReference<Session> findSessionReference( Session session )
-    {
-        return sessionToClients.keySet()
-                               .stream()
-                               .filter( ref -> session.equals( ref.get() ) )
-                               .findFirst()
-                               .orElse( null );
     }
 
     /**
@@ -458,16 +459,18 @@ public class CommBridge extends WebSocketAdapter
     {
         try
         {
-            WeakReference<Session> sessionRef = findSessionReference( session );
+            CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients;
 
-            if( sessionRef == null )
-                return; // Already cleaned up
-
-            CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.remove( sessionRef );
+            // Atomically remove the session mapping
+            synchronized( session )
+            {
+                clients = sessionToClients.remove( session );
+            }
 
             if( clients != null )
             {
-                logInfo( "Cleaning up session " + session + " with " + clients.size() + " ExEn connection(s)" );
+                if( logger.isLoggable( ILogger.Level.INFO ) )
+                    logger.log( Level.INFO,  "Cleaning up session " + session + " with " + clients.size() + " ExEn connection(s)" );
 
                 // Disconnect all ExEn clients
                 for( Pair<INetClient, JsonObject> pair : clients )
@@ -506,41 +509,25 @@ public class CommBridge extends WebSocketAdapter
     {
         try
         {
-            Iterator<Map.Entry<WeakReference<Session>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>>> iterator = sessionToClients.entrySet().iterator();
+            Iterator<Map.Entry<Session, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>>> iterator = sessionToClients.entrySet().iterator();
 
             int cleanedCount = 0;
 
             while( iterator.hasNext() )
             {
-                Map.Entry<WeakReference<Session>, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>> entry   = iterator.next();
-                Session                                                                                 session = entry.getKey().get();
+                Map.Entry<Session, CopyOnWriteArrayList<Pair<INetClient, JsonObject>>> entry   = iterator.next();
+                Session                                                                session = entry.getKey();
 
+                // If session is closed but still in map (leak), force cleanup
                 if( session == null || !session.isOpen() )
                 {
-                    // Dead reference or closed session
-                    CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = entry.getValue();
-
-                    for( Pair<INetClient, JsonObject> pair : clients )
-                    {
-                        clientToSession.remove( pair.getKey() );
-
-                        try
-                        {
-                            pair.getKey().disconnect();
-                        }
-                        catch( Exception e )
-                        {
-                            // Ignore cleanup errors
-                        }
-                    }
-
-                    iterator.remove();
+                    cleanupSession( session, CloseCode.GOING_AWAY );
                     cleanedCount++;
                 }
             }
 
-            if( cleanedCount > 0 )
-                logInfo( "Cleaned up " + cleanedCount + " dead WebSocket references" );
+            if( cleanedCount > 0 && logger.isLoggable( ILogger.Level.INFO ) )
+                logger.log( Level.INFO, "Cleaned up " + cleanedCount + " dead WebSocket references" );
         }
         catch( Exception e )
         {
@@ -566,23 +553,14 @@ public class CommBridge extends WebSocketAdapter
         }
     }
 
-    // Logging helper methods
-    private static void logInfo( String message )
-    {
-        ILogger logger = UtilSys.getLogger();
-
-        if( logger.isLoggable( ILogger.Level.INFO ) )
-            logger.log( ILogger.Level.INFO, message );
-    }
-
     private static void logWarning( String message, Throwable throwable )
     {
-        UtilSys.getLogger().log( ILogger.Level.WARNING, throwable, message );
+        logger.log( ILogger.Level.WARNING, throwable, message );
     }
 
     private static void logError( String message, Throwable throwable )
     {
-        UtilSys.getLogger().log( ILogger.Level.SEVERE, throwable, message );
+        logger.log( ILogger.Level.SEVERE, throwable, message );
     }
 
     /**
@@ -623,26 +601,26 @@ public class CommBridge extends WebSocketAdapter
         @Override
         public void onConnected( INetClient client )
         {
-            logInfo( "ExEn client connected: " + client );
+            if( logger.isLoggable( ILogger.Level.INFO ) )
+                logger.log( Level.INFO, "ExEn client connected: " + client );
         }
 
         @Override
         public void onDisconnected( INetClient client )
         {
-            Pair<WeakReference<Session>, JsonObject> sessionInfo = clientToSession.remove( client );
+            Pair<Session, JsonObject> sessionInfo = clientToSession.remove( client );
 
             if( sessionInfo == null )
                 return;     // Already cleaned up
 
-            WeakReference<Session> sessionRef = sessionInfo.getKey();
-            Session                session    = sessionRef.get();
+            Session session = sessionInfo.getKey();
 
             if( session != null && session.isOpen() )
             {
                 removeExEnClient( session, client );
 
                 // Close WebSocket if no more ExEn connections
-                CopyOnWriteArrayList<Pair<INetClient, JsonObject>> remainingClients = sessionToClients.get( sessionRef );
+                CopyOnWriteArrayList<Pair<INetClient, JsonObject>> remainingClients = sessionToClients.get( session );
 
                 if( remainingClients == null || remainingClients.isEmpty() )
                     cleanupSession( session, CloseCode.GOING_AWAY );
@@ -657,12 +635,12 @@ public class CommBridge extends WebSocketAdapter
 
             try
             {
-                Pair<WeakReference<Session>, JsonObject> sessionInfo = clientToSession.get( client );
+                Pair<Session, JsonObject> sessionInfo = clientToSession.get( client );
 
                 if( sessionInfo == null )
                     return; // Connection already closed
 
-                Session session = sessionInfo.getKey().get();
+                Session session = sessionInfo.getKey();
 
                 if( session == null || !session.isOpen() )
                     return; // WebSocket closed
@@ -681,14 +659,13 @@ public class CommBridge extends WebSocketAdapter
         @Override
         public void onError( INetClient client, Exception error )
         {
-            Pair<WeakReference<Session>, JsonObject> sessionInfo = clientToSession.get( client );
+            Pair<Session, JsonObject> sessionInfo = clientToSession.get( client );
 
             if( sessionInfo == null )
                 return;    // Already cleaned up
 
-            WeakReference<Session> sessionRef   = sessionInfo.getKey();
-            Session                session      = sessionRef.get();
-            JsonObject             exenAddress  = sessionInfo.getValue();
+            Session    session     = sessionInfo.getKey();
+            JsonObject exenAddress = sessionInfo.getValue();
 
             if( session != null && session.isOpen() )
             {

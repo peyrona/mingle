@@ -310,7 +310,7 @@ public abstract class   BaseServer4IP
      */
     protected boolean isAllowed( InetAddress addr ) throws SocketException
     {
-        return UtilComm.isCLientAllowed( nAllow, addr );
+        return UtilComm.isClientAllowed( nAllow, addr );
     }
 
     /**
@@ -424,7 +424,7 @@ public abstract class   BaseServer4IP
 
         sHost  = UtilComm.getHost( uj.getString( KEY_HOST, "localhost" ) );
         nPort  = uj.getInt( KEY_PORT, -1 );                                          // Then has to be like this: {"host":"localhost", "port": 65534, ... }
-        nAllow = UtilComm.clientScope( uj.getString( "allow", "intranet" ), null );
+        nAllow = UtilComm.clientScope( uj.getString( "allow", "intranet" ) );
 
         if( nPort < 0 )    // Then has to be like this: {"host":"localhost:65534", ... }
         {

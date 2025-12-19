@@ -93,7 +93,7 @@ public final class UtilSys
             if( UtilIO.mkdirs( fEtc ) )
                 Files.setPosixFilePermissions( fEtc.toPath(), permissions );
         }
-        catch( Throwable twl )
+        catch( Exception twl )
         {
             getLogger().log( ILogger.Level.WARNING, twl );
         }

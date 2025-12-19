@@ -199,8 +199,9 @@ public class EventBus implements IEventBus
                 sMsg = "Error in 'message.toString()': " + err.getMessage();
             }
 
-            UtilSys.getLogger().log( ILogger.Level.SEVERE,
-                                     new MingleException( "Error '" + exc.getMessage() + "' while dispatching message: " + sMsg, new Exception(exc) ) );
+            UtilSys.getLogger()
+                   .log( ILogger.Level.SEVERE,
+                         new MingleException( "Error '" + exc.getMessage() + "' while dispatching message: " + sMsg, new Exception(exc) ) );
         }
     }
 

@@ -68,7 +68,7 @@ final class ServiceFileMgr extends ServiceBase
 
         if( sFile != null )
         {
-            sendText( UtilIO.getAsText( new File( fRoot, sFile ) ) );
+            sendText( UtilIO.getAsText( resolveSecurePath(sFile) ) );
         }
         else
         {
@@ -93,8 +93,8 @@ final class ServiceFileMgr extends ServiceBase
         String sParent = asString( "parent", null );
         String sFile   = asString( "name"  , ""   );
         String sType   = asString( "type"  , ""   );
-        File   fParent = UtilStr.isEmpty( sParent ) ? fRoot : new File( fRoot, sParent );     // 'fRoot' is always needed
-        File   fTarget = new File( fParent, sFile );    // file or dir
+        File   fParent = UtilStr.isEmpty( sParent ) ? fRoot : resolveSecurePath( sParent );
+        File   fTarget = resolveSecurePath( new File(fParent, sFile).getPath() );
 
         if( "dir".equalsIgnoreCase( sType ) )
         {
@@ -123,8 +123,8 @@ final class ServiceFileMgr extends ServiceBase
     @Override    // POST == UPDATE
     protected void doPost() throws IOException
     {
-        File fOld = new File( fRoot, asString( "old", "" ) );
-        File fNew = new File( fRoot, asString( "new", "" ) );
+        File fOld = resolveSecurePath( asString( "old", "" ) );
+        File fNew = resolveSecurePath( asString( "new", "" ) );
 
         if( ! fOld.renameTo( fNew ) )
             throw new IOException( "Error renaming ["+ fOld +"] to ["+ fNew +']' );
@@ -144,10 +144,26 @@ final class ServiceFileMgr extends ServiceBase
         String[] asFileNames = asString( "paths", "" ).split( ";" );
 
         for( String sName : asFileNames )
-            UtilIO.delete( new File( fRoot, sName ) );
+            UtilIO.delete( resolveSecurePath( sName ) );
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
+
+    private File resolveSecurePath( String relativePath ) throws IOException
+    {
+        File userFile = new File( relativePath );
+
+        if( userFile.isAbsolute() )
+            throw new IOException( "Path traversal attempt: Absolute paths are not allowed." );
+
+        File finalPath = new File( fRoot, relativePath ).getCanonicalFile();
+
+        if( ! finalPath.toPath().startsWith( fRoot.getCanonicalPath() ) )
+            throw new IOException( "Path traversal attempt detected: " + relativePath );
+
+        return finalPath;
+    }
 
     /**
      * Recursive method to build the tree.
@@ -161,10 +177,8 @@ final class ServiceFileMgr extends ServiceBase
 
             // 2. Security Check: Ensure current node is actually inside the root
             // (Prevents following symlinks that point outside the base folder)
-            if( !currentPathObj.startsWith( rootPathObj ) )
-            {
+            if( ! currentPathObj.startsWith( rootPathObj ) )
                 return null;
-            }
 
             // 3. Create Relative Path string (e.g., "css/styles.css")
             // Relativize handles separator boundaries correctly unlike substring()
@@ -173,7 +187,7 @@ final class ServiceFileMgr extends ServiceBase
                                              .replace( '\\', '/' ); // Enforce JSON standard
 
             JsonObject node = new JsonObject();
-            node.add( "path", relativePath );
+                       node.add( "path", relativePath );
 
             // 4. Handle File (Leaf node)
             if( ! currentDir.isDirectory() )
@@ -183,38 +197,35 @@ final class ServiceFileMgr extends ServiceBase
             }
 
             // 5. Handle Directory
-            JsonArray childrenArray = new JsonArray();
-            File[] files = currentDir.listFiles();
+            JsonArray jaChildren = new JsonArray();
+            File[]    aFiles     = currentDir.listFiles();
 
-            if( files != null )
+            if( aFiles != null )
             {
                 // 6. Sort files: Directories first, then alphabetical
-                Arrays.sort( files, Comparator.comparing( File::isDirectory ).reversed()
-                             .thenComparing( File::getName, String.CASE_INSENSITIVE_ORDER ) );
+                Arrays.sort( aFiles, Comparator.comparing( File::isDirectory )
+                       .reversed()
+                       .thenComparing( File::getName, String.CASE_INSENSITIVE_ORDER ) );
 
-                for( File file : files )
+                for( File file : aFiles )
                 {
                     if( file.isHidden() || !file.canRead() )
-                    {
                         continue;
-                    }
 
                     // Recurse
                     JsonObject childNode = buildFileTree( file, rootPathObj );
+
                     if( childNode != null )
-                    {
-                        childrenArray.add( childNode );
-                    }
+                        jaChildren.add( childNode );
                 }
             }
 
-            node.add( "nodes", childrenArray );
+            node.add( "nodes", jaChildren );
             return node;
         }
         catch( IOException e )
         {
-            // If we can't read the real path of a specific node, skip it
-            return null;
+            return null;   // If we can't read the real path of a specific node, skip it
         }
     }
 }

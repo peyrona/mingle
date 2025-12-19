@@ -100,7 +100,7 @@ final class ServiceDB extends ServiceBase
                 sb.append( '{' )
                   .append( "\"label\": \"" ).append( tbl ).append( '.' ).append( val ).append( '"' )   // DataSerie -> "label": "table.values"
                   .append( ',' )
-                  .append( "\"data\": ").append( new RS2JsonStr( ps.executeQuery() ).getBody() )
+                  .append( "\"data\": " ).append( RS2Json.toJson( ps.executeQuery() ).get( "body" ).toString() )
                   .append( "}," );
             }
 
