@@ -12,6 +12,7 @@ import java.net.URISyntaxException;
 import java.util.List;
 
 /**
+ * Gum utility methods.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -73,7 +74,7 @@ final class Util
 
     static File getDashboardManagerDir() throws IOException
     {
-        File fDir = Util.getAppDir(); // e.g. .../gum_user_base/dashboards/
+        File fDir = Util.getAppDir(); // e.g. .../gum_user_base/
 
         if( ! new File( fDir, "index.html" ).exists() )
             throw new IOException( "Dashboard 'index.html' not found in: " + fDir );
@@ -129,7 +130,7 @@ final class Util
                         List<URI> lst = UtilIO.expandPath( userDir );
 
                         if( ! lst.isEmpty() )
-                            userDir = lst.get( 0 ).toString();
+                            userDir = new File( lst.get( 0 ) ).getAbsolutePath();
                     }
                     catch( IOException | URISyntaxException exc )
                     {
@@ -139,7 +140,7 @@ final class Util
                 }
 
                 fUserDir = UtilStr.isMeaningless( userDir ) ? new File( UtilSys.getEtcDir(), "gum_user_base" )
-                                                            : new File( userDir            , "gum_user_base" );
+                                                            : new File( userDir );
 
                 if( ! UtilIO.mkdirs( fUserDir ) )
                     throw new MingleException( "Can not create "+ fUserDir );
@@ -148,11 +149,6 @@ final class Util
 
                 if( result != null )
                     throw new MingleException( result );
-
-                //----------------------------------------------------
-//                if( UtilSys.isDevEnv )
-//                    fUserDir = new File( UtilSys.fHomeDir.getParentFile(), "balata/gum_user_base" );
-                //----------------------------------------------------
             }
         }
 

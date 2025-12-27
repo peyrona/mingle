@@ -14,6 +14,7 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.tape.TranspilerTask;
+import java.awt.event.ActionEvent;
 import java.awt.event.ComponentAdapter;
 import java.awt.event.ComponentEvent;
 import java.io.ByteArrayOutputStream;
@@ -23,8 +24,10 @@ import java.io.PrintWriter;
 import java.net.URISyntaxException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import javax.swing.Action;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
+import org.fife.ui.rsyntaxtextarea.RSyntaxTextAreaEditorKit;
 
 /**
  * A Split Panel with an editor at top and a PanelConsole (to show transpiler and run output) at bottom.
@@ -34,6 +37,7 @@ public final class UneEditorUnit extends JSplitPane
     private static final AtomicInteger nSocketPort = new AtomicInteger(2048);
 
     private File    fCode     = null;
+    private boolean isFolded  = false;
     private Process procExEn  = null;
     private boolean is1stTime = true;
 
@@ -129,6 +133,24 @@ public final class UneEditorUnit extends JSplitPane
     public boolean isChanged()
     {
         return getEditor().isChanged();
+    }
+
+    public UneEditorUnit toggleFolding()
+    {
+        if( isFolded )
+        {
+            Action a = new RSyntaxTextAreaEditorKit.ExpandAllFoldsAction();
+            a.actionPerformed(new ActionEvent(getEditor().getTextArea(), ActionEvent.ACTION_PERFORMED, "expandAllFolds"));
+        }
+        else
+        {
+            Action a = new RSyntaxTextAreaEditorKit.CollapseAllFoldsAction();
+            a.actionPerformed(new ActionEvent(getEditor().getTextArea(), ActionEvent.ACTION_PERFORMED, "collapseAllFolds"));
+        }
+
+        isFolded = ! isFolded;
+
+        return this;
     }
 
     public boolean canUndo()

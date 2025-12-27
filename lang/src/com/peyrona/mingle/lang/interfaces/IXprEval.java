@@ -116,7 +116,7 @@ public interface IXprEval
      * Returns a List with all errors found in passed expression.
      * <p>
      * Instances of ICandi.IError
-     * 
+     *
      * @return A List with all errors found in passed expression.
      */
     List<ICandi.IError> getErrors();
@@ -147,7 +147,7 @@ public interface IXprEval
     /**
      * Closes the expression evaluator and releases any resources it holds.
      */
-    void close();
+    IXprEval close();
 
     /**
      * Returns true if this Expression Evaluator recognizes 'oValue' as an Une basic

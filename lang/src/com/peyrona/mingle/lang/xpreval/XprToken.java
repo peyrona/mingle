@@ -55,7 +55,7 @@ final class XprToken implements ITokenable
     {
         assert newType >= 1 && newType <= 11;
 
-        this.text     = ((type == FUNCTION || type == VARIABLE) ? newText.toLowerCase() : newText);    // In fact FUNCTION is not needed because funcs are searched ignoring case, but it is more clear in this way
+        this.text     = token.isType( FUNCTION, VARIABLE ) ? newText.toLowerCase() : newText;    // In fact FUNCTION is not needed because funcs are searched ignoring case, but it is more clear in this way
         this.type     = newType;
         this.line     = token.line;
         this.column   = token.column;
@@ -65,13 +65,13 @@ final class XprToken implements ITokenable
     // PUBLIC SCOPE
 
     @Override
-    public String   toString()      { return "{text=\""+ text +"\", type="+ type +'}'; }
+    public String   toString() { return "{text=\""+ text +"\", type="+ type +'}'; }
     @Override
-    public String   text()          { return text;     }
+    public String   text()     { return text;     }
     @Override
-    public int      line()          { return line;     }
+    public int      line()     { return line;     }
     @Override
-    public int      column()        { return column;   }
+    public int      column()   { return column;   }
 
     @Override
     public int hashCode()
@@ -98,13 +98,16 @@ final class XprToken implements ITokenable
 
         final XprToken other = (XprToken) obj;
 
-        if( this.line != other.line )
+        if( line != other.line )
             return false;
 
-        if( this.column != other.column )
+        if( column != other.column )
             return false;
 
-        if( this.type != other.type )
+        if( type != other.type )
+            return false;
+
+        if( ! Objects.equals( value, other.value ) )
             return false;
 
         return Objects.equals( text, other.text );

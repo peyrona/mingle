@@ -111,7 +111,7 @@ public abstract class   BaseServer4IP
 
         try
         {
-            if( ! serverExec.awaitTermination( 10, TimeUnit.SECONDS ) )
+            if( ! serverExec.awaitTermination( 3, TimeUnit.SECONDS ) )
                 serverExec.shutdownNow();
 
             log( ILogger.Level.INFO, "WebSocket server stopped" );

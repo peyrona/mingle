@@ -49,6 +49,7 @@ final class UneEditorToolBar extends JToolBar
     JButton btnOpen;
     JButton btnPrev;
     JButton btnRedo;
+    JButton btnFolding;
     JButton btnRepl;
     JButton btnReplAll;
     JButton btnRuns;
@@ -107,6 +108,7 @@ final class UneEditorToolBar extends JToolBar
                                         btnRTF.setEnabled( ! isEditorEmpty );
 
                                         btnComment.setEnabled( ! isEditorEmpty );     // As this button is just text (no icon) it depends on the System L&F to disable it or not
+                                        btnFolding.setEnabled( ! isEditorEmpty );
                                         btnTranspi.setEnabled( ! isEditorEmpty );
                                         cmbTemplate.setEnabled( edtFocused != null );
 
@@ -177,7 +179,7 @@ final class UneEditorToolBar extends JToolBar
     {
         if( editor == null )
             return this;
-        
+
         int line = (editor == null) ? 1 : editor.getCaretLine();
         int col  = (editor == null) ? 1 : editor.getCaretColumn();
 
@@ -214,6 +216,7 @@ final class UneEditorToolBar extends JToolBar
         btnUndo    = addButton( row1, FontAwesome.UNDO       , "Undo (Ctrl+Z)" );
         btnRedo    = addButton( row1, FontAwesome.REPEAT     , "Redo [Ctrl+Y]" );
         btnComment = addButton( row1, FontAwesome.HASHTAG    , "Toggle commented for selected lines or current line if none selected (Ignore lines) [Ctrl+I]" );
+        btnFolding = addButton( row1, FontAwesome.EXPAND     , "Expand / Collapse all" );
         btnRTF     = addButton( row1, FontAwesome.CODE       , "Copy to clipboard as RTF selected text or all text if nothing selected" );
 
         row1.add( newSeparator() );

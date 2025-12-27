@@ -111,7 +111,7 @@ final class XprPreProc
     @SuppressWarnings(value = "empty-statement")
     private List<XprToken> doAllAny( List<XprToken> lstTokens, Function<String,String[]> fnGroupWise )
     {
-        List<XprToken> lstResult = new ArrayList();
+        List<XprToken> lstResult = new ArrayList<>();
 
         if( lstTokens.isEmpty() )
             return lstResult;

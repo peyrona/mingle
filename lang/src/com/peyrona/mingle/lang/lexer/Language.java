@@ -37,8 +37,8 @@ public final class Language
                                                                "DRIVER" , "CONFIG", "REQUIRED",
                                                                "DEVICE" , "INIT"  ,
                                                                "RULE"   , "WHEN"  , "THEN", "IF",
-                                                               "AFTER"  , "WITHIN", "ANY" ,
-                                                               "ALL"    , "BY"    , "FOR" , "ONERROR" } );
+                                                               "AFTER"  , "WITHIN", "ANY" , "ALL",
+                                                               "BY"     , "FOR"   , "ONERROR" } );   // These are reserved for future use
 
     private static final String sOPERATORS = "+-*/%^=!><&|~:,";    // ':' is send-op and ',' is function arguments separator
 

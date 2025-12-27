@@ -78,9 +78,9 @@ public final class   WeatherOpenMeteo
 
                 set( KEY_LATITUDE , String.valueOf( latit ) );
                 set( KEY_LONGITUDE, String.valueOf( longi ) );
-                set( KEY_INTERVAL , UtilUnit.setBetween( 15, interval, 60*24*99 ) * UtilUnit.MINUTE );           // Need to convert into millis
-                set( KEY_FORECAST , UtilUnit.setBetween(  0, forecast, oneWeek -1 ) );                           // -1 == 1 hour before the limit (because minium frame is 1 hour)
-                set( KEY_FRAME    , UtilUnit.setBetween(  1, frame   , oneWeek - (int) get( KEY_FORECAST ) ) );  // Needed to do "- nForecast", so nFrame does not go beyond 1 week
+                set( KEY_INTERVAL , UtilUnit.setBetween( 15, interval, 60*24*99 ) * UtilUnit.MINUTE );                           // Need to convert into millis
+                set( KEY_FORECAST , UtilUnit.setBetween(  0, forecast, oneWeek -1 ) );                                           // -1 == 1 hour before the limit (because minium frame is 1 hour)
+                set( KEY_FRAME    , UtilUnit.setBetween(  1, frame   , oneWeek - ((Number) get( KEY_FORECAST )).intValue() ) );  // Needed to do "- nForecast", so nFrame does not go beyond 1 week
                 set( KEY_METRIC   , (Boolean) deviceInit.getOrDefault( "metric", true ) );
                 set( KEY_TIME_ZONE, timezone );
 
@@ -98,7 +98,9 @@ public final class   WeatherOpenMeteo
         UtilSys.execute( getClass().getName(),
                          () ->
                             {
-                                int nDays  = ((int) get( KEY_FORECAST ) + (int) get( KEY_FRAME )) / 24;
+                                int nFore  = ((Number) get( KEY_FORECAST )).intValue();
+                                int nFram  = ((Number) get( KEY_FRAME    )).intValue();
+                                int nDays  = nFore - nFram / 24;
                                     nDays += 2;    // +2 no harm and many things can happen (like invoking the service close to midnight): DO NOT DECREASE THIS VALUE
 
                                 String sURL = "https://api.open-meteo.com/v1/forecast?latitude="+
@@ -202,7 +204,7 @@ public final class   WeatherOpenMeteo
                .asObject()
                .remove( "time" );   // We do not use this "hourly" array
 
-        if( (int) get( KEY_FORECAST ) == 0 )
+        if( getLong( KEY_FORECAST ) == 0 )
         {
             int ndx = LocalTime.now().getHour();    // From 0 to 23 (JSON array also goes from 0 to 23)
 
@@ -212,9 +214,9 @@ public final class   WeatherOpenMeteo
         else
         {
             LocalTime time   = LocalTime.now();
-            int       nHour  = time.getHour() + (time.getMinute() > 35 ? 1 : 0);   // When hour is past 35 minutes we want next hour
-            int       nBegin = nHour  + (int) get( KEY_FORECAST );                 // Begining array index (JSON array is zero based and hour is zero based too)
-            int       nEnd   = nBegin + (int) get( KEY_FRAME    );                                    // Ending array index
+            int       nHour  = time.getHour() + (time.getMinute() > 35 ? 1 : 0);    // When hour is past 35 minutes we want next hour
+            int       nBegin = nHour  + ((Number) get( KEY_FORECAST )).intValue();  // Begining array index (JSON array is zero based and hour is zero based too)
+            int       nEnd   = nBegin + ((Number) get( KEY_FRAME    )).intValue();  // Ending array index
 
             for( String key : jo.names() )
             {

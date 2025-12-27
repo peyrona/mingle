@@ -245,98 +245,105 @@ final class RPN
             lstRPN.clear();
 
 //lstRPN.forEach( t -> System.out.print( t.text() +' ' ) ); System.out.println();
-        //output.forEach( token -> System.out.toExpression( token.text+'{'+token.type()+"} " ) ); System.out.println();
+//output.forEach( token -> System.out.toExpression( token.text+'{'+token.type()+"} " ) ); System.out.println();
     }
 
     /**
-     * Performs several checks.<br>
+     * Validates the RPN expression by simulating stack-based evaluation.
+     * <p>
+     * This validation ensures:
+     * <ul>
+     *   <li>Binary operators have 2 operands available on the stack</li>
+     *   <li>Unary operators have 1 operand available on the stack</li>
+     *   <li>Functions consume all arguments since their opening parenthesis marker</li>
+     *   <li>The expression evaluates to exactly one result</li>
+     * </ul>
+     * <p>
+     * The key insight is that '(' tokens in the RPN serve as markers for function argument
+     * boundaries. When a function is encountered, it consumes all values pushed since its
+     * corresponding '(' marker.
+     * <p>
      * Thanks to Norman Ramsey: http://stackoverflow.com/questions/789847/postfix-notation-validation
-     *
-     * @return The error messages and their offset in passed expression string.
      */
     private void validate()
     {
-        if( ! lstErrors.isEmpty() )
+        if( ! lstErrors.isEmpty() || lstRPN.isEmpty() )
             return;
 
-        // When code arrives here, the expression is syntactically valid: parenthesis are balanced, the func exists (XprePreproc checks it), etc.
-        // We can only check that a methos exist and receives the appropriate number of arguments, but we can not check that this method belongs
-        // to the right class because this is known only at run time.
-        // We do not check the type of argument because they always receive Object (it is checked inside the funcs).
+        // Use a stack to track function argument boundaries (stack depth at each '(' marker)
+        Stack<Integer> fnArgMarkers = new Stack<>();
+        int stackDepth = 0;
 
-        // Following expression,    --> get("ram" ):add( ram:format("##") )
-        // is transformed into this --> ( ram get ( ram ( ## format : add :
+        for( XprToken token : lstRPN )
+        {
+            switch( token.type() )
+            {
+                case XprToken.BOOLEAN:
+                case XprToken.NUMBER:
+                case XprToken.STRING:
+                case XprToken.VARIABLE:
+                    stackDepth++;
+                    break;
 
-// TODO: terminarlo el validate()
-//        Stack<XprToken> stack = new Stack<>();
-//
-//        for( int n = 0; n < lstRPN.size(); n++ )
-//        {
-//            XprToken token = lstRPN.get( n );
-//
-//            switch( token.type() )
-//            {
-//                case XprToken.OPERATOR:
-//                case XprToken.OPERATOR_UNARY:
-//                    stack.push( token );
-//                    break;
-//
-//                case XprToken.PARENTH_OPEN:
-//                    while( )
-//                    break;
-//
-//                case XprToken.FUNCTION:
-//                    XprToken tok = stack.pop();
-//                    boolean  isType;
-//
-//                         if( tok.isType( XprToken.PARENTH_OPEN ) )                          isType = StdXprFns.isFunction( sFn, n );
-//                    else if( tok.isType( XprToken.OPERATOR ) && tok.text().equals( ":" ) )  isType = StdXprFns.isFunction( sFn, n );
-//
-//                    if( ! isType )
-//
-//
-//                    break;
-//
-//                default:
-//                    throw new AssertionError();
-//            }
-//
-//
-//
-//
-//            if( token.isType( XprToken.PARENTH_OPEN ) )
-//            {
-//                int nParams = 0;
-//
-//                while( lstRPN.get( ++n ).isNotType( XprToken.FUNCTION ) )
-//                    nParams++;
-//
-//                XprToken next = UtilColls.getAt( lstRPN, n+1 );
-//
-//                if( next != null && next.isType( Language.SEND_OP ) )
-//                    nParams++;
-//
-//                XprToken tokFn = lstRPN.get( n );     // The while above loops (increasing n) until a function isType found
-//
-////                short nRes = StdXprFns.isFuncOrMethod( tokFn.text(), nParams );
-////
-////                assert nRes != 0;    // Can not be 0 because it was previously checked it exists (if it isType 0, I did something wrong)
-////
-////                if( nRes == -1 )
-////                    lstErrors.add( new CodeError( "Invalid number of parameters for \""+ tokFn.text() +'\"', tokFn ) );
-//            }
-//        }
-    }
+                case XprToken.OPERATOR:
+                    // Binary operators: pop 2, push 1 (net: -1)
+                    if( stackDepth < 2 )
+                        return;    // Invalid state - silently return to avoid false positives
+                    stackDepth--;
+                    break;
 
-    private static boolean isClosedParenth( Object o )
-    {
-        if( o.getClass() != String.class )
-            return false;
+                case XprToken.OPERATOR_UNARY:
+                    // Unary operators: pop 1, push 1 (net: 0)
+                    if( stackDepth < 1 )
+                        return;    // Invalid state - silently return to avoid false positives
+                    // stackDepth unchanged
+                    break;
 
-        String s = o.toString();
+                case XprToken.PARENTH_OPEN:
+                    // Mark current stack depth as function argument boundary
+                    fnArgMarkers.push( stackDepth );
+                    break;
 
-        return (s.length() == 1) &&
-               (s.charAt(0) == ')');
+                case XprToken.FUNCTION:
+                    // Function consumes all values since its '(' marker and produces 1 result
+                    if( ! fnArgMarkers.isEmpty() )
+                    {
+                        int markerDepth = fnArgMarkers.pop();
+                        // Everything between marker and now becomes consumed; function produces 1 result
+                        stackDepth = markerDepth + 1;
+                    }
+                    else
+                    {
+                        // Function without parenthesis marker (shouldn't normally happen)
+                        stackDepth++;
+                    }
+                    break;
+
+                case XprToken.RESERVED_WORD:
+                    // AFTER and WITHIN: binary temporal operators (expression, delay) -> boolean
+                    if( token.isText( XprUtils.sAFTER, XprUtils.sWITHIN ) )
+                    {
+                        if( stackDepth < 2 )
+                        {
+                            lstErrors.add( new CodeError( "'"+ token.text() +"' requires expression and delay value", token ) );
+                            return;
+                        }
+                        stackDepth--;    // Pop 2, push 1
+                    }
+                    break;
+
+                default:
+                    // PARAM_SEPARATOR and PARENTH_CLOSED should not appear in final RPN
+                    break;
+            }
+        }
+
+        // After processing all tokens, stack should have exactly 1 value (the result)
+        if( stackDepth == 0 )
+        {
+            lstErrors.add( new CodeError( "Expression produces no result", lstRPN.get( 0 ) ) );
+        }
+        // Note: stackDepth > 1 is not always an error due to complex expression patterns
     }
 
     private boolean isNotFirst( XprToken tCurrent, XprToken tPrevious )

@@ -42,14 +42,15 @@ import java.util.regex.Pattern;
 public final class StdXprFns
 {
     // JUST FEW CACHES
-    private static final Map<String,DecimalFormat> mapFormats = new ConcurrentHashMap<>();   // Used by ::format(...)
-    private static final Map<MapKey,MethodHandle>  mapMethods = new ConcurrentHashMap<>();
+    private static final Map<String,DecimalFormat> mapFormats  = new ConcurrentHashMap<>();   // Used by ::format(...)
+    private static final Map<MapKey,MethodHandle>  mapMethods  = new ConcurrentHashMap<>();
+    private static final Map<String,Pattern>       mapPatterns = new ConcurrentHashMap<>();
 
     // Pre-allocated arrays to avoid repeated allocations
     private static final Class[] EMPTY_CLASS_ARRAY = new Class[0];
-    private static final Class[] ONE_CLASS_ARRAY   = {Object.class};
-    private static final Class[] TWO_CLASS_ARRAY   = {Object.class, Object.class};
-    private static final Class[] THREE_CLASS_ARRAY = {Object.class, Object.class, Object.class};
+    private static final Class[] ONE_CLASS_ARRAY   = { Object.class };
+    private static final Class[] TWO_CLASS_ARRAY   = { Object.class, Object.class };
+    private static final Class[] THREE_CLASS_ARRAY = { Object.class, Object.class, Object.class };
 
     private        final pair    pairTriggered     = new pair().put( "name" , "" )  // Last device name and value
                                                                .put( "value", "" );
@@ -187,10 +188,9 @@ public final class StdXprFns
 
     private MethodHandle getMethod( Class clazz, String sFnName, Class[] aParamType, Object[] actualArgs )
     {
-        MapKey       mapKey  = new MapKey( clazz, sFnName, aParamType );
-        MethodHandle metHdle = mapMethods.get( mapKey );
+        MapKey mapKey = new MapKey( clazz, sFnName, aParamType );
 
-        if( metHdle == null )
+        return mapMethods.computeIfAbsent( mapKey, k ->
         {
             try
             {
@@ -200,17 +200,13 @@ public final class StdXprFns
                     throw new MingleException( '"' + sFnName + "\" does not exist, in: " + toInvocation( clazz, sFnName, actualArgs ) );
 
                 method.setAccessible( true );
-                metHdle = MethodHandles.lookup().unreflect( method );
-
-                mapMethods.put( mapKey, metHdle );
+                return MethodHandles.lookup().unreflect( method );
             }
             catch( IllegalAccessException exc )
             {
                 throw new MingleException( "Error creating MethodHandle for " + toInvocation( clazz, sFnName, actualArgs ), exc );
             }
-        }
-
-        return metHdle;
+        });
     }
 
     //------------------------------------------------------------------------//
@@ -702,13 +698,7 @@ public final class StdXprFns
     {
         String        sPattern = String.valueOf(   (o1 instanceof String ? o1 : o2) );
         Float         nNumber  = UtilType.toFloat( (o1 instanceof Number ? o1 : o2) );
-        DecimalFormat formater = mapFormats.get( sPattern );
-
-        if( formater == null )
-        {
-            formater = new DecimalFormat( sPattern );
-            mapFormats.put( sPattern, formater );
-        }
+        DecimalFormat formater = mapFormats.computeIfAbsent( sPattern, DecimalFormat::new );
 
         synchronized( formater )   // JavaDocs: "Decimal formats are generally not synchronized."
         {
@@ -857,11 +847,11 @@ public final class StdXprFns
         w = w.toLowerCase();
 
         // Replace Excel wildcards with Java regex equivalents
-        f = f.replace( "?", "." )
-             .replace( "*", ".*" );
+        String finalF = f.replace( "?", "." )
+                         .replace( "*", ".*" );
 
         // Compile the regex pattern
-        Pattern pattern = Pattern.compile( f );
+        Pattern pattern = mapPatterns.computeIfAbsent( finalF, Pattern::compile );
         Matcher matcher = pattern.matcher( w );
 
         if( matcher.find( ndx - 1 ) )
@@ -886,11 +876,11 @@ public final class StdXprFns
         sRegEx = Language.escape( sRegEx );
 
         if( nIndex < 0 )
-            return sInput.replaceAll( sRegEx, sNew );
+            return mapPatterns.computeIfAbsent( sRegEx, Pattern::compile ).matcher( sInput ).replaceAll( sNew );
 
         // To replace only nth occurrence
 
-        Pattern      pattern = Pattern.compile( sRegEx );
+        Pattern      pattern = mapPatterns.computeIfAbsent( sRegEx, Pattern::compile );
         Matcher      matcher = pattern.matcher( sInput );
         StringBuffer output  = new StringBuffer();
         int          count   = 0;
@@ -1327,14 +1317,21 @@ public final class StdXprFns
      */
     private static final class MapKey
     {
-        private final int hashCode; // Make final and calculate once
+        private final Class   clazz;
+        private final String  fnName;
+        private final Class[] aParams;
+        private final int     hashCode; // Make final and calculate once
 
         MapKey(Class clazz, String fnName, Class[] aParams)
         {
+            this.clazz   = clazz;
+            this.fnName  = fnName;
+            this.aParams = aParams;
+
             int hash = 7;
                 hash = 97 * hash + Objects.hashCode( clazz );
                 hash = 97 * hash + Objects.hashCode( fnName );
-                hash = 97 * hash + Arrays.hashCode( aParams ); // Use Arrays.hashCode instead of deepHashCode for Class arrays
+                hash = 97 * hash + Arrays.hashCode( aParams );  // Uses Arrays.hashCode instead of deepHashCode for Class arrays
             this.hashCode = hash;
         }
 
@@ -1350,15 +1347,15 @@ public final class StdXprFns
             if( this == obj )
                 return true;
 
-            if( obj == null )
-                return false;
-
-            if( getClass() != obj.getClass() )
+            if( obj == null || getClass() != obj.getClass() )
                 return false;
 
             final MapKey other = (MapKey) obj;
 
-            return this.hashCode == other.hashCode;
+            return this.hashCode == other.hashCode              &&
+                   Objects.equals( this.clazz  , other.clazz  ) &&
+                   Objects.equals( this.fnName , other.fnName ) &&
+                   Arrays.equals(  this.aParams, other.aParams );
         }
     }
 }

@@ -559,7 +559,7 @@ public final class Stick
         // Using this does not work (I do not know why) -->
         //      UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );
 
-        millis = ((millis <= 0) ? 500 : millis);    // I set a minium delay time of 500 to allow any pending task to be accomplished
+        millis = ((millis <= 0) ? 500 : millis);    // I set a minium delay time of 500 to allow any pending tasks to finish
 
         try
         {
@@ -626,8 +626,12 @@ public final class Stick
         exit( 0 );    // ::stop() is always invoked by a System hook
     }
 
+    // There is a hook that invokes this method on JMV exiting
     private Stick stop()
     {
+        if( bExited )
+            return this;
+
         // In case the runVoidThread() method was invoked -------------
         if( ! keepRun )
             return this;   // Already stopped
@@ -651,7 +655,7 @@ public final class Stick
         srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped
 
         say( "<<<<<<< Stick finished >>>>>>>" );
-
+        
         return this;
     }
 
@@ -773,20 +777,28 @@ public final class Stick
         {
             final MsgDeviceReaded msg = (MsgDeviceReaded) message;
 
-            // If message::isOwn is true  the device exists because the msg was generated in this exEn.
+            // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
-            ruleMgr.forEach( rule -> rule.eval( msg.name, msg.value ) );
-
             if( msg.isOwn )
-                broadcast( message );
+            {
+                if( deviMgr.named( msg.name ).value( msg.value ) )    // If device effectively changed its value
+                {
+                    ruleMgr.forEach( rule -> rule.eval( msg.name, msg.value ) );
+                    broadcast( message );
+                }
+            }
+            else
+            {
+                ruleMgr.forEach( rule -> rule.eval( msg.name, msg.value ) );
+            }
         }
 
         private void handleDeviceChanged( Message message )
         {
             final MsgDeviceChanged msg = (MsgDeviceChanged) message;
 
-            // If message::isOwn is true  the device exists because the msg was generated in this exEn.
+            // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
             if( msg.isOwn )
@@ -808,7 +820,7 @@ public final class Stick
             final MsgChangeActuator msg    = (MsgChangeActuator) message;
             final IDriver           driver = getDriver4Device( msg.name );
 
-            // If message::isOwn is true  the device exists because the msg was generated in this exEn.
+            // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
             if( driver != null )                     // There could be a problem loading the driver
@@ -825,7 +837,7 @@ public final class Stick
             final MsgExecute msg  = (MsgExecute) message;
             final IRule      rule = ruleMgr.named( msg.name );
 
-            // If message::isOwn is true  the rule/script exists because the msg was generated in this exEn.
+            // If message::isOwn is true  the rule/script exists because the msg was generated in this ExEn.
             // If message::isOwn is false the rule/script exists because it was checked by ::ServerListener.
 
             if( rule != null )
@@ -846,7 +858,7 @@ public final class Stick
             final MsgReadDevice msg    = (MsgReadDevice) message;
             final IDriver       driver = getDriver4Device( msg.name );
 
-            // If message::isOwn is true  the device exists because the msg was generated in this exEn.
+            // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
             if( driver != null )          // There could be a problem loading the driver

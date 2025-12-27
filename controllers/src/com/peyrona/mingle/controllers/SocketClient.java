@@ -74,22 +74,20 @@ public final class SocketClient
 
         super.start( rt );
 
+        String sConnect = "{\"host\":\""+ (String) get( KEY_HOST ) +"\", \"port\":"+ (int) get( KEY_PORT ) +'}';
+
         if( (Boolean) get( KEY_USE_WS ) )
         {
-            // FIXME: uar los WebSockets de network
-
-//            NettyWebSocketClient wsc = new NettyWebSocketClient();
-//                                 wsc.add( new MyListener() );
-//                                 wsc.connect( "{\"host\":"+ sHost +", \"port\":"+ nPort +'}' );
-//            client = wsc;
-            System.out.println( "WebSocket -> Option not yet implemeted" );
-            System.exit( 1 );
+            com.peyrona.mingle.network.websocket.WebSocketClient wsc = new com.peyrona.mingle.network.websocket.WebSocketClient();
+                                                                 wsc.add( new MyListener() );
+                                                                 wsc.connect( sConnect );
+            client = wsc;
         }
         else
         {
             com.peyrona.mingle.network.socket.SocketClient psc = new com.peyrona.mingle.network.socket.SocketClient();
                                                            psc.add( new MyListener() );
-                                                           psc.connect( "{\"host\":"+ (String) get( KEY_HOST ) +", \"port\":"+ (int) get( KEY_PORT ) +'}' );
+                                                           psc.connect( sConnect );
             client = psc;
         }
     }

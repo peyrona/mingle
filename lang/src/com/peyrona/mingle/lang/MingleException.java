@@ -11,6 +11,7 @@ public class MingleException extends RuntimeException
 {
     public static final short SHOULD_NOT_HAPPEN = 0;
     public static final short INVALID_ARGUMENTS = 1;
+    public static final short INVALID_STATE     = 2;
 
     private static final String[] asMSG = new String[] { "This should not happen", "Invalid arguments" };
 

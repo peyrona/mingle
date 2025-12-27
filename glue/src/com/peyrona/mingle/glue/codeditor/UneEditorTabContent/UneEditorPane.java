@@ -27,6 +27,7 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 import org.fife.ui.rsyntaxtextarea.SyntaxConstants;
 import org.fife.ui.rsyntaxtextarea.SyntaxScheme;
 import org.fife.ui.rsyntaxtextarea.Token;
+import org.fife.ui.rsyntaxtextarea.folding.FoldParserManager;
 import org.fife.ui.rtextarea.RTextScrollPane;
 import org.fife.ui.rtextarea.SearchContext;
 import org.fife.ui.rtextarea.SearchEngine;
@@ -47,10 +48,13 @@ import org.fife.ui.rtextarea.SearchEngine;
  */
 public final class UneEditorPane extends RTextScrollPane
 {
-    private final RSyntaxTextArea rsta;
-    private final DumbSense       dumbSense;
-    private       boolean         isChanged = false;
-    private       String          sOriginalText;
+    /** Custom syntax style identifier for Une language */
+    private static final String SYNTAX_STYLE_UNE = "text/une";
+
+    private final RSyntaxTextArea  rsta;
+    private final UneIntelliSense  intelliSense;
+    private       boolean          isChanged = false;
+    private       String           sOriginalText;
 
     //------------------------------------------------------------------------//
     // PACKAGE SCROPE CONSTRUCTORS  (use UneEditorUnit::newEditor(...))
@@ -69,47 +73,92 @@ public final class UneEditorPane extends RTextScrollPane
         rsta.setAntiAliasingEnabled( true );
         rsta.setFont( rsta.getFont().deriveFont( Font.PLAIN, 11 ) );
         rsta.setHyperlinksEnabled( true );
-     // NEXT: no funciona
-     // Mirar aquí: https://github.com/bobbylight/RSyntaxTextArea/wiki
-     //             https://www.youtube.com/watch?v=U9nQsA7Bvww
         rsta.setBracketMatchingEnabled( true );
-      //textArea.setAnimateBracketMatching( true );
         rsta.setMatchedBracketBGColor( Color.darkGray );
         rsta.setMatchedBracketBorderColor( Color.yellow.darker() );
         rsta.setPaintMatchedBracketPair( true );
         rsta.setInsertPairedCharacters( true );
-      //rsta.setShowMatchedBracketPopup( true );
-      //rsta.setForeground( Color.red );
         rsta.setBackground( Color.darkGray.darker().darker() );
         rsta.setCaretColor( Color.gray.brighter() );
         rsta.setSelectionColor( new Color( 48, 86, 93 ) );
         rsta.setCurrentLineHighlightColor( Color.darkGray.darker() );
         rsta.setSelectedTextColor( Color.yellow );
         rsta.setUseSelectedTextColor( true );
-        rsta.setMarkAllHighlightColor( new Color( 75,56,101 ) );
+        rsta.setMarkAllHighlightColor( new Color( 75, 56, 101 ) );
         rsta.setMarkAllOnOccurrenceSearches( true );
-     // rsta.setMarkOccurrences( true );             No sé pa qué sirve
-     // rsta.setMarkOccurrencesColor( Color.red );   No sé pa qué sirve
+
         //----------------------------------------------------
+        // Syntax highlighting color scheme for Une language
+        // Colors are mapped to token types used by UneTokenMaker
 
         SyntaxScheme scheme = rsta.getSyntaxScheme();
-                     scheme.getStyle( Token.COMMENT_EOL                 ).foreground = Color.gray;
-                     scheme.getStyle( Token.FUNCTION                    ).foreground = Color.pink;
-                     scheme.getStyle( Token.IDENTIFIER                  ).foreground = new Color( 162, 208, 244 );
-                     scheme.getStyle( Token.LITERAL_NUMBER_DECIMAL_INT  ).foreground = new Color( 199,  80,  97 );
-                     scheme.getStyle( Token.LITERAL_NUMBER_FLOAT        ).foreground = new Color( 199,  80,  97 );
-                     scheme.getStyle( Token.LITERAL_BOOLEAN             ).foreground = new Color( 193, 122,  27 );
-                     scheme.getStyle( Token.LITERAL_STRING_DOUBLE_QUOTE ).foreground = new Color(  93, 152,  96 );
-                     scheme.getStyle( Token.OPERATOR                    ).foreground = new Color( 193, 122,  27 );
-                     scheme.getStyle( Token.PREPROCESSOR                ).foreground = new Color( 244, 198, 162 );
-                     scheme.getStyle( Token.RESERVED_WORD               ).foreground = new Color(  16, 123, 208 );
-                     scheme.getStyle( Token.RESERVED_WORD_2             ).foreground = new Color( 124,  92, 171 );
+
+        // Comments (gray)
+        scheme.getStyle( Token.COMMENT_EOL ).foreground = new Color( 100, 100, 100 );
+
+        // Functions and methods (yellow-ish)
+        scheme.getStyle( Token.FUNCTION ).foreground = new Color( 220, 220, 170 );
+
+        // Identifiers (light blue)
+        scheme.getStyle( Token.IDENTIFIER ).foreground = new Color( 156, 220, 254 );
+
+        // Numbers (salmon/pink)
+        scheme.getStyle( Token.LITERAL_NUMBER_DECIMAL_INT ).foreground = new Color( 181, 206, 168 );
+        scheme.getStyle( Token.LITERAL_NUMBER_FLOAT       ).foreground = new Color( 181, 206, 168 );
+
+        // Boolean literals (blue)
+        scheme.getStyle( Token.LITERAL_BOOLEAN ).foreground = new Color( 86, 156, 214 );
+
+        // Strings (green)
+        scheme.getStyle( Token.LITERAL_STRING_DOUBLE_QUOTE ).foreground = new Color( 206, 145, 120 );
+
+        // Operators (orange/gold)
+        scheme.getStyle( Token.OPERATOR ).foreground = new Color( 212, 212, 212 );
+
+        // Preprocessor directives: INCLUDE, USE (peach)
+        scheme.getStyle( Token.PREPROCESSOR ).foreground = new Color( 197, 134, 192 );
+
+        // Reserved words: DEVICE, DRIVER, RULE, SCRIPT, etc. (blue)
+        scheme.getStyle( Token.RESERVED_WORD ).foreground = new Color( 86, 156, 214 );
+
+        // Reserved words 2: AND, OR, XOR, NOT (purple)
+        scheme.getStyle( Token.RESERVED_WORD_2 ).foreground = new Color( 197, 134, 192 );
+
+        // Data types: BOOLEAN, NUMBER, STRING, ANY, language names (cyan)
+        scheme.getStyle( Token.DATA_TYPE ).foreground = new Color( 78, 201, 176 );
+
+        // Separators: parentheses, commas, semicolons
+        scheme.getStyle( Token.SEPARATOR ).foreground = new Color( 212, 212, 212 );
+
+        // Variables / Unit suffixes (light green)
+        scheme.getStyle( Token.VARIABLE ).foreground = new Color( 78, 201, 176 );
+
+        // Annotations / Macros: {*name*} (light green)
+        scheme.getStyle( Token.ANNOTATION ).foreground = new Color( 181, 206, 168 );
+
+        // Inline code braces (yellow)
+        scheme.getStyle( Token.MARKUP_TAG_DELIMITER ).foreground = new Color( 128, 128, 128 );
+
+        // Inline code content (default foreground - handled by embedded language)
+        scheme.getStyle( Token.MARKUP_CDATA ).foreground = new Color( 212, 212, 212 );
+
+        //----------------------------------------------------
+        // Register custom token maker and fold parser
 
         ((RSyntaxDocument) rsta.getDocument()).setSyntaxStyle( new UneTokenMaker() );
 
+        // Register fold parser for Une language
+        FoldParserManager.get().addFoldParserMapping( SYNTAX_STYLE_UNE, new UneFoldParser() );
+        rsta.setSyntaxEditingStyle( SYNTAX_STYLE_UNE );
+
+        //----------------------------------------------------
+        // Gutter configuration
+
         getGutter().setLineNumberFont( rsta.getFont() );
-        getGutter().setBackground( rsta.getBackground().brighter());
+        getGutter().setBackground( rsta.getBackground().brighter() );
         getGutter().setForeground( rsta.getForeground() );
+        getGutter().setFoldIndicatorEnabled( true );
+        getGutter().setFoldBackground( rsta.getBackground() );
 
         //------------------------------------------------------------------------//
 
@@ -160,9 +209,9 @@ public final class UneEditorPane extends RTextScrollPane
         rsta.getActionMap().put( "ActionCloneLine_Dn", actCloneLine );
 
         //------------------------------------------------------------------------//
-        // To show DumbSense (vs IntelliSense) pop up menu
+        // IntelliSense code completion (Ctrl+Space)
 
-        dumbSense = new DumbSense( rsta );
+        intelliSense = new UneIntelliSense( rsta );
 
         rsta.addKeyListener( new KeyAdapter()
                             {
@@ -170,7 +219,7 @@ public final class UneEditorPane extends RTextScrollPane
                                 public void keyPressed( KeyEvent kpe )
                                 {
                                     if( kpe.isControlDown() && kpe.getKeyCode() == KeyEvent.VK_SPACE )
-                                        dumbSense.pop();
+                                        intelliSense.showCompletions();
                                 }
                             } );
         //------------------------------------------------------------------------//
@@ -533,22 +582,22 @@ public final class UneEditorPane extends RTextScrollPane
 
         switch( sFileExt )
         {
+            case "model":
             case "json" : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_JSON       ); break;
             case "java" : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_JAVA       ); break;
             case "js"   : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_JAVASCRIPT ); break;
             case "py"   : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_PYTHON     ); break;
             case "html" : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_HTML       ); break;
             case "sql"  : rsta.setSyntaxEditingStyle( SyntaxConstants.SYNTAX_STYLE_SQL        ); break;
-            case "model":
-            case "une"  : break;
-            default     : throw new AssertionError("Unknown file extension: "+ sFileExt );
+            case "une"  : // Ensure Une syntax style and token maker are active
+                ((RSyntaxDocument) rsta.getDocument()).setSyntaxStyle( new UneTokenMaker() );
+                rsta.setSyntaxEditingStyle( SYNTAX_STYLE_UNE );
+                break;
+            default     : JTools.error( "Unknown file extension: " + sFileExt );
         }
 
         if( ! bChanged )
-            isChanged = false;    // It is strange, but after changing the style, RSyntaxTextArea says the content is changed.
-
-     // rsta.getSyntaxScheme().getStyle( Token.COMMENT_EOL ).foreground = Color.gray;
-     // rsta.getSyntaxScheme().getStyle( Token.COMMENT_EOL ).commentDelim = "#";      // NEXT: NO FUNCIONA
+            isChanged = false;    // After changing the style, RSyntaxTextArea reports content as changed
     }
 
     //------------------------------------------------------------------------//

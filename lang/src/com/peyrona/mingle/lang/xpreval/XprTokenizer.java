@@ -136,7 +136,7 @@ public final class XprTokenizer
                 if( operators.get( lex.text() ) == null )
                 {
                     lstErrors.add( new CodeError( "Unknown operator \"" + lex.text() +'"', lex ) );
-                    return;
+                    continue;
                 }
 
                 boolean  bUnary = isUnaryOp( lstLexemes, n );

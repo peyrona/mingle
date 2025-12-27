@@ -11,7 +11,6 @@ import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -52,7 +51,7 @@ import java.util.function.Function;
  */
 public final class NAXE implements IXprEval
 {
-    private EvalByAST                 evaluator    = null;    // Is null only when the expression is empty
+    private EvalByAST                 evaluator    = null;    // Is null only when the expression has errors
     private List<ICandi.IError>       lstErrors    = null;
     private String                    sOriginal    = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
     private Function<String,String[]> fnGroupWise  = null;
@@ -70,6 +69,9 @@ public final class NAXE implements IXprEval
     {
         this.sOriginal   = sXprInfix;
         this.fnGroupWise = fnGroupWise;
+
+        if( UtilColls.isNotEmpty( lstErrors ) )
+            lstErrors.clear();
 
         Lexer lexer = new Lexer( sOriginal );
 
@@ -91,6 +93,9 @@ public final class NAXE implements IXprEval
                 evaluator = new EvalByAST( lstInfix, onSolved );
 
                 addAll( evaluator.getErrors() );
+
+                if( ! getErrors().isEmpty() )
+                    evaluator = null;
             }
         }
 
@@ -100,13 +105,13 @@ public final class NAXE implements IXprEval
     @Override
     public boolean set( String varName, Object varValue )
     {
-        return evaluator.set( varName, varValue );
+        return evaluator.set( varName, varValue );    // NullPointerException can be thrown: this is intended
     }
 
     @Override
     public Object eval( String varName, Object varValue )
     {
-        return evaluator.set( varName, varValue ) ? eval() : null;
+        return evaluator.set( varName, varValue ) ? eval() : null;    // NullPointerException can be thrown: this is intended
     }
 
     @Override
@@ -114,16 +119,16 @@ public final class NAXE implements IXprEval
     {
         try
         {
-            return evaluator.eval();
+            return evaluator.eval();    // NullPointerException can be thrown: this is intended
         }
-        catch( Exception exc )         // Only happens when improper use of this class
+        catch( Exception exc )          // Only happens when improper use of this class
         {
-            if( evaluator == null )    // null means empty expression
-                return null;
-
             if( UtilColls.isNotEmpty( lstErrors ) )
                 throw new MingleException( "Expression:"+ sOriginal +
                                            "\n has errors. Check '::getErrors()' prior to evalute" );    // This Exception is intended
+
+            if( evaluator == null )
+                return null;
 
             throw new MingleException( "Error evaluating:\n"+ sOriginal, exc );
         }
@@ -132,26 +137,26 @@ public final class NAXE implements IXprEval
     @Override
     public Map<String,Object> getVars()
     {
-        return (evaluator == null) ? new HashMap<>()
-                                   : evaluator.getVars();    // This is already unmodifiable
+        return evaluator.getVars();    // This is already unmodifiable
     }
 
     @Override
     public List<ICandi.IError> getErrors()   // This method can not call ::check()
     {
-        return (lstErrors == null) ? new ArrayList<>() : Collections.unmodifiableList( lstErrors );
+        return (lstErrors == null) ? Collections.unmodifiableList( new ArrayList<>() )   // Unmodifiable just for consistency: not needed
+                                   : Collections.unmodifiableList( lstErrors );
     }
 
     @Override
     public boolean isBoolean()
     {
-        return evaluator.isBoolean();    // NullPointerException can be thrown: this is intended
+        return evaluator.isBoolean();      // NullPointerException can be thrown: this is intended
     }
 
     @Override
     public boolean isFutureing()
     {
-        return evaluator.isFutureing();
+        return evaluator.isFutureing();    // NullPointerException can be thrown: this is intended
     }
 
     @Override
@@ -164,10 +169,12 @@ public final class NAXE implements IXprEval
     }
 
     @Override
-    public void close()
+    public IXprEval close()
     {
         if( evaluator != null )
             evaluator.shutdown();
+
+        return this;
     }
 
     @Override

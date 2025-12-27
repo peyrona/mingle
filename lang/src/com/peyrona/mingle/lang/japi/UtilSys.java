@@ -80,7 +80,7 @@ public final class UtilSys
         // If the app is invoked the first time with 'sudo', created folders will have only 'sudo' priviledges.
         // If subsequent invocations are done without 'sudo', the access to these created folders will be rejected.
 
-        try // Only one 'try-catch' because if it can be done once, it can be done with the three
+        try // Only one 'try-catch' because if it can be done with the first, it can be done with the other two
         {
             Set<PosixFilePermission> permissions = PosixFilePermissions.fromString( "rwxrwxrwx" );
 
@@ -286,34 +286,34 @@ public final class UtilSys
 
     /**
      * Executes passed Runnable using an internal ThreadPoolExecutor.
-     * @param sThreadName
+     * @param name
      * @param r What to execute.
      */
-    public static ScheduledFuture execute( String sThreadName, Runnable r )
+    public static ScheduledFuture execute( String name, Runnable r )
     {
-        return execute( sThreadName, 0, r );
+        return execute( name, 0, r );
     }
 
     /**
      * Executes passed Runnable after specified delay (in millis) using an internal ThreadPoolExecutor.
      *
-     * @param sThreadName
+     * @param name
      * @param delay Delay in millis to execute the task.
      * @param r What to execute.
      * @return
      */
-    public static ScheduledFuture execute( String sThreadName, long delay, Runnable r )
+    public static ScheduledFuture execute( String name, long delay, Runnable r )
     {
-        // Can not afford to have an execption inside r because the Scheduler stops.
+        // Can not afford to have an exception inside r because the Scheduler stops.
         // Although we wrap r with a generic try catch, the r should have its own try catch.
+
+        String s = getThreadName( name );
 
         Runnable run = () ->
                         {
-                            Thread.currentThread()
-                                  .setName( sThreadName );
-
                             try
                             {
+                                Thread.currentThread().setName( s );
                                 r.run();
                             }
                             catch( Exception exc )
@@ -328,33 +328,29 @@ public final class UtilSys
     /**
      * Periodically executes passed Runnable after specified initial delay every rate millis using an internal ThreadPoolExecutor.
      *
-     * @param sThreadName
+     * @param name
      * @param delay Initial delay in milliseconds to execute the task.
      * @param rate Rate in milliseconds to execute the task.
      * @param r What to execute.
      * @return
      */
-    public static ScheduledFuture executeAtRate( String sThreadName, long delay, long rate, Runnable r )
+    public static ScheduledFuture executeAtRate( String name, long delay, long rate, Runnable r )
     {
         // Can not afford to have an execption inside r because the Scheduler stops.
         // Although we wrap r with a generic try catch, the r should have its own try catch.
 
+        String s = getThreadName( name );
+
         Runnable run = () ->
                         {
-                            String original = Thread.currentThread().getName();
-                            Thread.currentThread().setName( sThreadName );
-
                             try
                             {
+                                Thread.currentThread().setName( s );
                                 r.run();
                             }
                             catch( Exception exc )
                             {
                                 UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
-                            }
-                            finally
-                            {
-                                Thread.currentThread().setName( original );
                             }
                         };
 
@@ -365,38 +361,36 @@ public final class UtilSys
      * Periodically executes passed Runnable after specified initial delay: when task ends its execution,
      * an amount of delay millis is waited until the next execution of the task starts.
      *
-     * @param sThreadName
+     * @param name
      * @param delay Interval between an iteration ends and the next iteration starts.
      * @param rate
      * @param r What to execute.
      * @return
      */
-    public static ScheduledFuture executeWithDelay( String sThreadName, long delay, long rate, Runnable r )
+    public static ScheduledFuture executeWithDelay( String name, long delay, long rate, Runnable r )
     {
         // Can not afford to have an execption inside r because the Scheduler stops.
         // Although we wrap r with a generic try catch, the r should have its own try catch.
 
+        String s = getThreadName( name );
+
         Runnable run = () ->
                         {
-                            String original = Thread.currentThread().getName();
-                            Thread.currentThread().setName( sThreadName );
-
                             try
                             {
+                                Thread.currentThread().setName( s );
                                 r.run();
                             }
                             catch( Exception exc )
                             {
                                 UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
                             }
-                            finally
-                            {
-                                Thread.currentThread().setName( original );
-                            }
                         };
 
         return pool.scheduleWithFixedDelay( run, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
     }
+
+    //------------------------------------------------------------------------//
 
     /**
      * Returns the time in milliseconds elapsed since ExEn started.<br>
@@ -739,6 +733,19 @@ public final class UtilSys
     private UtilSys()
     {
         // Avoids creating instances of this class.
+    }
+
+    private static String getThreadName( String name )
+    {
+        if( UtilStr.isMeaningless( name ) )
+        {
+            name = UtilSys.class.getSimpleName() +":pool:"+ UtilReflect.getCallerMethodName( 4 );
+
+            if( name == null )    // Because UtilReflect.getCallerMethodName(...) can return null
+                name = UtilSys.class.getSimpleName() +":pool";
+        }
+
+        return name;
     }
 
     /**

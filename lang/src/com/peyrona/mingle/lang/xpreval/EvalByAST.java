@@ -66,18 +66,19 @@ final class EvalByAST
     public static final short VISIT_IN_ORDER   =  0;
     public static final short VISIT_POST_ORDER =  1;
 
-    private final Consumer<Object>    onSolved;                       // It is invoked when the expr is solved passing the result (either TRUE or FALSE)
-    private final StdXprOps           operators = new StdXprOps();
-    private final StdXprFns           functions = new StdXprFns();
-    private final List<ICandi.IError> lstErrors = new ArrayList<>();  // Used to add items only, never removed
-    private final Map<String,Object>  mapVars   = new HashMap<>();    // key == deviceName, value == deviceValue (not nneded to be sync)
-    private       boolean             hasAllVars;
-    private final boolean             hasWithin;                      // hasAFTER is not really needed
-
-    private final MyExecutor executor;    // Used for both AFTER and WITHIN.
-    private final ASTNode    root;        // The fucking root node
-    private final boolean    isBoolean;
-    private final boolean    hasChangedDeviceFn;
+    private final    Consumer<Object>    onSolved;                               // It is invoked when the expr is solved passing the result (either TRUE or FALSE)
+    private final    StdXprOps           operators = new StdXprOps();
+    private final    StdXprFns           functions = new StdXprFns();
+    private final    List<ICandi.IError> lstErrors = new ArrayList<>();          // Used to add items only, never removed
+    private final    Map<String,Object>  mapVars   = Collections.synchronizedMap( new HashMap<>() );  // key == deviceName, value == deviceValue (not nneded to be sync)
+    private final    MyExecutor          executor;                               // Used for both AFTER and WITHIN.
+    private final    ASTNode             root;                                   // The fucking root node
+    private final    boolean             isBoolean;
+    private final    boolean             hasChangedDeviceFn;
+    private final    boolean             hasWithin;                              // hasAfter is not really needed
+    private volatile boolean             hasAllVars;
+    private final    String              sToString;
+    private final    int                 nHashCode;
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR (package scope)
@@ -158,6 +159,9 @@ final class EvalByAST
         hasAllVars         = mapVars.isEmpty();    // Some expressions does not have variables
         hasWithin          = bWithin;
         hasChangedDeviceFn = bHasChgDevFn;
+
+        sToString = (root == null) ? "" : toString( root );
+        nHashCode = 37 * 3 + sToString.hashCode();
 
 //System.out.println( "Original: " + XprUtils.toString( lstInfix ) );
 //System.out.println( "AST:\n" + toString() );
@@ -279,10 +283,7 @@ final class EvalByAST
     @Override
     public int hashCode()
     {
-        int hash = 3;
-            hash = 37 * hash + toString().hashCode();
-
-        return hash;
+        return nHashCode;
     }
 
     @Override
@@ -299,13 +300,13 @@ final class EvalByAST
 
         final EvalByAST other = (EvalByAST) obj;
 
-        return toString().equals( other.toString() );
+        return sToString.equals( other.sToString );
     }
 
     @Override
     public String toString()
     {
-        return (root == null) ? "" : toString( root );
+        return sToString;
     }
 
     //------------------------------------------------------------------------//
@@ -411,38 +412,32 @@ final class EvalByAST
 
     private boolean validate( ASTNode node )
     {
+        return validate( node, 0 );
+    }
+
+    private boolean validate( ASTNode node, long currentMaxDelay )
+    {
         if( node == null )
-            return false;
+            return true;
 
-        final AtomicBoolean bRet       = new AtomicBoolean( true );
-        final Stack<Long>   delayStack = new Stack<>();
+        boolean bValid = node.validate( lstErrors );
+        long    delay  = node.delay();
 
-        // Ckeck that a nested delay is not bigger than its parent delay -----------------------------
-        visitor( node,
-                VISIT_POST_ORDER,     // Visit childs first
-                (ASTNode child) ->
-                {
-                    bRet.set( child.validate( lstErrors ) && bRet.get() );
+        if( delay > 0 )
+        {
+            if( currentMaxDelay > 0 && delay > currentMaxDelay )
+            {
+                lstErrors.add( new CodeError( "Nested delay (" + delay + ") is bigger than parent (" + currentMaxDelay + ") delay", node.token() ) );
+            }
 
-                    if( child.delay() > 0 )
-                    {
-                        long currentMax = delayStack.isEmpty() ? 0 : delayStack.peek();
+            currentMaxDelay = delay;
+        }
 
-                        if( currentMax > 0 && child.delay() > currentMax )
-                        {
-                            lstErrors.add( new CodeError( "Nested delay (" + child.delay() + ") is bigger than parent (" + currentMax + ") delay", child.token() ) );
-                        }
+        // Use bitwise AND to avoid short-circuiting so all nodes are visited/validated
+        bValid &= validate( node.left(),  currentMaxDelay );
+        bValid &= validate( node.right(), currentMaxDelay );
 
-                        delayStack.push( child.delay() );
-                    }
-                    else if( !delayStack.isEmpty() && delayStack.peek() > 0 )
-                    {
-                        // Pop when we've finished a subtree that had a delay
-                        delayStack.pop();
-                    }
-                } );
-
-        return bRet.get();
+        return bValid;
     }
 
     /**
@@ -622,8 +617,8 @@ final class EvalByAST
  */
     private final class MyExecutor extends ThreadPoolExecutor
     {
-        private final          Set<Thread> runningThreads = ConcurrentHashMap.newKeySet();
-        private       volatile boolean     isShuttingDown = false;
+        private final          Set<Thread>   runningThreads = ConcurrentHashMap.newKeySet();
+        private final          AtomicBoolean isShuttingDown = new AtomicBoolean( false );
 
         MyExecutor( int poolSize )
         {
@@ -651,7 +646,7 @@ final class EvalByAST
         {
             super.beforeExecute( t, r );
 
-            if( ! isShuttingDown )
+            if( ! isShuttingDown.get() )
                 runningThreads.add( t );
         }
 
@@ -686,7 +681,7 @@ final class EvalByAST
 
         void cancelAllTasks()
         {
-            if( isShuttingDown )
+            if( isShuttingDown.get() )
                 return;    // Already shutting down
 
             // Create a snapshot of currently running threads
@@ -708,10 +703,8 @@ final class EvalByAST
          */
         void shutdownExecutor()
         {
-            if( isShuttingDown )
+            if( ! isShuttingDown.compareAndSet( false, true ) )
                 return;    // Already shutting down
-
-            isShuttingDown = true;
 
             // Create a snapshot of currently running threads
             Set<Thread> threadsToInterrupt = new HashSet<>( runningThreads );

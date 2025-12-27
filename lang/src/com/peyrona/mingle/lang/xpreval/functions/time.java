@@ -70,7 +70,7 @@ public final class time
                 }
                 else                                                             // e.g.: 12,30,42
                 {
-                    if( args.length != 3 )
+                    if( args.length < 2 || args.length > 3 )
                         throw new MingleException( MingleException.INVALID_ARGUMENTS );
 
                     int hour   = UtilType.toInteger( args[0] );
@@ -598,10 +598,10 @@ public final class time
         if( zone == null )
             throw new MingleException( "Invalid time-zone: "+ zone );
 
-        final LocalDateTime local    = LocalDateTime.of( ((date) date).asLocalDate(), (LocalTime) time );
-        final Instant       instant  = local.atZone( (ZoneId) zone ).toInstant();
-        final Calendar      calendar = Calendar.getInstance( TimeZone.getTimeZone( (ZoneId) zone ) );
-                            calendar.setTimeInMillis( instant.toEpochMilli() );
+        LocalDateTime local    = LocalDateTime.of( ((date) date).asLocalDate(), (LocalTime) time );
+        Instant       instant  = local.atZone( (ZoneId) zone ).toInstant();
+        Calendar      calendar = Calendar.getInstance( TimeZone.getTimeZone( (ZoneId) zone ) );
+                      calendar.setTimeInMillis( instant.toEpochMilli() );
 
         return calendar;
     }

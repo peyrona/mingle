@@ -86,7 +86,6 @@ final class Menu
                 case "x":
                     if( isInteractive() )
                     {
-                        askToKill();
                         running = false;
                         System.out.println( "Mingle console menu finished." );
                     }
@@ -497,32 +496,6 @@ final class Menu
         return aNew;
     }
 
-    private void askToKill()
-    {
-        List<ProcessInfo> lstProcs= orchestrator.listProcesses();
-
-        if( ! lstProcs.isEmpty() )
-        {
-            System.out.println( "These are the currently running Mingle components." );
-
-            listProcesses( lstProcs );
-
-            boolean kill = UtilUI.confirm( "Do you want to terminate all now?" );
-
-            if( kill )
-            {
-                for( ProcessInfo proc : lstProcs )
-                    orchestrator.killProcess( proc.pid, true );
-
-                System.out.println( "All processes terminated." );
-            }
-            else
-            {
-                System.out.println( "Processes will continue running." );
-            }
-        }
-    }
-
     //------------------------------------------------------------------------//
     // MENU DISPLAY
     //------------------------------------------------------------------------//
@@ -583,8 +556,8 @@ final class Menu
                 System.out.println( " 2 - Service Start" );
                 System.out.println( " 3 - Service Stop" );
                 System.out.println( " 4 - Service Restart" );
-                System.out.println( " 5 - Service show log" );
-                System.out.println( " 6 - Service show file contents" );
+                System.out.println( " 5 - Show service log" );
+                System.out.println( " 6 - Show service file contents" );
                 System.out.println( " 9 - Delete service file" );
                 System.out.println( "---------------------------------" );
                 System.out.println( " 0   + [Enter] to change tool"     );

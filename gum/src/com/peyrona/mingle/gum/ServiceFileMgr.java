@@ -28,10 +28,10 @@ import javax.servlet.http.HttpServletResponse;
  *   <ul>
  *   <li>file: Name of the file to retrieve (optional)
  *   </ul>
- * <li>PUT: Creates a new folder.
+ * <li>PUT: Creates a new folder/file OR updates existing file content.
  *   <ul>
- *   <li>parent: Parent directory (optional)
- *   <li>name: Name of the new folder (required)
+ *   <li>Mode 1 - Create: type=dir|file, name=..., [parent=...], [content=...] (query params)
+ *   <li>Mode 2 - Update: file=... (query param), content in request body
  *   </ul>
  * <li>POST: Renames a file or folder.
  *   <ul>
@@ -80,21 +80,53 @@ final class ServiceFileMgr extends ServiceBase
     }
 
     /**
-     * Create new folder or save a file (existing or new).
+     * Create new folder, create a new file, or update existing file content.
      *
-     * @param request
-     * @param response
-     * @throws javax.servlet.ServletException
+     * Two modes of operation:
+     * 1. Create: type=dir|file, name=..., [parent=...], [content=...] (query params)
+     * 2. Update: file=... (query param), content in request body
+     *
      * @throws java.io.IOException
      */
     @Override    // PUT == APPEND
     protected void doPut() throws IOException
     {
+        String sFilePath = asString( "file", null );
+
+        // Mode 2: Update existing file content (file path in query, content in body)
+        if( sFilePath != null )
+        {
+            File fTarget = resolveSecurePath( sFilePath );
+
+            // Read content from request body
+            StringBuilder sb = new StringBuilder();
+            String line;
+
+            try( java.io.BufferedReader reader = request.getReader() )
+            {
+                while( (line = reader.readLine()) != null )
+                {
+                    if( sb.length() > 0 )
+                        sb.append( '\n' );
+
+                    sb.append( line );
+                }
+            }
+
+            UtilIO.newFileWriter()
+                  .setFile( fTarget )
+                  .replace( sb.toString() );
+
+            sendText( "OK" );
+            return;
+        }
+
+        // Mode 1: Create new folder or file (all params in query string)
         String sParent = asString( "parent", null );
-        String sFile   = asString( "name"  , ""   );
+        String sName   = asString( "name"  , ""   );
         String sType   = asString( "type"  , ""   );
         File   fParent = UtilStr.isEmpty( sParent ) ? fRoot : resolveSecurePath( sParent );
-        File   fTarget = resolveSecurePath( new File(fParent, sFile).getPath() );
+        File   fTarget = resolveSecurePath( new File(fParent, sName).getPath() );
 
         if( "dir".equalsIgnoreCase( sType ) )
         {
@@ -110,14 +142,13 @@ final class ServiceFileMgr extends ServiceBase
         {
             throw new IOException( "Wrong type "+ sType +" (must be 'dir' or 'file')");
         }
+
+        sendText( "OK" );
     }
 
     /**
      * Rename file or folder.
      *
-     * @param request
-     * @param response
-     * @throws javax.servlet.ServletException
      * @throws java.io.IOException
      */
     @Override    // POST == UPDATE
@@ -128,14 +159,13 @@ final class ServiceFileMgr extends ServiceBase
 
         if( ! fOld.renameTo( fNew ) )
             throw new IOException( "Error renaming ["+ fOld +"] to ["+ fNew +']' );
+
+        sendText( "OK" );
     }
 
     /**
      * Deletes the file passed at the request.
      *
-     * @param request
-     * @param response
-     * @throws javax.servlet.ServletException
      * @throws java.io.IOException
      */
     @Override
@@ -145,6 +175,8 @@ final class ServiceFileMgr extends ServiceBase
 
         for( String sName : asFileNames )
             UtilIO.delete( resolveSecurePath( sName ) );
+
+        sendText( "OK" );
     }
 
     //------------------------------------------------------------------------//
@@ -152,14 +184,30 @@ final class ServiceFileMgr extends ServiceBase
 
     private File resolveSecurePath( String relativePath ) throws IOException
     {
+        // Normalize and validate input first
+        if( relativePath == null || relativePath.trim().isEmpty() )
+            throw new IOException( "Path cannot be null or empty" );
+
+        // Reject dangerous patterns upfront
+        if( relativePath.contains( ".." )  ||
+            relativePath.contains( "//" )  ||
+            relativePath.contains( "\\" )  ||
+            relativePath.startsWith( "/" ) ||
+            relativePath.contains( "\0" ) )
+        {
+            throw new IOException( "Path traversal attempt detected: " + relativePath );
+        }
+
         File userFile = new File( relativePath );
 
         if( userFile.isAbsolute() )
-            throw new IOException( "Path traversal attempt: Absolute paths are not allowed." );
+            throw new IOException( "Absolute paths are not allowed." );
 
-        File finalPath = new File( fRoot, relativePath ).getCanonicalFile();
+        File finalPath     = new File( fRoot, relativePath ).getCanonicalFile();
+        File rootCanonical = fRoot.getCanonicalFile();
 
-        if( ! finalPath.toPath().startsWith( fRoot.getCanonicalPath() ) )
+        // More robust check using String comparison after canonicalization
+        if( ! finalPath.getPath().startsWith( rootCanonical.getPath() ) )
             throw new IOException( "Path traversal attempt detected: " + relativePath );
 
         return finalPath;
@@ -209,7 +257,7 @@ final class ServiceFileMgr extends ServiceBase
 
                 for( File file : aFiles )
                 {
-                    if( file.isHidden() || !file.canRead() )
+                    if( file.isHidden() || ! file.canRead() )
                         continue;
 
                     // Recurse

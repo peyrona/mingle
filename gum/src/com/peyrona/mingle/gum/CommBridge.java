@@ -19,6 +19,7 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
@@ -102,14 +103,16 @@ public class CommBridge extends WebSocketAdapter
      */
     private enum CloseCode
     {
-        NORMAL_CLOSURE(    StatusCode.NORMAL,      "Normal closure" ),
-        GOING_AWAY(        StatusCode.SHUTDOWN,    "Server going away" ),
-        PROTOCOL_ERROR(    StatusCode.PROTOCOL,    "Protocol error" ),
-        UNSUPPORTED_DATA(  StatusCode.BAD_DATA,    "Unsupported data" ),
-        INVALID_PAYLOAD(   StatusCode.BAD_PAYLOAD, "Invalid payload data" ),
-        POLICY_VIOLATION(  StatusCode.POLICY_VIOLATION, "Policy violation" ),
-        MESSAGE_TOO_LARGE( StatusCode.MESSAGE_TOO_LARGE, "Message too large" ),
-        INTERNAL_ERROR(    StatusCode.SERVER_ERROR, "Internal server error" );
+        NORMAL_CLOSURE(     StatusCode.NORMAL,            "Normal closure" ),
+        TARGET_UNAVAILABLE( StatusCode.BAD_PAYLOAD,       "Target ExEn unavailable" ),
+        WEBSOCKET_TIMEOUT(  StatusCode.POLICY_VIOLATION,  "Idle timeout expired" ),
+        GOING_AWAY(         StatusCode.SHUTDOWN,          "Server going away" ),
+        PROTOCOL_ERROR(     StatusCode.PROTOCOL,          "Protocol error" ),
+        UNSUPPORTED_DATA(   StatusCode.BAD_DATA,          "Unsupported data" ),
+        INVALID_PAYLOAD(    StatusCode.BAD_PAYLOAD,       "Invalid payload data" ),
+        POLICY_VIOLATION(   StatusCode.POLICY_VIOLATION,  "Policy violation" ),
+        MESSAGE_TOO_LARGE(  StatusCode.MESSAGE_TOO_LARGE, "Message too large" ),
+        INTERNAL_ERROR(     StatusCode.SERVER_ERROR,      "Internal server error" );
 
         private final int code;
         private final String reason;
@@ -131,12 +134,35 @@ public class CommBridge extends WebSocketAdapter
         }
     }
 
-    // Thread-safe map: WebSocket Session → List of (ExEn client, ExEn address)
+    /**
+     * Thread-safe map: WebSocket Session → List of (ExEn client, ExEn address).
+     *
+     * <p><b>Design Note:</b> These static maps are intentional. Jetty creates one CommBridge
+     * instance per WebSocket connection, but we need to share state across all connections
+     * (e.g., for cleanup, cross-session lookups). Static maps provide this shared state
+     * while instance methods provide access to per-connection Session via {@code getSession()}.</p>
+     */
     private static final ConcurrentHashMap<Session,
                                            CopyOnWriteArrayList<Pair<INetClient,JsonObject>>> sessionToClients = new ConcurrentHashMap<>();
 
-    // Reverse lookup: ExEn client → (WebSocket Session, ExEn address)
+    /**
+     * Reverse lookup: ExEn client → (WebSocket Session, ExEn address).
+     * @see #sessionToClients
+     */
     private static final ConcurrentHashMap<INetClient, Pair<Session, JsonObject>> clientToSession = new ConcurrentHashMap<>();
+
+    /**
+     * Dedicated lock objects per session to avoid synchronizing on Session objects directly.
+     * Synchronizing on Session is risky because Jetty may internally synchronize on it,
+     * potentially causing deadlocks.
+     */
+    private static final ConcurrentHashMap<Session, Object> sessionLocks = new ConcurrentHashMap<>();
+
+    /**
+     * Set of ExEn addresses currently being connected to, to prevent duplicate connection attempts.
+     * Key format: session.hashCode() + ":" + exenAddress.toString()
+     */
+    private static final ConcurrentHashMap<String, Boolean> pendingConnections = new ConcurrentHashMap<>();
 
     // Scheduled cleanup of dead WebSocket references
     private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor( r ->
@@ -179,13 +205,8 @@ public class CommBridge extends WebSocketAdapter
 
         try
         {
-            if( message.length() > MAX_PAYLOAD_SIZE )    // Fail fast on oversized messages
-            {
-                handleError( session,
-                             new IllegalArgumentException( "Message too large: " + message.length() + " bytes" ),
-                             "message size validation" );
-                return;
-            }
+            // Note: Jetty already enforces MAX_PAYLOAD_SIZE via setMaxTextMessageSize() in GumWebSocketServlet.
+            // No need to check here - Jetty will reject oversized messages before they reach this method.
 
             if( UtilStr.isEmpty( message ) )
                 return;
@@ -195,9 +216,7 @@ public class CommBridge extends WebSocketAdapter
 
             if( exenAddress == null )
             {
-                handleError( session,
-                             new IllegalArgumentException( "Missing or invalid ExEn address:\n"+ session ),
-                             "ExEn address extraction" );
+                sendErrorToClient( session, "Missing or invalid ExEn address" );
                 return;
             }
 
@@ -206,25 +225,26 @@ public class CommBridge extends WebSocketAdapter
 
             if( client == null )
             {
-                // Attempt to create and connect
-                client = addExEnClient( session, exenAddress );
+                // Attempt to create and connect asynchronously
+                String payload = messageJson.get( "msg" ).toString();
+                addExEnClientAsync( session, exenAddress, payload );
+                return;   // Message will be sent after connection is established
             }
 
-            if( client != null && client.isConnected() )    // Forward message to ExEn
+            if( client.isConnected() )    // Forward message to ExEn
             {
                 String payload = messageJson.get( "msg" ).toString();
                 client.send( payload );
             }
             else
             {
-                handleError( session,
-                             new IllegalStateException( "ExEn client unavailable:\n"+ session ),
-                             "ExEn communication" );
+                sendErrorToClient( session, exenAddress, "ExEn client unavailable: "+ exenAddress );
             }
         }
         catch( Exception e )
         {
-            handleError( session, e, "message processing" );
+            logWarning( "Error processing WebSocket message", e );
+            sendErrorToClient( session, sanitizeErrorMessage( e.getMessage() ) );
         }
     }
 
@@ -248,7 +268,8 @@ public class CommBridge extends WebSocketAdapter
 
         if( session != null )
         {
-            handleError( session, cause, "WebSocket error" );
+            // WebSocket errors are typically fatal (connection issues, protocol errors)
+            handleFatalError( session, cause );
         }
 
         super.onWebSocketError( cause );
@@ -258,49 +279,98 @@ public class CommBridge extends WebSocketAdapter
     // PRIVATE STATIC METHODS
 
     /**
-     * Adds a new ExEn client connection for the given WebSocket session.
+     * Returns a dedicated lock object for the given session.
+     * Using dedicated locks avoids potential deadlocks from synchronizing on Session objects.
      */
-    private static INetClient addExEnClient( Session session, JsonObject exenAddress )
+    private static Object getLock( Session session )
     {
-        INetClient client = null;
+        return sessionLocks.computeIfAbsent( session, k -> new Object() );
+    }
 
-        try
+    /**
+     * Generates a unique key for pending connection tracking.
+     */
+    private static String getPendingKey( Session session, JsonObject exenAddress )
+    {
+        return session.hashCode() + ":" + exenAddress.toString();
+    }
+
+    /**
+     * Adds a new ExEn client connection asynchronously.
+     * Uses UtilSys.execute() to avoid blocking the WebSocket thread during connection.
+     * Prevents duplicate connection attempts using pendingConnections map.
+     *
+     * @param session      The WebSocket session
+     * @param exenAddress  The ExEn address to connect to
+     * @param initialPayload The message to send after connection is established (can be null)
+     */
+    private static void addExEnClientAsync( Session session, JsonObject exenAddress, String initialPayload )
+    {
+        String pendingKey = getPendingKey( session, exenAddress );
+
+        // Prevent duplicate connection attempts (race condition fix)
+        if( pendingConnections.putIfAbsent( pendingKey, Boolean.TRUE ) != null )
         {
-            // 1. Prepare and connect the client (Heavy operation outside locks)
-            client = getNetClient();
-            client.add( new ExEnListener() );
-            client.connect( exenAddress.toString() ); // May block or fail
+            if( logger.isLoggable( ILogger.Level.INFO ) )
+                logger.log( Level.INFO, "Connection already in progress for: " + exenAddress );
+            return;
         }
-        catch( Exception me )
+
+        // Execute connection in background thread using UtilSys ThreadPool
+        UtilSys.execute( "CommBridge-Connect-" + exenAddress.hashCode(), () ->
         {
-            logError( "Failed to create/connect ExEn client for " + exenAddress, me );
-            // Clean up the partially created client if it exists
-            if( client != null )
+            INetClient client = null;
+
+            try
             {
-                try { client.disconnect(); } catch( Exception ignored ) {}
-            }
-            return null;
-        }
+                // 1. Prepare and connect the client (Heavy operation in background thread)
+                client = getNetClient();
+                client.add( new ExEnListener() );
+                client.connect( exenAddress.toString() );  // This may block
 
-        // 2. Add to maps safely (Quick atomic operation)
-        synchronized( session )
-        {
-            if( ! session.isOpen() )
+                // 2. Add to maps safely using dedicated lock
+                synchronized( getLock( session ) )
+                {
+                    if( ! session.isOpen() )
+                    {
+                        try { client.disconnect(); } catch( Exception ignored ) {}
+                        return;
+                    }
+
+                    Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
+
+                    sessionToClients.computeIfAbsent( session, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
+                    clientToSession.put( client, new Pair<>( session, exenAddress ) );
+                }
+
+                if( logger.isLoggable( ILogger.Level.INFO ) )
+                    logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
+
+                // 3. Send the initial message if provided
+                if( initialPayload != null && client.isConnected() )
+                {
+                    client.send( initialPayload );
+                }
+            }
+            catch( Exception me )
             {
-                try { client.disconnect(); } catch( Exception ignored ) {}
-                return null;
+                logError( "Failed to create/connect ExEn client for " + exenAddress, me );
+
+                // Clean up the partially created client if it exists
+                if( client != null )
+                {
+                    try { client.disconnect(); } catch( Exception ignored ) {}
+                }
+
+                // Send error to client
+                sendErrorToClient( session, exenAddress, "Cannot connect to ExEn: " + exenAddress );
             }
-
-            Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
-
-            sessionToClients.computeIfAbsent( session, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
-            clientToSession.put( client, new Pair<>( session, exenAddress ) );
-        }
-
-        if( logger.isLoggable( ILogger.Level.INFO ) )
-            logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
-
-        return client;
+            finally
+            {
+                // Remove from pending connections
+                pendingConnections.remove( pendingKey );
+            }
+        });
     }
 
     private static INetClient getNetClient()
@@ -345,8 +415,8 @@ public class CommBridge extends WebSocketAdapter
     {
         boolean removed = false;
 
-        // Synchronize on session to ensure atomic removal from list
-        synchronized( session )
+        // Synchronize using dedicated lock to ensure atomic removal from list
+        synchronized( getLock( session ) )
         {
             CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = sessionToClients.get( session );
 
@@ -358,6 +428,7 @@ public class CommBridge extends WebSocketAdapter
                 if( clients.isEmpty() )
                 {
                     sessionToClients.remove( session );
+                    sessionLocks.remove( session );   // Also cleanup the lock
                 }
             }
         }
@@ -380,11 +451,13 @@ public class CommBridge extends WebSocketAdapter
     }
 
     /**
-     * Centralized error handling that logs, notifies client, and cleans up.
+     * Centralized error handling for fatal errors that require session cleanup.
+     * Only call this for truly fatal errors (connection failures, protocol errors).
+     * For recoverable errors, use sendErrorToClient() instead.
      */
-    private static void handleError( Session session, Throwable error, String context )
+    private static void handleFatalError( Session session, Throwable error )
     {
-        logWarning( "WebSocket error in " + context + ": " + session, error );
+        logError( "Fatal WebSocket error in: " + session, error );
 
         try    // Send sanitized error message to client
         {
@@ -395,9 +468,42 @@ public class CommBridge extends WebSocketAdapter
         {
             logWarning( "Failed to send error message to client", e );
         }
+        finally     // Force cleanup only for fatal errors
+        {
+            cleanupSession( session, CloseCode.INTERNAL_ERROR );
+        }
+    }
 
-        // Force cleanup
-        cleanupSession( session, CloseCode.INTERNAL_ERROR );
+    /**
+     * Sends an error message to the client without closing the session.
+     * Use this for recoverable errors like invalid messages or temporarily unavailable ExEn.
+     */
+    private static void sendErrorToClient( Session session, String errorMessage )
+    {
+        sendErrorToClient( session, null, errorMessage );
+    }
+
+    /**
+     * Sends an error message to the client with ExEn address context, without closing the session.
+     */
+    private static void sendErrorToClient( Session session, JsonObject exenAddress, String errorMessage )
+    {
+        if( session == null || !session.isOpen() )
+            return;
+
+        try
+        {
+            JsonObject errorResponse = new JsonObject().add( MessageType.ERROR.getValue(), sanitizeErrorMessage( errorMessage ) );
+
+            if( exenAddress != null )
+                errorResponse.add( "exen", exenAddress );
+
+            sendToWebSocket( session, errorResponse.toString() );
+        }
+        catch( Exception e )
+        {
+            logWarning( "Failed to send error message to client", e );
+        }
     }
 
     /**
@@ -417,12 +523,14 @@ public class CommBridge extends WebSocketAdapter
 
     /**
      * Sends a message to the WebSocket with proper error handling and back-pressure.
+     * Does not cleanup session on failure - let periodic cleanup handle stale sessions.
      */
     private static void sendToWebSocket( Session session, String message )
     {
         if( session == null || !session.isOpen() )
         {
-            logWarning( "Attempted to send to closed WebSocket: " + session, null );
+            if( logger.isLoggable( ILogger.Level.INFO ) )
+                logWarning( "Attempted to send to closed WebSocket: " + session, null );
             return;
         }
 
@@ -440,15 +548,16 @@ public class CommBridge extends WebSocketAdapter
                 @Override
                 public void writeFailed( Throwable throwable )
                 {
+                    // Log failure but don't cleanup session here - let periodic cleanup handle it
+                    // This avoids race conditions where multiple sends fail simultaneously
                     logWarning( "Failed to send WebSocket message", throwable );
-                    cleanupSession( session, CloseCode.INTERNAL_ERROR );
                 }
             } );
         }
         catch( Exception e )
         {
+            // Log error but don't cleanup - periodic cleanup will handle stale sessions
             logWarning( "Error initiating WebSocket send", e );
-            cleanupSession( session, CloseCode.INTERNAL_ERROR );
         }
     }
 
@@ -457,14 +566,18 @@ public class CommBridge extends WebSocketAdapter
      */
     private static void cleanupSession( Session session, CloseCode closeCode )
     {
+        if( session == null )
+            return;
+
         try
         {
             CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients;
 
-            // Atomically remove the session mapping
-            synchronized( session )
+            // Atomically remove the session mapping using dedicated lock
+            synchronized( getLock( session ) )
             {
                 clients = sessionToClients.remove( session );
+                sessionLocks.remove( session );   // Cleanup the lock itself
             }
 
             if( clients != null )
@@ -504,6 +617,7 @@ public class CommBridge extends WebSocketAdapter
 
     /**
      * Periodic cleanup of dead WebSocket references.
+     * Uses iterator.remove() to safely remove entries while iterating.
      */
     private static void cleanupDeadReferences()
     {
@@ -521,10 +635,58 @@ public class CommBridge extends WebSocketAdapter
                 // If session is closed but still in map (leak), force cleanup
                 if( session == null || !session.isOpen() )
                 {
-                    cleanupSession( session, CloseCode.GOING_AWAY );
+                    // First remove from map using iterator to avoid ConcurrentModificationException
+                    iterator.remove();
+
+                    // Then cleanup associated resources
+                    if( session != null )
+                    {
+                        CopyOnWriteArrayList<Pair<INetClient, JsonObject>> clients = entry.getValue();
+
+                        // Disconnect all ExEn clients
+                        if( clients != null )
+                        {
+                            for( Pair<INetClient, JsonObject> pair : clients )
+                            {
+                                INetClient client = pair.getKey();
+                                clientToSession.remove( client );
+
+                                try
+                                {
+                                    client.disconnect();
+                                }
+                                catch( Exception e )
+                                {
+                                    logWarning( "Error disconnecting ExEn client during periodic cleanup", e );
+                                }
+                            }
+                        }
+
+                        // Cleanup the lock
+                        sessionLocks.remove( session );
+
+                        // Close WebSocket if still somehow open
+                        try
+                        {
+                            if( session.isOpen() )
+                                session.close( CloseCode.GOING_AWAY.getCode(), CloseCode.GOING_AWAY.getReason() );
+                        }
+                        catch( Exception e )
+                        {
+                            logWarning( "Error closing session during periodic cleanup", e );
+                        }
+                    }
+
                     cleanedCount++;
                 }
             }
+
+            // Also cleanup orphaned pending connections
+            pendingConnections.entrySet().removeIf( entry -> {
+                // Pending connections older than 30 seconds are considered orphaned
+                // (connection timeout should have triggered by then)
+                return true;  // For now, just remove all - they should be removed by the async tasks
+            });
 
             if( cleanedCount > 0 && logger.isLoggable( ILogger.Level.INFO ) )
                 logger.log( Level.INFO, "Cleaned up " + cleanedCount + " dead WebSocket references" );
@@ -560,7 +722,10 @@ public class CommBridge extends WebSocketAdapter
 
     private static void logError( String message, Throwable throwable )
     {
-        logger.log( ILogger.Level.SEVERE, throwable, message );
+        if( throwable instanceof TimeoutException )
+            logger.log( ILogger.Level.INFO  , throwable, message );
+        else
+            logger.log( ILogger.Level.SEVERE, throwable, message );
     }
 
     /**
@@ -571,6 +736,7 @@ public class CommBridge extends WebSocketAdapter
     {
         try
         {
+            // Shutdown the cleanup executor
             cleanupExecutor.shutdown();
 
             if( ! cleanupExecutor.awaitTermination( 5, TimeUnit.SECONDS ) )
@@ -580,6 +746,18 @@ public class CommBridge extends WebSocketAdapter
                 if( ! cleanupExecutor.awaitTermination( 2, TimeUnit.SECONDS ) )
                     logError( "ScheduledExecutorService did not terminate gracefully", null );
             }
+
+            // Cleanup all remaining sessions
+            for( Session session : sessionToClients.keySet() )
+            {
+                cleanupSession( session, CloseCode.GOING_AWAY );
+            }
+
+            // Clear all static maps
+            sessionToClients.clear();
+            clientToSession.clear();
+            sessionLocks.clear();
+            pendingConnections.clear();
         }
         catch( InterruptedException e )
         {
@@ -687,8 +865,10 @@ public class CommBridge extends WebSocketAdapter
                 {
                     logError( "Error sending ExEn error to WebSocket", e );
                 }
-
-                removeExEnClient( session, client );   // Clean up the failed client
+                finally
+                {
+                    removeExEnClient( session, client );   // Clean up the failed client
+                }
             }
         }
     }

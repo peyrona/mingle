@@ -168,7 +168,8 @@ public final class Logger implements ILogger
     {
         System.out.println( msg );
 
-        oLogger.log( myLevel2javaLevel( ILogger.Level.INFO ), msg );    // Has to use ::oLogger to unconditionally log (oLogger has Level.ALL)
+        if( isLoggable( ILogger.Level.INFO ) )
+            oLogger.log( myLevel2javaLevel( ILogger.Level.INFO ), msg );    // Has to use ::oLogger to unconditionally log (oLogger has Level.ALL)
 
         return true;
     }

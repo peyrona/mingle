@@ -21,7 +21,6 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.SocketException;
 import java.net.UnknownHostException;
@@ -108,15 +107,15 @@ final class HttpServer
         ContextHandlerCollection contexts = new ContextHandlerCollection();
 
         // Add Handlers to the collection
-        contexts.addHandler( createLoginHandler( timeout ) );        // /gum/login - NO AUTH FILTER
-        contexts.addHandler( createWsHandler( timeout ) );           // /gum/ws/* - WITH AUTH FILTER
-        contexts.addHandler( createBridgeHandler( timeout ) );       // /gum/bridge/* - WITH AUTH FILTER
-        contexts.addHandler( createUploadHandler( timeout ) );       // /gum/upload - WITH AUTH FILTER
-        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/file_mgr/* - WITH AUTH FILTER
+        contexts.addHandler( createLoginHandler( timeout ) );        // /gum/login        - NO AUTH FILTER
+        contexts.addHandler( createWsHandler( timeout ) );           // /gum/ws/*         - WITH AUTH FILTER
+        contexts.addHandler( createBridgeHandler( timeout ) );       // /gum/bridge/*     - WITH AUTH FILTER
+        contexts.addHandler( createUploadHandler( timeout ) );       // /gum/upload       - WITH AUTH FILTER
+        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/file_mgr/*   - WITH AUTH FILTER
         contexts.addHandler( createServedFilesHandler( timeout ) );  // /gum/user-files/* - WITH AUTH FILTER
-        contexts.addHandler( createBoardHandler( timeout ) );        // /gum/board/* - WITH AUTH FILTER
-        contexts.addHandler( createGumHandler( timeout ) );          // /gum - WITH AUTH FILTER
-        contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout - WITH AUTH FILTER
+        contexts.addHandler( createBoardHandler( timeout ) );        // /gum/board/*      - WITH AUTH FILTER
+        contexts.addHandler( createGumHandler( timeout ) );          // /gum              - WITH AUTH FILTER
+        contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout       - WITH AUTH FILTER
 
         // Set the Root Handler (NO SessionHandler wrapper, NO AuthWrapper!)
         server.setHandler( contexts );
@@ -359,8 +358,7 @@ final class HttpServer
 
         context.setSessionHandler( sessionHandler );
 
-        // NO authentication filter here - login must be accessible without auth!
-        // Add servlet
+        // NO authentication filter here - login must be accessible without auth.
         context.addServlet( new ServletHolder( new ServletLogin() ), "/*" );
 
         return context;
@@ -446,8 +444,8 @@ final class HttpServer
 
                 if( contentType != null && contentType.startsWith( "application/json" ) )
                 {
-                    int    length = request.getContentLength();
-                    byte[] buffer = new byte[length];
+                    int    length = request.getContentLength();    // getContentLength() returns -1 if the length is unknown
+                    byte[] buffer = new byte[Math.max( length, 1024)];
 
                     try( InputStream is = request.getInputStream() )
                     {
@@ -461,7 +459,7 @@ final class HttpServer
                                 totalRead += bytesRead;
                         }
 
-                        if( totalRead != length )
+                        if( length > -1 && totalRead != length )
                             throw new IOException( "Incomplete request data received" );
                     }
 
@@ -571,6 +569,7 @@ final class HttpServer
 
     //------------------------------------------------------------------------//
     // INNER CLASS
+    //------------------------------------------------------------------------//
 
     private class ServletUpload extends HttpServlet
     {
@@ -642,15 +641,63 @@ final class HttpServer
 
         private void saveUserFile( HttpServletRequest request, Part part, String fileName ) throws IOException
         {
+            // Validate basedir parameter
             String fBaseDir = request.getParameter( "basedir" );
+
+            if( fBaseDir == null || fBaseDir.trim().isEmpty() )
+                fBaseDir = "";
+
+            // Validate and sanitize basedir
+            if( fBaseDir.contains( ".." ) || fBaseDir.contains( "//" ) || fBaseDir.contains( "\\" ) )
+                throw new IOException( "Invalid base directory: " + fBaseDir );
+
+            // Validate filename
+            if( fileName == null || fileName.trim().isEmpty() )
+                throw new IOException( "Filename cannot be empty" );
+
+            // Remove path components from filename
+            fileName = new File( fileName ).getName();
+
+            if( fileName.contains( ".." ) || fileName.contains( "/" ) || fileName.contains( "\\" ) )
+                throw new IOException( "Invalid filename: " + fileName );
+
+            File baseDir = new File( Util.getServedFilesDir(), fBaseDir );
+            File destDir = baseDir.getCanonicalFile();
+            File rootDir = Util.getServedFilesDir().getCanonicalFile();
+
+            // Ensure destination is within allowed directory
+            if( ! destDir.getPath().startsWith( rootDir.getPath() ) )
+                throw new IOException( "Access denied: " + fBaseDir );
+
+            File fDestination = new File( destDir, fileName ).getCanonicalFile();
+
+            // Final safety check
+            if( ! fDestination.getPath().startsWith( rootDir.getPath() ) )
+                throw new IOException( "Access denied" );
+
+            // Add file size limit
+            long maxSize = 100 * 1024 * 1024; // 100MB
+            long totalBytes = 0;
 
             try( InputStream is = part.getInputStream() )
             {
-                File fDestination = new File( new File( Util.getServedFilesDir(), fBaseDir ), fileName );
+                byte[] buffer = new byte[8192];
+                int bytesRead;
 
                 try( FileOutputStream os = new FileOutputStream( fDestination ) )
                 {
-                    copyStream( is, os );
+                    while( (bytesRead = is.read( buffer )) != -1 )
+                    {
+                        totalBytes += bytesRead;
+
+                        if( totalBytes > maxSize )
+                        {
+                            fDestination.delete(); // Clean up partial file
+                            throw new IOException( "File too large" );
+                        }
+
+                        os.write( buffer, 0, bytesRead );
+                    }
                 }
             }
         }
@@ -701,11 +748,22 @@ final class HttpServer
 
     public static class GumWebSocketServlet extends WebSocketServlet
     {
+        /**
+         * WebSocket idle timeout in milliseconds (5 minutes).
+         * Jetty will automatically send ping frames to keep the connection alive.
+         */
+        private static final long WS_IDLE_TIMEOUT_MS = 5 * 60 * 1000;
+
         @Override
         public void configure( WebSocketServletFactory factory )
         {
             factory.register( CommBridge.class );
             factory.getPolicy().setMaxTextMessageSize( 64 * 1024 );
+
+            // Enable idle timeout - Jetty handles ping/pong automatically when this is set.
+            // If no activity occurs within this timeout, Jetty sends a ping frame.
+            // If no pong is received, the connection is closed.
+            factory.getPolicy().setIdleTimeout( WS_IDLE_TIMEOUT_MS );
         }
     }
 
@@ -853,7 +911,7 @@ final class HttpServer
                 try
                 {
                     String s = xForwardedFor.split( "," )[0].trim();
-                    clientIP = Inet4Address.getByName( s );
+                    clientIP = InetAddress.getByName( s );
                 }
                 catch( UnknownHostException ex )
                 {
@@ -941,37 +999,33 @@ final class HttpServer
         @Override
         public void handle( String target, Request baseRequest, HttpServletRequest request, HttpServletResponse response ) throws IOException
         {
-            Throwable cause = (Throwable) request.getAttribute( "javax.servlet.error.exception" );
-            Integer statusCode = (Integer) request.getAttribute( "javax.servlet.error.status_code" );
+            String sURI = request.getRequestURI();
 
-            System.err.println( "=== ERROR HANDLER TRIGGERED ===" );
-            System.err.println( "Target: " + target );
-            System.err.println( "Status: " + statusCode );
-            System.err.println( "Request URI: " + request.getRequestURI() );
+            if( sURI.endsWith( ".js.map" ) ||      // Ignore JS debugging file,
+                sURI.endsWith( "favicon.ico" ) )   // also this stupidity.
+                return;
+
+            Throwable cause  = (Throwable) request.getAttribute( "javax.servlet.error.exception"   );
+            Integer   status = (Integer)   request.getAttribute( "javax.servlet.error.status_code" );
+
+            logger.log( Level.SEVERE, "=== ERROR HANDLER TRIGGERED ===\n"+
+                                      "Target: " + target    +'\n'+
+                                      "Status: " + status    +'\n'+
+                                      "Request URI: " + sURI +'\n' );
 
             if( cause != null )
-            {
-                System.err.println( "Exception: " + cause.getClass().getName() );
-                cause.printStackTrace( System.err );
-            }
+                logger.log( Level.SEVERE, cause, "Exception: " + cause.getClass().getName() );
 
             cause = (Throwable) request.getAttribute( "javax.servlet.error.exception" );
 
-            if( cause != null )
-            {
-                System.err.println( "CRITICAL SERVER ERROR:\n" );
-                cause.printStackTrace( System.err );
-            }
-            else
-            {
-                System.err.println( "Server error with no exception attached. Target: " + target);
-            }
+            if( cause != null )  logger.log( Level.SEVERE, cause, "CRITICAL SERVER ERROR:\n" );
+            else                 logger.log( Level.SEVERE, "Server error with no exception attached. Target: " + target +", Status: "+ status );
 
             if( ! response.isCommitted() )
             {
                 response.setContentType( "application/json" );
 
-                String errorMsg = (cause != null) ? cause.getMessage() : "Unknown error on target: " + target;
+                String errorMsg = (cause != null) ? cause.getMessage() : "Unknown error on target: " + target +", Status: "+ status;
 
                 response.getWriter().write( "{\"error\":"+ Json.value( errorMsg ).toString() + "}" );   // Safe JSON quoting
             }

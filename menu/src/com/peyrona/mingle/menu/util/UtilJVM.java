@@ -230,18 +230,24 @@ public final class UtilJVM
 
     private static String path2Exec( File fPath )
     {
-        File   fExe;
         String sExEName = UtilSys.sOS.contains( "wind" ) ? "java.exe" : "java";
+        File   fExe     = null;
 
-        // Double check: just in case
+        if( fPath.isFile() && fPath.getName().equalsIgnoreCase( sExEName ) )
+        {
+            fExe = fPath;
+        }
+        else
+        {
+            File fBase = fPath.isDirectory() ? fPath : fPath.getParentFile();
 
-             if( fPath.isDirectory() )  fExe = new File( fPath.getAbsolutePath() );                   // Most probable
-        else if( fPath.isFile() )       fExe = new File( fPath.getParentFile().getAbsolutePath() );   // Is not ".../bin/", but e.g. ".../bin/java.exe"
-        else                            return null;
+            if( fBase.getName().equalsIgnoreCase( "bin" ) )
+                fBase = fBase.getParentFile();
 
-        fExe = new File( fExe, "bin" + File.separator + sExEName );
+            fExe = new File( fBase, "bin" + File.separator + sExEName );
+        }
 
-        if( fExe.exists() && fExe.canExecute() )
+        if( fExe != null && fExe.exists() && fExe.canExecute() )
         {
             String sPath = fExe.getParentFile().getAbsolutePath();
             String sLibs = System.getProperty( "java.library.path", "" );

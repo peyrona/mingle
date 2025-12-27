@@ -42,6 +42,7 @@ Thumbs.db
 *.zip           # Ignore all .zip files
 
 GEMINI.md
+CLAUDE.md
 count_lines.sh
 generate_javadocs.sh
 release.sh

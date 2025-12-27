@@ -220,7 +220,7 @@ final class Action implements IRule.IAction
         if( device != null )
         {
             if( device.value() == null )
-                return "Action can not be evaluted now: the device '"+ device.name() +" havs not a value yet";
+                return "Action can not be evaluted now: the device '"+ device.name() +" has not a value yet";
 
             return device.value();     // 'value' is another Device; e.g.: THEN MyDevice1 = MyDevice2
         }
@@ -240,7 +240,7 @@ final class Action implements IRule.IAction
         {
             Object val = getDevice( varName ).value();
 
-            if( val != null )                // A device has a null value when no value arrived yet
+            if( val != null )                // A device has a null value until its associated controller send a value
                 xprEval.set( varName, val );
         }
 

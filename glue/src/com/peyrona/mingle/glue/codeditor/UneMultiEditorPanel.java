@@ -5,8 +5,8 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
-import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
@@ -83,6 +83,7 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.btnRepl.addActionListener(    (e) -> onReplace( false ) );
         toolBar.btnReplAll.addActionListener( (e) -> onReplace( true ) );
         toolBar.btnComment.addActionListener( (e) -> onToogleRem()  );
+        toolBar.btnFolding.addActionListener( (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.toggleFolding(); } );
         toolBar.btnTranspi.addActionListener( (e) -> onTranspile()  );
 
         // --------------------------------------------------------------------

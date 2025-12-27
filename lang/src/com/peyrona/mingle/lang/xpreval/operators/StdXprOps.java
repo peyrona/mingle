@@ -19,7 +19,7 @@ import java.util.Map;
 public final class StdXprOps
 {
     public  static final String sUNARY_MINUS = "ª";     // The easiest way of dealing with the unary minus operator is by providing a different symbol to differentiate it from the minus as subtraction
-    private static final Map<String,Operator> map = new StdXprOps().init();
+    private static final Map<String,Operator> map = init();
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE
@@ -46,7 +46,7 @@ public final class StdXprOps
     //------------------------------------------------------------------------//
     // PRIVATE INTERFACE
 
-    private Map<String,Operator> init()
+    private static Map<String,Operator> init()
     {
         Map<String,Operator> tmp = new HashMap<>();
 
@@ -77,8 +77,9 @@ public final class StdXprOps
                                 if( isR( Operable.class, args ) && isL( Number.class, args ) )          // e.g.: (3 + date())  or  (60 + time())
                                     return ((Operable) getR( args )).move( getNumL( args ) );           // Note: it does not make sense to add a date to a date or a time to a time
 
-                                if( toNum( args ) )                                                     // e.g.: 10 + 2   or  "10" + 2 (JS-wise)
-                                    return getNumL( args ) + getNumR( args );                           // This 'if' has to be the last one
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                     // e.g.: 10 + 2   or  "10" + 2 (JS-wise)
+                                    return getNumL( nArgs ) + getNumR( nArgs );                         // This 'if' has to be the last one
 
                                 return args[0].toString() + args[1].toString();                         // Can not be null
                             }
@@ -107,8 +108,9 @@ public final class StdXprOps
                                         return ((Operable) getR( args)).duration( getL( args ) );       // e.g.: (date1 - date2)  or  (time1 - time2)
                                 }
 
-                                if( toNum( args ) )                                                     // e.g.: 10 - 2  or  "10" - 2  (JS-wise)
-                                    return getNumL( args ) - getNumR( args );                           // This 'if' has to be the last one
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                     // e.g.: 10 - 2  or  "10" - 2  (JS-wise)
+                                    return getNumL( nArgs ) - getNumR( nArgs );                         // This 'if' has to be the last one
 
                                 throw unsupported( args );
                             }
@@ -118,8 +120,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )                                                    // e.g.: 10 * 2  or  10 * 2 (JS-wise)
-                                    return getNumL( args ) * getNumR( args );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: 10 * 2  or  10 * 2 (JS-wise)
+                                    return getNumL( nArgs ) * getNumR( nArgs );
 
                                 throw unsupported( args );
                             }
@@ -129,9 +132,10 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )                                                    // e.g.: 10 / 2  or  "10" / 2 (JS-wise)
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: 10 / 2  or  "10" / 2 (JS-wise)
                                 {
-                                    Float result = getNumL( args ) / getNumR( args );
+                                    Float result = getNumL( nArgs ) / getNumR( nArgs );
 
                                     return (Float.isInfinite( result ) ? Float.NaN : result);
                                 }
@@ -144,10 +148,11 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )                                                    // e.g.: 2 % 10.0 or  "2" % 10 (JS-wise)
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: 2 % 10.0 or  "2" % 10 (JS-wise)
                                 {
-                                    float percent = ((Number) args[0]).floatValue();
-                                    float total   = ((Number) args[1]).floatValue();
+                                    float percent = ((Number) nArgs[0]).floatValue();
+                                    float total   = ((Number) nArgs[1]).floatValue();
                                     return (percent / 100) * total;
                                 }
 
@@ -159,8 +164,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )                                                    // e.g.: 10.0 ** 2   or  "10" ** 2  (JS-wise)
-                                    return (float) Math.pow( getNumL(args), getNumR(args) );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: 10.0 ** 2   or  "10" ** 2  (JS-wise)
+                                    return (float) Math.pow( getNumL(nArgs), getNumR(nArgs) );
 
                                 throw unsupported( args );
                             }
@@ -175,11 +181,13 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) == 0;
 
-                                if( toNum( args ) )                                                    // e.g.: "10" == 2 == false  (JS-wise)
-                                    return Float.compare( getNumL( args ), getNumR( args ) ) == 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: "10" == 2 == false  (JS-wise)
+                                    return Float.compare( getNumL( nArgs ), getNumR( nArgs ) ) == 0;
 
-                                if( toBool( args ) )                                                   // e.g.: "true" == true
-                                    return (getBolL( args ).equals( getBolR( args ) ));
+                                Object[] bArgs = toBool( args );
+                                if( bArgs != null )                                                   // e.g.: "true" == true
+                                    return (getBolL( bArgs ).equals( getBolR( bArgs ) ));
 
                                 return false;
                             }
@@ -192,11 +200,13 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) != 0;
 
-                                if( toNum( args ) )                                                    // e.g.: "10" % 2 == true  (JS-wise)
-                                    return Float.compare( getNumL(args), getNumR(args) ) != 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: "10" % 2 == true  (JS-wise)
+                                    return Float.compare( getNumL(nArgs), getNumR(nArgs) ) != 0;
 
-                                if( toBool( args ) )                                                   // e.g.: "true" == true
-                                    return ! (getBolL( args ).equals( getBolR( args ) ));
+                                Object[] bArgs = toBool( args );
+                                if( bArgs != null )                                                   // e.g.: "true" == true
+                                    return ! (getBolL( bArgs ).equals( getBolR( bArgs ) ));
 
                                 return true;
                             }
@@ -209,8 +219,9 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) > 0;
 
-                                if( toNum( args ) )   // e.g.: "10" > 2 == true  (JS-wise)
-                                    return Float.compare( getNumL(args), getNumR(args) ) > 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )   // e.g.: "10" > 2 == true  (JS-wise)
+                                    return Float.compare( getNumL(nArgs), getNumR(nArgs) ) > 0;
 
                                 throw unsupported( args );
                             }
@@ -223,8 +234,9 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) < 0;
 
-                                if( toNum( args ) )                                                    // e.g.: "10" < 2 == false  (JS-wise)
-                                    return Float.compare( getNumL(args), getNumR(args) ) < 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: "10" < 2 == false  (JS-wise)
+                                    return Float.compare( getNumL(nArgs), getNumR(nArgs) ) < 0;
 
                                 throw unsupported( args );
                             }
@@ -237,8 +249,9 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) >= 0;
 
-                                if( toNum( args ) )   // e.g.: "10" >= 2 == true  (JS-wise)
-                                    return Float.compare( getNumL(args), getNumR(args) ) >= 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )   // e.g.: "10" >= 2 == true  (JS-wise)
+                                    return Float.compare( getNumL(nArgs), getNumR(nArgs) ) >= 0;
 
                                 throw unsupported( args );
                             }
@@ -251,8 +264,9 @@ public final class StdXprOps
                                 if( areAll( Comparable.class, args ) )                                 // Comparable
                                     return compare( args ) <= 0;
 
-                                if( toNum( args ) )                                                    // e.g.: "10" <= 2 == false  (JS-wise)
-                                    return Float.compare( getNumL(args), getNumR(args) ) <= 0;
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )                                                    // e.g.: "10" <= 2 == false  (JS-wise)
+                                    return Float.compare( getNumL(nArgs), getNumR(nArgs) ) <= 0;
 
                                 throw unsupported( args );
                             }
@@ -315,8 +329,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )
-                                    return (float) ( ((Float) getNumL( args )).intValue() & ((Float) getNumR( args )).intValue() );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )
+                                    return (float) ( ((Float) getNumL( nArgs )).intValue() & ((Float) getNumR( nArgs )).intValue() );
 
                                 throw unsupported( args );
                             }
@@ -326,8 +341,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )
-                                    return (float) ( ((Float) getNumL( args )).intValue() | ((Float) getNumR( args )).intValue() );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )
+                                    return (float) ( ((Float) getNumL( nArgs )).intValue() | ((Float) getNumR( nArgs )).intValue() );
 
                                 throw unsupported( args );
                             }
@@ -337,8 +353,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )
-                                    return (float) ( ((Float) getNumL( args )).intValue() ^ ((Float) getNumR( args )).intValue() );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )
+                                    return (float) ( ((Float) getNumL( nArgs )).intValue() ^ ((Float) getNumR( nArgs )).intValue() );
 
                                 throw unsupported( args );
                             }
@@ -359,8 +376,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )
-                                    return (float) ( ((Float) getNumL( args )).intValue() >> ((Float) getNumR( args )).intValue() );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )
+                                    return (float) ( ((Float) getNumL( nArgs )).intValue() >> ((Float) getNumR( nArgs )).intValue() );
 
                                 throw unsupported( args );
                             }
@@ -370,8 +388,9 @@ public final class StdXprOps
                         {   @Override
                             protected Number eval( Object... args )
                             {
-                                if( toNum( args ) )
-                                    return (float) ( ((Float) getNumL( args )).intValue() << ((Float) getNumR( args )).intValue() );
+                                Object[] nArgs = toNum( args );
+                                if( nArgs != null )
+                                    return (float) ( ((Float) getNumL( nArgs )).intValue() << ((Float) getNumR( nArgs )).intValue() );
 
                                 throw unsupported( args );
                             }
@@ -406,12 +425,12 @@ public final class StdXprOps
     // PRIVATE SCOPE
     // AUXILIARY FUNCTIONS
 
-    private boolean isL( Class clazz, Object... args )
+    private static boolean isL( Class clazz, Object... args )
     {
         return clazz.isAssignableFrom( args[0].getClass() );
     }
 
-    private boolean isR( Class clazz, Object... args )
+    private static boolean isR( Class clazz, Object... args )
     {
         return clazz.isAssignableFrom( args[1].getClass() );
     }
@@ -425,7 +444,7 @@ public final class StdXprOps
      * @param objs
      * @return
      */
-    private boolean areAll( Class clazz, Object... objs )
+    private static boolean areAll( Class clazz, Object... objs )
     {
         if( clazz == Comparable.class )    // This is a special case because all objects have to be of same class (isAssignableFrom(...) will not work)
         {
@@ -450,42 +469,42 @@ public final class StdXprOps
         }
     }
 
-    private Object getL( Object... args )
+    private static Object getL( Object... args )
     {
         return args[0];
     }
 
-    private Object getR( Object... args )
+    private static Object getR( Object... args )
     {
         return args[1];
     }
 
-    private float getNumL( Object... args )
+    private static float getNumL( Object... args )
     {
         return ((Number) args[0]).floatValue();
     }
 
-    private float getNumR( Object... args )
+    private static float getNumR( Object... args )
     {
         return ((Number) args[1]).floatValue();
     }
 
-    private String getStrL( Object... args )
+    private static String getStrL( Object... args )
     {
         return args[0].toString();
     }
 
-    private String getStrR( Object... args )
+    private static String getStrR( Object... args )
     {
         return args[1].toString();
     }
 
-    private Boolean getBolL( Object... args )
+    private static Boolean getBolL( Object... args )
     {
         return (Boolean) args[0];
     }
 
-    private Boolean getBolR( Object... args )
+    private static Boolean getBolR( Object... args )
     {
         return (Boolean) args[1];
     }
@@ -496,23 +515,25 @@ public final class StdXprOps
      * This is a fail fast method.
      *
      * @param args
-     * @return true if all Strings were successfully converted into their Number.
+     * @return Converted args or null if any conversion failed.
      */
-    private boolean toNum( Object... args )
+    private static Object[] toNum( Object... args )
     {
+        Object[] newArgs = new Object[args.length];
+
         for( int n = 0; n < args.length; n++ )
         {
             try
             {
-                args[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (sse this class doc)
+                newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (sse this class doc)
             }
             catch( MingleException me )
             {
-                return false;
+                return null;
             }
         }
 
-        return true;
+        return newArgs;
     }
 
     /**
@@ -521,37 +542,42 @@ public final class StdXprOps
      * This is a fail fast method.
      *
      * @param args
-     * @return true if all Strings were successfully converted into their Number.
+     * @return Converted args or null if any conversion failed.
      */
-    private boolean toBool( Object... args )
+    private static Object[] toBool( Object... args )
     {
+        Object[] newArgs = new Object[args.length];
+
         for( int n = 0; n < args.length; n++ )
         {
             try
             {
-                args[n] = UtilType.toBoolean( args[n] );
+                newArgs[n] = UtilType.toBoolean( args[n] );
             }
             catch( MingleException me )
             {
-                return false;
+                return null;
             }
         }
 
-        return true;
+        return newArgs;
     }
 
-    private int compare( Object[] args )
+    private static int compare( Object[] args )
     {
+        Comparable c0 = (Comparable) args[0];
+        Comparable c1 = (Comparable) args[1];
+
         if( areAll( String.class, args ) )
         {
-            args[0] = args[0].toString().toLowerCase();      // Because Une is
-            args[1] = args[1].toString().toLowerCase();      // case insensitive
+            c0 = args[0].toString().toLowerCase();      // Because Une is
+            c1 = args[1].toString().toLowerCase();      // case insensitive
         }
 
-        return ((Comparable) args[0]).compareTo( (Comparable) args[1] );
+        return c0.compareTo( c1 );
     }
 
-    private MingleException unsupported( Object... args )
+    private static MingleException unsupported( Object... args )
     {
         StringBuilder sb = new StringBuilder( args.length * 16 );
                       sb.append( "Invalid arguments: " );
