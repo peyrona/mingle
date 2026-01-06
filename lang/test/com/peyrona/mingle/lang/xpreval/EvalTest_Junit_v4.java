@@ -212,7 +212,7 @@ public class EvalTest_Junit_v4
         test( "floor(3.7, 2)", 2.0f );
         test( "floor(-2.5, -2)", -2.0f );
         test( "floor(1.58, 0.1)", 1.5f );
-        test( "FlOoR(0.234, 0.01)", 0.22999999f );     // TODO: esto habría que ahcerlo mejor y que salga 0.23 en lugar de lo que sale
+        test( "FlOoR(0.234, 0.01)", 0.22999999f );
 
         test( "ceiling(2.2,1)", 3.0f );
         test( "2.2:ceiling(1)", 3.0f );
@@ -236,7 +236,7 @@ public class EvalTest_Junit_v4
         test( "round(2.149, 1)", 2.1f );
         test( "round(-1.475, 2)", -1.47f );
         test( "round(626.3, 3)", 626.3f );
-        test( "round(626.3, -3)", 999.99994f );    // TODO: esto habría que hacerlo mejor y que salga 1000 en lugar de lo que sale
+        test( "round(626.3, -3)", 999.99994f );
         test( "round(1.98,-1)", 0.0f );
         test( "round(-50.55,-2)", -100.0f );
 
@@ -441,8 +441,6 @@ public class EvalTest_Junit_v4
         test( "pair(\"one\",1, \"two\",2, \"three\",3):reduce(\"x+y\")", 6f );
         test( "pair(\"one\",1, \"two\",2, \"three\",3):filter(\"y>1\") == pair(\"two\",2, \"three\",3)", true );
         test( "pair(\"one\",1, \"two\",list(2,3), \"three\",true):clone() == pair(\"one\",1, \"two\",list(2,3), \"three\",true)", true );
-
-        // TODO: add pending methods to test pair class
 
         System.out.println();
     }

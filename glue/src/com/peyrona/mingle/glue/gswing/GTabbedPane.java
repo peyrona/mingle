@@ -15,7 +15,6 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
-import java.lang.reflect.Method;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
@@ -25,9 +24,7 @@ import javax.swing.JPanel;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
-import javax.swing.plaf.TabbedPaneUI;
 import javax.swing.plaf.basic.BasicButtonUI;
-import javax.swing.plaf.basic.BasicTabbedPaneUI;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -81,14 +78,6 @@ public class GTabbedPane extends JTabbedPane
         if( index < 0 || index >= getTabCount() )
             return;
 
-        // Clear rollover state BEFORE removing the tab to prevent
-        // ArrayIndexOutOfBoundsException in BasicTabbedPaneUI.tabForCoordinate()
-        // This is a known Java Swing bug that occurs when:
-        // 1. Mouse is over tab area
-        // 2. Tab is removed
-        // 3. UI tries to compute rollover for now-invalid index
-        clearRolloverState();
-
         super.removeTabAt( index );
 
         // Force UI update after removal
@@ -127,6 +116,7 @@ public class GTabbedPane extends JTabbedPane
      * Returns the index of the tab that contains the specified button.
      * Returns -1 if the button is not found in any tab.
      * @param button
+     * @return
      */
     public int getTabIndexWhichButtonIs( JButton button )
     {
@@ -173,37 +163,6 @@ public class GTabbedPane extends JTabbedPane
 
                 if( btn != null )    // Because the event is triggered before the TabPanel can be added
                     btn.setSelected( n == selectedIndex );
-            }
-        }
-    }
-
-    /**
-     * Clears the rollover tab index in the UI to prevent ArrayIndexOutOfBoundsException.
-     * <p>
-     * BasicTabbedPaneUI maintains an internal rollover tab index that can become stale
-     * when tabs are removed. This method uses reflection to access the protected
-     * setRolloverTab() method and reset it to -1 (no rollover).
-     */
-    private void clearRolloverState()
-    {
-        TabbedPaneUI ui = getUI();
-
-        if( ui instanceof BasicTabbedPaneUI )
-        {
-            try
-            {
-                // Use reflection to call the protected setRolloverTab(-1) method
-                Method setRolloverTab = BasicTabbedPaneUI.class.getDeclaredMethod( "setRolloverTab", int.class );
-                setRolloverTab.setAccessible( true );
-                setRolloverTab.invoke( ui, -1 );
-            }
-            catch( Exception e )
-            {
-                // If reflection fails, force a mouse exit event as fallback
-                // This triggers the UI to clear its rollover state naturally
-                dispatchEvent( new MouseEvent( this, MouseEvent.MOUSE_EXITED,
-                                               System.currentTimeMillis(), 0,
-                                               -1, -1, 0, false ) );
             }
         }
     }

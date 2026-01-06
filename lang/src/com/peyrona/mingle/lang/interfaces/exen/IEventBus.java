@@ -4,6 +4,7 @@ package com.peyrona.mingle.lang.interfaces.exen;
 import com.peyrona.mingle.lang.messages.Message;
 
 /**
+ * This interface has to be implemented by the Event Bus used by an ExEn.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -72,7 +73,7 @@ public interface IEventBus
      * @return Itself.
      */
     IEventBus start();
-    
+
     /**
      * House keeping.
      *

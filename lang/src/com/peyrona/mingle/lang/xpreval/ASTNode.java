@@ -27,12 +27,12 @@ import java.util.Objects;
  */
 final class ASTNode
 {
-    private volatile XprToken      token     = null;   // Literal, operator, variable or func_name
-    private volatile ASTNode       left      = null;   // Left child        (no sync needed)
-    private volatile ASTNode       right     = null;   // Right child       (no sync needed)
-    private volatile ASTNode       parent    = null;   // ReadOnly property (no sync needed)
-    private volatile List<ASTNode> lstFnArgs = null;   // Function arguments (AKA parameters)
-    private volatile Future        future    = null;   // Used to make this class less verbose
+    private XprToken      token     = null;   // Literal, operator, variable or func_name
+    private ASTNode       left      = null;   // Left child        (no sync needed)
+    private ASTNode       right     = null;   // Right child       (no sync needed)
+    private ASTNode       parent    = null;   // ReadOnly property (no sync needed)
+    private List<ASTNode> lstFnArgs = null;   // Function arguments (AKA parameters)
+    private Future        future    = null;   // Used to make this class less verbose
 
     private static final String sOP_LOGIC_AND = "&&";
     private static final String sOP_LOGIC_OR  = "||";
@@ -267,7 +267,7 @@ final class ASTNode
                 {
                     Object lVal = left.eval( ops, fns, vars, hasAllVars );
 
-                    if( lVal == Boolean.FALSE )                                    // Short-Circuit Evaluation at left side
+                    if( lVal != null && ! UtilType.isTruthy( lVal ) )              // Short-Circuit Evaluation at left side
                     {
                         return Boolean.FALSE;
                     }
@@ -275,7 +275,7 @@ final class ASTNode
                     {
                         Object rVal = right.eval( ops, fns, vars, hasAllVars );    // Lets see if the right is known
 
-                        if( rVal == Boolean.FALSE )                                // Short-Circuit Evaluation at right side
+                        if( rVal != null && ! UtilType.isTruthy( rVal ) )          // Short-Circuit Evaluation at right side
                         {
                             return Boolean.FALSE;
                         }
@@ -283,10 +283,7 @@ final class ASTNode
                         {
                             if( (lVal != null) && (rVal != null) )
                             {
-                                if( ! (lVal instanceof Boolean) ) throw invalidArg( "Boolean", lVal );
-                                if( ! (rVal instanceof Boolean) ) throw invalidArg( "Boolean", rVal );
-
-                                return ops.eval( token.text(), (Boolean) lVal, (Boolean) rVal );
+                                return ops.eval( token.text(), lVal, rVal );
                             }
                         }
                     }
@@ -295,7 +292,7 @@ final class ASTNode
                 {
                     Object lVal = left.eval( ops, fns, vars, hasAllVars );
 
-                    if( lVal == Boolean.TRUE )                       // Short-Circuit Evaluation at left side
+                    if( lVal != null && UtilType.isTruthy( lVal ) )              // Short-Circuit Evaluation at left side
                     {
                         return Boolean.TRUE;
                     }
@@ -303,7 +300,7 @@ final class ASTNode
                     {
                         Object rVal = right.eval( ops, fns, vars, hasAllVars );  // Lets see if the right is known
 
-                        if( rVal == Boolean.TRUE )                   // Short-Circuit Evaluation at right side
+                        if( rVal != null && UtilType.isTruthy( rVal ) )          // Short-Circuit Evaluation at right side
                         {
                             return Boolean.TRUE;
                         }
@@ -311,10 +308,7 @@ final class ASTNode
                         {
                             if( (lVal != null) && (rVal != null) )
                             {
-                                if( ! (lVal instanceof Boolean) ) throw invalidArg( "Boolean", lVal );
-                                if( ! (rVal instanceof Boolean) ) throw invalidArg( "Boolean", rVal );
-
-                                return ops.eval( token.text(), (Boolean) lVal, (Boolean) rVal );
+                                return ops.eval( token.text(), lVal, rVal );
                             }
                         }
                     }
@@ -478,13 +472,6 @@ final class ASTNode
         return args;
     }
 
-    private MingleException invalidArg( String sExpected, Object found )
-    {
-        String sClass = (found == null) ? "null" : found.getClass().getSimpleName();
-
-        return new MingleException( "Invalid argument. Expected '"+ sExpected +"', found '"+ sClass +"'  (value="+ found +')' );
-    }
-
     private String getFnArgs()    // Aux func for ::toString()
     {
         if( UtilColls.isEmpty( lstFnArgs ) )
@@ -506,10 +493,10 @@ final class ASTNode
      */
     private final class Future
     {
-        private final boolean  isAfter;
+        private final    boolean  isAfter;
         private volatile Object   oWithInitVal = null;   // WITHIN initial Value (null when this node is not of type 'future' and 'new AtomicReference(null)' when not initialized yet
         private volatile Boolean  bResult      = null;   // Updated when Timer ends for AFTER and when a var changed or timer ended for WITHIN.
-                                                      // After ended, it has the furure result (futures are always booleans). null means that it is not resolved yet.
+                                                         // After ended, it has the furure result (futures are always booleans). null means that it is not resolved yet.
 
         //------------------------------------------------------------------------//
 

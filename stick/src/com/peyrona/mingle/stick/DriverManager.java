@@ -9,13 +9,14 @@ import com.peyrona.mingle.lang.interfaces.commands.IDriver;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 
 /**
- * This class maintains drivers instances: there is only one instance per driver type
- * because one driver instance attends as many devices as needed.
+ * Manages DRIVER instances in the runtime environment.
  * <p>
- * Initially I instantiated the Drivers when I received from a Guest a message that involved a
- * device that required that driver, but the problem with this is that if e.g. a human pushes a
- * push button on the wall and the driver (e.g. RPi) is not instantiated, there will be no one
- * to receive (who is listening) the notification that the driver sends.
+ * Maintains one instance per driver type because one driver instance can handle
+ * multiple devices of that type.
+ * <p>
+ * Important: Drivers must be instantiated and added before any devices that
+ * require them, to ensure the driver is available to receive notifications
+ * from hardware (e.g., push buttons, sensors).
  *
  * @author Francisco José Morero Peyrona
  *
@@ -27,6 +28,11 @@ final class   DriverManager
     //----------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
 
+    /**
+     * Creates a new DriverManager instance.
+     *
+     * @param runtime The runtime environment for this manager.
+     */
     DriverManager( IRuntime runtime )
     {
         super( runtime );
@@ -62,6 +68,14 @@ final class   DriverManager
         return true;
     }
 
+    /**
+     * Removes a device from its driver.
+     * <p>
+     * If the driver becomes empty after removal, the driver is stopped and removed from manager.
+     *
+     * @param device The device to remove from its driver.
+     * @return true if device was successfully removed; false if driver was not found.
+     */
     synchronized boolean remove( IDevice device )
     {
         IDriver driver = named( device.getDriverName() );
@@ -83,6 +97,12 @@ final class   DriverManager
         return true;
     }
 
+    /**
+     * Removes a driver from the manager along with all its associated devices.
+     *
+     * @param driver The driver to remove.
+     * @return true if driver was successfully removed; false otherwise.
+     */
     @Override
     synchronized boolean remove( IDriver driver )         // There is no need to remove Rules
     {
@@ -105,6 +125,9 @@ final class   DriverManager
         return false;
     }
 
+    /**
+     * Removes all drivers that have no devices assigned to them.
+     */
     synchronized void clean()
     {
         forEach( driver ->

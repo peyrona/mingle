@@ -5,7 +5,14 @@ import com.peyrona.mingle.menu.core.Orchestrator;
 import com.peyrona.mingle.menu.util.UtilSys;
 import com.peyrona.mingle.menu.util.UtilUI;
 import java.awt.GraphicsEnvironment;
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileReader;
+import java.io.IOException;
+import java.io.RandomAccessFile;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.LinkedList;
 import java.util.List;
 
 /**
@@ -72,6 +79,10 @@ final class Menu
                 case "l":
                     if( isInteractive() )
                         manageProcesses();
+                    break;
+                case "v":
+                    if( isInteractive() )
+                        viewLogs();
                     break;
                 case "o":
                     showSystemInfo();
@@ -380,6 +391,256 @@ final class Menu
     }
 
     //------------------------------------------------------------------------//
+    // LOG VIEWER
+    //------------------------------------------------------------------------//
+
+    private void viewLogs()
+    {
+        while( true )
+        {
+            UtilUI.clearScreen();
+            System.out.println( "-----------------------------------------------" );
+            System.out.println( "           ::: Log Viewer :::" );
+            System.out.println( "-----------------------------------------------" );
+
+            File   logDir   = new File( UtilSys.getWorkingDir(), "log" );
+            File[] logFiles = logDir.listFiles( (dir, name) -> name.endsWith( ".out.txt" ) );
+
+            if( logFiles == null || logFiles.length == 0 )
+            {
+                System.out.println( " No log files found in 'log/' folder." );
+                System.out.println( " Logs are created when tools are launched." );
+                System.out.println( "-----------------------------------------------" );
+                UtilUI.pause();
+                return;
+            }
+
+            // Sort by modification time (most recent first)
+            Arrays.sort( logFiles, (a, b) -> Long.compare( b.lastModified(), a.lastModified() ) );
+
+            System.out.println( " Available logs:" );
+
+            for( File f : logFiles )
+            {
+                String toolName = f.getName().replace( ".out.txt", "" );
+                String key      = getLogKey( toolName );
+                String size     = UtilUI.formatFileSize( f.length() );
+                String modified = UtilUI.formatTimeAgo( f.lastModified() );
+
+                System.out.println( "   " + key + " - " + UtilUI.capitalize( toolName ) +
+                                    " (" + size + ", " + modified + ")" );
+            }
+
+            System.out.println( "-----------------------------------------------" );
+            String choice = UtilUI.readInput( " Select tool or [Enter] to go back: " );
+
+            if( choice.isEmpty() )
+                return;
+
+            File selectedLog = findLogByKey( logFiles, choice );
+
+            if( selectedLog != null )
+                showLogOptions( selectedLog );
+            else
+                System.out.println( "Invalid selection." );
+        }
+    }
+
+    private String getLogKey( String toolName )
+    {
+        switch( toolName.toLowerCase() )
+        {
+            case "glue":  return "G";
+            case "gum":   return "U";
+            case "stick": return "S";
+            case "tape":  return "A";
+            default:      return toolName.substring( 0, 1 ).toUpperCase();
+        }
+    }
+
+    private File findLogByKey( File[] logFiles, String key )
+    {
+        for( File f : logFiles )
+        {
+            String toolName = f.getName().replace( ".out.txt", "" );
+
+            if( getLogKey( toolName ).equalsIgnoreCase( key ) )
+                return f;
+        }
+        return null;
+    }
+
+    private void showLogOptions( File logFile )
+    {
+        while( true )
+        {
+            UtilUI.clearScreen();
+            String toolName = logFile.getName().replace( ".out.txt", "" );
+            String size     = UtilUI.formatFileSize( logFile.length() );
+
+            System.out.println( "-----------------------------------------------" );
+            System.out.println( " Viewing: " + logFile.getName() + " (" + size + ")" );
+            System.out.println( "-----------------------------------------------" );
+            System.out.println( " 1 - Last 50 lines" );
+            System.out.println( " 2 - Last 200 lines" );
+            System.out.println( " 3 - Last 500 lines" );
+            System.out.println( " 4 - Entire file" + (logFile.length() > 100000 ? " (large!)" : "") );
+            System.out.println( " 5 - Follow mode (live updates)" );
+            System.out.println( "-----------------------------------------------" );
+
+            String choice = UtilUI.readInput( " Select option or [Enter] to go back: " );
+
+            if( choice.isEmpty() )
+                return;
+
+            switch( choice )
+            {
+                case "1":
+                    displayLastLines( logFile, 50 );
+                    break;
+                case "2":
+                    displayLastLines( logFile, 200 );
+                    break;
+                case "3":
+                    displayLastLines( logFile, 500 );
+                    break;
+                case "4":
+                    displayEntireFile( logFile );
+                    break;
+                case "5":
+                    followLog( logFile );
+                    break;
+                default:
+                    System.out.println( "Invalid option." );
+            }
+        }
+    }
+
+    private void displayLastLines( File logFile, int numLines )
+    {
+        UtilUI.clearScreen();
+        System.out.println( "=== Last " + numLines + " lines of " + logFile.getName() + " ===" );
+        System.out.println();
+
+        try
+        {
+            LinkedList<String> lines = new LinkedList<>();
+
+            try( BufferedReader reader = new BufferedReader( new FileReader( logFile ) ) )
+            {
+                String line;
+                while( (line = reader.readLine()) != null )
+                {
+                    lines.add( line );
+                    if( lines.size() > numLines )
+                        lines.removeFirst();
+                }
+            }
+
+            if( lines.isEmpty() )
+            {
+                System.out.println( "(Log file is empty)" );
+            }
+            else
+            {
+                for( String line : lines )
+                    System.out.println( line );
+            }
+        }
+        catch( IOException e )
+        {
+            System.out.println( "Error reading log file: " + e.getMessage() );
+        }
+
+        System.out.println();
+        System.out.println( "=== End of log ===" );
+        UtilUI.pause();
+    }
+
+    private void displayEntireFile( File logFile )
+    {
+        if( logFile.length() > 500000 )   // 500 KB warning
+        {
+            if( ! UtilUI.confirm( "File is " + UtilUI.formatFileSize( logFile.length() ) + ". Display anyway?" ) )
+                return;
+        }
+
+        UtilUI.clearScreen();
+        System.out.println( "=== " + logFile.getName() + " ===" );
+        System.out.println();
+
+        try( BufferedReader reader = new BufferedReader( new FileReader( logFile ) ) )
+        {
+            String line;
+            while( (line = reader.readLine()) != null )
+                System.out.println( line );
+        }
+        catch( IOException e )
+        {
+            System.out.println( "Error reading log file: " + e.getMessage() );
+        }
+
+        System.out.println();
+        System.out.println( "=== End of log ===" );
+        UtilUI.pause();
+    }
+
+    private void followLog( File logFile )
+    {
+        UtilUI.clearScreen();
+        System.out.println( "=== Following " + logFile.getName() + " (press Enter to stop) ===" );
+        System.out.println();
+
+        try( RandomAccessFile raf = new RandomAccessFile( logFile, "r" ) )
+        {
+            // Start from end of file
+            long fileLength = logFile.length();
+            raf.seek( Math.max( 0, fileLength - 2000 ) );   // Show last ~2KB initially
+
+            // Skip to next line if we started mid-line
+            if( fileLength > 2000 )
+                raf.readLine();
+
+            // Display initial content
+            String line;
+            while( (line = raf.readLine()) != null )
+                System.out.println( line );
+
+            System.out.println();
+            System.out.println( "--- Waiting for new output (press Enter to stop) ---" );
+
+            // Follow mode loop
+            while( true )
+            {
+                // Check for user input (non-blocking)
+                if( System.in.available() > 0 )
+                {
+                    System.in.read();   // Consume the input
+                    break;
+                }
+
+                // Check for new content
+                long currentLength = logFile.length();
+                if( currentLength > raf.getFilePointer() )
+                {
+                    while( (line = raf.readLine()) != null )
+                        System.out.println( line );
+                }
+
+                Thread.sleep( 500 );   // Poll every 500ms
+            }
+        }
+        catch( IOException | InterruptedException e )
+        {
+            System.out.println( "Error following log: " + e.getMessage() );
+            UtilUI.pause();
+        }
+
+        System.out.println();
+        System.out.println( "=== Stopped following ===" );
+    }
+
+    //------------------------------------------------------------------------//
     // INFORMATION FUNCTIONS
     //------------------------------------------------------------------------//
 
@@ -424,6 +685,7 @@ final class Menu
                             "MANAGEMENT OPTIONS:\n" +
                             "------------------\n" +
                             "L - List/Kill : View and terminate running Mingle processes\n" +
+                            "V - View Logs : View console output from Glue, Gum, Stick, Tape\n" +
                             "E - Services  : Manage Mingle tools as system services\n" +
                             "O - Info      : Display system and Java information\n" +
                             "\n" +
@@ -443,7 +705,12 @@ final class Menu
                             "menu u              # Start Gum dashboard server\n" +
                             "menu s file.model   # Run Stick in default mode\n" +
                             "menu i              # Run Stick with remote debugging enabled\n" +
-                            "menu a file.une     # Compile Une file with Tape" );
+                            "menu a file.une     # Compile Une file with Tape\n" +
+                            "\n" +
+                            "LOG VIEWER (V option):\n" +
+                            "---------------------\n" +
+                            "Shows output logs from running tools stored in 'log/' folder.\n" +
+                            "Options: Last 50/200/500 lines, entire file, or follow mode (live)." );
 
         UtilUI.pause();
     }
@@ -518,6 +785,7 @@ final class Menu
             System.out.println( " K - Stick..........Resident mode (nohup)" );
             System.out.println( " A - Tape ......Transpiler" );
             System.out.println( " L - List/Kill..Manage JVM processes" );
+            System.out.println( " V - View Logs..Output from running tools" );
         }
         else
         {

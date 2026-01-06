@@ -414,14 +414,14 @@ public final class Lexer
         addLexeme( lex, String.valueOf( ch ), type );
     }
 
-    // For Lexeme::column all calculations are zero based and the final value must be 1 based.
-    // This is taken into account when making the calculations in this method.
+    // For Lexeme::column all calculations are 1 based.
     // When this method is invoked, the pointer is just after the lexeme end.
     private void addLexeme( Lexeme lex, String text, short type )
     {
-        // TODO: revisar esto -->
-        int back = text.length(); //  + (type == Lexeme.TYPE_STRING ? 2 : 0));   // When String, the 2 quotes ("a string") has to be added to the length because the quotes themselves are not part of the String
-        //------------------------------
+        int back = text.length();
+
+        if( type == Lexeme.TYPE_STRING )
+            back += 2;   // When String, the 2 quotes ("a string") has to be added to the length because the quotes themselves are not part of the String
 
         lex.text   = text;
         lex.type   = type;
@@ -450,31 +450,6 @@ public final class Lexer
         return (offset < code.length());
     }
 
-//    private boolean isValidEscape( char ch )
-//    {
-//        if( ch != Language.QUOTE )
-//            return false;
-//
-//        char next = readChar( false );
-//
-//        if( next == '\n' )
-//            return false;
-//
-//        if( next != 'n' && next != 'r' && next != 't' )     // Only following escapes are Une valid: '\n', '\r', '\t'
-//        {
-//            Lexeme lex = new Lexeme();
-//                   lex.text   = "\\" + readChar( false );
-//                   lex.type   = Lexeme.TYPE_STRING;
-//                   lex.line   = line;
-//                   lex.column = column;
-//                   lex.offset = offset;
-//
-//            addError( "Invalid escape [\\"+ readChar( false ) +']', lex );
-//        }
-//
-//        return true;
-//    }
-
     private static short word2Type( String word )
     {
         if( Language.isCmdWord(      word ) )  return Lexeme.TYPE_CMD_WORD;
@@ -483,11 +458,4 @@ public final class Lexer
 
         return Lexeme.TYPE_NAME;
     }
-
-//    public static void main( String[] as )
-//    {
-//        Lexer lexer = new Lexer( "\"This is \n a string\"" );
-//
-//        System.out.println( lexer.getErrors() );
-//    }
 }

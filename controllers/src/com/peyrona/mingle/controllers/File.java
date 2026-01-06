@@ -113,7 +113,7 @@ public final class File
         file = new java.io.File( uri );
 
         if( (future == null) && ((int) get( KEY_INTERVAL ) > -1) )
-            future = UtilSys.executeAtRate( getClass().getName(), getLong( KEY_INTERVAL ), getLong( KEY_INTERVAL ), () -> read() );
+            future = UtilSys.executeWithDelay( getClass().getName(), getLong( KEY_INTERVAL ), getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override

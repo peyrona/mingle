@@ -72,21 +72,46 @@ public class UtilComm
     private UtilComm() {}  // Avoid this class instances creation
     //------------------------------------------------------------------------//
 
+    /**
+     * Checks if the given port number is a valid UDP port.
+     *
+     * @param port The port number to validate.
+     * @return true if the port is within the valid UDP range (0-65535); false otherwise.
+     */
     public static boolean isValidPort( int port )
     {
         return ((port >= UDP_PORT_MIN_ALLOWED) && (port <= UDP_PORT_MAX_ALLOWED));
     }
 
+    /**
+     * Checks if the given port number is a valid TCP port.
+     *
+     * @param port The port number to validate.
+     * @return true if the port is within the valid TCP range (1-65535); false otherwise.
+     */
     public static boolean isValidPort4TCP( int port )
     {
         return ((port >= TCP_PORT_MIN_ALLOWED) && (port <= TCP_PORT_MAX_ALLOWED));
     }
 
+    /**
+     * Checks if the given port number is a valid UDP port.
+     *
+     * @param port The port number to validate.
+     * @return true if the port is within the valid UDP range (0-65535); false otherwise.
+     */
     public static boolean isValidPort4UDP( int port )
     {
         return ((port >= UDP_PORT_MIN_ALLOWED) && (port <= UDP_PORT_MAX_ALLOWED));
     }
 
+    /**
+     * Ensures the given port number is within the valid TCP range.
+     * If the port is outside the valid range, it is clamped to the nearest valid value.
+     *
+     * @param port The port number to validate and adjust.
+     * @return A port number within the valid TCP range (1-65535).
+     */
     public static int makeValidPort4TCP( int port )
     {
         if( port < TCP_PORT_MIN_ALLOWED || port > TCP_PORT_MAX_ALLOWED )
@@ -97,6 +122,13 @@ public class UtilComm
         return port;
     }
 
+    /**
+     * Ensures the given port number is within the valid UDP range.
+     * If the port is outside the valid range, it is clamped to the nearest valid value.
+     *
+     * @param port The port number to validate and adjust.
+     * @return A port number within the valid UDP range (0-65535).
+     */
     public static int makeValidPort4UDP( int port )
     {
         if( port < UDP_PORT_MIN_ALLOWED || port > UDP_PORT_MAX_ALLOWED )
@@ -107,6 +139,16 @@ public class UtilComm
         return port;
     }
 
+    /**
+     * Checks if the given port is within the recommended user port range.
+     * <p>
+     * In strict mode, the port must be 49152 or higher (ephemeral ports).
+     * In non-strict mode, the port must be 1024 or higher (user ports).
+     *
+     * @param port The port number to validate.
+     * @param strict If true, requires port >= 49152; if false, requires port >= 1024.
+     * @return true if the port is within the recommended user range; false otherwise.
+     */
     public static boolean isRecommendedPort( int port, boolean strict )
     {
         if( strict )
@@ -121,6 +163,21 @@ public class UtilComm
                 (port <= TCP_PORT_MAX_ALLOWED));
     }
 
+    /**
+     * Parses a client scope string and returns the corresponding scope constant.
+     * <p>
+     * Supported values (case-insensitive):
+     * <ul>
+     * <li>"local" - returns ALLOW_IP_LOCAL
+     * <li>"subnet" - returns ALLOW_IP_SUBNET
+     * <li>"intranet" - returns ALLOW_IP_INTRANET
+     * <li>"any" - returns ALLOW_IP_ANY
+     * </ul>
+     *
+     * @param sAllow The scope string to parse.
+     * @return The corresponding scope constant.
+     * @throws IllegalArgumentException if the string does not contain a valid scope value.
+     */
     public static short clientScope( String sAllow )
     {
         if( UtilStr.contains( "local"   , sAllow ) )  return ALLOW_IP_LOCAL;
@@ -131,6 +188,15 @@ public class UtilComm
         throw new IllegalArgumentException( sAllow +": invalid value for 'allow'. Only 'local', 'intranet' or 'any' are accepted.");
     }
 
+    /**
+     * Checks if the given client address is allowed based on the specified scope.
+     *
+     * @param nScope The scope to check against (ALLOW_IP_LOCAL, ALLOW_IP_SUBNET, ALLOW_IP_INTRANET, or ALLOW_IP_ANY).
+     * @param addr The client address to validate.
+     * @return true if the address is allowed within the specified scope; false otherwise.
+     * @throws SocketException if an I/O error occurs while checking the address.
+     * @throws IllegalArgumentException if nScope is not a valid scope constant.
+     */
     public static boolean isClientAllowed( short nScope, InetAddress addr ) throws SocketException
     {
         switch( nScope )
@@ -169,6 +235,14 @@ public class UtilComm
         return null;
     }
 
+    /**
+     * Returns the schema from the given URI, or null if the URI has no schema.
+     * <p>
+     * Example: "https://peyrona.com:8080" returns "https://"
+     *
+     * @param sURI The URI to extract the schema from.
+     * @return The schema (lowercased with "://") or null if no schema is present.
+     */
     public static String getSchema( String sURI )
     {
         return getSchema( sURI, null );
@@ -203,6 +277,14 @@ public class UtilComm
      *
      * @param sURI To extract the host from.
      * @return The host or null if passed URI has no host.
+     */
+    /**
+     * Returns the host from the given URI, or null if the URI has no host.
+     * <p>
+     * Example: "https://peyrona.com:8080" returns "peyrona.com"
+     *
+     * @param sURI The URI to extract the host from.
+     * @return The host or null if no host is present.
      */
     public static String getHost( String sURI )
     {
@@ -255,6 +337,14 @@ public class UtilComm
         return sURI.substring( nStart, nEnd );
     }
 
+    /**
+     * Returns the port from the given string, or -1 if no port is present.
+     * <p>
+     * The port can be a numeric value or a time suffix (e.g., "100ms").
+     *
+     * @param s The string to extract the port from.
+     * @return The port number or -1 if no port is present.
+     */
     public static int getPort( String s )
     {
         return getPort( s, -1 );
@@ -321,11 +411,24 @@ public class UtilComm
         }
     }
 
+    /**
+     * Checks if the given InetAddress is reachable with a default timeout of 750ms.
+     *
+     * @param hostname The InetAddress to check.
+     * @return true if the address is reachable; false otherwise.
+     */
     public static boolean isReachable( InetAddress hostname )
     {
         return isReachable( hostname, 750 );
     }
 
+    /**
+     * Checks if the given InetAddress is reachable within the specified timeout.
+     *
+     * @param hostname The InetAddress to check.
+     * @param timeout The timeout in milliseconds before the check is aborted.
+     * @return true if the address is reachable; false otherwise.
+     */
     public static boolean isReachable( InetAddress hostname, int timeout )
     {
         try
@@ -472,20 +575,24 @@ public class UtilComm
     }
 
     /**
-     * Crea una IP en base a dos IPs la primera es una IP válida y la segunda
-     * una IP en la que hay uno o más comodines.
-     * Ejemplos:
+     * Composes an IPv4 address by merging a base IP address with a template containing wildcards.
+     * The template uses '*' as a wildcard character which will be replaced with the corresponding octet from the parent IP.
+     * <p>
+     * Examples:
      * <pre>
-     * new IPV4( "192.168.1.1", "*" )         --> "192.168.1.1"
-     * new IPV4( "192.168.1.1", "*.5" )       --> "192.168.1.5"
-     * new IPV4( "192.168.1.1", "5.*" )       --> "192.168.5.1"
-     * new IPV4( "192.168.1.1", "*.3.5" )     --> "192.168.3.5"
-     * new IPV4( "192.168.1.1", "*.100.3.5" ) --> "192.100.3.5"
-     * new IPV4( "192.168.1.1", "212.*.4.5" ) --> "212.168.4.5"
+     * compose( "192.168.1.1", "*" )         --> "192.168.1.1"
+     * compose( "192.168.1.1", "*.5" )       --> "192.168.1.5"
+     * compose( "192.168.1.1", "5.*" )       --> "192.168.5.1"
+     * compose( "192.168.1.1", "*.3.5" )     --> "192.168.3.5"
+     * compose( "192.168.1.1", "*.100.3.5" ) --> "192.100.3.5"
+     * compose( "192.168.1.1", "212.*.4.5" ) --> "212.168.4.5"
      * </pre>
-     * @param parent IP base a utilizar para rellenar los huecos del 2º parámetro
-     * @param template Una IP con comodines (wildcards: '*')
-     * @return El resultado de aplicar las reglas especificadas en los dos parámetros.
+     * The method also handles port numbers. If either parameter contains a port, the resulting address will include the port from the template if present, otherwise from the parent.
+     *
+     * @param parent A valid IPv4 address (with optional port) used to fill in wildcard positions.
+     * @param template An IPv4 address template (with optional port) containing wildcards ('*') to be replaced.
+     * @return The composed IPv4 address with wildcards replaced, including port if present.
+     * @throws IllegalArgumentException if either parameter is null or empty, if parent is not a valid IPv4 address, if template is malformed, or if the resulting port is out of bounds.
      */
     public static String compose( String parent, String template )
     {
@@ -706,6 +813,14 @@ public class UtilComm
         return true;
     }
 
+    /**
+     * Checks if an InetAddress is a unique local IPv6 address (ULA).
+     * <p>
+     * Unique local addresses are in the fc00::/7 range (fc00:: to fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff).
+     *
+     * @param address The InetAddress to check.
+     * @return true if the address is a unique local IPv6 address; false otherwise.
+     */
     // Helper method to check for IPv6 unique local addresses (ULA)
     private static boolean isUniqueLocalAddress( InetAddress address )
     {

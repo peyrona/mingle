@@ -53,6 +53,8 @@ public class Main
         if( ! config.get( "exen", "write_disk", true ) )
             throw new IOException( "'write_disk' is set to false: can not transpile" );
 
+        UtilSys.setConfig( config );
+
         if( UtilStr.isNotEmpty( cli.getValue( "charset" ) ) )
         {
             try

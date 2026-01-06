@@ -34,7 +34,7 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextAreaEditorKit;
  */
 public final class UneEditorUnit extends JSplitPane
 {
-    private static final AtomicInteger nSocketPort = new AtomicInteger(2048);
+    private static final AtomicInteger nSocketPort = new AtomicInteger( 20000 );   // High enough port number to no conflict with System ports
 
     private File    fCode     = null;
     private boolean isFolded  = false;
@@ -63,10 +63,9 @@ public final class UneEditorUnit extends JSplitPane
         setOrientation( JSplitPane.VERTICAL_SPLIT );
         setContinuousLayout( true );
         setOneTouchExpandable( true );
-        setTopComponent( new UneEditorPane( sCode ) );
+        setTopComponent( new UneEditorPane( sCode ) );    // UneEditorPane constructor already calls setText(sCode)
         setBottomComponent( new ConsolePanel() );
 
-        getEditor().setText( sCode );
         getEditor().grabFocus();
 
         addComponentListener( new ComponentAdapter()
@@ -76,7 +75,7 @@ public final class UneEditorUnit extends JSplitPane
             {
                 if( is1stTime && (ce.getComponent() == UneEditorUnit.this) )
                 {
-                    UtilSys.execute( getClass().getName(),
+                    UtilSys.execute( null,
                                      250,   // Needed
                                      () -> SwingUtilities.invokeLater( () -> UneEditorUnit.this.setDividerLocation( 1d ) ) );
 
@@ -280,7 +279,7 @@ public final class UneEditorUnit extends JSplitPane
 
     public boolean transpile( boolean isForGrid )
     {
-        setDividerLocation( .65d );
+        setDividerLocation( 0.65d );
         stop();
         System.setProperty( "grid", (isForGrid  ? "true" : "false") );
         getConsole().clear();
@@ -291,7 +290,7 @@ public final class UneEditorUnit extends JSplitPane
 
         try
         {
-            return TranspilerTask.execute( UtilSys.getConfig(), null, new Printer( getConsole() ), fCode.toURI() );
+            return TranspilerTask.execute( UtilSys.getConfig(), null, new Consoler( getConsole() ), fCode.toURI() );
         }
         catch( IOException | URISyntaxException ioe )
         {
@@ -320,7 +319,7 @@ public final class UneEditorUnit extends JSplitPane
         {
             File fModel = new File( UtilIO.getPath( fCode ), UtilIO.getName( fCode ) +".model" );
 
-            setDividerLocation( .65d );
+            setDividerLocation( 0.65d );
             getConsole().clear();
 
             procExEn = Util.runStick( fModel, createConfigFile( bUseFakedCtrl, level ) );
@@ -397,11 +396,11 @@ public final class UneEditorUnit extends JSplitPane
             return  UtilJson.parse( "["+
                                     "  {"+
                                     "     \"name\"   : \"Plain Socket\","+
-                                     "     \"init\"   : { \"port\": "+ nSocketPort.incrementAndGet() +", \"ssl\": false, \"allow\": \"intranet\" },"+
+                                    "     \"init\"   : { \"port\": "+ nSocketPort.incrementAndGet() +", \"ssl\": false, \"allow\": \"intranet\" },"+
                                     "     \"builder\": \"com.peyrona.mingle.network.socket.PlainSocketServer\","+
                                     "     \"uris\"   : [\"file://{*home.lib*}network.jar\"]"+
                                     "  }"+
-                                    "]").asArray();
+                                    ']').asArray();
         }
         catch( Exception ioe )
         {
@@ -412,11 +411,11 @@ public final class UneEditorUnit extends JSplitPane
     //------------------------------------------------------------------------//
     // INNER CLASS
     //------------------------------------------------------------------------//
-    private static final class Printer extends PrintWriter
+    private static final class Consoler extends PrintWriter
     {
         private final ConsolePanel console;
 
-        Printer( ConsolePanel cp )
+        Consoler( ConsolePanel cp )
         {
             super( new ByteArrayOutputStream() );
 

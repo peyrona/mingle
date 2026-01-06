@@ -14,12 +14,15 @@ import java.util.function.Predicate;
 /**
  * Base class for all managers that manage instances of ICommand.
  * <p>
- * Note: NetworkManager does not belongs (therefore it does not inherits
- * from this class), but has the suffix "Manager" in its named for consistency.
+ * Provides thread-safe storage and lifecycle management for command objects.
+ * Commands are stored in a concurrent map keyed by their name (case-insensitive).
+ *
+ * Note: NetworkManager does not belong (therefore it does not inherit
+ * from this class), but has the suffix "Manager" in its name for consistency.
+ *
+ * @param <T> The type of ICommand managed by this class.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
@@ -32,6 +35,11 @@ abstract class BaseManager<T extends ICommand>
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
 
+    /**
+     * Returns a string representation of this manager.
+     *
+     * @return A string containing the manager's class name and the number of managed commands.
+     */
     @Override
     public String toString()
     {
@@ -42,10 +50,10 @@ abstract class BaseManager<T extends ICommand>
     // PACKAGE SCOPE
 
     /**
-     * Returns first T in the internal list that matches the predicate or null if none matched.
+     * Returns the first command in the internal map that matches the predicate, or null if none matched.
      *
-     * @param predicate To check list items.
-     * @return The first t that matches the predicate or null.
+     * @param predicate To check map items.
+     * @return The first command that matches the predicate or null.
      */
     synchronized T first( Predicate<T> predicate )      // 'synchronized' because this method iterates over the map
     {
@@ -57,16 +65,24 @@ abstract class BaseManager<T extends ICommand>
     }
 
     /**
-     * Returns the device named as received argument or null if it does not exist.
+     * Returns the command named as received argument or null if it does not exist.
      *
-     * @param name Of the device to be retrieved.
-     * @return The device named as received argument or null if it does not exist.
+     * @param name Of the command to be retrieved (case-insensitive).
+     * @return The command named as received argument or null if it does not exist.
      */
     T named( String name )
     {
         return map.get( name.toLowerCase() );
     }
 
+    /**
+     * Adds a command to the manager.
+     * <p>
+     * If a command with the same name already exists, logs an info message and does not add it.
+     * If the manager is already started, the command is immediately started.
+     *
+     * @param cmd The command to add.
+     */
     void add( T cmd )
     {
         String name = cmd.name().toLowerCase();
@@ -102,12 +118,12 @@ abstract class BaseManager<T extends ICommand>
     }
 
     /**
-     * Passes all registered devices to the consumer.
+     * Passes all registered commands to the consumer.
      * <p>
-     * The consumer could also apply an action only those devices which names match a regexp
-     * (same could be done with device's driver's named).
+     * The consumer can apply an action to those commands whose names match a regexp
+     * (this can also be done for command's driver names).
      *
-     * @param consumer
+     * @param consumer The consumer to process each command.
      */
     void forEach( Consumer<T> consumer )
     {
@@ -117,11 +133,22 @@ abstract class BaseManager<T extends ICommand>
         map.values().forEach( cmd -> consumer.accept( cmd ) );
     }
 
+    /**
+     * Checks if the manager has no commands.
+     *
+     * @return true if no commands are registered; false otherwise.
+     */
     boolean isEmpty()
     {
         return map.isEmpty();
     }
 
+    /**
+     * Starts all registered commands in the manager.
+     * <p>
+     * If the manager is already started, this method does nothing.
+     * Once started, newly added commands are automatically started.
+     */
     synchronized void start()
     {
         if( ! isStarted() )
@@ -130,6 +157,11 @@ abstract class BaseManager<T extends ICommand>
         isStarted.set( true );
     }
 
+    /**
+     * Stops all registered commands and clears the manager.
+     * <p>
+     * If the manager is not started, this method does nothing.
+     */
     void stop()
     {
         if( isStarted() )
@@ -140,6 +172,11 @@ abstract class BaseManager<T extends ICommand>
         }
     }
 
+    /**
+     * Checks if the manager is started.
+     *
+     * @return true if the manager has been started; false otherwise.
+     */
     boolean isStarted()
     {
         return isStarted.get();
@@ -149,7 +186,9 @@ abstract class BaseManager<T extends ICommand>
     // PROTECTED SCOPE
 
     /**
-     * constructor
+     * Creates a new BaseManager instance.
+     *
+     * @param runtime The runtime environment for this manager.
      */
     protected BaseManager( IRuntime runtime )
     {

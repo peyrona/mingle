@@ -95,7 +95,7 @@ public final class   WeatherOpenMeteo
         if( isInvalid() || isFaked() )
             return;
 
-        UtilSys.execute( getClass().getName(),
+        UtilSys.execute( null,
                          () ->
                             {
                                 int nFore  = ((Number) get( KEY_FORECAST )).intValue();
@@ -154,7 +154,7 @@ public final class   WeatherOpenMeteo
         super.start( rt );
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
+            timer = UtilSys.executeWithDelay( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override

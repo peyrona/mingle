@@ -43,11 +43,38 @@ public interface ILogger
         }
     }
 
+    /**
+     * Initializes the logger with specified configuration.
+     *
+     * @param sFileName  The base name for log files (without extension). If null or empty, no file logging.
+     * @param bUseDisk   If true, logs will be written to disk files.
+     * @param bUseConsole If true, logs will be printed to console.
+     * @return Itself.
+     */
     public ILogger init( String sFileName, boolean bUseDisk, boolean bUseConsole );
 
+    /**
+     * Returns the logger name.
+     *
+     * @return The logger name.
+     */
     public String  getName();
+
+    /**
+     * Returns the current minimum logging level.
+     *
+     * @return The current minimum logging level.
+     */
     public Level   getLevel();
+
+    /**
+     * Sets the minimum logging level.
+     *
+     * @param l The minimum logging level to set.
+     * @return Itself.
+     */
     public ILogger setLevel( Level  l );
+
     /**
      * Assigns minimum logging level based on received level string.<br>
      * <br>Normally this string is defined in Config.json.
@@ -59,6 +86,12 @@ public interface ILogger
      */
     public ILogger setLevel( String s );
 
+    /**
+     * Checks if a message at the given level would be logged.
+     *
+     * @param level The level to check.
+     * @return {@code true} if a message at this level would be logged, {@code false} otherwise.
+     */
     public boolean isLoggable( ILogger.Level level );
 
     /**
@@ -78,7 +111,32 @@ public interface ILogger
      * @return Always true.
      */
     public boolean say( String msg );
+
+    /**
+     * Logs a message at the specified level.
+     *
+     * @param l   The log level.
+     * @param msg The message to log.
+     * @return {@code true} if message was logged, {@code false} if level was below minimum.
+     */
     public boolean log( Level l, String msg );
+
+    /**
+     * Logs a throwable exception at the specified level.
+     *
+     * @param l   The log level.
+     * @param exc The exception to log.
+     * @return {@code true} if exception was logged, {@code false} if level was below minimum.
+     */
     public boolean log( Level l, Throwable exc );
+
+    /**
+     * Logs a message with a throwable exception at the specified level.
+     *
+     * @param l   The log level.
+     * @param exc The exception to log.
+     * @param msg The message to log.
+     * @return {@code true} if message was logged, {@code false} if level was below minimum.
+     */
     public boolean log( Level l, Throwable exc, String msg );
 }

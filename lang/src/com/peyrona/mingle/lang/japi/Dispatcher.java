@@ -4,6 +4,7 @@ package com.peyrona.mingle.lang.japi;
 import com.peyrona.mingle.lang.MingleException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -13,6 +14,14 @@ import java.util.function.Consumer;
  * Dispatcher class manages a queue of items which are processed asynchronously.
  * <p>
  * Improved for Zero-Allocation and Concurrency Safety.
+ * <p>
+ * Thread Safety Features:
+ * <ul>
+ *   <li><b>Reference-counted pause:</b> Multiple threads can call {@link #pause()} and the
+ *       dispatcher only resumes when all have called {@link #resume()}.</li>
+ *   <li><b>Atomic pause:</b> {@link #pause()} blocks until any in-flight message processing
+ *       completes, guaranteeing no concurrent access to shared state.</li>
+ * </ul>
  *
  * @param <T> the type of task to be processed.
  */
@@ -24,15 +33,17 @@ public final class Dispatcher<T>
 
     private volatile BlockingQueue<T>    queue;
     private final    int                 maxCapacity;
-    private volatile boolean             paused    = false;
-    private final    AtomicLong          msgCount  = new AtomicLong( 0 );
+    private final    AtomicInteger       pauseCount   = new AtomicInteger( 1 );  // Starts paused (count=1)
+    private volatile boolean             isProcessing = false;                   // True while consumer.accept() is running
+    private final    AtomicLong          msgCount     = new AtomicLong( 0 );
     private final    Consumer<T>         consumer;
     private final    String              thrName;
     private final    Consumer<Exception> onError;
     private volatile Thread              thrQueue;
 
-    private final    ReentrantLock       pauseLock = new ReentrantLock();
-    private final    Condition           unpaused  = pauseLock.newCondition();
+    private final    ReentrantLock       pauseLock     = new ReentrantLock();
+    private final    Condition           unpaused      = pauseLock.newCondition();
+    private final    Condition           notProcessing = pauseLock.newCondition();
 
     //------------------------------------------------------------------------//
 
@@ -74,11 +85,15 @@ public final class Dispatcher<T>
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Starts the dispatcher.
+     * @return Itself.
+     */
     public synchronized Dispatcher<T> start()
     {
         if( thrQueue == null )
         {
-            paused = false; // Reset state on start
+            pauseCount.set( 0 );   // Reset state on start (not paused)
             thrQueue = new Thread( this::execute, thrName );
             thrQueue.start();
         }
@@ -86,13 +101,17 @@ public final class Dispatcher<T>
         return this;
     }
 
+    /**
+     * Stops the dispatcher.
+     * @return Itself.
+     */
     public synchronized Dispatcher<T> stop()
     {
         if( thrQueue != null )
         {
             thrQueue.interrupt();
             thrQueue = null;
-            paused = false;
+            pauseCount.set( 1 );   // Mark as paused
             queue.clear();
         }
 
@@ -100,26 +119,64 @@ public final class Dispatcher<T>
     }
 
     /**
-     * Returns true if the dispatcher is paused.
+     * Returns true if the dispatcher is paused (pause count > 0).
+     *
+     * @return true if paused, false otherwise.
      */
     public boolean isPaused()
     {
-        return paused;
+        return pauseCount.get() > 0;
     }
 
     /**
-     * Pauses the dispatcher thread.
-     * Strategy C: Idempotent operation. Calling this multiple times has no side effect.
+     * Pauses the dispatcher thread and waits for any in-flight message to complete.
+     * <p>
+     * This method is <b>reference-counted</b>: each call to {@code pause()} must be balanced
+     * by a corresponding call to {@link #resume()}. The dispatcher only resumes when the
+     * pause count reaches zero.
+     * <p>
+     * This method <b>blocks</b> until any currently processing message completes, ensuring
+     * that no message is being processed when this method returns.
+     *
+     * @return this Dispatcher instance for method chaining.
      */
     public Dispatcher<T> pause()
     {
-        this.paused = true;   // No lock needed to set a volatile boolean
+        pauseLock.lock();
+
+        try
+        {
+            pauseCount.incrementAndGet();
+
+            // Wait for any in-flight message processing to complete
+            while( isProcessing )
+            {
+                try
+                {
+                    notProcessing.await();
+                }
+                catch( InterruptedException e )
+                {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+        finally
+        {
+            pauseLock.unlock();
+        }
+
         return this;
     }
 
     /**
-     * Resumes the dispatcher thread.
-     * Strategy C: Idempotent operation.
+     * Resumes the dispatcher thread by decrementing the pause count.
+     * <p>
+     * The dispatcher only truly resumes when the pause count reaches zero (i.e., all
+     * callers that invoked {@link #pause()} have called {@code resume()}).
+     *
+     * @return this Dispatcher instance for method chaining.
      */
     public Dispatcher<T> resume()
     {
@@ -127,8 +184,13 @@ public final class Dispatcher<T>
 
         try
         {
-            this.paused = false;
-            unpaused.signalAll();
+            int count = pauseCount.decrementAndGet();
+
+            if( count < 0 )
+                pauseCount.set( 0 );   // Prevent negative count from unbalanced calls
+
+            if( pauseCount.get() == 0 )
+                unpaused.signalAll();
         }
         finally
         {
@@ -208,8 +270,12 @@ public final class Dispatcher<T>
             if( newCapacity > currentCapacity )
             {
                 BlockingQueue<T> newQueue = new ArrayBlockingQueue<>( newCapacity );
-                queue.drainTo( newQueue );
-                this.queue = newQueue;
+
+                synchronized( this )
+                {
+                    queue.drainTo( newQueue );
+                    this.queue = newQueue;
+                }
             }
         }
     }
@@ -224,28 +290,55 @@ public final class Dispatcher<T>
 
             try
             {
-                if( paused )
+                // Wait for message from queue
+                val = queue.take();
+
+                if( tCurrent.isInterrupted() )
+                    break;
+
+                // CRITICAL: Check pause status and set isProcessing atomically AFTER getting
+                // the message. This prevents the race where pause() returns while we're about
+                // to start processing.
+                pauseLock.lock();
+
+                try
                 {
+                    // Wait if paused - must check AFTER getting message to prevent race
+                    while( pauseCount.get() > 0 && ! tCurrent.isInterrupted() )
+                        unpaused.await();
+
+                    if( tCurrent.isInterrupted() )
+                        break;
+
+                    // Mark as processing while still holding the lock
+                    isProcessing = true;
+                }
+                finally
+                {
+                    pauseLock.unlock();
+                }
+
+                // Process the message
+                try
+                {
+                    consumer.accept( val );
+                    msgCount.incrementAndGet();
+                }
+                finally
+                {
+                    // Mark as not processing and signal any waiting pause() callers
                     pauseLock.lock();
 
                     try
                     {
-                        while( paused && ! tCurrent.isInterrupted() )    // Check paused again inside lock to avoid race conditions
-                            unpaused.await();
+                        isProcessing = false;
+                        notProcessing.signalAll();
                     }
                     finally
                     {
                         pauseLock.unlock();
                     }
                 }
-
-                if( tCurrent.isInterrupted() )
-                    break;
-
-                val = queue.take();    // ArrayBlockingQueuE::take() is cleaner on memory
-
-                consumer.accept( val );
-                msgCount.incrementAndGet();
             }
             catch( InterruptedException ie )
             {

@@ -126,10 +126,10 @@ public final class   Sensors
 
         synchronized( this )
         {
-            timer = UtilSys.executeAtRate( getClass().getName(),
-                                           5000l,                      // Initial delay
-                                           getLong( KEY_INTERVAL ),
-                                           () -> read() );
+            timer = UtilSys.executeWithDelay( null,
+                                              5000l,                      // Initial delay
+                                              getLong( KEY_INTERVAL ),
+                                              () -> read() );
         }
     }
 

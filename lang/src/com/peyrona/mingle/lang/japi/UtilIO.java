@@ -40,6 +40,7 @@ import java.util.UUID;
 import java.util.function.Function;
 
 /**
+ * This class is a set of utility methods related with Input/Output.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -64,16 +65,49 @@ public final class UtilIO
     private static final short NativeLib      =  9;
     private static final short Unknown        = 10;
 
+    /**
+     * Checks if the file type of the given URI is recognized by this implementation.
+     *
+     * @param uri The URI to check.
+     * @return true if the file type is known; false otherwise.
+     */
     public static boolean isKnownFileType( URI uri )
     {
         return ! isUnknownFileType( uri );
     }
 
+    /**
+     * Checks if the file type of the given URI is not recognized by this implementation.
+     *
+     * @param uri The URI to check.
+     * @return true if the file type is unknown; false otherwise.
+     */
     public static boolean isUnknownFileType( URI uri )
     {
         return getKnownFileType( uri ) == Unknown;
     }
 
+    /**
+     * Returns the file type constant for the given URI based on its file extension.
+     * <p>
+     * Supported file types:
+     * <ul>
+     * <li>.une - Une source files
+     * <li>.model - Une compiled files
+     * <li>.json - JSON files
+     * <li>.java - Java source files
+     * <li>.class - Java class files
+     * <li>.jar - Java archive files
+     * <li>.js - JavaScript files
+     * <li>.py - Python source files
+     * <li>.pyc - Python compiled files
+     * <li>.so - Native shared libraries (Unix)
+     * <li>.dll - Native dynamic libraries (Windows)
+     * </ul>
+     *
+     * @param uri The URI to check.
+     * @return The file type constant, or Unknown if the extension is not recognized.
+     */
     public static int getKnownFileType( URI uri )
     {
         String sExt = getExtension( uri ).toLowerCase();
@@ -114,6 +148,16 @@ public final class UtilIO
                uri.getPath() != null;
     }
 
+    /**
+     * Reads the content of a file at the given URI as text.
+     * <p>
+     * The URI can contain wildcards but must resolve to exactly one file.
+     * Uses UTF-8 encoding by default for model files, or the system default charset otherwise.
+     *
+     * @param uri The URI of the file to read. Can contain wildcards.
+     * @return The file content as a string, or null if the URI is empty.
+     * @throws IOException if no files are found, multiple files are found, or an I/O error occurs.
+     */
     public static String getAsText( String uri ) throws IOException
     {
         if( UtilStr.isEmpty( uri ) )
@@ -137,16 +181,45 @@ public final class UtilIO
         }
     }
 
+    /**
+     * Reads the content of a file as text.
+     * <p>
+     * Uses UTF-8 encoding for model files, or the system default charset otherwise.
+     *
+     * @param file The file to read.
+     * @return The file content as a string.
+     * @throws IOException if an I/O error occurs.
+     */
     public static String getAsText( File file ) throws IOException
     {
         return getAsText( file.toURI() );
     }
 
+    /**
+     * Reads the content of a URI as text using default charset.
+     * <p>
+     * Uses UTF-8 encoding for model files, or the system default charset otherwise.
+     *
+     * @param uri The URI to read from.
+     * @return The content as a string.
+     * @throws IOException if the file does not exist or an I/O error occurs.
+     */
     public static String getAsText( URI uri ) throws IOException
     {
-        return UtilIO.getAsText( uri, null );     // The default must be UTF-8 because it is impossible to assume which one
+        return getAsText( uri, null );     // The default must be UTF-8 because it is impossible to assume which one
     }                                             // is used at remote-side and because the Mingle compiler always produces UTF-8.
 
+    /**
+     * Reads the content of a URI as text using the specified charset.
+     * <p>
+     * If the file type is a compiled Une model file, UTF-8 encoding is always used regardless
+     * of the charset parameter, as model files must be UTF-8 encoded.
+     *
+     * @param uri The URI to read from.
+     * @param charset The charset to use for decoding. If null, the system default charset is used.
+     * @return The content as a string.
+     * @throws IOException if the file does not exist or an I/O error occurs.
+     */
     public static String getAsText( URI uri, Charset charset ) throws IOException
     {
         Objects.requireNonNull( uri );
@@ -177,12 +250,7 @@ public final class UtilIO
                 is.close();
             }
 
-            String text = sb.toString();
-
-            if( ((nType == UneSource) || (nType == JSON)) && UtilStr.isMeaningless( text ) )
-                throw new IOException( uri +": file is meaningless." );
-
-            return text;
+            return sb.toString();
         }
         catch( IOException use )
         {
@@ -195,6 +263,16 @@ public final class UtilIO
         }
     }
 
+    /**
+     * Reads the content of a URI as binary data.
+     * <p>
+     * The content length must be known (Content-Length header must be present).
+     * The content type must not start with "text/".
+     *
+     * @param uri The URI to read from.
+     * @return The binary content of the URI.
+     * @throws IOException if content length is unknown, content is not binary, or an I/O error occurs.
+     */
     public static byte[] getAsBinary( URI uri ) throws IOException
     {
         URLConnection conn  = uri.toURL().openConnection();
@@ -235,6 +313,23 @@ public final class UtilIO
     // FILE NAME AND PATH RELATED METHODS
     //------------------------------------------------------------------------//
 
+    /**
+     * Replaces file path macros in the given path with their actual values.
+     * <p>
+     * Supported macros:
+     * <ul>
+     * <li>{*home*} - Home directory of the application
+     * <li>{*home.inc*} - Include directory
+     * <li>{*home.lib*} - Library directory
+     * <li>{*home.log*} - Log directory
+     * <li>{*home.tmp*} - Temporary directory
+     * </ul>
+     *
+     * @param sPath The path containing macros to replace.
+     * @return The path with macros replaced by their actual directory paths.
+     * @throws URISyntaxException if the path has invalid syntax.
+     * @throws MingleException if macros are used in a non-file protocol path.
+     */
     public static String replaceFileMacros( String sPath ) throws URISyntaxException
     {
         if( UtilStr.isEmpty( sPath ) )
@@ -281,11 +376,25 @@ public final class UtilIO
         return sPath;
     }
 
+    /**
+     * Splits a path string into its folder components.
+     *
+     * @param path The path to split.
+     * @return A list of folder names in the path.
+     */
     public static List<String> splitByFolder( String path )
     {
         return new ArrayList<>( Arrays.asList( path.split( java.util.regex.Pattern.quote( File.separator ) ) ) );
     }
 
+    /**
+     * Splits a file path into its folder components.
+     * <p>
+     * If the path points to a file, uses the parent directory instead.
+     *
+     * @param path The file or directory to split.
+     * @return A list of folder names in the path, or empty list if path is null.
+     */
     public static List<String> splitByFolder( File path )
     {
         if( path.isFile() )
@@ -414,6 +523,28 @@ public final class UtilIO
     }
 
     /**
+     * Extracts the base name (without extension) from a file path.
+     *
+     * @param path The file path.
+     * @return The file name or "" if path is empty.
+     */
+    public static String getName( String path )
+    {
+        if( UtilStr.isEmpty( path ) )
+            return "";
+
+        int lastSlash = Math.max( path.lastIndexOf( '/' ), path.lastIndexOf( '\\' ) );
+        int lastDot   = path.lastIndexOf( '.' );
+
+        String fileName = (lastSlash >= 0) ? path.substring( lastSlash + 1 ) : path;
+
+        if( lastDot > lastSlash )
+            return fileName.substring( 0, fileName.lastIndexOf( '.' ) );
+
+        return fileName;
+    }
+
+    /**
      * Returns the file extension without (not including) the '.' or "" if file
      * has no extension.
      *
@@ -443,6 +574,15 @@ public final class UtilIO
         return getExtension( uri.toString() );
     }
 
+    /**
+     * Returns the file extension from a path string.
+     * <p>
+     * The extension is returned without the '.' character.
+     * Returns empty string if the path has no extension or ends with '.'.
+     *
+     * @param s The file path string.
+     * @return The file extension without '.', or empty string if no extension exists.
+     */
     public static String getExtension( String s )
     {
         if( s == null )
@@ -557,11 +697,24 @@ public final class UtilIO
     // LISTING AND READING RELATED METHODS (besides getAsText and getAsBinary)
     //------------------------------------------------------------------------//
 
+    /**
+     * Lists all files and directories in the specified folder.
+     *
+     * @param fFolder The folder to list contents from.
+     * @return A list of files and directories, or empty list if folder is null or doesn't exist.
+     */
     public static List<File> listFiles( File fFolder )
     {
         return listFiles( fFolder, null );
     }
 
+    /**
+     * Lists files and directories in the specified folder, optionally filtered.
+     *
+     * @param folder The folder to list contents from.
+     * @param fn A filter function that returns true to include a file, or null to include all.
+     * @return A list of files and directories matching the filter, or empty list if folder is null or doesn't exist.
+     */
     public static List<File> listFiles( final File folder, final Function<File,Boolean> fn )
     {
         if( (folder == null) || (! folder.exists()) )
@@ -573,6 +726,16 @@ public final class UtilIO
         return Arrays.asList( folder.listFiles( (File file) -> fn.apply( file ) ) );
     }
 
+    /**
+     * Recursively lists files in a directory tree, optionally filtered.
+     * <p>
+     * Traverses all subdirectories and returns files matching the filter.
+     * Directories are not included in the result.
+     *
+     * @param dir The root directory to start traversal from.
+     * @param fn A filter function that returns true to include a file, or null to include all files.
+     * @return A list of files matching the filter, or empty list if directory is null or doesn't exist.
+     */
     public static List<File> listFilesInTree( final File dir, final Function<File, Boolean> fn )
     {
         List<File> list = new ArrayList<>();
@@ -646,6 +809,12 @@ public final class UtilIO
         return null;
     }
 
+    /**
+     * Creates a Reader from one or more strings.
+     *
+     * @param str One or more strings to create a reader from.
+     * @return A StringReader containing the concatenated strings.
+     */
     public static Reader fromStringToReader( String... str )
     {
         if( str.length == 1 )    // To save CPU
@@ -663,6 +832,14 @@ public final class UtilIO
         return new StringReader( sb.toString() );
     }
 
+    /**
+     * Creates an InputStream from one or more strings.
+     * <p>
+     * Strings are encoded to bytes using UTF-8 charset.
+     *
+     * @param str One or more strings to create an input stream from.
+     * @return A ByteArrayInputStream containing the UTF-8 encoded bytes of concatenated strings.
+     */
     public static InputStream fromStringsToInputStream( String...  str )
     {
         if( str.length == 1 )    // To save CPU
@@ -714,6 +891,14 @@ public final class UtilIO
     // Meanwhile read can be done from local or meote files, write is only local
     //------------------------------------------------------------------------//
 
+    /**
+     * Creates a new FileWriter instance for writing files.
+     * <p>
+     * The FileWriter provides a fluent API for configuring and writing files.
+     * Use methods like setFile(), setCharset(), and then append() or replace().
+     *
+     * @return A new FileWriter instance.
+     */
     public static FileWriter newFileWriter()
     {
         return new FileWriter();
@@ -869,20 +1054,48 @@ public final class UtilIO
             Files.delete( file.toPath() );    // Removes the folder itself
     }
 
+    /**
+     * Deletes files within a folder that match the specified filter.
+     * <p>
+     * When {@code bSubFolders} is {@code true}, the method recursively enters all
+     * subdirectories (regardless of the filter) and deletes matching files within them.
+     * Subdirectories themselves are not deleted.
+     * </p>
+     *
+     * @param folder      The folder to process. Must exist and be a directory.
+     * @param filter      A filter to select which files to delete. If {@code null}, all files are deleted.
+     * @param bSubFolders If {@code true}, recursively process subdirectories.
+     * @throws IOException If folder is null, does not exist, is not a directory,
+     *                     cannot be listed, or if any file deletion fails.
+     */
     public static void delete( File folder, FileFilter filter, boolean bSubFolders ) throws IOException
     {
+        if( folder == null )
+            throw new IOException( "Folder cannot be null" );
+
         if( ! folder.exists() )
-            return;
+            throw new IOException( folder + ": does not exist" );
 
         if( ! folder.isDirectory() )
-            throw new IOException( folder +": is not a folder" );
+            throw new IOException( folder + ": is not a folder" );
 
-        if( bSubFolders )
-            throw new IOException( "Not yet implemented" );
-        // TODO: add the code needed for the option bSubFolders
+        File[] files = folder.listFiles();
 
-        for( File f : folder.listFiles( filter ) )
-            f.delete();
+        if( files == null )
+            throw new IOException( folder + ": unable to list files (I/O error or access denied)" );
+
+        for( File f : files )
+        {
+            if( f.isDirectory() )
+            {
+                if( bSubFolders )
+                    delete( f, filter, true );
+            }
+            else if( filter == null || filter.accept( f ) )
+            {
+                Files.delete( f.toPath() );
+            }
+        }
     }
 
     /**
@@ -1055,6 +1268,17 @@ public final class UtilIO
         return lst;
     }
 
+    /**
+     * Replaces a single file macro with its actual path value.
+     * <p>
+     * Ensures proper path separator between macro replacement and path suffix.
+     * Macros are case-sensitive. Multiple occurrences of the same macro are replaced.
+     *
+     * @param sPath The path containing the macro.
+     * @param sMacro The macro string (e.g., "{*home*}") to replace.
+     * @param sNew The replacement path.
+     * @return The path with macro(s) replaced.
+     */
     private static String replaceFileMacro( String sPath, String sMacro, String sNew )
     {
         if( sPath.equals( sMacro ) )    // Do not use equalsIgnoreCase because macros are case sensistive
@@ -1073,6 +1297,14 @@ public final class UtilIO
         return sPath;
     }
 
+    /**
+     * Extracts the parent directory path up to the first glob pattern.
+     * <p>
+     * Stops traversal when a directory component contains glob syntax characters.
+     *
+     * @param sPath The path to extract parent directory from.
+     * @return The parent directory path before the first glob pattern.
+     */
     private static String getFoldersUntilGlob( String sPath )
     {
         List<String> lstDirs = UtilIO.splitByFolder( sPath );
@@ -1115,51 +1347,6 @@ public final class UtilIO
         return (UtilComm.getFileProtocol( str ) == null) ? new File( str ).toURI()    // When no protocol is declared, "file://" is assumed
                                                          : URI.create( str );
     }
-
-    //------------------------------------------------------------------------//
-    // INNER CLASS: FileReader
-    // Thread safe when a new instance is created by user at run-time
-    //------------------------------------------------------------------------//
-// NEXT: terminarlo algún día
-//    public final static class UriReader
-//    {
-//        private URI     uri     = null;
-//        private Charset charset = Charset.defaultCharset();
-//
-//        private FileReader()    // Only accesible from this class
-//        {
-//        }
-//
-//        //------------------------------------------------------------------------//
-//
-//        public FileReader fromURI( String str )
-//        {
-//            uri = toURI( str );
-//            return this;
-//        }
-//
-//        public FileReader fromURI( File file  )
-//        {
-//            uri = file.toURI();
-//            return this;
-//        }
-//
-//        public FileReader fromURI( URI u )
-//        {
-//            uri = u;
-//            return this;
-//        }
-//
-//        public String asText()
-//        {
-//
-//        }
-//
-//        public byte[] asBinary()
-//        {
-//
-//        }
-//    }
 
     //------------------------------------------------------------------------//
     // INNER CLASS: FileWriter

@@ -27,9 +27,10 @@ import java.lang.reflect.InvocationTargetException;
 public final class UtilType
 {
     /**
+     * Returns an instance of Double or NaN if received Object is not a number.
      *
-     * @param n the value of n
-     * @return
+     * @param n the object to convert.
+     * @return An instance of Double or NaN if received Object is not a number.
      */
     public static Double toDouble( Object n )
     {
@@ -44,9 +45,10 @@ public final class UtilType
     }
 
     /**
+     * Returns an instance of Float or NaN if received Object is not a number.
      *
-     * @param n the value of n
-     * @return
+     * @param n the object to convert.
+     * @return An instance of Float or NaN if received Object is not a number.
      */
     public static Float toFloat( Object n )
     {
@@ -61,9 +63,10 @@ public final class UtilType
     }
 
     /**
+     * Returns an instance of Long or NaN if received Object is not a number.
      *
-     * @param n the value of n
-     * @return the long
+     * @param n the object to convert.
+     * @return An instance of Long or NaN if received Object is not a number.
      */
     public static Long toLong( Object n )
     {
@@ -78,9 +81,10 @@ public final class UtilType
     }
 
     /**
+     * Returns an instance of Integer or NaN if received Object is not a number.
      *
-     * @param n the value of n
-     * @return the int
+     * @param n the object to convert.
+     * @return An instance of Integer or NaN if received Object is not a number.
      */
     public static Integer toInteger( Object n )
     {
@@ -125,6 +129,46 @@ public final class UtilType
         }
 
         throw new MingleException( "Invalid boolean \""+ value +'\"' );
+    }
+
+    /**
+     * Determines if a value is "truthy" according to Une semantics.
+     * <p>
+     * Falsy values:
+     * <ul>
+     *   <li>null</li>
+     *   <li>Boolean FALSE</li>
+     *   <li>Number 0 (zero)</li>
+     *   <li>Empty String ("")</li>
+     *   <li>Empty list</li>
+     *   <li>Empty pair</li>
+     * </ul>
+     * All other values are truthy.
+     *
+     * @param value The value to test.
+     * @return true if value is truthy, false if falsy.
+     */
+    public static boolean isTruthy( Object value )
+    {
+        if( value == null )
+            return false;
+
+        if( value instanceof Boolean )
+            return (Boolean) value;
+
+        if( value instanceof Number )
+            return ((Number) value).floatValue() != 0.0f;
+
+        if( value instanceof String )
+            return ! ((String) value).isEmpty();
+
+        if( value instanceof list )
+            return ! ((list) value).isEmpty();
+
+        if( value instanceof pair )
+            return ! ((pair) value).isEmpty();
+
+        return true;    // All other values (date, time, other objects) are truthy
     }
 
     public static <T> T[] convertArray( Object[] ao, Class<T> type )

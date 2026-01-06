@@ -114,6 +114,7 @@ public final class Stick
         // These are also nedded here (besides Main.java) because this class
         // can be instatiated directly (without passing it by Main.java)
 
+        UtilSys.setConfig( config );
         UtilSys.setLogger( "stick", config );
 
         // Creates and assigns a SLF4J Provider to redirect SLF4J logs to Mingle default Logger (I also removed the SLF4J JAR from the Stick project)
@@ -310,7 +311,7 @@ public final class Stick
             nDownTime = (nDownTime < 1000 ? 1000 : nDownTime);
 
             if( deviMgr.named( sDownDevice ) != null )
-                UtilSys.executeWithDelay( getClass().getName(), nDownTime, nDownTime, () -> checkDowntimedDevices( sDownDevice ) );
+                UtilSys.executeWithDelay( null, nDownTime, nDownTime, () -> checkDowntimedDevices( sDownDevice ) );
             else
                 log( ILogger.Level.WARNING, '"'+ sDownDevice +"\" device does not exist; downtimed task not initiated" );
         }
@@ -655,7 +656,7 @@ public final class Stick
         srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped
 
         say( "<<<<<<< Stick finished >>>>>>>" );
-        
+
         return this;
     }
 
@@ -913,7 +914,8 @@ public final class Stick
 
     //----------------------------------------------------------------------------//
     // INNER CLASS
-    // This is passed to the Communcations Manager to process incoming requests.
+    // This is passed to the Communcations Manager to process incoming messages
+    // from other ExEns.
     //---------------------------------------------------------------------------//
 
     /**
@@ -969,18 +971,18 @@ public final class Stick
                 client.send( ExEnComm.asError( "Error in connection:"+ exc.getMessage() ).toString() );
         }
 
-// TODO: quitar este synchronized y hacerlo con Executor(s)
-//       PROMPT:
-//       Inner Class 'private final class ServerListener implements INetServer.IListener' in class @stick/src/com/peyrona/mingle/stick/Stick.java. Its methods are invoked from a Socket-Server. Therefore many
-//       socket clients can make the same request almost at the same time, triggering the same Inner Class method (e.g. 'onMessage(...)') that can take long time to process.
-//       I need to know if current implementation can handle these sutuations gracefully and if not I want to know what to do to achieve it.
-
         @Override
-        public synchronized void onMessage( INetServer origin, INetClient client, String message )
+        public void onMessage( INetServer origin, INetClient client, String message )
         {
             if( gridMgr.isDeaf )
                 return;
 
+            UtilSys.execute( getClass().getSimpleName() +":onMessage:"+ message,
+                             () -> processMsg( origin, client, message ) );
+        }
+
+        private void processMsg( INetServer origin, INetClient client, String message )
+        {
             if( isInfoLoggable )
                 log( ILogger.Level.INFO, "Arrived message ["+ message +"] received from ["+ origin +"] to ["+ client +']' );
 
@@ -994,12 +996,12 @@ public final class Stick
                         client.send( new ExEnComm( ExEnComm.Request.Listed, all( (String[]) null ) ).toString() );
                         break;
 
-                    case Add:
+                    case Add:      // Another ExEn or tool is informing that a device was added in a remote ExEn
                         _add_( in );
                         break;
 
-                    case Remove:
-                        _remove_( in, client );
+                    case Remove:   // Another ExEn or tool is informing that a device was removed from a remote ExEn
+                        _remove_( in );
                         break;
 
                     case Read:       // Another ExEn or tool is requesting to read a device's value (JSON -> { "Read": sDeviceName })
@@ -1042,33 +1044,18 @@ public final class Stick
 
         private void _add_( ExEnComm comm )
         {
-            List<ICommand> lstAdded = new ArrayList<>();
-            List<ICommand> lstAll   = comm.getCommands();
+            List<ICommand> lst = sortByType( comm.getCommands(), false );
 
-            for( ICommand cmd : sortByType( lstAll, false ) )    // Java compiler optimizes for-each loops by transforming them into equivalent loops using iterators ('sortByType' is invoked only once)
-            {
-                if( lstAdded.add( cmd ) )
-                    netwMgr.broadcast( new ExEnComm( ExEnComm.Request.Added, cmd ) );
-            }
+            for( ICommand cmd : lst )
+                Stick.this.add( cmd );
         }
 
-        private void _remove_( ExEnComm comm, INetClient origin )
+        private void _remove_( ExEnComm comm )
         {
-            List<ICommand> lstDeleted = new ArrayList<>();
-            List<ICommand> lstErrors  = new ArrayList<>();
+            List<ICommand> lst = sortByType( comm.getCommands(), true );
 
-            for( ICommand cmd : sortByType( comm.getCommands(), true ) )
-            {
-                if( remove( cmd ) )  lstDeleted.add( cmd );                   // Stick:remove(...) pauses the bus
-                else                 lstErrors.add(  cmd );
-            }
-
-            netwMgr.broadcast( new ExEnComm( ExEnComm.Request.Removed, lstDeleted.toArray( ICommand[]::new ) ) );
-
-            if( ! lstErrors.isEmpty() )
-            {
-                origin.send( new ExEnComm( ExEnComm.Request.ErrorDeleting, lstErrors.toArray( ICommand[]::new ) ).toString() );       // Only to the requester
-            }
+            for( ICommand cmd : lst )
+                Stick.this.remove( cmd );
         }
 
         private void _postRequest_( ExEnComm comm, INetClient origin )

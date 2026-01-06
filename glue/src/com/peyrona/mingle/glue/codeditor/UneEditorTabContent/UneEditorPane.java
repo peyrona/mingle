@@ -429,7 +429,8 @@ public final class UneEditorPane extends RTextScrollPane
 
     public UneEditorPane setCaretOffset( int pos )
     {
-        rsta.setCaretPosition( UtilUnit.setBetween( 0, pos, rsta.getText().length() - 1 ) );
+        if( UtilStr.isNotEmpty( rsta.getText() ) )
+            rsta.setCaretPosition( UtilUnit.setBetween( 0, pos, rsta.getText().length() - 1 ) );
 
         return this;
     }

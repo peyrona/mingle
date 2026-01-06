@@ -9,16 +9,14 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * This class is what is usually called the "Logical Twin": a computerized representation
- * of the real world. Both worlds are always synchronized.
+ * Manages all devices in the runtime environment.
  * <p>
- * Implementation note: CIL lib (the one that contains the commands implementations) holds
- * all devices and these have to handle following messages: MsgDeviceChanged and MsgChangeActuator.
- * I tried to move to here this responsibilities (trying to keep the development of CILs as simple as
- * possible), but I've found that it fits better and easier to put MsgDeviceChanged in Sensor.java
- * and MsgChangeActuator in Actuator.java.
+ * This class provides a "Logical Twin": a computerized representation
+ * of the real world that is always synchronized with it.
+ * Supports device groups and group-based queries.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -27,6 +25,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class   DeviceManager
       extends BaseManager<IDevice>
 {
+    /**
+     * Creates a new DeviceManager instance.
+     *
+     * @param runtime The runtime environment for this manager.
+     */
     DeviceManager( IRuntime runtime )
     {
         super( runtime );
@@ -46,6 +49,12 @@ final class   DeviceManager
         super.add( new RemoteDevice( name ) );
     }
 
+    /**
+     * Checks if any device belongs to the specified group.
+     *
+     * @param name The group name to check.
+     * @return true if at least one device has this group name; false otherwise.
+     */
     boolean isGroup( String name )
     {
         if( UtilStr.isEmpty( name ) )
@@ -70,6 +79,12 @@ final class   DeviceManager
         return found.get();
     }
 
+    /**
+     * Returns all devices that belong to ANY of the specified groups.
+     *
+     * @param group One or more group names to filter devices.
+     * @return A set of devices belonging to at least one of the specified groups, or null if no groups provided.
+     */
     Set<IDevice> getMembersOf( String... group )
     {
         if( UtilColls.isEmpty( group ) )
@@ -97,6 +112,12 @@ final class   DeviceManager
         return toReturn;
     }
 
+    /**
+     * Returns all devices that belong to ANY of the specified groups.
+     *
+     * @param group One or more group names to filter devices.
+     * @return A set of devices belonging to at least one of the specified groups, or null if no groups provided.
+     */
     Set<IDevice> getInAnyGroup( String... group )
     {
         if( UtilColls.isEmpty( group ) )
@@ -126,6 +147,12 @@ final class   DeviceManager
         return toReturn;
     }
 
+    /**
+     * Returns all devices that belong to ALL of the specified groups.
+     *
+     * @param group One or more group names to filter devices.
+     * @return A set of devices belonging to all of the specified groups (empty set if no device matches all groups).
+     */
     Set<IDevice> getInAllGroups( String... group )
     {
         Set<IDevice> toReturn = new HashSet<>();
@@ -169,8 +196,8 @@ final class   DeviceManager
     //------------------------------------------------------------------------//
     private static final class RemoteDevice implements IDevice
     {
-        private final String name;
-        private       Object value = null;
+        private final String                  name;
+        private final AtomicReference<Object> value = new AtomicReference<>( null );
 
         RemoteDevice( String sName )
         {
@@ -198,13 +225,13 @@ final class   DeviceManager
         @Override
         public Object value()
         {
-            return value;
+            return value.get();
         }
 
         @Override
         public boolean value( Object newValue )
         {
-            value = newValue;
+            value.set( newValue );
             return true;
         }
 

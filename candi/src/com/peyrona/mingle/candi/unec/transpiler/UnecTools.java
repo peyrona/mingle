@@ -161,7 +161,7 @@ public final class UnecTools
                 "\t[; ...]]");
 
         map.put("include",
-                "INCLUDE \"<URI> [*|**]\" [; ...]");
+                "INCLUDE \"<URI> [*|**]\" [USE <name> [, ...] AS <literal> [, ...]]");
 
         map.put("rule",
                 "[RULE <name>]\n" +

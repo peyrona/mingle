@@ -11,6 +11,15 @@ import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
+/**
+ * Thread-safe map where each key maps to a list of values.
+ * <p>
+ * This class wraps a {@code ConcurrentHashMap<K, List<V>>} and provides convenience
+ * methods for managing one-to-many relationships. All operations are thread-safe.
+ *
+ * @param <K> the type of keys maintained by this map
+ * @param <V> the type of values in the lists
+ */
 public class OneToMany<K,V>
 {
     private final ConcurrentHashMap<K, List<V>> map;    // Internal ConcurrentHashMap to store key-list mappings
@@ -161,6 +170,12 @@ public class OneToMany<K,V>
         map.clear();
     }
 
+    /**
+     * Finds the first key that contains the specified value in its associated list.
+     *
+     * @param value the value to search for
+     * @return the first key whose list contains the value, or null if not found
+     */
     public K getKeyForValue( V value )
     {
         for( Map.Entry<K,List<V>> entry : map.entrySet() )
@@ -172,6 +187,16 @@ public class OneToMany<K,V>
         return null;
     }
 
+    /**
+     * Returns a Set view of the mappings contained in this map.
+     * <p>
+     * The set is backed by the map, so changes to the map are reflected in the set,
+     * and vice-versa. The set supports element removal, which removes the corresponding
+     * mapping from the map, via Iterator.remove, Set.remove, removeAll, retainAll, and
+     * clear operations. It does not support the add or addAll operations.
+     *
+     * @return a set view of the mappings contained in this map
+     */
     public Set<Entry<K,List<V>>> entrySet()
     {
         return map.entrySet();

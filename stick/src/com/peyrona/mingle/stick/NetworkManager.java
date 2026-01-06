@@ -102,6 +102,9 @@ final class NetworkManager
         }
     }
 
+    /**
+     * Stops this manager.
+     */
     synchronized void stop()
     {
         if( lstServers != null )
@@ -123,13 +126,18 @@ final class NetworkManager
         return (lstServers == null);
     }
 
+    /**
+     * Sends received message to all connected clients.
+     *
+     * @param comm An instance of ExEnComm, which embeds the message to be sent.
+     */
     void broadcast( ExEnComm comm )
     {
         if( lstServers != null )
         {
             String msg = comm.toString();    // Saves CPU in the forEach loop
 
-            UtilSys.execute( getClass().getName(),
+            UtilSys.execute( null,
                              () -> lstServers.forEach( (INetServer server) ->
                                                        server.broadcast( msg ) ) );
         }

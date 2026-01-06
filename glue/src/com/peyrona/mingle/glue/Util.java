@@ -189,7 +189,7 @@ public final class Util
             }
         } );
 
-        UtilSys.execute( Util.class.getName(),
+        UtilSys.execute( Util.class.getSimpleName() +":catchProcessOutput",
                         () ->
                            {
                                try
@@ -219,7 +219,7 @@ public final class Util
         if( proc == null )
             return;
 
-        UtilSys.execute( Util.class.getName(),
+        UtilSys.execute( Util.class.getSimpleName() +":killProcess",
                          () ->
                             {
                                 try

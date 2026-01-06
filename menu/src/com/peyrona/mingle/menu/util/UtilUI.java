@@ -245,4 +245,71 @@ public class UtilUI
         return UtilSys.isNotEmpty( pattern ) &&
                pattern.matches( "^[a-zA-Z0-9_\\-./\\\\*?\\s]+$" );
     }
+
+    //------------------------------------------------------------------------//
+    // FILE INFO METHODS
+
+    /**
+     * Formats a file size in bytes to a human-readable string.
+     * Examples: "1.2 KB", "45 MB", "128 bytes"
+     *
+     * @param bytes The file size in bytes.
+     * @return Human-readable file size string.
+     */
+    public static String formatFileSize( long bytes )
+    {
+        if( bytes < 0 )
+            return "0 bytes";
+
+        if( bytes < 1024 )
+            return bytes + " bytes";
+
+        if( bytes < 1024 * 1024 )
+            return String.format( "%.1f KB", bytes / 1024.0 );
+
+        if( bytes < 1024 * 1024 * 1024 )
+            return String.format( "%.1f MB", bytes / (1024.0 * 1024) );
+
+        return String.format( "%.1f GB", bytes / (1024.0 * 1024 * 1024) );
+    }
+
+    /**
+     * Formats a timestamp to a relative time string.
+     * Examples: "just now", "5 min ago", "2 hours ago", "yesterday", "3 days ago"
+     *
+     * @param timestamp The timestamp in milliseconds.
+     * @return Human-readable relative time string.
+     */
+    public static String formatTimeAgo( long timestamp )
+    {
+        long now  = System.currentTimeMillis();
+        long diff = now - timestamp;
+
+        if( diff < 0 )
+            return "in the future";
+
+        long seconds = diff / 1000;
+        long minutes = seconds / 60;
+        long hours   = minutes / 60;
+        long days    = hours / 24;
+
+        if( seconds < 60 )
+            return "just now";
+
+        if( minutes < 60 )
+            return minutes == 1 ? "1 min ago" : minutes + " min ago";
+
+        if( hours < 24 )
+            return hours == 1 ? "1 hour ago" : hours + " hours ago";
+
+        if( days == 1 )
+            return "yesterday";
+
+        if( days < 7 )
+            return days + " days ago";
+
+        // For older files, show the date
+        java.text.SimpleDateFormat sdf = new java.text.SimpleDateFormat( "MMM d" );
+        return sdf.format( new java.util.Date( timestamp ) );
+    }
 }

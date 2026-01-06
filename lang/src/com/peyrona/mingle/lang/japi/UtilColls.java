@@ -19,31 +19,67 @@ public final class UtilColls
     private UtilColls() {}  // Avoid this class instances creation
     //------------------------------------------------------------------------//
 
+    /**
+     * Checks if collection is not empty (also handles null).
+     *
+     * @param c the collection to check
+     * @return {@code true} if collection is not null and not empty, {@code false} otherwise
+     */
     public static boolean isNotEmpty( Collection c )
     {
         return ((c != null) && (! c.isEmpty()));
     }
 
+    /**
+     * Checks if collection is empty (also handles null).
+     *
+     * @param c the collection to check
+     * @return {@code true} if collection is null or empty, {@code false} otherwise
+     */
     public static boolean isEmpty( Collection c )
     {
         return ((c == null) || c.isEmpty());
     }
 
+    /**
+     * Checks if map is not empty (also handles null).
+     *
+     * @param c the map to check
+     * @return {@code true} if map is not null and not empty, {@code false} otherwise
+     */
     public static boolean isNotEmpty( Map c )
     {
         return ((c != null) && (! c.isEmpty()));
     }
 
+    /**
+     * Checks if map is empty (also handles null).
+     *
+     * @param c the map to check
+     * @return {@code true} if map is null or empty, {@code false} otherwise
+     */
     public static boolean isEmpty( Map c )
     {
         return ((c == null) || c.isEmpty());
     }
 
+    /**
+     * Checks if array is empty (also handles null).
+     *
+     * @param array the array to check
+     * @return {@code true} if array is null or has length 0, {@code false} otherwise
+     */
     public static boolean isEmpty( Object[] array )
     {
         return (array == null) || (array.length == 0);
     }
 
+    /**
+     * Checks if array is not empty (also handles null).
+     *
+     * @param array the array to check
+     * @return {@code true} if array is not null and has at least one element, {@code false} otherwise
+     */
     public static boolean isNotEmpty( Object[] array )
     {
         return ! isEmpty( array );
@@ -52,11 +88,27 @@ public final class UtilColls
     //------------------------------------------------------------------------//
     // CONVERTING BACK AND FORTH
 
+    /**
+     * Converts array to string using comma separator.
+     *
+     * @param array the array to convert
+     * @return String representation of array with comma separator
+     */
     public static String toString( Object[] array )
     {
         return toString( array, ',' );
     }
 
+    /**
+     * Converts array to string using specified separator.
+     * <p>
+     * String items are wrapped in double quotes, null items as "\"\"",
+     * and numeric items without quotes.
+     *
+     * @param array     the array to convert
+     * @param separator the character to use as separator
+     * @return String representation of array with specified separator
+     */
     public static String toString( Object[] array, char separator )
     {
         if( array == null )
@@ -93,6 +145,13 @@ public final class UtilColls
         return sb.toString();
     }
 
+    /**
+     * Converts string to array using comma separator.
+     *
+     * @param str the string to split
+     * @return Array of objects parsed from string
+     * @see #toArray(java.lang.String, char)
+     */
     public static Object[] toArray( String str )
     {
         return toArray( str, ',' );
@@ -124,6 +183,12 @@ public final class UtilColls
         return ao;
     }
 
+    /**
+     * Converts array of objects to array of strings.
+     *
+     * @param ao the object array to convert
+     * @return String array representation, or null if ao is null
+     */
     public static String[] toArrayOfStr( Object[] ao )
     {
         if( ao == null )
@@ -137,6 +202,13 @@ public final class UtilColls
         return as;
     }
 
+    /**
+     * Converts map to string using comma and equals separators.
+     *
+     * @param map the map to convert
+     * @return String representation with format "key1=value1,key2=value2,..."
+     * @see #toString(java.util.Map, char, char)
+     */
     public static String toString( Map map )
     {
         return toString( map, ',', '=' );
@@ -180,21 +252,48 @@ public final class UtilColls
         return sb.toString();
     }
 
+    /**
+     * Converts list to string using comma separator.
+     *
+     * @param list the list to convert
+     * @return String representation of list
+     * @see #toString(java.lang.Object[])
+     */
     public static String toString( List list )
     {
         return toString( list.toArray() );
     }
 
+    /**
+     * Converts list to string using specified separator.
+     *
+     * @param list the list to convert
+     * @param sep  the character to use as separator
+     * @return String representation of list
+     */
     public static String toString( List list, char sep )
     {
         return toString( list.toArray(), sep );
     }
 
+    /**
+     * Converts string to list using comma separator.
+     *
+     * @param str the string to split
+     * @return List of objects parsed from string
+     */
     public static List toList( String str )
     {
         return toList( toArray( str ) );
     }
 
+    /**
+     * Converts string to list using specified separator.
+     *
+     * @param str the string to split
+     * @param sep the character to use as separator
+     * @return List of objects parsed from string
+     */
     public static List toList( String str, char sep )
     {
         return toList( toArray( str, sep ) );
@@ -359,6 +458,13 @@ public final class UtilColls
         return false;
     }
 
+    /**
+     * Checks if all items in collection satisfy the predicate.
+     *
+     * @param list      the collection to check
+     * @param condition the predicate to test each item
+     * @return {@code true} if all items satisfy the condition, {@code false} otherwise
+     */
     public static boolean areAll( Collection list, Predicate condition )
     {
         for( Object item : list )
@@ -370,6 +476,13 @@ public final class UtilColls
         return true;
     }
 
+    /**
+     * Counts items in collection that satisfy the predicate.
+     *
+     * @param list      the collection to count items in
+     * @param condition the predicate to test each item
+     * @return Number of items that satisfy the condition
+     */
     public static int count( Collection list, Predicate condition )
     {
         int n = 0;
@@ -383,6 +496,13 @@ public final class UtilColls
         return n;
     }
 
+    /**
+     * Removes the last item from the list.
+     *
+     * @param <T>  the type of elements in the list
+     * @param list the list to modify
+     * @return The modified list (same instance)
+     */
     public static <T> List<T> removeTail( List<T> list )
     {
         if( ! list.isEmpty() )
@@ -391,6 +511,14 @@ public final class UtilColls
         return list;
     }
 
+    /**
+     * Removes the last item from the list if it satisfies the predicate.
+     *
+     * @param <T>       the type of elements in the list
+     * @param list      the list to modify
+     * @param condition the predicate to test against the last item
+     * @return The modified list (same instance)
+     */
     public static <T> List<T> removeTailIf( List<T> list, Predicate<T> condition )
     {
         if( (! list.isEmpty()) && (condition.test( getAt( list, -1 ) )) )
@@ -418,6 +546,14 @@ public final class UtilColls
         return null;
     }
 
+    /**
+     * Returns the index of the first item in list that matches the predicate.
+     *
+     * @param <T>       the type of elements in the list
+     * @param list      the list to search
+     * @param condition the predicate to test each item
+     * @return The index of the first matching item, or -1 if no match found
+     */
     public static <T> int findIndex( List<T> list, Predicate<T> condition )
     {
         for( int n = 0; n < list.size(); n++ )
@@ -429,6 +565,14 @@ public final class UtilColls
         return -1;
     }
 
+    /**
+     * Finds all duplicate items in the collection.
+     *
+     * @param <T>  the type of elements in the collection
+     * @param coll the collection to search for duplicates
+     * @return List of items that appear more than once (each duplicate listed once)
+     * @throws IllegalArgumentException if coll is a Map
+     */
     public static <T> List findDuplicates( Collection<T> coll )
     {
         if( (coll == null) || (coll.size() < 2) )
@@ -454,6 +598,15 @@ public final class UtilColls
         return lstDup;
     }
 
+    /**
+     * Sorts the array in ascending order.
+     * <p>
+     * Array elements must implement Comparable interface.
+     *
+     * @param <T>   the type of elements in the array
+     * @param array the array to sort (modified in place)
+     * @return The sorted array (same instance)
+     */
     public static <T> T[] sort( T[] array )
     {
         if( isNotEmpty( array ) )

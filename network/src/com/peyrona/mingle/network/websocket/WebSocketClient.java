@@ -47,7 +47,7 @@ public final class WebSocketClient extends BaseClient4IP
     //------------------------------------------------------------------------//
 
     @Override
-    public INetClient connect( String sCfgAsJSON )
+    public synchronized INetClient connect( String sCfgAsJSON )
     {
         // Avoid re-connecting if already connected
         if( isConnected() ) return this;
@@ -130,7 +130,7 @@ public final class WebSocketClient extends BaseClient4IP
     }
 
     @Override
-    public INetClient disconnect()
+    public synchronized INetClient disconnect()
     {
         isStopping.set( true );
         cleanupResources();

@@ -85,7 +85,7 @@ public final class ExEnClient
         return true;
     }
 
-    public void disconnect()
+    public synchronized void disconnect()
     {
         if( netClient != null )
         {

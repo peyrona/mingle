@@ -63,10 +63,10 @@ public final class HttpClient
         {
             if( (int) get( KEY_TIME ) >= 1000 )
             {
-                timer = UtilSys.executeAtRate( getClass().getName(),
-                                               getLong( KEY_TIME ),     // 'interval' must also be the initial delay
-                                               getLong( KEY_TIME ),
-                                               () -> read() );
+                timer = UtilSys.executeWithDelay( getClass().getName(),
+                                                  getLong( KEY_TIME ),     // 'interval' must also be the initial delay
+                                                  getLong( KEY_TIME ),
+                                                  () -> read() );
             }
         }
     }

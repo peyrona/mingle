@@ -12,6 +12,13 @@ import java.util.List;
  */
 public interface IConfig
 {
+    /**
+     * Loads configuration from the specified URI.
+     *
+     * @param sUri The URI of the configuration file to load (e.g., "file:///path/to/config.json" or "http://server/config.json").
+     * @return Itself.
+     * @throws IOException If an I/O error occurs while loading the configuration.
+     */
     IConfig load(String sUri) throws IOException;
 
     /**
@@ -91,6 +98,11 @@ public interface IConfig
      */
     IXprEval newXprEval();
 
+    /**
+     * Returns the configuration as a JSON string.
+     *
+     * @return The configuration encoded as a JSON string.
+     */
     String toStrJSON();
 
     //------------------------------------------------------------------------//
@@ -105,7 +117,17 @@ public interface IConfig
      */
     List<GridNode> getGridNodes();
 
+    /**
+     * Checks if the grid is in "deaf" mode, meaning it won't send or receive messages from other grid nodes.
+     *
+     * @return {@code true} if the grid is deaf, {@code false} otherwise.
+     */
     boolean isGridDeaf();
 
+    /**
+     * Returns the reconnection interval for grid nodes in seconds.
+     *
+     * @return The number of seconds to wait between reconnection attempts to grid nodes.
+     */
     int getGridReconectInterval();
 }

@@ -71,7 +71,7 @@ public final class SystemMonitor
         }
 
         if( timer == null )
-            timer = UtilSys.executeAtRate( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
+            timer = UtilSys.executeWithDelay( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
     }
 
     @Override

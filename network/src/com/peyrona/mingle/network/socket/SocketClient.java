@@ -121,7 +121,7 @@ public final class SocketClient
     }
 
     @Override
-    public boolean isConnected()
+    public synchronized boolean isConnected()
     {
         return (client != null) && (! client.isClosed());   // client.isConnected() returns always true after being connected, same with .isBound()
     }
@@ -152,7 +152,7 @@ public final class SocketClient
             client = socket;
             input  = new BufferedReader( new InputStreamReader( client.getInputStream(), StandardCharsets.UTF_8 ) );
             output = new PrintWriter( client.getOutputStream(), true );
-            future = UtilSys.execute( "socketclient-reader", new ThreadReader() );
+            future = UtilSys.execute( "network:socketclient-reader", new ThreadReader() );
 
             forEachListener( l -> ((INetClient.IListener) l).onConnected( SocketClient.this ) );
             return true;

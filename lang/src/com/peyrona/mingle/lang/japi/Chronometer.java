@@ -17,10 +17,13 @@ public final class Chronometer
   // Following line will be thread safe for 64 bits CPUs but not for 32 bits CPUs -->
   // private volatile long time = System.currentTimeMillis();
 
-     private long time;
+    private long time;
 
     //----------------------------------------------------------------------------//
 
+    /**
+     * Class constructor.
+     */
     public Chronometer()
     {
         synchronized( this )

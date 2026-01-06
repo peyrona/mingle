@@ -29,12 +29,7 @@
 
  **How to install Mingle?**
 
-> 1. Download lastest release (mingle.n.n.n.zip) and unzip it.
->
-> 2. If you have Java 11 or above installed in your PC, you are done.
->
->    Otherwise, execute the appropriate 'get-java-*' script (inside 'etc' folder).<br>
->    **Warning**: the script and the user need to have the right permissions to execute it.
+> Download lastest release (mingle.n.n.n.zip) and unzip it: that is all.
 
  **What is the easiest way to start?**
 

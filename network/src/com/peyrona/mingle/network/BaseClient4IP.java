@@ -27,13 +27,13 @@ import javax.net.ssl.SSLContext;
  */
 public abstract class BaseClient4IP extends BaseClient
 {
-    private String  sHost;
-    private int     nPort;
-    private int     nTimeout;
-    private File    fCert;    // SSL certificate file
-    private File    fKey;     // SSL key file
-    private char[]  acPass;   // SSL certificate password
-    private boolean bSSL = false;
+    private volatile String  sHost;
+    private volatile int     nPort;
+    private volatile int     nTimeout;
+    private volatile File    fCert;    // SSL certificate file
+    private volatile File    fKey;     // SSL key file
+    private volatile char[]  acPass;   // SSL certificate password
+    private volatile boolean bSSL = false;
 
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE

@@ -12,15 +12,24 @@ import java.net.URISyntaxException;
 import java.util.Arrays;
 
 /**
+ * Utility class for Java reflection operations.
+ * <p>
+ * Provides methods for introspecting classes, creating instances dynamically,
+ * invoking methods, and accessing fields using reflection.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class UtilReflect
 {
+    /**
+     * Checks if all instances are instances of or assignable to specified class.
+     *
+     * @param clazz     The class to check against
+     * @param instances Instances to verify
+     * @return {@code true} if all instances are assignable to clazz, {@code false} otherwise
+     */
     public static boolean areAll( Class<?> clazz, Object... instances )
     {
         if( UtilColls.isEmpty( instances ) )
@@ -33,6 +42,12 @@ public final class UtilReflect
         return true;
     }
 
+    /**
+     * Checks if all instances are of the same exact class.
+     *
+     * @param instances Objects to verify
+     * @return {@code true} if all instances are of the same class, {@code false} otherwise
+     */
     public static boolean areAllSame( Object... instances )
     {
         if( UtilColls.isEmpty( instances ) )
@@ -251,12 +266,16 @@ public final class UtilReflect
     }
 
     /**
+     * Invokes method on object with parameters.
+     * <p>
+     * Handles array parameter expansion when method signature expects
+     * an array but receives individual arguments.
      *
-     *
-     * @param obj
-     * @param method
-     * @param param
-     * @return
+     * @param obj    The object to invoke method on
+     * @param method The method to invoke
+     * @param param  Arguments to pass to method (can be individual args or array)
+     * @return The return value from method invocation
+     * @throws MingleException if invocation fails
      */
     public static Object invoke( Object obj, Method method, Object... param )
     {

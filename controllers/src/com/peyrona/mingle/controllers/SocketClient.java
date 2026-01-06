@@ -24,7 +24,7 @@ public final class SocketClient
     private static final String KEY_PORT   = "port";
     private static final String KEY_USE_WS = "websocket";
 
-    private INetClient client = null;
+    private volatile INetClient client = null;
 
     //------------------------------------------------------------------------//
 

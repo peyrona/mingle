@@ -13,10 +13,9 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
+ * Utility methods related with Strings.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
@@ -35,7 +34,7 @@ public class UtilStr
 
     //----------------------------------------------------------------------------//
 
-    /**
+        /**
      * Checks if passed String is null, has zero length or all its chars are
      * spaces.
      *
@@ -328,12 +327,12 @@ public class UtilStr
     }
 
     /**
-     * Splits passed string cutting it in chuncks of specified length.
+     * Splits text into strings of specified length.
      *
-     * @param text
-     * @param len
-     * @param def
-     * @return
+     * @param text The text to split.
+     * @param len Maximum length of each resulting string.
+     * @param def Default string to return if text is null.
+     * @return List of strings with specified maximum length.
      */
     public static List<String> splitByLength( String text, int len, String def )
     {

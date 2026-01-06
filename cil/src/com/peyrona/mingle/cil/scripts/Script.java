@@ -41,8 +41,8 @@ public final class      Script
     private final boolean    isInline;          // This inf. is not part of the language, it is provided by the transpiler (True when Une source code FROM clause contents (SCRIPT command) is in between brackets ({...}))
     private final String     call;              // Function or method to call (invoke) inside FROM (can be null for some languages (not for Java))
     private final String[]   asFrom;            // URI(s) or Code
-    private ICandi.ILanguage langMgr       = null;   // Language manager
-    private ICandi.IPrepared prepared      = null;
+    private ICandi.ILanguage langMgr  = null;   // Language manager
+    private ICandi.IPrepared prepared = null;
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
@@ -122,7 +122,7 @@ public final class      Script
         // Stick (which is a higher level entity and has a broader vision) is responsible for invoking ::execute()
 
         if( isOnStart && canExecute() )
-            getRuntime().bus().post(new MsgExecute( name(), false ) );
+            getRuntime().bus().post( new MsgExecute( name(), false ) );
     }
 
     @Override
@@ -155,7 +155,7 @@ public final class      Script
         if( ! canExecute() )
             return;
 
-        UtilSys.execute( getClass().getSimpleName() + name(),
+        UtilSys.execute( getClass().getSimpleName() +':'+ name(),
                             () ->
                             {
                                 try
@@ -213,36 +213,7 @@ public final class      Script
     {
         assert isStarted();
 
-        if( prepared == null )
-            getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Script '"+ name() +"' (using '"+ langName +"') can not be executed because it has errors." ) );
-
         return (prepared != null);
-    }
-
-    /**
-     * Determines if the script is allowed to execute based on language type and configuration.
-     *
-     * Une scripts are always allowed. For other languages, checks the 'allow_native_code'
-     * configuration flag. Scripts used by Drivers are also allowed regardless of the flag.
-     *
-     * @return true if execution is allowed, false otherwise
-     */
-    private boolean isAllowed2Exec()
-    {
-        if( "une".equalsIgnoreCase( langName ) )    // Une is always allowed (faster)
-            return true;
-
-        if( getRuntime().getFromConfig( "exen", "allow_native_code", true ) )   // Config allows it
-            return true;
-
-        // Check if the script is used by a Driver: this is allowed
-        for( ICommand cmd : getRuntime().all( "drivers" ) )
-        {
-            if( ((IDriver) cmd).getScriptName().equals( name() ) );
-                return true;
-        }
-
-        return false;
     }
 
     /**
@@ -263,9 +234,24 @@ public final class      Script
         if( prepared != null )
             return;
 
-        if( ! isAllowed2Exec() )
+        boolean isAllowed = "une".equalsIgnoreCase( langName ) ||   // Une is always allowed
+                            getRuntime().getFromConfig( "exen", "allow_native_code", true );
+
+        if( ! isAllowed )
+        {   // Check if the script is used by a Driver: this is always allowed
+            for( ICommand cmd : getRuntime().all( "drivers" ) )
+            {
+                if( ((IDriver) cmd).getScriptName().equals( name() ) )
+                {
+                    isAllowed = true;
+                    break;
+                }
+            }
+        }
+
+        if( ! isAllowed )
         {
-            getRuntime().log( ILogger.Level.WARNING, langName +" code is not allowed: 'allow_native_code' flag is 'false'" );
+            getRuntime().log( ILogger.Level.WARNING, "Script '"+ name() +"' (using '"+ langName +"') is not allowed: 'allow_native_code' flag is 'false'" );
             return;
         }
 
@@ -279,7 +265,7 @@ public final class      Script
 
         if( isInline )    // ::asFrom has only one item (the source code) and the code is already compiled and checked that it is error free
         {
-             prepared = new ICandi.IPrepared()
+            prepared = new ICandi.IPrepared()
                             {
                                 @Override
                                 public ICandi.IError[] getErrors()    { return new ICandi.IError[0]; }
@@ -313,11 +299,13 @@ public final class      Script
 
             for( ICandi.IError error : prepared.getErrors() )
             {
-                sb.append( "Error: " ).append( error.message() ).append( '\n' )
+                sb.append( "Error: "   ).append( error.message() ).append( '\n' )
                   .append( "At lin:" ).append( error.line() ).append( ", col:" ).append( error.column() ).append( '\n' );
             }
 
-            getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Source code compilation errors:\n"+ sb.toString() ) );
+            getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Script '"+ name() +"' (using '"+ langName +"') is inoperative because it has errors.\n"+
+                                                                         "Source code compilation errors:\n"+ sb.toString() ) );
+
             prepared = null;
         }
 

@@ -218,7 +218,7 @@ final class EvalByAST
             executor.shutdownExecutor();
     }
 
-    Object eval()
+    synchronized Object eval()
     {
      // This is not needed because it is cheked by NAXE.java -->
      // if( root == null )
@@ -235,6 +235,10 @@ final class EvalByAST
         {
             result = root.eval( operators, functions, mapVars, hasAllVars );
 
+            // Convert to boolean if expression is boolean type and result isn't already Boolean
+            if( isBoolean && (result != null) && ! (result instanceof Boolean) )
+                result = UtilType.isTruthy( result );
+
             if( (result != null) && (onSolved != null) )            // onSolved is allowed to be null when the expression has no futures
                 onSolved.accept( result );
 
@@ -250,13 +254,17 @@ final class EvalByAST
 
                 visitor( root, VISIT_PRE_ORDER, (node) ->     // Order here is not important: -1, 0, 1, will produce same result
                         {
-                                 if( node.isAfter() || node.isWithin() )
-                                     EvalByAST.this.executor.execute( new RunFuture( node ) );
+                            if( node.isAfter() || node.isWithin() )
+                                EvalByAST.this.executor.execute( new RunFuture( node ) );
                         } );
             }
             else                     // If the eval is already initialized...
             {
                 result = root.eval( operators, functions, mapVars, hasAllVars );
+
+                // Convert to boolean if expression is boolean type and result isn't already Boolean
+                if( isBoolean && (result != null) && ! (result instanceof Boolean) )
+                    result = UtilType.isTruthy( result );
 
                 if( result != null )
                 {
@@ -372,7 +380,9 @@ final class EvalByAST
             if( token.isText( Language.SEND_OP ) )
             {
                 ASTNode node = root.right();     // This is a function and will be analized below (in this method)
-                token = (node.isAfter() || node.isWithin()) ? node.left().token() : node.token();
+
+                if( node != null )
+                    token = (node.isAfter() || node.isWithin()) ? node.left().token() : node.token();
             }
             else
             {
@@ -381,7 +391,7 @@ final class EvalByAST
             }
         }
 
-        if( token.isType( XprToken.OPERATOR_UNARY ) )
+        if( token.isType( XprToken.OPERATOR_UNARY ) && token.isText( '!' ) )
             return true;
 
         if( token.isType( XprToken.FUNCTION ) )

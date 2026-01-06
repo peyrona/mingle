@@ -278,10 +278,7 @@ public final class StdXprOps
                         {   @Override
                             protected Boolean eval( Object... args )
                             {
-                                if( areAll( Boolean.class, args ) )
-                                    return getBolL(args) && getBolR(args);
-
-                                throw unsupported( args );
+                                return UtilType.isTruthy( args[0] ) && UtilType.isTruthy( args[1] );
                             }
                         } );
 
@@ -289,10 +286,7 @@ public final class StdXprOps
                         {   @Override
                             protected Boolean eval( Object... args )
                             {
-                                if( areAll( Boolean.class, args ) )
-                                    return getBolL(args) || getBolR(args);
-
-                                throw unsupported( args );
+                                return UtilType.isTruthy( args[0] ) || UtilType.isTruthy( args[1] );
                             }
                         } );
 
@@ -300,15 +294,10 @@ public final class StdXprOps
                         {   @Override
                             protected Boolean eval( Object... args )
                             {
-                                if( areAll( Boolean.class, args ) )
-                                {
-                                    Boolean a = getBolL(args);
-                                    Boolean b = getBolR(args);
+                                boolean a = UtilType.isTruthy( args[0] );
+                                boolean b = UtilType.isTruthy( args[1] );
 
-                                    return (a || b) && (!(a && b));
-                                }
-
-                                throw unsupported( args );
+                                return (a || b) && (!(a && b));
                             }
                         } );
 
@@ -316,10 +305,7 @@ public final class StdXprOps
                         {   @Override
                             protected Boolean eval( Object... args )
                             {
-                                if( isL( Boolean.class, args ) )
-                                    return (! getBolL( args ));
-
-                                throw unsupported( args );
+                                return ! UtilType.isTruthy( args[0] );
                             }
                         } );
 

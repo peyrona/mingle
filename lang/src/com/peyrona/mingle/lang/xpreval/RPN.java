@@ -143,18 +143,21 @@ final class RPN
                 case XprToken.OPERATOR_UNARY:
                     if( tNext != null )
                     {
-                        if( tNext.isType( XprToken.FUNCTION ) )                                     // We need to know the function return type
+                        if( token.isText( '!' ) )
                         {
-                            Class<?> clazz = token.isText( '!' ) ? Boolean.class : Number.class;    // If not "!", the other unaries are: "+" and "-"
-
-                            if( ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( clazz ) )
+                            // With truthy/falsy semantics, '!' can be applied to any value type
+                            if( tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
+                                lstErrors.add( new CodeError( "Invalid unary operator \"!\" for operand \""+ tNext.text() +'"', tNext ) );
+                        }
+                        else if( tNext.isType( XprToken.FUNCTION ) )                                // '+' and '-' unary operators
+                        {
+                            if( ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( Number.class ) )
                                 lstErrors.add( new CodeError( "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext ) );
                         }
                         else
                         {
-                            short nNextType = token.isText( '!' ) ? XprToken.BOOLEAN : XprToken.NUMBER;    // If not "!", the other unaries are: "+" and "-"
-
-                            if( tNext.isNotType( nNextType, XprToken.PARENTH_OPEN, XprToken.VARIABLE ) )
+                            // '+' and '-' unary operators require NUMBER
+                            if( tNext.isNotType( XprToken.NUMBER, XprToken.PARENTH_OPEN, XprToken.VARIABLE ) )
                                 lstErrors.add( new CodeError( "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext ) );
                         }
                     }

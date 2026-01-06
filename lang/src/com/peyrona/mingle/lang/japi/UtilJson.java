@@ -23,6 +23,13 @@ public final class UtilJson
     //------------------------------------------------------------------------//
     // STATICS
 
+    /**
+     * Parses JSON string into JsonValue.
+     *
+     * @param sJSON JSON string to parse
+     * @return Parsed JsonValue, or null if sJSON is empty
+     * @throws MingleException if JSON is malformed
+     */
     public static JsonValue parse( String sJSON )
     {
         if( UtilStr.isEmpty( sJSON ) )
@@ -40,11 +47,25 @@ public final class UtilJson
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Converts JSON string to Une data type.
+     * <p>
+     * Converts JSON values to equivalent Une types (Pair, List, primitives).
+     *
+     * @param s JSON string to convert
+     * @return Une-compatible object (Pair for objects, List for arrays, or primitives)
+     */
     public static Object toUneType( String s )
     {
         return convertJsonValue( Json.parse(s) );
     }
 
+    /**
+     * Converts JsonValue array to Object array.
+     *
+     * @param jv JsonValue to convert (should be array type)
+     * @return Object array with converted elements
+     */
     public static Object[] toArray(JsonValue jv)
     {
         Object[]  array = null;

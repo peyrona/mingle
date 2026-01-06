@@ -11,10 +11,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
+ * Manages SCRIPT instances in the runtime environment.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */

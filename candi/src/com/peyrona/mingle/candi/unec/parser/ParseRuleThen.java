@@ -82,33 +82,6 @@ public class ParseRuleThen extends ParseBase
         return lstActions.toArray( Action[]::new );
     }
 
-    /**
-     * Returns the index in ::lexemes where received expression starts.
-     *
-     * @param expr
-     * @return The index in ::lexemes where received expression starts.
-     */
-    public int getActionStart( String expr )
-    {
-        Action action = null;
-
-        for( Action act : lstActions )
-        {
-            if( UtilStr.contains( act.getTargetName(), expr ) ||
-                UtilStr.contains( act.getValueToSet(), expr ) )
-            {
-                action = act;
-                break;
-            }
-        }
-
-        if( action == null )
-            return 0;
-
-        // TODO: terminarlo
-        return 0;
-    }
-
     public Lexeme getLexemeAt( int ndx )
     {
         return lexemes.get( ndx );

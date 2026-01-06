@@ -49,11 +49,6 @@ import org.eclipse.jetty.websocket.api.WriteCallback;
 public class CommBridge extends WebSocketAdapter
 {
     /**
-     * Maximum allowed message payload size (64 KiB)
-     */
-    private static final int MAX_PAYLOAD_SIZE = 64 * 1024;
-
-    /**
      * Interval for cleaning up dead WebSocket references (minutes)
      */
     private static final int CLEANUP_INTERVAL_MINUTES = 5;
@@ -254,9 +249,7 @@ public class CommBridge extends WebSocketAdapter
         Session session = getSession();
 
         if( session != null )
-        {
             cleanupSession( session, CloseCode.NORMAL_CLOSURE );
-        }
 
         super.onWebSocketClose( statusCode, reason );
     }
@@ -268,8 +261,15 @@ public class CommBridge extends WebSocketAdapter
 
         if( session != null )
         {
-            // WebSocket errors are typically fatal (connection issues, protocol errors)
-            handleFatalError( session, cause );
+            if( cause instanceof TimeoutException )     // Treat timeout as normal termination, not an error
+            {
+                logInfo( "WebSocket idle timeout expired", cause );
+                cleanupSession( session, CloseCode.WEBSOCKET_TIMEOUT );
+            }
+            else   // WebSocket errors are typically fatal (connection issues, protocol errors)
+            {
+                handleFatalError( session, cause );
+            }
         }
 
         super.onWebSocketError( cause );
@@ -715,6 +715,11 @@ public class CommBridge extends WebSocketAdapter
         }
     }
 
+    private static void logInfo( String message, Throwable throwable )
+    {
+        logger.log( ILogger.Level.INFO, throwable, message );
+    }
+
     private static void logWarning( String message, Throwable throwable )
     {
         logger.log( ILogger.Level.WARNING, throwable, message );
@@ -722,10 +727,7 @@ public class CommBridge extends WebSocketAdapter
 
     private static void logError( String message, Throwable throwable )
     {
-        if( throwable instanceof TimeoutException )
-            logger.log( ILogger.Level.INFO  , throwable, message );
-        else
-            logger.log( ILogger.Level.SEVERE, throwable, message );
+        logger.log( ILogger.Level.SEVERE, throwable, message );
     }
 
     /**

@@ -62,7 +62,7 @@ public final class Main
 
                 stick = new Stick( sJSON, config ).start( sName );
             }
-            catch( Throwable exc )
+            catch( Exception exc )
             {
                 String msg = exc.getMessage() +"\nStick can not continue.\n"+ UtilStr.toString( exc );
 

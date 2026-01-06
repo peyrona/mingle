@@ -20,7 +20,7 @@ public interface IDevice extends ICommand
     Map<String,Object> getDriverInit();
 
     /**
-     * Returns current device value or null if device is not yet initilized or there was a
+     * Returns current device value or null if device is not yet initialized or there was a
      * problem (error) retrieving device's value.
      *
      * @return current device value.

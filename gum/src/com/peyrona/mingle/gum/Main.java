@@ -24,7 +24,7 @@ import java.net.UnknownHostException;
 import java.util.List;
 
 /**
- *
+ * Starting Gum class.
  *
  * @author Francisco José Morero Peyrona
  *

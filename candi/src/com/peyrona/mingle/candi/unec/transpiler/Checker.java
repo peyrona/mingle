@@ -1,7 +1,6 @@
 
 package com.peyrona.mingle.candi.unec.transpiler;
 
-import com.peyrona.mingle.candi.IntermediateCodeWriter;
 import com.peyrona.mingle.candi.unec.parser.ParseBase;
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
 import com.peyrona.mingle.candi.unec.parser.ParseDriver;
@@ -254,11 +253,6 @@ final class Checker
 
             if( xpr.getVars().isEmpty() && UtilStr.isEmpty( rule.getName() ) )
                 tuRuleOwner.addError( new CodeError( "WHEN has no devices and RULE has no name: the RULE is useless.", rule.getClauseContents( "when" ).get( 0 ) ) );
-
-            if( xpr.getErrors().isEmpty() && IntermediateCodeWriter.isRequired() )
-            {
-                // TODO: mostrar el IXprEval::intern()  (no olvidar especificar el fnGroupWise)
-            }
         }
     }
 
@@ -473,8 +467,7 @@ final class Checker
         }
         else
         {
-            int    ndx = rule.getThen().getActionStart( sXpr );
-            Lexeme lex = rule.getThen().getLexemeAt( ndx );
+            Lexeme lex = rule.getThen().getLexemeAt( 0 );
 
             tuRuleOwner.addErrors( UnecTools.updateErrorLine( lex.line(), xpr.getErrors() ) );
         }

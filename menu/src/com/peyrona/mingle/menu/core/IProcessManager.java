@@ -32,13 +32,8 @@ public interface IProcessManager
 
         private static String getJar( String cmd )
         {
-            if( cmd.contains( "glue.jar"  ) ) return "Glue";
-            if( cmd.contains( "gum.jar"   ) ) return "Gum";
-            if( cmd.contains( "stick.jar" ) ) return "Stick";
-            if( cmd.contains( "tape.jar"  ) ) return "Tape";
-            if( cmd.contains( "menu.jar"  ) ) return "Menu";
-
-            // e.g. "com.peyrona.mingle.menu.Main"
+            // First: check main class pattern (e.g. "com.peyrona.mingle.glue.Main")
+            // This is more reliable than checking JAR names in classpath
 
             int ndx1 = cmd.indexOf( "com.peyrona.mingle." );
 
@@ -51,7 +46,15 @@ public interface IProcessManager
                     return UtilUI.capitalize( cmd.substring( ndx1, ndx2 ) );
             }
 
-            // Returns last JAR found
+            // Second: check for -jar execution (e.g. "-jar lib/glue.jar")
+
+            Pattern jarPattern = Pattern.compile( "-jar\\s+(?:lib/)?(\\w+)\\.jar" );
+            Matcher jarMatcher = jarPattern.matcher( cmd );
+
+            if( jarMatcher.find() )
+                return UtilUI.capitalize( jarMatcher.group( 1 ) );
+
+            // Third: check classpath for last JAR entry
 
             Pattern classpathPattern = Pattern.compile("-classpath\\s+([^\"\\s]+?)(?:\\s+-\\w+|\\s*$)");
             Matcher matcher = classpathPattern.matcher( cmd );
@@ -74,7 +77,7 @@ public interface IProcessManager
                 }
             }
 
-            return "no-jar"; // Fallback
+            return "unknown"; // Fallback
         }
     }
 

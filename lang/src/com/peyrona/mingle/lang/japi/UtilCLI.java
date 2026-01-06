@@ -37,11 +37,21 @@ public final class UtilCLI
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Checks if command line arguments array is empty.
+     *
+     * @return {@code true} if no arguments were provided, {@code false} otherwise.
+     */
     public boolean isEmpty()
     {
         return (as.length == 0);
     }
 
+    /**
+     * Returns a copy of the raw command line arguments array.
+     *
+     * @return A defensive copy of the arguments array.
+     */
     public String[] getRaw()
     {
         return Arrays.copyOf( as, as.length );
@@ -109,6 +119,15 @@ public final class UtilCLI
         return getValue( sOpt, null );
     }
 
+    /**
+     * Options has de form of: -port:54321
+     * <p>
+     * The search is case insensitive.
+     *
+     * @param sOpt      The option name to search for.
+     * @param oDefault The default value to return if option is not found.
+     * @return The value converted to type T, or oDefault if option not found.
+     */
     public <T> T getValue( String sOpt, T oDefault )
     {
         String sRet = getOption( sOpt );
@@ -132,6 +151,15 @@ public final class UtilCLI
         return null;
     }
 
+    /**
+     * Returns multiple values from an option with comma-separated values.
+     * Options have the form: -option:value1,value2,value3
+     * <p>
+     * The search is case insensitive.
+     *
+     * @param sOpt The option name to search for.
+     * @return Array of values, or null if option not found or no values.
+     */
     public String[] getMultiValue( String sOpt )
     {
         String       sOption = getOption( sOpt );
@@ -153,6 +181,13 @@ public final class UtilCLI
         return (lstRet.isEmpty() ? null : lstRet.toArray( String[]::new ));
     }
 
+    /**
+     * Checks if an option's value matches the specified string (case-insensitive).
+     *
+     * @param sValueKey The option name to get the value from.
+     * @param sToCompare The string to compare against. If null, checks if value is also null.
+     * @return {@code true} if the value matches (both null or equal ignoring case), {@code false} otherwise.
+     */
     public boolean isValue( String sValueKey, String sToCompare )
     {
         String sValue = getValue( sValueKey );
@@ -165,6 +200,11 @@ public final class UtilCLI
         return sToCompare.equalsIgnoreCase( sValue );
     }
 
+    /**
+     * Returns all arguments that are not options (i.e., do not start with '-').
+     *
+     * @return Array of non-option arguments.
+     */
     public String[] getNoOptions()
     {
         List<String> lst2Ret = new ArrayList<>();

@@ -53,12 +53,12 @@ public final class   RPiGpioPin
     {
         if( isFaked() )
         {
-            timer = UtilSys.executeAtRate( getClass().getName(),
-                                           5000l, 3000l,    // After 5 secs (initial delay), every 3 secs
-                                           () -> {
-                                                    if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
-                                                        sendReaded( pin.read() );                               // a new random value
-                                                 } );
+            timer = UtilSys.executeWithDelay( getClass().getName(),
+                                              5000l, 3000l,    // After 5 secs (initial delay), every 3 secs
+                                              () -> {
+                                                        if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
+                                                            sendReaded( pin.read() );                               // a new random value
+                                                    } );
         }
     }
 
@@ -74,7 +74,7 @@ public final class   RPiGpioPin
         set( mapConfig );
     }
 
-    
+
     @Override
     public void start( IRuntime rt )
     {
@@ -106,7 +106,7 @@ public final class   RPiGpioPin
     }
 
     @Override
-    public void read()              // isFaked is managed via PinFaked
+    public void read()    // isFaked is managed via PinFaked
     {
         if( pin != null )
         {

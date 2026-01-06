@@ -73,6 +73,6 @@
 
      <!-- Mingle -->
     <target name="-post-jar">
-        <copy file="${dist.jar}" todir="../todeploy/" failonerror="true"/>
+        <copy file="${dist.jar}" todir="../todeploy/lib/" failonerror="true"/>
     </target>
 </project>

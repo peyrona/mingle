@@ -67,6 +67,12 @@ public class ExEnComm
     //------------------------------------------------------------------------//
     // STATIC INTERFACE
 
+    /**
+     * Parses a JSON string and creates an {@code ExEnComm} instance.
+     *
+     * @param sJSON JSON string in format { "request_name": {pay_load} }.
+     * @return An {@code ExEnComm} instance parsed from the JSON string.
+     */
     public static ExEnComm fromJSON( String sJSON )
     {
         Member member = Json.parse( sJSON )
@@ -77,6 +83,12 @@ public class ExEnComm
         return new ExEnComm( Request.valueOf( member.getName() ), (member.getValue().isNull() ? Json.NULL : member.getValue()) );
     }
 
+    /**
+     * Creates an error {@code ExEnComm} with the specified error message.
+     *
+     * @param sErrorMsg The error message to include in the payload.
+     * @return An {@code ExEnComm} instance with {@code Request.Error}.
+     */
     public static ExEnComm asError( String sErrorMsg )
     {
         return new ExEnComm( Request.Error, Json.value( sErrorMsg ) );
@@ -85,6 +97,7 @@ public class ExEnComm
     //------------------------------------------------------------------------//
 
     /**
+     * Class constructor.
      *
      * @param verb  One of ::Request
      * @param sJSON Can be null
@@ -95,12 +108,24 @@ public class ExEnComm
         this.payload = (sJSON == null ? null : Json.parse( sJSON ));
     }
 
+    /**
+     * Class constructor.
+     *
+     * @param verb
+     * @param cmd
+     */
     public ExEnComm( Request verb, ICommand cmd )
     {
         this.request = verb;
         this.payload = Json.parse( getCIL().unbuild( cmd ) );
     }
 
+    /**
+     * Class constructor.
+     *
+     * @param verb
+     * @param aCmds
+     */
     public ExEnComm( Request verb, ICommand[] aCmds )
     {
         JsonArray ja = Json.array();
@@ -112,6 +137,11 @@ public class ExEnComm
             ja.add( Json.parse( getCIL().unbuild( cmd ) ) );
     }
 
+    /**
+     * Class constructor.
+     *
+     * @param msg
+     */
     public ExEnComm( Message msg )
     {
              if( msg instanceof MsgDeviceChanged  ) request = ExEnComm.Request.Changed;  // Most frecuent
@@ -124,6 +154,11 @@ public class ExEnComm
         this.payload = msg.toJSON();
     }
 
+    /**
+     * Class constructor.
+     * 
+     * @param exc
+     */
     public ExEnComm( Exception exc  )
     {
         this( Request.Error, Json.value( UtilStr.toString( exc ) ) );
@@ -131,6 +166,12 @@ public class ExEnComm
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Returns the error message from an error request.
+     *
+     * @return The error message string.
+     * @throws AssertionError if this is not an {@code Request.Error}.
+     */
     public String getErrorMsg()
     {
         assert request == Request.Error;
@@ -138,6 +179,12 @@ public class ExEnComm
         return payload.asString();
     }
 
+    /**
+     * Returns the timestamp (when) from the payload.
+     *
+     * @return The timestamp in milliseconds, or 0 for {@code Request.List} and {@code Request.Listed},
+     *         or current time if not specified in payload.
+     */
     public long getWhen()
     {
         if( request == Request.List || request == Request.Listed )
@@ -148,6 +195,11 @@ public class ExEnComm
         return ((nWhen == -1) ? System.currentTimeMillis() : nWhen);
     }
 
+    /**
+     * Returns the device name from the payload.
+     *
+     * @return The device name, or "List have no device" for {@code Request.List} and {@code Request.Listed}.
+     */
     public String getDeviceName()
     {
         if( request == Request.List || request == Request.Listed )
@@ -156,6 +208,12 @@ public class ExEnComm
         return new UtilJson( payload ).getString( Message.sNAME, null );
     }
 
+    /**
+     * Extracts device name and value from the payload for change-related requests.
+     *
+     * @return A {@code Pair<String, Object>} where key is device name and value is the new value,
+     *         or an error pair if payload is invalid.
+     */
     public Pair<String,Object> getChange()
     {
         if( payload == null )
@@ -176,6 +234,11 @@ public class ExEnComm
         return new Pair( sDevice, oValue );
     }
 
+    /**
+     * Extracts commands from the payload.
+     *
+     * @return A list of {@code ICommand} objects parsed from the payload.
+     */
     public List<ICommand> getCommands()
     {
         List<ICommand> lstCmd  = new ArrayList<>();
@@ -195,12 +258,22 @@ public class ExEnComm
         return lstCmd;
     }
 
+    /**
+     * Converts this {@code ExEnComm} to a JSON value.
+     *
+     * @return A {@code JsonValue} representation in format { "request_name": {pay_load} }.
+     */
     public JsonValue toJSON()
     {
         return Json.object()
                    .add( request.name(), ((payload == null) ? Json.NULL : payload) );
     }
 
+    /**
+     * Returns the JSON string representation of this communication.
+     *
+     * @return JSON string in format { "request_name": {pay_load} }.
+     */
     @Override
     public String toString()
     {
@@ -217,16 +290,20 @@ public class ExEnComm
 
     private ICmdEncDecLib getCIL()
     {
-        if( pclBuilder == null )
+        ICmdEncDecLib builder = this.pclBuilder;
+
+        if( builder == null )
         {
             synchronized( this )
             {
-                if( pclBuilder == null )
-                    pclBuilder = UtilSys.getConfig().newCILBuilder();
+                builder = this.pclBuilder;
+
+                if( builder == null )
+                    this.pclBuilder = builder = UtilSys.getConfig().newCILBuilder();
             }
         }
 
-        return pclBuilder;
+        return builder;
     }
 
     private Pair newMsgPropNotFound( String property )    // To save RAM

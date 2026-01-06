@@ -41,7 +41,35 @@ public final class Config implements IConfig
     public IConfig load( String sUri ) throws IOException
     {
         if( UtilStr.isEmpty( sUri ) )
-            sUri = new File( UtilSys.fHomeDir, "config.json" ).toURI().toString();
+        {
+            File fConf = new File( UtilSys.fHomeDir, "etc/config.json" );
+
+            if( fConf.exists() )
+            {
+                String sMsgErr = UtilIO.canRead( fConf );
+
+                if( sMsgErr == null )
+                {
+                    sUri = fConf.toURI().toString();
+                }
+                else
+                {
+                    if( UtilSys.getLogger() != null )  UtilSys.getLogger().log( ILogger.Level.WARNING, sMsgErr );
+                    else                               System.err.println( sMsgErr );
+
+                    return this;
+                }
+            }
+            else
+            {
+                String msg = fConf +" not found: This is not a problem but is strange.";
+
+                if( UtilSys.getLogger() != null )  UtilSys.getLogger().log( ILogger.Level.WARNING, msg );
+                else                               System.err.println( msg );
+
+                return this;
+            }
+        }
 
         try
         {

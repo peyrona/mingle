@@ -143,7 +143,7 @@ public final class UneMultiEditorPanel extends JPanel
 
         //------------------------------------------------------------------------------------------------------------------
 
-        UtilSys.execute( getClass().getName(),
+        UtilSys.execute( null,
                          250,
                          () -> // Dirty, but works (I tried many other things but none worked)
                                 {
@@ -407,7 +407,7 @@ public final class UneMultiEditorPanel extends JPanel
         }
         else
         {
-            futureSave.set( UtilSys.executeWithDelay( getClass().getName(), 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
+            futureSave.set( UtilSys.executeWithDelay( null, 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
         }
     }
 

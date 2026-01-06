@@ -157,7 +157,7 @@ public class EvalProfile
 
             end = System.currentTimeMillis();
 
-            System.out.println( new DecimalFormat("###,###").format( itera ) +" operations in "+ new DecimalFormat("###,###").format(end - start) + " millis");
+            System.out.println( new DecimalFormat("###,###").format( itera ) +" evaluations in "+ new DecimalFormat("###,###").format(end - start) + " millis");
             System.out.println( "In other words: "+ new DecimalFormat("###,###.###").format( (itera / (end - start)) ) + " ops/millis");
 
             System.out.println( "\n-----------------------------------------------------\n" );

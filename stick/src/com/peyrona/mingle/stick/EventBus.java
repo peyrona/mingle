@@ -38,6 +38,11 @@ public class EventBus implements IEventBus
 
     //----------------------------------------------------------------------------//
 
+    /**
+     * Creates a new EventBus instance.
+     *
+     * @param nMaxMsgs Maximum number of messages that can be queued for processing.
+     */
     public EventBus( int nMaxMsgs )
     {
         this.dispatcher = new Dispatcher<>( (msg) -> trigger( msg ),
@@ -61,6 +66,13 @@ public class EventBus implements IEventBus
         return this;
     }
 
+    /**
+     * Posts a message to be delivered after a specified delay.
+     *
+     * @param message The message to post.
+     * @param delay The delay in milliseconds before the message is posted. If <= 0, posts immediately.
+     * @return This EventBus instance for method chaining.
+     */
     @Override
     public IEventBus post( final Message message, final long delay )
     {
@@ -124,6 +136,11 @@ public class EventBus implements IEventBus
         return this;
     }
 
+    /**
+     * Returns a string representation of this EventBus.
+     *
+     * @return A string containing the EventBus class name and listener information.
+     */
     @Override
     public String toString()
     {
@@ -133,6 +150,13 @@ public class EventBus implements IEventBus
     //------------------------------------------------------------------------//
     // DELEGATED METHODS
 
+    /**
+     * Pauses message processing.
+     * <p>
+     * Messages continue to be queued but are not dispatched until resumed.
+     *
+     * @return This EventBus instance for method chaining.
+     */
     @Override
     public IEventBus pause()
     {
@@ -140,6 +164,11 @@ public class EventBus implements IEventBus
         return this;
     }
 
+    /**
+     * Resumes message processing after a pause.
+     *
+     * @return This EventBus instance for method chaining.
+     */
     @Override
     public IEventBus resume()
     {
@@ -147,18 +176,33 @@ public class EventBus implements IEventBus
         return this;
     }
 
+    /**
+     * Checks if the EventBus is currently paused.
+     *
+     * @return true if message processing is paused; false otherwise.
+     */
     @Override
     public boolean isPaused()
     {
         return dispatcher.isPaused();
     }
 
+    /**
+     * Returns the current processing speed.
+     *
+     * @return The number of messages processed per second, or -1 if not configured.
+     */
     @Override
     public int getSpeed()
     {
         return dispatcher.getSpeed();
     }
 
+    /**
+     * Returns the number of messages currently pending processing.
+     *
+     * @return The number of queued messages waiting to be dispatched.
+     */
     @Override
     public int getPending()
     {

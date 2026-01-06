@@ -35,9 +35,43 @@ public interface INetClient
      * @return Itself.
      */
     INetClient connect( String sCfgAsJSON );
+
+    /**
+     * Disconnects from the remote server and releases resources.
+     *
+     * @return Itself.
+     */
     INetClient disconnect();
-    boolean    isConnected();
+
+    /**
+     * Checks if the client is currently connected to the remote server.
+     *
+     * @return {@code true} if connected, {@code false} otherwise.
+     */
+    boolean isConnected();
+
+    /**
+     * Sends a message to the remote server through the established connection.
+     *
+     * @param message The message to send (encoded as string).
+     * @return Itself.
+     */
     INetClient send( String message );
-    boolean    add( IListener rl );
-    boolean    remove( IListener rl );
+
+    /**
+     * Registers a listener to receive events from this network client.
+     * Multiple listeners can be added and will all receive events.
+     *
+     * @param rl The listener to register.
+     * @return {@code true} if the listener was added successfully, {@code false} if it was already registered.
+     */
+    boolean add( IListener rl );
+
+    /**
+     * Removes a previously registered listener from this network client.
+     *
+     * @param rl The listener to remove.
+     * @return {@code true} if the listener was removed successfully, {@code false} if it was not registered.
+     */
+    boolean remove( IListener rl );
 }

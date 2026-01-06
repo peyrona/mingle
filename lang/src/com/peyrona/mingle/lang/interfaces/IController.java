@@ -117,5 +117,10 @@ public interface IController
      */
     void stop();
 
+    /**
+     * Returns true if the controller was properly initialized and is ready to be used.
+     *
+     * @return true if the controller was properly initialized and is ready to be used.
+     */
     boolean isValid();
 }

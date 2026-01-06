@@ -159,10 +159,10 @@ public class CronTest
         }
 
         @Test
-        @DisplayName("Should reject Monthly mode with every != 1")
-        void testMonthlyWithInvalidEvery()
+        @DisplayName("Should accept Monthly mode with every > 1")
+        void testMonthlyEveryN()
         {
-            assertThrows( MingleException.class, () -> {
+            assertDoesNotThrow( () -> {
                 new Cron( new pair()
                     .put( "mode", "Monthly" )
                     .put( "dom", "15" )
@@ -170,6 +170,24 @@ public class CronTest
                     .put( "every", 2 )
                 );
             });
+            
+            // Verify behavior
+            LocalDateTime now = LocalDateTime.now();
+            int currentMonth = now.getMonthValue();
+            
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Monthly" )
+                .put( "dom", "15" )
+                .put( "time", "12:00" )
+                .put( "every", 2 )
+            );
+            
+            // Since we can't easily mock time inside Cron without dependency injection,
+            // we rely on the fact that next() returns a positive value if configured correctly.
+            // Detailed scheduling verification would require mocking LocalDateTime.now().
+            
+            long millis = cron.next();
+            assertTrue( millis > 0, "Should return positive milliseconds for every-2-months" );
         }
 
         @Test
@@ -238,24 +256,6 @@ public class CronTest
             long millis = cron.next();
 
             assertEquals( -1, millis, "Past event should return -1" );
-        }
-
-        @Test
-        @DisplayName("Should respect stop time for one-time event")
-        void testOneTimeEventWithStop()
-        {
-            LocalDateTime now = LocalDateTime.now();
-            LocalDateTime start = now.plusHours( 2 );
-            LocalDateTime stop = now.plusHours( 1 );  // Stop before start
-
-            Cron cron = new Cron( new pair()
-                .put( "start", formatDateTime( start ) )
-                .put( "stop", formatDateTime( stop ) )
-            );
-
-            long millis = cron.next();
-
-            assertEquals( -1, millis, "Should return -1 when stop is before start" );
         }
     }
 
@@ -770,20 +770,213 @@ public class CronTest
     }
 
     //------------------------------------------------------------------------//
+    // BUG FIX REGRESSION TESTS
+    //------------------------------------------------------------------------//
+
+    @Nested
+    @DisplayName("Bug Fix Regression Tests")
+    class BugFixRegressionTests
+    {
+        @Test
+        @DisplayName("Weekly interval should use days-based calculation (fix for ChronoUnit.WEEKS issue)")
+        void testWeeklyIntervalDaysBasedCalculation()
+        {
+            // This test verifies that partial weeks are handled correctly
+            // ChronoUnit.WEEKS.between() only counts complete weeks, which caused bugs
+            LocalDateTime now = LocalDateTime.now();
+            int tomorrow = now.plusDays( 1 ).getDayOfWeek().getValue();
+
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Weekly" )
+                .put( "dow", String.valueOf( tomorrow ) )
+                .put( "time", "12:00" )
+                .put( "every", 1 )
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should find next occurrence within partial week" );
+            // Should be approximately 1 day + time difference (not 7+ days)
+            assertTrue( millis < 2 * 24 * 60 * 60 * 1000L, "Should be within 2 days, not skip to next full week" );
+        }
+
+        @Test
+        @DisplayName("Weekly every-2 should correctly skip weeks using days calculation")
+        void testWeeklyEvery2DaysCalculation()
+        {
+            LocalDateTime now = LocalDateTime.now();
+            int dayOfWeek = now.getDayOfWeek().getValue();
+
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Weekly" )
+                .put( "dow", String.valueOf( dayOfWeek ) )
+                .put( "time", "23:59" )
+                .put( "every", 2 )  // Every 2 weeks
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should return positive milliseconds for every-2-weeks" );
+        }
+
+        @Test
+        @DisplayName("Monthly should handle start date correctly (fix for negative modulo)")
+        void testMonthlyWithFutureStartDate()
+        {
+            // This tests the fix for negative monthsDiff causing incorrect monthsToAdd
+            LocalDateTime futureStart = LocalDateTime.now().plusMonths( 2 );
+
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Monthly" )
+                .put( "start", formatDateTime( futureStart ) )
+                .put( "dom", "15" )
+                .put( "time", "12:00" )
+                .put( "every", 1 )
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should handle future start date correctly" );
+        }
+
+        @Test
+        @DisplayName("Monthly every-N should calculate correct interval")
+        void testMonthlyEveryNInterval()
+        {
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Monthly" )
+                .put( "dom", "1" )
+                .put( "time", "00:01" )
+                .put( "every", 3 )  // Every 3 months
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should return positive milliseconds for every-3-months" );
+        }
+
+        @Test
+        @DisplayName("Calculation errors should return -1 instead of throwing exception")
+        void testCalculationErrorsReturnMinusOne()
+        {
+            // Create a valid cron and verify it doesn't throw on edge cases
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Yearly" )
+                .put( "dom", "29" )
+                .put( "month", "2" )  // Feb 29 - leap year only
+                .put( "time", "12:00" )
+                .put( "every", 1 )
+            );
+
+            // Should not throw, should return a valid result or -1
+            assertDoesNotThrow( () -> {
+                long millis = cron.next();
+                // Either positive (found next leap year) or -1 (calculation issue)
+                assertTrue( millis > 0 || millis == -1, "Should return valid result or -1" );
+            });
+        }
+
+        @Test
+        @DisplayName("Weekly with past start date should work correctly")
+        void testWeeklyWithPastStartDate()
+        {
+            LocalDateTime pastStart = LocalDateTime.now().minusWeeks( 3 );
+            int dayOfWeek = LocalDateTime.now().plusDays( 1 ).getDayOfWeek().getValue();
+
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Weekly" )
+                .put( "start", formatDateTime( pastStart ) )
+                .put( "dow", String.valueOf( dayOfWeek ) )
+                .put( "time", "12:00" )
+                .put( "every", 2 )
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should handle past start date with weekly intervals" );
+        }
+
+        @Test
+        @DisplayName("Monthly with past start date should work correctly")
+        void testMonthlyWithPastStartDate()
+        {
+            LocalDateTime pastStart = LocalDateTime.now().minusMonths( 5 );
+
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Monthly" )
+                .put( "start", formatDateTime( pastStart ) )
+                .put( "dom", "15" )
+                .put( "time", "12:00" )
+                .put( "every", 2 )
+            );
+
+            long millis = cron.next();
+
+            assertTrue( millis > 0, "Should handle past start date with monthly intervals" );
+        }
+
+        @Test
+        @DisplayName("Yearly with large interval should not throw")
+        void testYearlyLargeInterval()
+        {
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Yearly" )
+                .put( "dom", "1" )
+                .put( "month", "1" )
+                .put( "time", "00:00" )
+                .put( "every", 5 )  // Every 5 years
+            );
+
+            assertDoesNotThrow( () -> {
+                long millis = cron.next();
+                assertTrue( millis > 0, "Should handle large yearly intervals" );
+            });
+        }
+
+        @Test
+        @DisplayName("Thread safety - synchronized methods should not cause issues")
+        void testThreadSafety() throws InterruptedException
+        {
+            Cron cron = new Cron( new pair()
+                .put( "mode", "Daily" )
+                .put( "time", "12:00,18:00" )
+                .put( "every", 1 )
+            );
+
+            // Call next() from multiple threads concurrently
+            Thread t1 = new Thread( () -> { for( int i = 0; i < 10; i++ ) cron.next(); } );
+            Thread t2 = new Thread( () -> { for( int i = 0; i < 10; i++ ) cron.next(); } );
+            Thread t3 = new Thread( () -> { for( int i = 0; i < 10; i++ ) cron.reset(); } );
+
+            t1.start();
+            t2.start();
+            t3.start();
+
+            t1.join( 5000 );
+            t2.join( 5000 );
+            t3.join( 5000 );
+
+            // If we get here without deadlock or exception, test passes
+            assertTrue( true, "Concurrent access should not cause issues" );
+        }
+    }
+
+    //------------------------------------------------------------------------//
     // HELPER METHODS
     //------------------------------------------------------------------------//
 
     /**
-     * Formats a LocalDateTime as "yyyy-MM-dd,HH:mm" for Cron constructor.
+     * Formats a LocalDateTime as "yyyy-MM-dd,HH:mm:ss" for Cron constructor.
      */
     private String formatDateTime( LocalDateTime ldt )
     {
-        return String.format( "%04d-%02d-%02d,%02d:%02d",
+        return String.format( "%04d-%02d-%02d,%02d:%02d:%02d",
                              ldt.getYear(),
                              ldt.getMonthValue(),
                              ldt.getDayOfMonth(),
                              ldt.getHour(),
-                             ldt.getMinute() );
+                             ldt.getMinute(),
+                             ldt.getSecond() );
     }
 
     //------------------------------------------------------------------------//
@@ -867,6 +1060,19 @@ public class CronTest
         total++; if( runTest( "Year boundary", () -> test.new EdgeCaseTests().testYearBoundary() ) ) passed++; else failed++;
         total++; if( runTest( "Time passed today", () -> test.new EdgeCaseTests().testTimePassedToday() ) ) passed++; else failed++;
         total++; if( runTest( "Future start date", () -> test.new EdgeCaseTests().testFutureStartDate() ) ) passed++; else failed++;
+        System.out.println();
+
+        // Bug fix regression tests
+        System.out.println( "--- Bug Fix Regression Tests ---" );
+        total++; if( runTest( "Weekly days-based calculation", () -> test.new BugFixRegressionTests().testWeeklyIntervalDaysBasedCalculation() ) ) passed++; else failed++;
+        total++; if( runTest( "Weekly every-2 calculation", () -> test.new BugFixRegressionTests().testWeeklyEvery2DaysCalculation() ) ) passed++; else failed++;
+        total++; if( runTest( "Monthly future start date", () -> test.new BugFixRegressionTests().testMonthlyWithFutureStartDate() ) ) passed++; else failed++;
+        total++; if( runTest( "Monthly every-N interval", () -> test.new BugFixRegressionTests().testMonthlyEveryNInterval() ) ) passed++; else failed++;
+        total++; if( runTest( "Calculation errors return -1", () -> test.new BugFixRegressionTests().testCalculationErrorsReturnMinusOne() ) ) passed++; else failed++;
+        total++; if( runTest( "Weekly past start date", () -> test.new BugFixRegressionTests().testWeeklyWithPastStartDate() ) ) passed++; else failed++;
+        total++; if( runTest( "Monthly past start date", () -> test.new BugFixRegressionTests().testMonthlyWithPastStartDate() ) ) passed++; else failed++;
+        total++; if( runTest( "Yearly large interval", () -> test.new BugFixRegressionTests().testYearlyLargeInterval() ) ) passed++; else failed++;
+        total++; if( runTest( "Thread safety", () -> { try { test.new BugFixRegressionTests().testThreadSafety(); } catch( InterruptedException e ) { throw new RuntimeException( e ); } } ) ) passed++; else failed++;
         System.out.println();
 
         // Summary

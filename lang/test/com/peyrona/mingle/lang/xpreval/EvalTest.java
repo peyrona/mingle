@@ -4,6 +4,8 @@ import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Lexer;
+import com.peyrona.mingle.lang.xpreval.functions.list;
+import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -303,6 +305,130 @@ public class EvalTest
             // Undefined variable results in null
             assertNull( new NAXE().build( "1 > 2 || x > 5" ).eval() );
             assertNull( new NAXE().build( "2 > 1 && x > 5" ).eval() );
+        }
+
+        @Test
+        @DisplayName("Should evaluate truthy/falsy numbers")
+        void testTruthyFalsyNumbers()
+        {
+            // Zero is falsy
+            test( "0 && true", false );
+            test( "!0", true );
+            test( "0.0 && true", false );
+
+            // Non-zero is truthy
+            test( "1 && true", true );
+            test( "!1", false );
+            test( "-1 || false", true );
+            test( "42 && true", true );
+            test( "0.001 && true", true );
+
+            IXprEval xpr = new NAXE().build( "variable", null, null );
+                     xpr.set( "variable", 1.0f );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+                     xpr.set( "variable", 0.0f );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+        }
+
+        @Test
+        @DisplayName("Should evaluate truthy/falsy strings")
+        void testTruthyFalsyStrings()
+        {
+            // Empty string is falsy
+            test( "\"\" && true", false );
+            test( "!\"\"", true );
+
+            // Non-empty string is truthy
+            test( "\"hello\" && true", true );
+            test( "!\"hello\"", false );
+            test( "\" \" || false", true );  // Whitespace is non-empty
+
+            IXprEval xpr = new NAXE().build( "variable", null, null );
+                     xpr.set( "variable", "ABC" );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+                     xpr.set( "variable", "" );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+        }
+
+        @Test
+        @DisplayName("Should evaluate truthy/falsy lists")
+        void testTruthyFalsyLists()
+        {
+            // Empty list is falsy
+            test( "list() && true", false );
+            test( "!list()", true );
+
+            // Non-empty list is truthy
+            test( "list(1,2,3) && true", true );
+            test( "!list(1)", false );
+
+            IXprEval xpr = new NAXE().build( "variable", null, null );
+                     xpr.set( "variable", new list(1,2,3) );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+                     xpr.set( "variable", new list() );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+        }
+
+        @Test
+        @DisplayName("Should evaluate truthy/falsy pairs")
+        void testTruthyFalsyPairs()
+        {
+            // Empty pair is falsy
+            test( "pair() && true", false );
+            test( "!pair()", true );
+
+            // Non-empty pair is truthy
+            test( "pair(\"a\",1) && true", true );
+            test( "!pair(\"key\",\"value\")", false );
+
+            IXprEval xpr = new NAXE().build( "variable", null, null );
+                     xpr.set( "variable", new pair("one",1,"two",2) );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+                     xpr.set( "variable", new pair() );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+        }
+
+        @Test
+        @DisplayName("Should short-circuit with truthy/falsy values")
+        void testTruthyFalsyShortCircuit()
+        {
+            // AND short-circuits on falsy expressions (using comparisons that return falsy results)
+            assertEquals( Boolean.FALSE, new NAXE().build( "(1-1) && true" ).eval() );     // 0 is falsy
+            assertEquals( Boolean.FALSE, new NAXE().build( "list():isEmpty() && false" ).eval() );  // true && false = false
+
+            // OR short-circuits on truthy expressions
+            assertEquals( Boolean.TRUE, new NAXE().build( "(1+1) || false" ).eval() );    // 2 is truthy
+            assertEquals( Boolean.TRUE, new NAXE().build( "list(1):size() || false" ).eval() );  // 1 is truthy
+
+            // Verify falsy values don't short-circuit OR (allows evaluation to continue)
+            test( "0 || true", true );
+            test( "\"\" || true", true );
+            test( "list() || true", true );
+
+            // Verify truthy values don't short-circuit AND (allows evaluation to continue)
+            test( "1 && false", false );
+            test( "\"x\" && false", false );
+            test( "list(1) && false", false );
+        }
+
+        @Test
+        @DisplayName("Should evaluate XOR with truthy/falsy values")
+        void testTruthyFalsyXOR()
+        {
+            test( "1 |& 0", true );       // truthy XOR falsy = true
+            test( "1 |& 1", false );      // truthy XOR truthy = false
+            test( "0 |& 0", false );      // falsy XOR falsy = false
+            test( "\"hello\" |& \"\"", true );  // non-empty XOR empty = true
+        }
+
+        @Test
+        @DisplayName("XOR must evaluate both sides (cannot short-circuit)")
+        void testXorNoShortCircuit()
+        {
+            // XOR requires both operands - undefined variable should result in null
+            assertNull( new NAXE().build( "true |& x" ).eval() );   // must eval x
+            assertNull( new NAXE().build( "x |& false" ).eval() );  // must eval x
+            assertNull( new NAXE().build( "false |& x" ).eval() );  // must eval x (can't short-circuit even when left is falsy)
         }
     }
 
@@ -1000,6 +1126,72 @@ public class EvalTest
         {
             test( "pair(\"one\",1, \"two\",list(2,3), \"three\",true):clone() == pair(\"one\",1, \"two\",list(2,3), \"three\",true)", true );
         }
+
+        @Test
+        @DisplayName("Should check size and emptiness")
+        void testSizeAndEmpty()
+        {
+            test( "pair():size()", 0 );
+            test( "pair():len()", 0 );
+            test( "pair():isEmpty()", true );
+            test( "pair(\"k\", \"v\"):size()", 1 );
+            test( "pair(\"k\", \"v\"):isEmpty()", false );
+            test( "pair(\"k\", \"v\"):empty():isEmpty()", true );
+        }
+
+        @Test
+        @DisplayName("Should get with default value")
+        void testGetWithDefault()
+        {
+            test( "pair(\"k\", \"v\"):get(\"k\", \"default\")", "v" );
+            test( "pair(\"k\", \"v\"):get(\"missing\", \"default\")", "default" );
+        }
+
+        @Test
+        @DisplayName("Should check for keys and values")
+        void testHasKeyAndValue()
+        {
+            test( "pair(\"k\", \"v\"):hasKey(\"k\")", true );
+            test( "pair(\"k\", \"v\"):hasKey(\"missing\")", false );
+            test( "pair(\"k\", \"v\"):hasValue(\"v\")", true );
+            test( "pair(\"k\", \"v\"):hasValue(\"missing\")", false );
+        }
+
+        @Test
+        @DisplayName("Should delete key")
+        void testDel()
+        {
+             test( "pair(\"k1\", \"v1\", \"k2\", \"v2\"):del(\"k1\"):hasKey(\"k1\")", false );
+             test( "pair(\"k1\", \"v1\", \"k2\", \"v2\"):del(\"k1\"):size()", 1 );
+        }
+
+        @Test
+        @DisplayName("Should intersect pairs")
+        void testIntersect()
+        {
+            test( "pair(\"a\", 1, \"b\", 2):intersect(pair(\"b\", 3, \"c\", 4)) == pair(\"b\", 2)", true );
+        }
+
+        @Test
+        @DisplayName("Should union pairs")
+        void testUnion()
+        {
+            test( "pair(\"a\", 1):union(pair(\"b\", 2)) == pair(\"a\", 1, \"b\", 2)", true );
+        }
+
+        @Test
+        @DisplayName("Should serialize and deserialize pair")
+        void testPairSerialization()
+        {
+            test( "pair():deserialize( pair(\"k\", \"v\"):serialize() ) == pair(\"k\", \"v\")", true );
+        }
+
+        @Test
+        @DisplayName("Should convert to string")
+        void testToString()
+        {
+             test( "pair(\"a\", 1):toString()", "\"a\"=1" );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -1407,6 +1599,12 @@ public class EvalTest
         total++; if( runTest( "ANY quantifier", () -> test.new BooleanTests().testAnyQuantifier() ) ) passed++; else failed++;
         total++; if( runTest( "Complex quantifiers", () -> test.new BooleanTests().testComplexQuantifiers() ) ) passed++; else failed++;
         total++; if( runTest( "Lazy evaluation", () -> test.new BooleanTests().testLazyEvaluation() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy numbers", () -> test.new BooleanTests().testTruthyFalsyNumbers() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy strings", () -> test.new BooleanTests().testTruthyFalsyStrings() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy lists", () -> test.new BooleanTests().testTruthyFalsyLists() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy pairs", () -> test.new BooleanTests().testTruthyFalsyPairs() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy short-circuit", () -> test.new BooleanTests().testTruthyFalsyShortCircuit() ) ) passed++; else failed++;
+        total++; if( runTest( "Truthy/Falsy XOR", () -> test.new BooleanTests().testTruthyFalsyXOR() ) ) passed++; else failed++;
         System.out.println();
 
         // String tests
@@ -1512,6 +1710,14 @@ public class EvalTest
         total++; if( runTest( "Pair reduce", () -> test.new PairClassTests().testPairReduce() ) ) passed++; else failed++;
         total++; if( runTest( "Pair filter", () -> test.new PairClassTests().testPairFilter() ) ) passed++; else failed++;
         total++; if( runTest( "Pair clone", () -> test.new PairClassTests().testPairClone() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair size/empty", () -> test.new PairClassTests().testSizeAndEmpty() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair get default", () -> test.new PairClassTests().testGetWithDefault() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair has key/value", () -> test.new PairClassTests().testHasKeyAndValue() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair del", () -> test.new PairClassTests().testDel() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair intersect", () -> test.new PairClassTests().testIntersect() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair union", () -> test.new PairClassTests().testUnion() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair serialization", () -> test.new PairClassTests().testPairSerialization() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair toString", () -> test.new PairClassTests().testToString() ) ) passed++; else failed++;
         System.out.println();
 
         // Temporal operator tests

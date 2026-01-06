@@ -24,6 +24,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -58,7 +59,7 @@ public final class UtilSys
     private static final long                     nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
     private static final Set<URI>                 lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because messsages are only added
     private static final Map<Object,Object>       mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
-    private static final ScheduledExecutorService pool         = (ScheduledExecutorService) Executors.newScheduledThreadPool( 8 );   // Note: a lot needed beacuse there is one per each AFTER and WITHIN (plus Controllers)
+    private static final ScheduledExecutorService pool         = (ScheduledExecutorService) Executors.newScheduledThreadPool( 32 );   // Note: a lot needed: Dispatchers, AFTERs, WITHINs, Controllers...
 
     //------------------------------------------------------------------------//
 
@@ -68,7 +69,7 @@ public final class UtilSys
         {
             System.err.println( "Java version at: "+ UtilSys.getJavaHome() +'\n'+
                                 "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11.\n"+
-                                "Can no continue.");
+                                "Can not continue.");
             System.exit( 1 );
         }
 
@@ -288,6 +289,7 @@ public final class UtilSys
      * Executes passed Runnable using an internal ThreadPoolExecutor.
      * @param name
      * @param r What to execute.
+     * @return An ScheduledFuture
      */
     public static ScheduledFuture execute( String name, Runnable r )
     {
@@ -300,7 +302,7 @@ public final class UtilSys
      * @param name
      * @param delay Delay in millis to execute the task.
      * @param r What to execute.
-     * @return
+     * @return An ScheduledFuture
      */
     public static ScheduledFuture execute( String name, long delay, Runnable r )
     {
@@ -739,10 +741,12 @@ public final class UtilSys
     {
         if( UtilStr.isMeaningless( name ) )
         {
-            name = UtilSys.class.getSimpleName() +":pool:"+ UtilReflect.getCallerMethodName( 4 );
+            String invoker = UtilReflect.getCallerMethodName( 4 );   // UtilReflect.getCallerMethodName(...) can return null
 
-            if( name == null )    // Because UtilReflect.getCallerMethodName(...) can return null
-                name = UtilSys.class.getSimpleName() +":pool";
+            if( invoker == null )
+                invoker = UUID.randomUUID().toString();
+
+            name = UtilSys.class.getSimpleName() +":pool:"+ invoker;
         }
 
         return name;

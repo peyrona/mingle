@@ -84,7 +84,7 @@ final class GridManager
     {
         if( lstTargets != null )
         {
-            UtilSys.execute( getClass().getName(),
+            UtilSys.execute( null,
                              () ->
                                 {
                                     String msg = message.toString();             // Saves CPU in the forEach(...) loop
@@ -131,7 +131,7 @@ final class GridManager
                 if( nInterval == -1 ) nInterval = 10 * 1000;
                 else                  nInterval = Math.max( 1000, nInterval );     // Not less tha 1 second
 
-                executor = UtilSys.executeWithDelay( getClass().getName(), nInterval, nInterval, () -> lstTargets.forEach( t -> t.connect() ) );
+                executor = UtilSys.executeWithDelay( null, nInterval, nInterval, () -> lstTargets.forEach( t -> t.connect() ) );
             }
         }
     }
@@ -200,7 +200,6 @@ final class GridManager
     //
     // We will obtain 2 instances of Target class, one per each item in the "targets" array
     //------------------------------------------------------------------------//
-
     private final class Target
     {
         private final String     sConnConf;    // Can be a JSON, a simple string or wahtever: depends on what is expecting INetClient:connect(...)

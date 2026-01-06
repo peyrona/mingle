@@ -285,7 +285,7 @@ final class ToolbarPanel extends javax.swing.JPanel
 
                 Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
 
-                UtilSys.execute( getClass().getName(),
+                UtilSys.execute( null,
                                  1500,
                                  () ->     // Stick needs some time to be ready
                                     {
@@ -371,7 +371,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                 } );
 
             // Awful but useful
-            UtilSys.execute( getClass().getName(),
+            UtilSys.execute( null,
                              2000,
                              () ->
                                 {

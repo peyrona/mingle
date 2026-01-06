@@ -1149,7 +1149,7 @@ public final class StdXprFns
     @SuppressWarnings("unused")
     private Object exit()
     {
-        System.exit( 0 );
+        System.exit( 0 );    // The Runtime.getRuntime().addShutdownHook( ... ) will be invoked
         return "";
     }
 
@@ -1173,8 +1173,10 @@ public final class StdXprFns
     {
         try
         {
+            int millis = Math.max( 100, Math.abs( UtilType.toInteger( timeout ) ) );
+
             return InetAddress.getByName( host.toString() )
-                              .isReachable( Math.abs( UtilType.toInteger( timeout ) ) );
+                              .isReachable( millis );
         }
         catch( IOException e )
         {

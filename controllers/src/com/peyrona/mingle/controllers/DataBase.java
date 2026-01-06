@@ -90,7 +90,7 @@ public final class   DataBase
         if( ! (sql instanceof String) )
             sendWriteError( sql, new MingleException( "Is not a string" ) );
 
-        UtilSys.execute( getClass().getName(),
+        UtilSys.execute( null,
                          () ->
                         {
                             Exception exc = null;
@@ -193,7 +193,7 @@ public final class   DataBase
 
         if( sInit != null )
         {
-            UtilSys.execute( getClass().getName(),
+            UtilSys.execute( null,
                              () ->
                             {
                                 for( String s : sInit.split( ";" ) )

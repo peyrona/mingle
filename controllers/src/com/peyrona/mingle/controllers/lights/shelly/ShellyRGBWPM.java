@@ -143,10 +143,10 @@ public final class ShellyRGBWPM
         // Start periodic status polling
         int interval = (int) get( KEY_INTERVAL );
 
-        timer = UtilSys.executeAtRate( getClass().getName(),
-                                       1000,      // Initial delay
-                                       interval,
-                                       this::read );
+        timer = UtilSys.executeWithDelay( getClass().getName(),
+                                          1000,      // Initial delay
+                                          interval,
+                                          this::read );
     }
 
     @Override

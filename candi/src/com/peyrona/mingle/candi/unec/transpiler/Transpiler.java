@@ -3,18 +3,24 @@ package com.peyrona.mingle.candi.unec.transpiler;
 
 import com.peyrona.mingle.candi.IntermediateCodeWriter;
 import com.peyrona.mingle.candi.unec.parser.ParseInclude;
+import com.peyrona.mingle.candi.unec.parser.ParseInclude.UseAsTable;
 import com.peyrona.mingle.candi.unec.parser.ParseUse;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.lexer.Language;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.charset.Charset;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * ¡ BEFORE CHANGING ANYTHING, READ ME !
@@ -43,6 +49,7 @@ public final class Transpiler
     private final IConfig         config;
     private       Charset         charset;
     private final List<TransUnit> tus = new ArrayList<>();
+    private final List<Path>      tempFiles = new ArrayList<>();     // Temp files for parameterized INCLUDEs
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -61,26 +68,34 @@ public final class Transpiler
     {
         this.charset = (charset == null) ? Charset.defaultCharset() : charset;
 
-        tus.addAll( doChecks(
-                              doCommands(
-                                          doIncludes( uri, new ArrayList<>() ) ) ) );    // Passing a List because doIncludes(...) is recursive
-
-        if( IntermediateCodeWriter.isRequired() )
+        try
         {
-            try( IntermediateCodeWriter writer = IntermediateCodeWriter.get() )
+            tus.addAll( doChecks(
+                                  doCommands(
+                                              doIncludes( uri, new ArrayList<>() ) ) ) );    // Passing a List because doIncludes(...) is recursive
+
+            if( IntermediateCodeWriter.isRequired() )
             {
-                writer.startSection( "Lexemes after USEs\n" );
-
-                for( TransUnit tu : tus )
+                try( IntermediateCodeWriter writer = IntermediateCodeWriter.get() )
                 {
-                    writer.writeln( tu.sourceUnit.uri )
-                          .writeln( "Source: "+ tu.sourceUnit.uri +"\n" )
-                          .writeln( tu.toCode() )
-                          .writeSepara();
-                }
+                    writer.startSection( "Lexemes after USEs\n" );
 
-                writer.endSection();
+                    for( TransUnit tu : tus )
+                    {
+                        writer.writeln( tu.sourceUnit.uri )
+                              .writeln( "Source: "+ tu.sourceUnit.uri +"\n" )
+                              .writeln( tu.toCode() )
+                              .writeSepara();
+                    }
+
+                    writer.endSection();
+                }
             }
+        }
+        finally
+        {
+            // Cleanup temp files created for parameterized INCLUDEs
+            cleanupTempFiles();
         }
 
         return this;
@@ -129,9 +144,23 @@ public final class Transpiler
             {
                 for( URI include : UtilIO.expandPath( iu.getURIs() ) )
                 {
-                    if( ! isUriAlreadyLoaded( tus, include.toString() ) )
+                    // If INCLUDE has USE table, generate one temp file per row
+                    if( iu.hasUseAs() )
                     {
-                        doIncludes( include, tus );
+                        UseAsTable table = iu.getUseTable();
+
+                        for( int row = 0; row < table.getRowCount(); row++ )
+                        {
+                            URI actualUri = expandIncludeWithUses( include, table.getRowAsMap( row ) );
+
+                            if( ! isUriAlreadyLoaded( tus, actualUri.toString() ) )
+                                doIncludes( actualUri, tus );
+                        }
+                    }
+                    else
+                    {
+                        if( ! isUriAlreadyLoaded( tus, include.toString() ) )
+                            doIncludes( include, tus );
                     }
                 }
             }
@@ -187,5 +216,67 @@ public final class Transpiler
         }
 
         return false;
+    }
+
+    /**
+     * Expands an INCLUDE with USE table by creating a temp file with substitutions applied.
+     *
+     * @param originalUri The original file URI.
+     * @param rowValues   Map of column name to value for this row.
+     * @return URI of the generated temp file.
+     * @throws IOException If file operations fail.
+     */
+    private URI expandIncludeWithUses( URI originalUri, Map<String, UseAsTable.Value> rowValues ) throws IOException
+    {
+        // 1. Load original file content
+        String code = UtilIO.getAsText( originalUri, charset );
+
+        // 2. Apply substitutions
+        for( Map.Entry<String, UseAsTable.Value> entry : rowValues.entrySet() )
+        {
+            String           column      = entry.getKey();
+            UseAsTable.Value   value       = entry.getValue();
+            String           text        = value.getText();          // Value without quotes (for macro replacement)
+            String           quotedText  = value.getQuotedText();    // Value with quotes if it was a string (for identifier replacement)
+
+            // Replace {*column*} format (macro format used in strings) - use value WITHOUT quotes (case insensitive)
+            String macroPattern = "(?i)" + Pattern.quote( Language.buildMacro( column ) );
+            code = code.replaceAll( macroPattern, text );
+
+            // Replace bare column as identifier (case insensitive, word boundaries) - use value WITH quotes if string
+            String pattern = "(?i)\\b" + Pattern.quote( column ) + "\\b";
+            code = code.replaceAll( pattern, quotedText );
+        }
+
+        // 3. Generate unique temp file name
+        String baseName   = UtilIO.getName( originalUri.getPath() );
+        String uniqueName = baseName + "_" + System.nanoTime() + ".une";
+        Path   tempFile   = Files.createTempFile( "mingle_", "_" + uniqueName );
+
+        // 4. Write transformed content
+        Files.writeString( tempFile, code, charset );
+        tempFiles.add( tempFile );
+
+        return tempFile.toUri();
+    }
+
+    /**
+     * Cleans up all temporary files created during parameterized INCLUDE expansion.
+     */
+    private void cleanupTempFiles()
+    {
+        for( Path tempFile : tempFiles )
+        {
+            try
+            {
+                Files.deleteIfExists( tempFile );
+            }
+            catch( IOException e )
+            {
+                // Ignore cleanup errors - best effort
+            }
+        }
+
+        tempFiles.clear();
     }
 }
