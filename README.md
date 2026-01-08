@@ -29,15 +29,17 @@
 
  **How to install Mingle?**
 
-> Download lastest release (mingle.n.n.n.zip) and unzip it: that is all.
+> 1. Create a folder named 'mingle' (or any other name).
+> 2. Download lastest release (mingle.n.n.n.zip) into the created folder.
+> 3. Unzip the dowloaded file.
 
  **What is the easiest way to start?**
 
 > To make things simple, all tools are integrated in the IDE, which is called "**Glue**".
 >
 > So, our recommendation is:
-> 1.  Start **Glue** (for Linux, use "menu.sh"; for Windows "run-win.ps1", for MacOS "run-mac.sh").
-> 2.  Open the editor (click the pencil icon at toolbar).
+> 1.  Start **Glue** (use the apropriate 'run-*' script for your OS).
+> 2.  Open the editor (click the pencil icon).
 > 3.  Open an example (under the 'examples' folder): they are numbered from easiest to smartest.
 > 4.  Read, understand and test (run it).
 > 5.  Modify the _Une_ source code and re-test.

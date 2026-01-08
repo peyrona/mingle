@@ -168,10 +168,8 @@ final class XprPreProc
                            (! Language.isParenthesis( lstTokens.get( ndxEnd ).text() )) &&
                            (! lstTokens.get( ndxEnd ).isType(XprToken.RESERVED_WORD )) );
 
-                    // Adjust ndxEnd if we stopped at a parenthesis (don't include it in the template)
-                    
-                    if( (ndxEnd < lstTokens.size()) && Language.isParenthesis( lstTokens.get( ndxEnd ).text() ) )
-                        ndxEnd--;
+                    // Note: No adjustment needed - the while loop's pre-increment (++ndxEnd) means
+                    // ndxEnd already points past the last token to include, and subList() excludes the end index.
 
                     // Can't send 'lstTokens.subList( ndxStart, ndxEnd )' to expand because alterations made in the sublist are also made in the list
                     // Therefore I have to create a new List containing all the sublist's items.

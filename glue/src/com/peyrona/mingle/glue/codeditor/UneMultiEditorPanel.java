@@ -291,6 +291,8 @@ public final class UneMultiEditorPanel extends JPanel
         if( getFocusedUnit() == null )
             return true;               // Nothing to transpile
 
+        onSave( null );                // Save all modified files before transpiling
+
         return getFocusedUnit().transpile( toolBar.chk4Grid.isSelected() );
     }
 

@@ -509,10 +509,20 @@ final class EvalByAST
 
                 case XprToken.RESERVED_WORD:            // Only AFTER and WITHIN can be part of an expression
                     ASTNode nodeDelay = stack.pop();    // Previous token in RPN is the delay amount
-                    ASTNode nodeExpr  = stack.pop();    // Previous-previous token must be the Boolean or Relational operator
+                    ASTNode nodeExpr  = stack.pop();    // Previous-previous token must be a boolean expression
 
+                    // Valid expressions for AFTER/WITHIN:
+                    // - Boolean/relational operators (e.g., "a == 5", "a && b")
+                    // - Bare variables (treated as truthy/falsy, e.g., "flag AFTER 1000")
+                    // - Boolean literals (true/false)
+                    // - Functions (e.g., "isOpen() AFTER 1000")
+                    // - Unary operators (e.g., "!flag AFTER 1000")
                     if( (! Language.isBooleanOp(    nodeExpr.token().text() )) &&
-                        (! Language.isRelationalOp( nodeExpr.token().text() )) )
+                        (! Language.isRelationalOp( nodeExpr.token().text() )) &&
+                        (! nodeExpr.token().isType( XprToken.VARIABLE )) &&
+                        (! nodeExpr.token().isType( XprToken.BOOLEAN )) &&
+                        (! nodeExpr.token().isType( XprToken.FUNCTION )) &&
+                        (! nodeExpr.token().isType( XprToken.OPERATOR_UNARY )) )
                     {
                         lstErrors.add( new CodeError( "AFTER and WITHIN work with booleans, not with: "+ nodeExpr.token().text(), nodeExpr.token() ) );
                     }

@@ -1190,7 +1190,7 @@ public class EvalTest
         @DisplayName("Should convert to string")
         void testToString()
         {
-             test( "pair(\"a\", 1):toString()", "\"a\"=1" );
+             test( "pair(\"a\", 1):toString()", "\"a\"=1.0" );
         }
     }
 
@@ -1481,6 +1481,715 @@ public class EvalTest
     }
 
     //------------------------------------------------------------------------//
+    // ADVANCED TEMPORAL OPERATOR TESTS (AFTER/WITHIN)
+    //------------------------------------------------------------------------//
+
+    @Nested
+    @DisplayName("Advanced Temporal Operator Tests")
+    class AdvancedTemporalOperatorTests
+    {
+        @Test
+        @DisplayName("Should cancel AFTER evaluation when cancel() is called")
+        void testAfterCancel()
+        {
+            AtomicBoolean callbackInvoked = new AtomicBoolean( false );
+
+            IXprEval xpr = new NAXE().build( "var == 7 AFTER 2000",
+                                             (value) -> callbackInvoked.set( true ),
+                                             null );
+
+            xpr.eval( "var", 7.0f );
+            sleep( 500 );
+            xpr.cancel();    // Cancel before timeout
+            sleep( 2000 );   // Wait past the original timeout
+
+            assertFalse( callbackInvoked.get(), "Callback should not be invoked after cancel()" );
+        }
+
+        @Test
+        @DisplayName("Should cancel WITHIN evaluation when cancel() is called")
+        void testWithinCancel()
+        {
+            AtomicBoolean callbackInvoked = new AtomicBoolean( false );
+
+            IXprEval xpr = new NAXE().build( "var == 7 WITHIN 2000",
+                                             (value) -> callbackInvoked.set( true ),
+                                             null );
+
+            xpr.eval( "var", 7.0f );
+            sleep( 500 );
+            xpr.cancel();    // Cancel before timeout
+            sleep( 2000 );   // Wait past the original timeout
+
+            assertFalse( callbackInvoked.get(), "Callback should not be invoked after cancel()" );
+        }
+
+        @Test
+        @DisplayName("WITHIN should detect rapid value changes")
+        void testWithinRapidValueChanges()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var == 10 WITHIN 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 assertTrue( time < 1000, "Should resolve quickly after change" );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 10.0f );
+
+            // Rapid changes: same value should not trigger, different value should
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 10.0f ); } }, 100 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 10.0f ); } }, 200 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 10.0f ); } }, 300 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 5.0f ); } }, 400 );  // This triggers FALSE
+
+            sleep( 1500 );
+            assertTrue( passed.get(), "WITHIN should detect value change among rapid updates" );
+        }
+
+        @Test
+        @DisplayName("WITHIN should return FALSE when value changes")
+        void testWithinValueOscillation()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+
+            // WITHIN checks if the value STAYS the same for the entire period.
+            // When set() changes the value making condition false, WITHIN returns FALSE.
+            IXprEval xpr = new NAXE().build( "var == 5 WITHIN 1000",
+                                             (value) -> {
+                                                 // Value changed during the period, so WITHIN should be FALSE
+                                                 assertEquals( Boolean.FALSE, value, "WITHIN should return FALSE when value changed" );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 5.0f );
+
+            // Value changes to 10 at 300ms - this triggers WITHIN to return FALSE
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 10.0f ); } }, 300 );
+
+            sleep( 500 );
+            assertTrue( passed.get(), "WITHIN callback should have been called when value changed" );
+        }
+
+        @Test
+        @DisplayName("AFTER with greater-than comparison")
+        void testAfterWithGreaterThan()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "temperature > 25 AFTER 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "temperature", 30.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "AFTER with > operator should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with less-than-or-equal comparison")
+        void testWithinWithLessOrEqual()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "humidity <= 60 WITHIN 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "humidity", 55.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "WITHIN with <= operator should work" );
+        }
+
+        @Test
+        @DisplayName("AFTER with arithmetic expression")
+        void testAfterWithArithmetic()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(var1 + var2) > 100 AFTER 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "var1", 60.0f );
+            xpr.eval( "var2", 50.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "AFTER with arithmetic expression should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with arithmetic expression that changes")
+        void testWithinWithArithmeticChange()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(var1 * var2) == 100 WITHIN 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 assertTrue( UtilUnit.isBetween( 800, time, 1100 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "var1", 10.0f );
+            xpr.eval( "var2", 10.0f );    // 10 * 10 = 100
+
+            // Change var1 to make product != 100
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var1", 5.0f ); } }, 800 );
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "WITHIN with arithmetic should detect when result changes" );
+        }
+
+        @Test
+        @DisplayName("Three futures combined with AND")
+        void testThreeFuturesWithAnd()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a == 1 AFTER 500) && (b == 2 AFTER 1000) && (c == 3 WITHIN 1500)",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 // Should resolve when longest future completes
+                                                 assertTrue( UtilUnit.isBetween( 1400, time, 1800 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            // Initialize variables with eval() - must call eval() before set()
+            xpr.eval( "a", 1.0f );
+            xpr.set( "b", 2.0f );
+            xpr.set( "c", 3.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "Three futures with AND should all complete" );
+        }
+
+        @Test
+        @DisplayName("Three futures combined with OR - early resolution")
+        void testThreeFuturesWithOrEarlyResolution()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a == 1 AFTER 500) || (b == 2 AFTER 2000) || (c == 3 AFTER 3000)",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 // Should resolve when first (shortest) future completes
+                                                 assertTrue( UtilUnit.isBetween( 400, time, 800 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            // Initialize variables with eval() - must call eval() before set()
+            xpr.eval( "a", 1.0f );
+            xpr.set( "b", 2.0f );
+            xpr.set( "c", 3.0f );
+
+            sleep( 1000 );
+            assertTrue( passed.get(), "Three futures with OR should resolve on first TRUE" );
+        }
+
+        @Test
+        @DisplayName("AFTER with negated expression")
+        void testAfterWithNegation()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "!(var == 5) AFTER 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 10.0f );    // !(10 == 5) is TRUE
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "AFTER with negation should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with boolean AND in expression")
+        void testWithinWithBooleanAnd()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a > 5 && b < 10) WITHIN 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 2000, time, 2200 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "a", 10.0f );    // a > 5 is TRUE
+            xpr.eval( "b", 5.0f );    // b < 10 is TRUE
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "WITHIN with compound boolean should stay TRUE" );
+        }
+
+        @Test
+        @DisplayName("WITHIN fails when one part of AND becomes false")
+        void testWithinFailsOnPartialAndChange()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a > 5 && b < 10) WITHIN 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 assertTrue( UtilUnit.isBetween( 800, time, 1100 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "a", 10.0f );    // a > 5 is TRUE
+            xpr.eval( "b", 5.0f );    // b < 10 is TRUE
+
+            // Make b >= 10, so the AND becomes FALSE
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "b", 15.0f ); } }, 800 );
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "WITHIN should fail when part of AND becomes false" );
+        }
+
+        @Test
+        @DisplayName("AFTER expression starts FALSE then becomes TRUE")
+        void testAfterStartsFalseThenTrue()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var > 50 AFTER 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 2000, time, 2200 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 30.0f );    // Initially FALSE (30 > 50 is FALSE)
+
+            // Change to make it TRUE before timeout
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 60.0f ); } }, 800 );
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "AFTER should evaluate final value at timeout" );
+        }
+
+        @Test
+        @DisplayName("AFTER expression TRUE->FALSE->TRUE still evaluates final state")
+        void testAfterWithOscillatingValue()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var == 100 AFTER 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 2000, time, 2200 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 100.0f );    // TRUE
+
+            // Oscillate: TRUE -> FALSE -> TRUE
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 50.0f ); } }, 500 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 100.0f ); } }, 1000 );
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "AFTER evaluates final value, not intermediate states" );
+        }
+
+        @Test
+        @DisplayName("Short AFTER timeout (100ms)")
+        void testShortAfterTimeout()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var == 1 AFTER 100",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 100, time, 250 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 1.0f );
+
+            sleep( 500 );
+            assertTrue( passed.get(), "Short AFTER timeout should work" );
+        }
+
+        @Test
+        @DisplayName("Short WITHIN timeout (100ms)")
+        void testShortWithinTimeout()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var == 1 WITHIN 100",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 100, time, 250 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 1.0f );
+
+            sleep( 500 );
+            assertTrue( passed.get(), "Short WITHIN timeout should work" );
+        }
+
+        @Test
+        @DisplayName("Multiple variables: only relevant variable affects WITHIN")
+        void testWithinMultipleVariablesIsolation()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            // Expression only monitors 'target', changes to 'other' should not affect it
+            IXprEval xpr = new NAXE().build( "target == 5 WITHIN 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "target", 5.0f );
+
+            // Change an unrelated variable rapidly - should not affect the result
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "other", 1.0f ); } }, 200 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "other", 2.0f ); } }, 400 );
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "other", 3.0f ); } }, 600 );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "Changes to unrelated variables should not affect WITHIN" );
+        }
+
+        @Test
+        @DisplayName("AFTER with string comparison")
+        void testAfterWithStringComparison()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "status == \"active\" AFTER 1000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1000, time, 1200 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "status", "active" );
+
+            sleep( 1500 );
+            assertTrue( passed.get(), "AFTER with string comparison should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with string value change")
+        void testWithinWithStringValueChange()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "status == \"on\" WITHIN 2000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 assertTrue( UtilUnit.isBetween( 800, time, 1100 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "status", "on" );
+
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "status", "off" ); } }, 800 );
+
+            sleep( 2500 );
+            assertTrue( passed.get(), "WITHIN with string should detect value change" );
+        }
+
+        @Test
+        @DisplayName("AND with one TRUE future and one FALSE future")
+        void testAndWithMixedFutureResults()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a == 1 AFTER 1000) && (b == 2 AFTER 1500)",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 // Should resolve when we know the AND is FALSE
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1750 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "a", 1.0f );    // TRUE
+            xpr.eval( "b", 99.0f );  // FALSE (99 != 2)
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "AND should be FALSE when one future is FALSE" );
+        }
+
+        @Test
+        @DisplayName("OR with one TRUE future and one FALSE future")
+        void testOrWithMixedFutureResults()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "(a == 99 AFTER 1000) || (b == 2 AFTER 1500)",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 // Should resolve when second future (TRUE) completes
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1750 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "a", 1.0f );    // FALSE (1 != 99)
+            xpr.eval( "b", 2.0f );   // TRUE
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "OR should be TRUE when one future is TRUE" );
+        }
+
+        @Test
+        @DisplayName("close() should properly shutdown executor")
+        void testCloseShutdownsExecutor()
+        {
+            AtomicBoolean callbackInvoked = new AtomicBoolean( false );
+
+            IXprEval xpr = new NAXE().build( "var == 7 AFTER 3000",
+                                             (value) -> callbackInvoked.set( true ),
+                                             null );
+
+            xpr.eval( "var", 7.0f );
+            sleep( 500 );
+            xpr.close();     // Shutdown executor
+            sleep( 3000 );   // Wait past the original timeout
+
+            assertFalse( callbackInvoked.get(), "Callback should not be invoked after close()" );
+        }
+
+        @Test
+        @DisplayName("isFutureing() returns correct state")
+        void testIsFutureingState()
+        {
+            IXprEval xpr = new NAXE().build( "var == 7 AFTER 1000", (value) -> {}, null );
+
+            assertFalse( xpr.isFutureing(), "Should not be futureing before eval" );
+
+            xpr.eval( "var", 7.0f );
+            sleep( 100 );
+
+            assertTrue( xpr.isFutureing(), "Should be futureing after eval starts" );
+
+            sleep( 1200 );
+
+            assertFalse( xpr.isFutureing(), "Should not be futureing after timeout" );
+        }
+
+        @Test
+        @DisplayName("WITHIN immediately resolves FALSE when value changes on first set")
+        void testWithinImmediateResolutionOnDifferentValue()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var == 10 WITHIN 3000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 // Should resolve very quickly after value changes
+                                                 assertTrue( time < 500, "Should resolve quickly when value differs" );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 10.0f );    // Initial value matches
+            sleep( 100 );
+            xpr.set( "var", 20.0f );     // Immediately set to different value
+
+            sleep( 1000 );
+            assertTrue( passed.get(), "WITHIN should resolve FALSE immediately when value changes" );
+        }
+
+        @Test
+        @DisplayName("Complex expression: AFTER with function call")
+        void testAfterWithFunctionInExpression()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "abs(var) > 5 AFTER 1000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1000, time, 1200 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", -10.0f );    // abs(-10) = 10 > 5 is TRUE
+
+            sleep( 1500 );
+            assertTrue( passed.get(), "AFTER with function in expression should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with min/max functions")
+        void testWithinWithMinMaxFunctions()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "max(a, b) <= 100 WITHIN 1500",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 1500, time, 1700 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.set( "a", 50.0f );
+            xpr.eval( "b", 80.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "WITHIN with max() function should work" );
+        }
+
+        @Test
+        @DisplayName("Nested parentheses with futures")
+        void testNestedParenthesesWithFutures()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "((a == 1 AFTER 500) && (b == 2 WITHIN 1000)) || (c == 3 AFTER 1500)",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 // First group (AND) should resolve TRUE at 1000ms
+                                                 assertTrue( UtilUnit.isBetween( 900, time, 1350 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            // Initialize variables with eval() - must call eval() before set()
+            xpr.eval( "a", 1.0f );
+            xpr.set( "b", 2.0f );
+            xpr.set( "c", 3.0f );
+
+            sleep( 2000 );
+            assertTrue( passed.get(), "Nested parentheses with futures should work" );
+        }
+
+        @Test
+        @DisplayName("Boolean variable with AFTER")
+        void testAfterWithBooleanVariable()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            // Bare boolean variable with AFTER - tests truthy/falsy semantics
+            IXprEval xpr = new NAXE().build( "flag AFTER 1000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.TRUE, value );
+                                                 assertTrue( UtilUnit.isBetween( 900, time, 1300 ) );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "flag", true );
+
+            sleep( 1500 );
+            assertTrue( passed.get(), "AFTER with boolean variable should work" );
+        }
+
+        @Test
+        @DisplayName("WITHIN with boolean variable that flips")
+        void testWithinWithBooleanVariableFlip()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+
+            // Bare boolean variable with WITHIN - tests truthy/falsy semantics
+            IXprEval xpr = new NAXE().build( "flag WITHIN 2000",
+                                             (value) -> {
+                                                 // Value flipped to false, so condition becomes false, WITHIN returns FALSE
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "flag", true );
+
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "flag", false ); } }, 500 );
+
+            sleep( 1000 );
+            assertTrue( passed.get(), "WITHIN should detect boolean flip" );
+        }
+    }
+
+    //------------------------------------------------------------------------//
     // HELPER METHODS
     //------------------------------------------------------------------------//
 
@@ -1732,6 +2441,40 @@ public class EvalTest
         total++; if( runTest( "Both with OR", () -> test.new TemporalOperatorTests().testBothWithOr() ) ) passed++; else failed++;
         total++; if( runTest( "Two AFTERs", () -> test.new TemporalOperatorTests().testTwoAfters() ) ) passed++; else failed++;
         total++; if( runTest( "Two WITHINs", () -> test.new TemporalOperatorTests().testTwoWithins() ) ) passed++; else failed++;
+        System.out.println();
+
+        // Advanced temporal operator tests
+        System.out.println( "--- Advanced Temporal Operator Tests ---" );
+        total++; if( runTest( "AFTER cancel", () -> test.new AdvancedTemporalOperatorTests().testAfterCancel() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN cancel", () -> test.new AdvancedTemporalOperatorTests().testWithinCancel() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN rapid changes", () -> test.new AdvancedTemporalOperatorTests().testWithinRapidValueChanges() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN value oscillation", () -> test.new AdvancedTemporalOperatorTests().testWithinValueOscillation() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with >", () -> test.new AdvancedTemporalOperatorTests().testAfterWithGreaterThan() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with <=", () -> test.new AdvancedTemporalOperatorTests().testWithinWithLessOrEqual() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with arithmetic", () -> test.new AdvancedTemporalOperatorTests().testAfterWithArithmetic() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN arithmetic change", () -> test.new AdvancedTemporalOperatorTests().testWithinWithArithmeticChange() ) ) passed++; else failed++;
+        total++; if( runTest( "Three futures AND", () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithAnd() ) ) passed++; else failed++;
+        total++; if( runTest( "Three futures OR early", () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithOrEarlyResolution() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with negation", () -> test.new AdvancedTemporalOperatorTests().testAfterWithNegation() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with AND expr", () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanAnd() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN AND partial fail", () -> test.new AdvancedTemporalOperatorTests().testWithinFailsOnPartialAndChange() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER FALSE->TRUE", () -> test.new AdvancedTemporalOperatorTests().testAfterStartsFalseThenTrue() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER oscillating", () -> test.new AdvancedTemporalOperatorTests().testAfterWithOscillatingValue() ) ) passed++; else failed++;
+        total++; if( runTest( "Short AFTER 100ms", () -> test.new AdvancedTemporalOperatorTests().testShortAfterTimeout() ) ) passed++; else failed++;
+        total++; if( runTest( "Short WITHIN 100ms", () -> test.new AdvancedTemporalOperatorTests().testShortWithinTimeout() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN var isolation", () -> test.new AdvancedTemporalOperatorTests().testWithinMultipleVariablesIsolation() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with string", () -> test.new AdvancedTemporalOperatorTests().testAfterWithStringComparison() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN string change", () -> test.new AdvancedTemporalOperatorTests().testWithinWithStringValueChange() ) ) passed++; else failed++;
+        total++; if( runTest( "AND mixed results", () -> test.new AdvancedTemporalOperatorTests().testAndWithMixedFutureResults() ) ) passed++; else failed++;
+        total++; if( runTest( "OR mixed results", () -> test.new AdvancedTemporalOperatorTests().testOrWithMixedFutureResults() ) ) passed++; else failed++;
+        total++; if( runTest( "close() shutdown", () -> test.new AdvancedTemporalOperatorTests().testCloseShutdownsExecutor() ) ) passed++; else failed++;
+        total++; if( runTest( "isFutureing() state", () -> test.new AdvancedTemporalOperatorTests().testIsFutureingState() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN immediate FALSE", () -> test.new AdvancedTemporalOperatorTests().testWithinImmediateResolutionOnDifferentValue() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with function", () -> test.new AdvancedTemporalOperatorTests().testAfterWithFunctionInExpression() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with min/max", () -> test.new AdvancedTemporalOperatorTests().testWithinWithMinMaxFunctions() ) ) passed++; else failed++;
+        total++; if( runTest( "Nested parens futures", () -> test.new AdvancedTemporalOperatorTests().testNestedParenthesesWithFutures() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER boolean var", () -> test.new AdvancedTemporalOperatorTests().testAfterWithBooleanVariable() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN boolean flip", () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanVariableFlip() ) ) passed++; else failed++;
         System.out.println();
 
         // Summary

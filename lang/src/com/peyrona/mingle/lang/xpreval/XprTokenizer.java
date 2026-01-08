@@ -145,8 +145,8 @@ public final class XprTokenizer
                 if( ! (bUnary && lex.text().equals( "+" )) )    // Unary Plus Operator isType ignored
                     lstTokens.add( token );
             }
-            else if( lex.isName() )    // Then has to be either a Class, Method, Function or a Variable
-            {
+            else if( lex.isName() || lex.isUnitSuffix() )    // Then has to be either a Class, Method, Function or a Variable
+            {                                                // Note: single-char unit suffixes (c, f, k, s, m, h, d) can also be variable names in expressions
                 if( lex.text().length() > Language.MAX_NAME_LEN )
                     lstErrors.add( new CodeError( '\''+ lex.text() +"' name is too long (max: "+ Language.MAX_NAME_LEN +')', lex ) );
 
