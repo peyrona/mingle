@@ -110,6 +110,16 @@ public abstract class      ControllerBase
         return this;
     }
 
+    protected ControllerBase setDeviceConfig( Map<String,Object> map )
+    {
+        if( mapConfig == null )
+            mapConfig = new HashMap<>();
+
+        mapConfig.putAll( map );
+
+        return this;
+    }
+
     protected ControllerBase setListener( IController.Listener l )
     {
         listener = l;     // Atomic
@@ -157,6 +167,11 @@ public abstract class      ControllerBase
     //------------------------------------------------------------------------//
     // ACCESSING DEVICE CONFIGURATION
 
+    protected boolean isStarted()
+    {
+        return getRuntime() != null;
+    }
+
     protected Object get( String name )
     {
         return mapConfig.get( name );
@@ -179,15 +194,6 @@ public abstract class      ControllerBase
         throw new MingleException( MingleException.INVALID_ARGUMENTS );
     }
 
-    protected ControllerBase set( Map<String,Object> map )
-    {
-        if( mapConfig == null )
-            mapConfig = new HashMap<>();
-
-        mapConfig.putAll( map );
-
-        return this;
-    }
     protected ControllerBase set( String name, Object value )
     {
         if( mapConfig == null )

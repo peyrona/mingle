@@ -4,7 +4,6 @@ package com.peyrona.mingle.lang.japi;
 import com.peyrona.mingle.lang.MingleException;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
@@ -31,9 +30,11 @@ public final class Dispatcher<T>
     // 1. It is bounded (prevents OOM).
     // 2. It is backed by a single array (no Node object allocation per item).
 
-    private volatile BlockingQueue<T>    queue;
+    private static final Object          RESIZE_SIGNAL = new Object();
+
+    private volatile BlockingQueue<Object> queue;
     private final    int                 maxCapacity;
-    private final    AtomicInteger       pauseCount   = new AtomicInteger( 1 );  // Starts paused (count=1)
+    private volatile int                 pauseCount   = 1;                       // Starts paused (count=1), writes under pauseLock, reads can be lock-free
     private volatile boolean             isProcessing = false;                   // True while consumer.accept() is running
     private final    AtomicLong          msgCount     = new AtomicLong( 0 );
     private final    Consumer<T>         consumer;
@@ -93,7 +94,15 @@ public final class Dispatcher<T>
     {
         if( thrQueue == null )
         {
-            pauseCount.set( 0 );   // Reset state on start (not paused)
+            pauseLock.lock();
+            try
+            {
+                pauseCount = 0;   // Reset state on start (not paused)
+            }
+            finally
+            {
+                pauseLock.unlock();
+            }
             thrQueue = new Thread( this::execute, thrName );
             thrQueue.start();
         }
@@ -103,15 +112,39 @@ public final class Dispatcher<T>
 
     /**
      * Stops the dispatcher.
+     * <p>
+     * This method interrupts the processing thread and waits for it to terminate
+     * before clearing the queue, ensuring no race conditions with a subsequent start().
+     *
      * @return Itself.
      */
     public synchronized Dispatcher<T> stop()
     {
         if( thrQueue != null )
         {
-            thrQueue.interrupt();
+            Thread t = thrQueue;
             thrQueue = null;
-            pauseCount.set( 1 );   // Mark as paused
+            t.interrupt();
+
+            // Wait for thread to terminate to avoid race with immediate start()
+            try
+            {
+                t.join( 5000 );   // Wait up to 5 seconds for graceful termination
+            }
+            catch( InterruptedException e )
+            {
+                Thread.currentThread().interrupt();
+            }
+
+            pauseLock.lock();
+            try
+            {
+                pauseCount = 1;   // Mark as paused
+            }
+            finally
+            {
+                pauseLock.unlock();
+            }
             queue.clear();
         }
 
@@ -125,7 +158,7 @@ public final class Dispatcher<T>
      */
     public boolean isPaused()
     {
-        return pauseCount.get() > 0;
+        return pauseCount > 0;   // volatile read, no lock needed
     }
 
     /**
@@ -146,7 +179,7 @@ public final class Dispatcher<T>
 
         try
         {
-            pauseCount.incrementAndGet();
+            pauseCount++;
 
             // Wait for any in-flight message processing to complete
             while( isProcessing )
@@ -184,13 +217,13 @@ public final class Dispatcher<T>
 
         try
         {
-            int count = pauseCount.decrementAndGet();
+            pauseCount--;
 
-            if( count < 0 )
-                pauseCount.set( 0 );   // Prevent negative count from unbalanced calls
+            if( pauseCount < 0 )
+                pauseCount = 0;   // Prevent negative count from unbalanced calls
 
-            if( pauseCount.get() == 0 )
-                unpaused.signalAll();
+            if( pauseCount == 0 )
+                unpaused.signal();   // Only one consumer thread, signal() suffices
         }
         finally
         {
@@ -208,13 +241,18 @@ public final class Dispatcher<T>
      * @param item Item to add to the queue.
      * @return Itself.
      */
-    public synchronized Dispatcher<T> add( T item )
+    public Dispatcher<T> add( T item )
     {
         assert item != null;
 
-        if( ! queue.offer( item ) )   // If offer fails, it means the queue is full.
+        // Fast path: ArrayBlockingQueue.offer() is thread-safe
+        if( queue.offer( item ) )
+            return this;
+
+        // Slow path: queue is full, need synchronization for potential resize
+        synchronized( this )
         {
-            checkAndGrow();           // Tries to increment
+            checkAndGrow();
 
             if( ! queue.offer( item ) )
                 onError.accept( new MingleException( "Dispatcher queue is at max capacity (" + maxCapacity + "). Event dropped." ) );
@@ -269,13 +307,19 @@ public final class Dispatcher<T>
 
             if( newCapacity > currentCapacity )
             {
-                BlockingQueue<T> newQueue = new ArrayBlockingQueue<>( newCapacity );
+                BlockingQueue<Object> newQueue = new ArrayBlockingQueue<>( newCapacity );
+                BlockingQueue<Object> oldQueue = this.queue;
 
                 synchronized( this )
                 {
-                    queue.drainTo( newQueue );
+                    oldQueue.drainTo( newQueue );
                     this.queue = newQueue;
                 }
+
+                // If the consumer is blocked waiting for an item in the old queue, we must
+                // wake it up so it can switch to the new queue.
+                // We do this by inserting a special dummy object.
+                oldQueue.offer( RESIZE_SIGNAL );
             }
         }
     }
@@ -284,59 +328,95 @@ public final class Dispatcher<T>
     {
         Thread tCurrent = Thread.currentThread();
 
-        while( !tCurrent.isInterrupted() )
+        while( ! tCurrent.isInterrupted() )
         {
             T val = null;
 
             try
             {
                 // Wait for message from queue
-                val = queue.take();
+                Object obj = queue.take();
+
+                if( obj == RESIZE_SIGNAL )
+                    continue;
+
+                val = (T) obj;
 
                 if( tCurrent.isInterrupted() )
                     break;
 
-                // CRITICAL: Check pause status and set isProcessing atomically AFTER getting
-                // the message. This prevents the race where pause() returns while we're about
-                // to start processing.
-                pauseLock.lock();
-
-                try
+                // FAST PATH: If not paused, process without acquiring lock.
+                // This is the common case and avoids lock overhead.
+                if( pauseCount == 0 )
                 {
-                    // Wait if paused - must check AFTER getting message to prevent race
-                    while( pauseCount.get() > 0 && ! tCurrent.isInterrupted() )
-                        unpaused.await();
+                    isProcessing = true;   // volatile write
 
-                    if( tCurrent.isInterrupted() )
-                        break;
+                    try
+                    {
+                        consumer.accept( val );
+                        msgCount.incrementAndGet();
+                    }
+                    finally
+                    {
+                        isProcessing = false;   // volatile write
 
-                    // Mark as processing while still holding the lock
-                    isProcessing = true;
+                        // Check if pause() is waiting - only signal if someone might be waiting
+                        if( pauseCount > 0 )
+                        {
+                            pauseLock.lock();
+                            try
+                            {
+                                notProcessing.signal();
+                            }
+                            finally
+                            {
+                                pauseLock.unlock();
+                            }
+                        }
+                    }
                 }
-                finally
+                else
                 {
-                    pauseLock.unlock();
-                }
-
-                // Process the message
-                try
-                {
-                    consumer.accept( val );
-                    msgCount.incrementAndGet();
-                }
-                finally
-                {
-                    // Mark as not processing and signal any waiting pause() callers
+                    // SLOW PATH: Paused - must use lock-based coordination
                     pauseLock.lock();
 
                     try
                     {
-                        isProcessing = false;
-                        notProcessing.signalAll();
+                        // Wait if paused - must check AFTER getting message to prevent race
+                        while( pauseCount > 0 && ! tCurrent.isInterrupted() )
+                            unpaused.await();
+
+                        if( tCurrent.isInterrupted() )
+                            break;
+
+                        // Mark as processing while still holding the lock
+                        isProcessing = true;
                     }
                     finally
                     {
                         pauseLock.unlock();
+                    }
+
+                    // Process the message
+                    try
+                    {
+                        consumer.accept( val );
+                        msgCount.incrementAndGet();
+                    }
+                    finally
+                    {
+                        // Mark as not processing and signal any waiting pause() callers
+                        pauseLock.lock();
+
+                        try
+                        {
+                            isProcessing = false;
+                            notProcessing.signal();   // Only one waiter possible
+                        }
+                        finally
+                        {
+                            pauseLock.unlock();
+                        }
                     }
                 }
             }
@@ -350,9 +430,7 @@ public final class Dispatcher<T>
                 String sErr = "Error in " + tCurrent.getName() + ", using value: " +
                               (val == null ? "N/A" : val.toString());
 
-                // We must wrap Throwable in an Exception to match the Consumer<Exception> signature
-                // or assume MingleException can wrap Throwable.
-                onError.accept( new MingleException( sErr, new Exception(exc) ) );
+                onError.accept( new MingleException( sErr, exc ) );
             }
         }
     }

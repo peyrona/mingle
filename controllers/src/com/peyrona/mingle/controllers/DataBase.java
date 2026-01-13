@@ -32,17 +32,17 @@ public final class   DataBase
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         // DB Controller can work even if Use_Disk is off because the DB could reside in another machine
 
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        String sJARs = (String) mapConfig.get( "jars" );
-        String sJDBC = (String) mapConfig.get( "jdbc" );
+        String sJARs = (String) deviceConf.get( "jars" );
+        String sJDBC = (String) deviceConf.get( "jdbc" );
 
-        set( mapConfig );   // Can be done because mapConfig values are not modified
+        setDeviceConfig( deviceConf );   // Can be done because mapConfig values are not modified
 
         if( isFaked() )
         {
@@ -52,7 +52,7 @@ public final class   DataBase
 
         try
         {
-            String    sURL   = (String) mapConfig.get( "url" );
+            String    sURL   = (String) deviceConf.get( "url" );
             List<URI> lstURL = UtilIO.expandPath( sURL );
 
             if( lstURL.size() != 1 )

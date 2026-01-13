@@ -14,8 +14,6 @@ import java.nio.file.FileStore;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.file.attribute.PosixFilePermission;
-import java.nio.file.attribute.PosixFilePermissions;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalTime;
@@ -71,32 +69,6 @@ public final class UtilSys
                                 "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11.\n"+
                                 "Can not continue.");
             System.exit( 1 );
-        }
-
-        // These are needed to be created if they do not exist. IOException is never thrown, even if HD is read-only.
-        File fLog = new File( fHomeDir, "log" );
-        File fTmp = new File( fHomeDir, "tmp" );
-        File fEtc = new File( fHomeDir, "etc" );  // This one has no macro associated because it is used internally only
-
-        // If the app is invoked the first time with 'sudo', created folders will have only 'sudo' priviledges.
-        // If subsequent invocations are done without 'sudo', the access to these created folders will be rejected.
-
-        try // Only one 'try-catch' because if it can be done with the first, it can be done with the other two
-        {
-            Set<PosixFilePermission> permissions = PosixFilePermissions.fromString( "rwxrwxrwx" );
-
-            if( UtilIO.mkdirs( fLog ) )
-                Files.setPosixFilePermissions( fLog.toPath(), permissions );
-
-            if( UtilIO.mkdirs( fTmp ) )
-                Files.setPosixFilePermissions( fTmp.toPath(), permissions );
-
-            if( UtilIO.mkdirs( fEtc ) )
-                Files.setPosixFilePermissions( fEtc.toPath(), permissions );
-        }
-        catch( Exception twl )
-        {
-            getLogger().log( ILogger.Level.WARNING, twl );
         }
     }
 

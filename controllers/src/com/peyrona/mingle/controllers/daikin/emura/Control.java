@@ -46,7 +46,7 @@ public final class   Control
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
@@ -54,10 +54,10 @@ public final class   Control
         try
         {
             if( ! isFaked() )
-                talker = new Talker( deviceInit.get( "address" ).toString() );    // This is mandatory
+                talker = new Talker( deviceConf.get( "address" ).toString() );    // This is mandatory
 
             setValid( true );
-            set( deviceInit );
+            setDeviceConfig( deviceConf );
         }
         catch( IOException ioe )    // MalformedURLException extends IOException
         {
@@ -269,7 +269,7 @@ public final class   Control
 //                           map.put( "address", "192.168.7.246" );
 //
 //        Control control = new Control();
-//                control.set( "A.C.", map, listener );
+//                control.setDeviceConfig( "A.C.", map, listener );
 //
 //        pair p = new pair( "power", false );
 //

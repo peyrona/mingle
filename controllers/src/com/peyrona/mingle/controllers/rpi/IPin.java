@@ -11,8 +11,6 @@ public interface IPin
 {
     Object  read();                   // Boolean when isDigital() and Integer when isAnalog()
     void    write( boolean value );
-    void    write( int value );
     void    cleanup();
     boolean isInput();
-    boolean isDigital();
 }

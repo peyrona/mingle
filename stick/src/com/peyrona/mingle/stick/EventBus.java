@@ -33,7 +33,9 @@ public class EventBus implements IEventBus
     // In other words:
     // This map has as keys the Message's classes that listeners are subscribed and as values,
     // a list with all listeners that are subscribed to this class of Message.
-    private final Map<Class<? extends Message>, Set<IEventBus.Listener>> mapListeners = new ConcurrentHashMap<>();
+    private final Map<Class<? extends Message>, Set<IEventBus.Listener>> mapListeners  = new ConcurrentHashMap<>();
+    // This map exists to reduce looking into previous map (to save CPU).
+    private final Set<IEventBus.Listener>                                rootListeners = new CopyOnWriteArraySet<>();
     private final Dispatcher<Message> dispatcher;
 
     //----------------------------------------------------------------------------//
@@ -105,7 +107,10 @@ public class EventBus implements IEventBus
     {
         for( Class<? extends Message> type : eventTypes )
         {
-            mapListeners.computeIfAbsent( type, k -> new CopyOnWriteArraySet<>() ).add( listener );
+            if( type == Message.class )
+                rootListeners.add( listener );
+            else
+                mapListeners.computeIfAbsent( type, k -> new CopyOnWriteArraySet<>() ).add( listener );
         }
 
         return this;
@@ -117,6 +122,9 @@ public class EventBus implements IEventBus
         // CARE: the listener can be in more than one list (entry in the map)
 
         boolean bExisted = false;
+
+        if( rootListeners.remove( listener ) )
+            bExisted = true;
 
         for( Set<Listener> set : mapListeners.values() )
         {
@@ -221,14 +229,14 @@ public class EventBus implements IEventBus
         try
         {
             // 1. Notify listeners registered for the specific message class
-            notifyListeners( msg, mapListeners.get( msg.getClass() ) );
+            Class<? extends Message> msgClass = msg.getClass();
+
+            if( msgClass != Message.class )
+                notifyListeners( msg, mapListeners.get( msgClass ) );
 
             // 2. Notify listeners registered for the generic Message class (if different)
             // This maintains the existing logic: Specific Class + Root Class only.
-            if( msg.getClass() != Message.class )
-            {
-                notifyListeners( msg, mapListeners.get( Message.class ) );
-            }
+            notifyListeners( msg, rootListeners );
         }
         catch( Throwable exc )    // Catch-all to prevent the dispatcher thread from dying if something unexpected
         {                         // happens outside the listener loops (e.g. map corruption, OOM).
@@ -245,7 +253,7 @@ public class EventBus implements IEventBus
 
             UtilSys.getLogger()
                    .log( ILogger.Level.SEVERE,
-                         new MingleException( "Error '" + exc.getMessage() + "' while dispatching message: " + sMsg, new Exception(exc) ) );
+                         new MingleException( "Error '" + exc.getMessage() + "' dispatching message: " + sMsg, new Exception(exc) ) );
         }
     }
 
@@ -261,7 +269,7 @@ public class EventBus implements IEventBus
         if( listeners == null || listeners.isEmpty() )
             return;
 
-        for( IEventBus.Listener listener : listeners )
+        listeners.forEach( listener ->
         {
             try
             {
@@ -275,7 +283,7 @@ public class EventBus implements IEventBus
 
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to: " + exc.toString() );
             }
-        }
+        } );
     }
 
     //------------------------------------------------------------------------//

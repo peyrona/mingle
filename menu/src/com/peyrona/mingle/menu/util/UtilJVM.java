@@ -8,9 +8,7 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.HashSet;
 import java.util.List;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,7 +52,7 @@ public final class UtilJVM
 
         List<String> command = new ArrayList<>();
                      command.add( UtilJVM.findJavaCmd() );
-                     command.add( "-javaagent:lib/lang.jar" );
+                     command.add( "-javaagent:" + new File( UtilSys.getWorkingDir(), "lib/lang.jar" ).getAbsolutePath() );
                      command.add( "-cp" );
                      command.add( getClasspath() );
                      command.addAll( lstOptions );
@@ -67,12 +65,49 @@ public final class UtilJVM
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
+    /**
+     * Builds a wildcard-based classpath for the lib directory and its subdirectories.
+     * Uses wildcard syntax (lib/*) instead of listing individual JARs to avoid
+     * extremely long classpath strings that can cause issues with systemd services.
+     */
     private static String getClasspath()
     {
         if( sClassPath == null )
         {
-            sClassPath = String.join( File.pathSeparator,
-                                      findJarsRecursive(UtilSys.getWorkingDir(), "controllers", new HashSet<>() ) );
+            File libDir = new File( UtilSys.getWorkingDir(), "lib" );
+            List<String> classpathEntries = new ArrayList<>();
+
+            // Add main lib directory wildcard
+            classpathEntries.add( new File( libDir, "*" ).getAbsolutePath() );
+
+            // Add wildcard entries for subdirectories that contain JARs
+            File[] subDirs = libDir.listFiles( File::isDirectory );
+
+            if( subDirs != null )
+            {
+                for( File subDir : subDirs )
+                {
+                    String dirName = subDir.getName().toLowerCase();
+
+                    // Skip controllers, JDK and JRE directories
+                    if( dirName.equals( "controllers" ) ||
+                        dirName.contains( "jdk" ) ||
+                        dirName.contains( "jre" ) )
+                    {
+                        continue;
+                    }
+
+                    // Check if this subdirectory contains any JAR files
+                    File[] jars = subDir.listFiles( (dir, name) -> name.toLowerCase().endsWith( ".jar" ) );
+
+                    if( jars != null && jars.length > 0 )
+                    {
+                        classpathEntries.add( new File( subDir, "*" ).getAbsolutePath() );
+                    }
+                }
+            }
+
+            sClassPath = String.join( File.pathSeparator, classpathEntries );
         }
 
         return sClassPath;
@@ -90,30 +125,6 @@ public final class UtilJVM
         }
 
         return arg;
-    }
-
-    private static Set<String> findJarsRecursive( File currentDirectory, String excludeFolderName, Set<String> lstClassPath )
-    {
-        File[] filesAndDirs = currentDirectory.listFiles();
-
-        if( filesAndDirs == null )
-            return lstClassPath;
-
-        for( File fileOrDir : filesAndDirs )
-        {
-            if( fileOrDir.isDirectory() )
-            {
-                if( ! fileOrDir.getName().equals( excludeFolderName ) )
-                    findJarsRecursive( fileOrDir, excludeFolderName, lstClassPath );
-
-            }
-            else if( fileOrDir.isFile() && fileOrDir.getName().toLowerCase().endsWith( ".jar" ) )
-            {
-                lstClassPath.add( fileOrDir.getAbsolutePath() );
-            }
-        }
-
-        return lstClassPath;
     }
 
     private static String findJavaCmd()

@@ -75,18 +75,18 @@ public final class      Driver
                         @Override
                         public void onError( ILogger.Level level, String message, String device )
                         {
-                            getRuntime().log( level, message + (device == null ? "" : " Device; '"+ device +'\'') );
+                            if( message == null )
+                                message = "No information message";
+
+                            getRuntime().log( level, message + "; Device: '"+ device +'\'' );
                         }
 
                         private boolean check( String name, Object value )
                         {
-                            if( name != null && value != null )
-                                return true;
+                            if( name  == null )  getRuntime().log( ILogger.Level.SEVERE, "Error at '"+ scriptName +"': device name is 'null'" );
+                            if( value == null )  getRuntime().log( ILogger.Level.SEVERE, "Error at '"+ scriptName +"': 'null' notified as new value for '"+ name +'\'' );
 
-                            if( name  == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: device name is 'null'" );
-                            if( value == null )  getRuntime().log( ILogger.Level.SEVERE, "Error: 'null' notified as new value for '"+ name +'\'' );
-
-                            return false;
+                            return (name != null && value != null);
                         }
                     };
     }
@@ -101,16 +101,38 @@ public final class      Driver
 
         super.start( rt );
 
+        if( isEmpty() )
+            return;
+
+// TODO: mejorar cómo se inician los Controladores: primero llamar a start() y luego a set()
+//        for( Iterator<String> itera = map.keySet().iterator(); itera.hasNext(); )
+//        {
+//            IController cntrlr = ((IScript) getRuntime().get( scriptName )).newController();
+//
+//            if( cntrlr.start( rt ) )
+//            {
+//                IDevice device = (IDevice) rt.get( itera.next() );
+//
+//                if( ! setController( cntrlr, device ) )   // Invalid entries
+//                    itera.remove();                       // have to be removed
+//            }
+//            else
+//            {
+//                itera.remove();
+//            }
+//        }
+
         for( Iterator<String> itera = map.keySet().iterator(); itera.hasNext(); )
         {
             IDevice     device = (IDevice) rt.get( itera.next() );
             IController cntrlr = setController( device );
 
-            if( cntrlr == null )   // Invalid entries...
+            if( cntrlr == null )   // Invalid entries
                 itera.remove();    // have to be removed
         }
 
-        map.values().forEach( (IController ctrlr) -> ctrlr.start( rt ) );
+        if( ! map.isEmpty() )
+            map.values().forEach( (IController ctrlr) -> ctrlr.start( rt ) );
     }
 
     @Override

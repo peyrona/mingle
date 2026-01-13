@@ -140,6 +140,10 @@ public final class ShellyRGBWPM
                                .connectTimeout( Duration.ofSeconds( timeout ) )
                                .build();
 
+// FIXME: activarlo cuando vaya a probar esta clase
+httpClient = null;
+//-------------------------------------------------
+
         // Start periodic status polling
         int interval = (int) get( KEY_INTERVAL );
 

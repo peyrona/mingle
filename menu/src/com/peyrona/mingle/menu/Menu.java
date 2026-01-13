@@ -486,6 +486,7 @@ final class Menu
             System.out.println( " 3 - Last 500 lines" );
             System.out.println( " 4 - Entire file" + (logFile.length() > 100000 ? " (large!)" : "") );
             System.out.println( " 5 - Follow mode (live updates)" );
+            System.out.println( " 6 - Delete this log file" );
             System.out.println( "-----------------------------------------------" );
 
             String choice = UtilUI.readInput( " Select option or [Enter] to go back: " );
@@ -510,9 +511,34 @@ final class Menu
                 case "5":
                     followLog( logFile );
                     break;
+                case "6":
+                    if( deleteLogFile( logFile ) )
+                        return;   // File deleted, go back to log list
+                    break;
                 default:
                     System.out.println( "Invalid option." );
             }
+        }
+    }
+
+    private boolean deleteLogFile( File logFile )
+    {
+        System.out.println();
+
+        if( ! UtilUI.confirm( "Are you sure you want to delete '" + logFile.getName() + "'?" ) )
+            return false;
+
+        if( logFile.delete() )
+        {
+            System.out.println( "Log file deleted successfully." );
+            UtilUI.pause();
+            return true;
+        }
+        else
+        {
+            System.out.println( "Error: Could not delete the log file." );
+            UtilUI.pause();
+            return false;
         }
     }
 
@@ -807,9 +833,9 @@ final class Menu
         boolean bSuccess = true;
 
         UtilUI.clearScreen();
-        System.out.println( "---------------------------------" );
-        System.out.println( "     ::: Service Manager :::" );
-        System.out.println( "---------------------------------" );
+        System.out.println( "-----------------------------------" );
+        System.out.println( "     ::: Service Manager :::"        );
+        System.out.println( "-----------------------------------" );
 
         if( orchestrator.isServiceManagerAvailable() )
         {
@@ -827,11 +853,11 @@ final class Menu
                 System.out.println( " 5 - Show service log" );
                 System.out.println( " 6 - Show service file contents" );
                 System.out.println( " 9 - Delete service file" );
-                System.out.println( "---------------------------------" );
-                System.out.println( " 0   + [Enter] to change tool"     );
-                System.out.println( " 1-9 + [Enter] to execute a task"  );
-                System.out.println( " Only  [Enter] to go back"         );
-                System.out.println( "---------------------------------" );
+                System.out.println( "-----------------------------------" );
+                System.out.println( " 0   + [Enter] to switch Gum/Stick"  );
+                System.out.println( " 1-9 + [Enter] to execute a task"    );
+                System.out.println( " Only  [Enter] to go back"           );
+                System.out.println( "-----------------------------------" );
             }
             else
             {

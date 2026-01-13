@@ -66,14 +66,13 @@ public final class   RPiGpioPin
     // PUBLIC SCOPE
 
     @Override
-    public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        setListener( listener );    // Must be at begining: in case an error happens, Listener is needed
-        setDeviceName( deviceName );      // Must be second line to have name of device in case of error
-        setValid( true );           // So far this is valid, but start() can change it
-        set( mapConfig );
+        setListener( listener );      // Must be at begining: in case an error happens, Listener is needed
+        setDeviceName( deviceName );  // Must be second line to have name of device in case of error
+        setValid( true );             // So far this is valid, but start() can change it
+        setDeviceConfig( deviceConf );
     }
-
 
     @Override
     public void start( IRuntime rt )
@@ -83,7 +82,7 @@ public final class   RPiGpioPin
 
         super.start( rt );
 
-        initWiringPi();         // Must be 2nd line because in case of error, the previous line is needed
+        initWiringPi();         // Must be 2nd line because in case of error, the start(...) is needed
         createPin( getDeviceConfig() );
         setValid( pin != null );
     }
@@ -128,8 +127,10 @@ public final class   RPiGpioPin
         {
             try
             {
-                if( newValue instanceof Boolean ) pin.write( (boolean) newValue );
-                else                              pin.write( UtilType.toInteger( newValue ) );
+                if( newValue instanceof Boolean )
+                    pin.write( (boolean) newValue );
+                else
+                    sendWriteError( newValue, new MingleException( "Only boolean values are valid" ) );
 
                 sendChanged( newValue );
             }
@@ -176,7 +177,6 @@ public final class   RPiGpioPin
         // NOTE: in received map, the keys had been lowered (are lower-case) by the transpiler. But the values preserve their case.
 
         boolean bSuccesss = true;
-        boolean isDigital = get( "type", "analog", true );                       // Everything except "analog" is "digital" (if not in map, true)
         boolean isInput   = get( "mode", "output", true );                       // Everything except "output" is "input"   (if not in map, true)
         boolean isInvert  = false;                                               // Makes true to be false and false to be true
         boolean isButton  = false;
@@ -223,13 +223,13 @@ public final class   RPiGpioPin
 
         String msg = " can be applied only when \"type\" is \"digital\" and \"mode\" is \"input\"";
 
-        if( isButton && ((! isInput) || (! isDigital)) )
+        if( isButton && (! isInput) )
         {
             sendIsInvalid( "\"isButton\""+ msg );
             bSuccesss = false;          // Do not create this pin
         }
 
-        if( (debounce > 0) && ((! isInput) || (! isDigital)) )
+        if( (debounce > 0) && (! isInput) )
         {
             sendIsInvalid( "\"debounce\""+ msg );
             bSuccesss = false;          // Do not create this pin
@@ -239,12 +239,6 @@ public final class   RPiGpioPin
         {
             sendGenericError( ILogger.Level.WARNING, "\"debounce\" must be >= 0, but was: "+ debounce +". It is set to default (zero)" );
             debounce = 0;
-        }
-
-        if( isInvert && (! isDigital) )
-        {
-            sendIsInvalid( "\"invert\" can be applied only when \"type\" is \"digital\"" );
-            bSuccesss = false;          // Do not create this pin
         }
 
         if( isButton && (! mapConfig.containsKey( "debounce" )) )
@@ -258,7 +252,7 @@ public final class   RPiGpioPin
             {
                 if( isFaked() )
                 {
-                    pin = new PinFaked( isDigital, isInput );
+                    pin = new PinFaked( isInput );
                 }
                 else
                 {
@@ -269,7 +263,7 @@ public final class   RPiGpioPin
                         if( isInput )
                             callback = (obj) -> sendReaded( obj );
 
-                        pin = new Pin( address, nPull, debounce, isDigital, isInput, isInvert, isButton, isBCM,
+                        pin = new Pin( address, nPull, debounce, isInput, isInvert, isButton, isBCM,
                                        callback, (String str) -> sendGenericError( ILogger.Level.SEVERE, str ));
                     }
                     catch( MingleException ie )

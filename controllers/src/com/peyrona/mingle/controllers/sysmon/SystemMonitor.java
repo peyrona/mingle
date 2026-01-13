@@ -2,6 +2,7 @@
 package com.peyrona.mingle.controllers.sysmon;
 
 import com.peyrona.mingle.controllers.ControllerBase;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -99,7 +100,12 @@ public final class SystemMonitor
 
             case "cpu" :
             case "cpu%":
-                float fUsed = SystemMetrics.getCpuLoad() * 100;
+                float fUsed = SystemMetrics.getCpuLoad();
+
+                if( fUsed == Float.NaN )    // NaN returned when the value is not available
+                    sendReadError( new MingleException( "CPU value not available" ) );
+
+                fUsed *= 100;
 
                 if( ((String) get( KEY_MEASURE )).startsWith( "used" ) ) sendReaded(        fUsed );     // "used" and "used%"
                 else                                                     sendReaded( 100f - fUsed );

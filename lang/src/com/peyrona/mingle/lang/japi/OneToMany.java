@@ -1,7 +1,6 @@
 
 package com.peyrona.mingle.lang.japi;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Enumeration;
@@ -10,6 +9,7 @@ import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * Thread-safe map where each key maps to a list of values.
@@ -58,8 +58,9 @@ public class OneToMany<K,V>
                             {
                                 if( existingList == null )
                                 {
-                                    List<V> newList = new ArrayList<>();
-                                    newList.add( value );
+                                    // Use CopyOnWriteArrayList for thread safety during iteration
+                                    List<V> newList = new CopyOnWriteArrayList<>();
+                                            newList.add( value );
                                     return newList;
                                 }
 
@@ -108,6 +109,8 @@ public class OneToMany<K,V>
 
     /**
      * Removes a specific value from the list associated with a key.
+     * <p>
+     * If the list becomes empty after removal, the key is removed from the map.
      *
      * @param key   the key of the list to modify
      * @param value the value to remove
@@ -115,10 +118,22 @@ public class OneToMany<K,V>
      */
     public boolean remove(K key, V value)
     {
-        List<V> list = map.get( key );                    // Can not use ::get(key) because it returns an unmodifiable list
+        // Use computeIfPresent to ensure atomicity and cleanup empty lists
+        // We use a mutable boolean array to extract the result 'removed' from the lambda
+        boolean[] removed = { false };
 
-        return (list != null) && list.remove( value );    // true  --> the value was removed but the key remains
-    }                                                     // false --> Key not found in the map
+        map.computeIfPresent( key, (k, list) ->
+        {
+            if( list.remove( value ) )
+            {
+                removed[0] = true;
+                return list.isEmpty() ? null : list; // Remove key if list is empty
+            }
+            return list;
+        } );
+
+        return removed[0];
+    }
 
     /**
      * Removes all values associated with a given key.
@@ -172,6 +187,12 @@ public class OneToMany<K,V>
 
     /**
      * Finds the first key that contains the specified value in its associated list.
+     * <p>
+     * <b>Note on Consistency:</b> This method iterates over the map and its values.
+     * Since the map and the lists are concurrent collections, the result reflects
+     * the state of the collection at the time of iteration. It is possible to miss
+     * a value if it is moved or added to a list that has already been visited
+     * during the iteration. This provides <i>weak consistency</i>.
      *
      * @param value the value to search for
      * @return the first key whose list contains the value, or null if not found

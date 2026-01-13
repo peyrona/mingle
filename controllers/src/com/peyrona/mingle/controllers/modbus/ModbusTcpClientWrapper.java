@@ -88,13 +88,13 @@ public final class ModbusTcpClientWrapper extends ControllerBase
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
+    public void set( String deviceName, Map<String, Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
 
         // Parse and validate URI (required)
-        String sURI = (String) deviceInit.get( KEY_URI );
+        String sURI = (String) deviceConf.get( KEY_URI );
         if( UtilStr.isEmpty( sURI ) )
         {
             sendIsInvalid( "URI is required (e.g., '192.168.1.100:502')" );
@@ -118,7 +118,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
         }
 
         // Parse and validate address (required)
-        Object oAddr = deviceInit.get( KEY_ADDRESS );
+        Object oAddr = deviceConf.get( KEY_ADDRESS );
         if( oAddr == null )
         {
             sendIsInvalid( "Address is required" );
@@ -133,7 +133,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
         }
 
         // Parse and validate data type (required)
-        Object oType = deviceInit.get( KEY_TYPE );
+        Object oType = deviceConf.get( KEY_TYPE );
         if( oType == null )
         {
             sendIsInvalid( "Type is required. Must be: " + VALID_TYPES );
@@ -149,7 +149,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse and validate Unit ID (optional, default 1)
         int nUnitId = DEFAULT_UNITID;
-        Object oUnitId = deviceInit.get( KEY_UNITID );
+        Object oUnitId = deviceConf.get( KEY_UNITID );
         if( oUnitId != null )
         {
             nUnitId = ((Number) oUnitId).intValue();
@@ -162,7 +162,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse and validate function code (optional, auto-detect based on type)
         String sFunction = getDefaultFunction( sType );
-        Object oFunction = deviceInit.get( KEY_FUNCTION );
+        Object oFunction = deviceConf.get( KEY_FUNCTION );
         if( oFunction != null )
         {
             sFunction = oFunction.toString().toLowerCase();
@@ -182,7 +182,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse and validate byte order (optional, default ABCD)
         String sOrder = DEFAULT_ORDER;
-        Object oOrder = deviceInit.get( KEY_ORDER );
+        Object oOrder = deviceConf.get( KEY_ORDER );
         if( oOrder != null )
         {
             sOrder = oOrder.toString().toUpperCase();
@@ -195,7 +195,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse interval (optional, default 5000ms)
         int nInterval = DEFAULT_INTERVAL;
-        Object oInterval = deviceInit.get( KEY_INTERVAL );
+        Object oInterval = deviceConf.get( KEY_INTERVAL );
         if( oInterval != null )
         {
             nInterval = ((Number) oInterval).intValue();
@@ -209,7 +209,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse timeout (optional, default 4000ms)
         int nTimeout = DEFAULT_TIMEOUT;
-        Object oTimeout = deviceInit.get( KEY_TIMEOUT );
+        Object oTimeout = deviceConf.get( KEY_TIMEOUT );
         if( oTimeout != null )
         {
             nTimeout = ((Number) oTimeout).intValue();
@@ -223,7 +223,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         // Parse retries (optional, default 2)
         int nRetries = DEFAULT_RETRIES;
-        Object oRetries = deviceInit.get( KEY_RETRIES );
+        Object oRetries = deviceConf.get( KEY_RETRIES );
         if( oRetries != null )
         {
             nRetries = ((Number) oRetries).intValue();
@@ -244,7 +244,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
             nInterval, nTimeout, nRetries,
             new ModbusListener() );
 
-        set( deviceInit );
+        setDeviceConfig( deviceConf );
     }
 
     @Override

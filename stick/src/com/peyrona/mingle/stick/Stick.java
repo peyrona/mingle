@@ -23,7 +23,6 @@ import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.Config;
 import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.Pair;
-import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.messages.Message;
@@ -333,30 +332,43 @@ public final class Stick
     @Override
     public ICommand[] all( String... asClass )
     {
-        List<ICommand> list      = new ArrayList<>();
-        StringBuilder  sbClasses = new StringBuilder( 1024 * 8 );    // Proven: 8K is a good value
+        int mask;   // Bitmask: 1=device, 2=driver, 4=script, 8=rule
 
-        if( UtilColls.isEmpty( asClass ) )
+        if( asClass == null || asClass.length == 0 )
         {
-            asClass = null;
+            mask = 1 | 2 | 4 | 8;   // all
         }
         else
         {
-            for( String sClas : asClass )
+            int m = 0;
+
+            for( String s : asClass )
             {
-                sbClasses.append( sClas.trim().toLowerCase() );
+                m |= classMask( s );
 
-                if( UtilStr.isLastChar( sbClasses, 's' ) )
-                    UtilStr.removeLast( sbClasses, 1 );
-
-                sbClasses.append( ',' );
+                if( m == (1 | 2 | 4 | 8) )
+                    break;                 // early exit if everything requested
             }
+
+            mask = m;
         }
 
-        if( (asClass == null) || sbClasses.indexOf( "device" ) > -1 )  deviMgr.forEach( item -> list.add( item ) );    // My method
-        if( (asClass == null) || sbClasses.indexOf( "driver" ) > -1 )  drvrMgr.forEach( item -> list.add( item ) );    // forEach( ... )
-        if( (asClass == null) || sbClasses.indexOf( "script" ) > -1 )  srptMgr.forEach( item -> list.add( item ) );    // is already
-        if( (asClass == null) || sbClasses.indexOf( "rule"   ) > -1 )  ruleMgr.forEach( item -> list.add( item ) );    // synchronized
+        // Fast-path when only one bit is set
+        if( Integer.bitCount( mask ) == 1 )
+        {
+            if( (mask & 1) != 0 ) return deviMgr.getAll().toArray( ICommand[]::new );
+            if( (mask & 2) != 0 ) return drvrMgr.getAll().toArray( ICommand[]::new );
+            if( (mask & 4) != 0 ) return srptMgr.getAll().toArray( ICommand[]::new );
+         /* else */               return ruleMgr.getAll().toArray( ICommand[]::new );
+        }
+
+        // Generic case
+        List<ICommand> list = new ArrayList<>( 128 );
+
+        if( (mask & 1) != 0 )  list.addAll( deviMgr.getAll() );
+        if( (mask & 2) != 0 )  list.addAll( drvrMgr.getAll() );
+        if( (mask & 4) != 0 )  list.addAll( srptMgr.getAll() );
+        if( (mask & 8) != 0 )  list.addAll( ruleMgr.getAll() );
 
         return list.toArray( ICommand[]::new );
     }
@@ -364,12 +376,11 @@ public final class Stick
     @Override
     public ICommand get( String sName )
     {
-        if( UtilStr.isEmpty( sName ) )
-            return null;
-
-        sName = sName.trim().toLowerCase();
+        assert sName != null;
 
         ICommand cmd;
+
+        // From most to least frequent -->
 
         cmd = deviMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = ruleMgr.named( sName );  if( cmd != null ) return cmd;
@@ -721,6 +732,71 @@ public final class Stick
         voidTh.start();
     }
 
+    private static int classMask( String s )
+    {
+        if( s == null )
+            return 0;
+
+        // 1. Manual Trim (Zero Allocation)
+        int start = 0, end = s.length();
+
+        while( start < end && Character.isWhitespace( s.charAt( start ) ) )
+            start++;
+
+        while( end > start && Character.isWhitespace( s.charAt( end - 1 ) ) )
+            end--;
+
+        // 2. Manual Plural Check
+        if( end > start )
+        {
+            char last = s.charAt( end - 1 );
+
+            if( last == 's' || last == 'S' )
+                end--;
+        }
+
+        int len = end - start;
+
+        if( len == 0 )
+            return 0;
+
+        // 3. Switch on first char to reduce comparison cost
+        //    We bitwise-OR with 32 to force lowercase (ASCII trick) for the char check
+        char first = s.charAt( start );
+
+        switch( first | 32 )    // 'D' | 32 = 'd', 'R' | 32 = 'r'
+        {
+            case 'd':
+                if( len == 6 )
+                {
+                    // Only check "device" or "driver" if length matches 6
+                    // Differentiating by the second char 'e' vs 'r' is even faster
+                    char second = s.charAt( start + 1 );
+
+                    if( (second | 32) == 'e' && s.regionMatches( true, start, "device", 0, 6 ) )
+                        return 1;
+
+                    if( (second | 32) == 'r' && s.regionMatches( true, start, "driver", 0, 6 ) )
+                        return 2;
+                }
+                break;
+
+            case 's':
+                if( len == 6 && s.regionMatches( true, start, "script", 0, 6 ) )
+                    return 4;
+
+                break;
+
+            case 'r':
+                if( len == 4 && s.regionMatches( true, start, "rule", 0, 4 ) )
+                    return 8;
+
+                break;
+        }
+
+        return 0;
+    }
+
     //----------------------------------------------------------------------------//
     // INNER CLASS
     // A Bus Listener to read message (mainly form Controllers).
@@ -915,7 +991,7 @@ public final class Stick
     //----------------------------------------------------------------------------//
     // INNER CLASS
     // This is passed to the Communcations Manager to process incoming messages
-    // from other ExEns.
+    // from other tools (ExEns, Gum, etc).
     //---------------------------------------------------------------------------//
 
     /**

@@ -16,9 +16,17 @@
 package com.peyrona.mingle.controllers.rpi;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.sun.jna.Callback;
 import com.sun.jna.Native;
+import com.sun.jna.Pointer;
+import com.sun.jna.Structure;
+import com.sun.jna.Structure.FieldOrder;
+import com.sun.jna.ptr.IntByReference;
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
 import java.util.WeakHashMap;
@@ -76,17 +84,54 @@ final class WiringPi
     static final int PULL_UP   = 2;   // PUD_UP;
 
     //------------------------------------------------------------------------//
+    // CALLBACK INTERFACE AND STATUS STRUCTURE
+    //------------------------------------------------------------------------//
 
+    /**
+     * Callback interface for WiringPi 3.x interrupt handling.
+     * <p>
+     * The callback receives interrupt status details including pin number,
+     * edge type (RISING/FALLING), and microsecond timestamp.
+     */
     interface PinCallback extends Callback
     {
-        void onChanged();
+        void invoke( WPIWfiStatus status, Pointer userdata );
+    }
+
+    /**
+     * Maps the C struct WPIWfiStatus from WiringPi 3.x.
+     * <p>
+     * This structure is passed to callbacks registered with wiringPiISR().
+     */
+    @FieldOrder({ "statusOK", "pinBCM", "edge", "timeStamp_us" })
+    public static class WPIWfiStatus extends Structure
+    {
+        /** Status code: -1 = error, 0 = timeout, 1 = IRQ processed successfully */
+        public int  statusOK;
+
+        /** GPIO pin number in BCM format */
+        public int  pinBCM;
+
+        /** Edge type: INT_EDGE_FALLING (1) or INT_EDGE_RISING (2) */
+        public int  edge;
+
+        /** Timestamp of the interrupt in microseconds */
+        public long timeStamp_us;
+
+        public WPIWfiStatus() { super(); }
+
+        public WPIWfiStatus( Pointer p )
+        {
+            super( p );
+            read();
+        }
     }
 
     //------------------------------------------------------------------------//
 
     private static volatile boolean bInited = false;
-    private static final Object INIT_LOCK = new Object();
-    private static final Map<Integer,PinCallback> callbackMap = Collections.synchronizedMap( new WeakHashMap<>() );    // Keep strong references to callbacks to prevent garbage collection
+    private static final    Object INIT_LOCK = new Object();
+    private static final    Map<Integer,PinCallback> callbackMap = Collections.synchronizedMap( new WeakHashMap<>() );
 
     static boolean isInited()
     {
@@ -107,8 +152,8 @@ final class WiringPi
             {
                 if( ! bInited )
                 {
-                    initializeNative( bUseBCM );
-                    bInited = true;
+                    bInited = true;               // Before init(...) because init(...) can be called only
+                    initializeNative( bUseBCM );  // once and if it fails one time, it will fail next times
                 }
             }
         }
@@ -116,26 +161,105 @@ final class WiringPi
 
     /**
      * Cleanup resources and callbacks.
+     * <p>
+     * Properly stops all registered ISR handlers and releases GPIO resources.
      */
     static synchronized void cleanup()
     {
+        for( Integer pin : callbackMap.keySet() )
+        {
+            try
+            {
+                wiringPiISRStop( pin );
+            }
+            catch( Exception e )
+            {
+                // Ignore errors during cleanup
+            }
+        }
+
         callbackMap.clear();
 
-        // Cant' do: initialized = false
+        // Can't do: bInited = false
         // because once the RPi is initialized, this can not be undone.
     }
 
     /**
-     * Thread-safe interrupt registration with callback protection.
+     * Thread-safe interrupt registration with enhanced callback and debounce.
+     * <p>
+     * Uses WiringPi 3.x wiringPiISR2() which provides:
+     * <ul>
+     *   <li>Interrupt status information (pin, edge type, timestamp)</li>
+     *   <li>Built-in debounce support</li>
+     *   <li>Proper cleanup via wiringPiISRStop()</li>
+     * </ul>
+     *
+     * @param pin        The GPIO pin number (WiringPi or BCM depending on setup)
+     * @param edgeType   Edge type: INT_EDGE_FALLING, INT_EDGE_RISING, or INT_EDGE_BOTH
+     * @param callback   The callback to invoke on interrupt
+     * @param debounceUs Debounce period in microseconds (0 to disable)
+     * @return 0 on success, -1 on error
      */
-    public static synchronized int setCallBack( int pin, int edgeType, PinCallback callback )
+    public static synchronized int setCallBack( int pin, int edgeType, PinCallback callback, long debounceUs )
     {
-        callbackMap.put( pin, callback );    // Store callback to prevent garbage collection
+        if( callbackMap.containsKey( pin ) )   // Stop any existing ISR on this pin first
+            wiringPiISRStop( pin );
 
-        return wiringPiISR( pin, edgeType, callback );
+        callbackMap.put( pin, callback );      // Store callback to prevent garbage collection
+
+        return wiringPiISR2( pin, edgeType, callback, debounceUs, null );
+    }
+
+    /**
+     * Stops the ISR handler for a specific pin.
+     * <p>
+     * Properly releases the GPIO resources held by the interrupt handler.
+     *
+     * @param pin The GPIO pin number to stop ISR on
+     */
+    public static synchronized void stopCallBack( int pin )
+    {
+        wiringPiISRStop( pin );
+        callbackMap.remove( pin );
     }
 
     //------------------------------------------------------------------------//
+    // SETUP FUNCIONS
+
+    /**
+     * Setup Functions</p>
+     *
+     * <p>
+     * This initializes the wiringPi system and assumes that the calling program is going to be
+     * using the wiringPi pin numbering scheme.
+     * </p>
+     *
+     * @see <a href="http://wiringpi.com/reference/setup/">http://wiringpi.com/reference/setup/</a>
+     * @return If this function returns a value of '-1' then an error has occurred and the
+     *         initialization of the GPIO has failed. A return value of '0' indicates a successful
+     *         GPIO initialization.
+     */
+    private static native int  wiringPiSetup();
+
+    /**
+     * Setup Functions</p>
+     *
+     * <p>
+     * This initializes the wiringPi system and assumes that the calling program is going to be
+     * using the Broadcom pin numbering scheme.
+     * </p>
+     *
+     * @see <a href="http://wiringpi.com/reference/setup/">http://wiringpi.com/reference/setup/</a>
+     * @return If this function returns a value of '-1' then an error has occurred and the
+     *         initialization of the GPIO has failed. A return value of '0' indicates a successful
+     *         GPIO initialization.
+     */
+    private static native int  wiringPiSetupGpio();
+
+    private static native void wiringPiVersion( IntByReference major, IntByReference minor );
+
+    //------------------------------------------------------------------------//
+    // CORE FUNCTIONS
 
     /**
      * Core Functions</p>
@@ -266,88 +390,45 @@ final class WiringPi
     public static native void analogWrite( int pin, int value);
 
     //------------------------------------------------------------------------//
+    // INTERRUPT FUNCTIONS (WiringPi 3.x)
 
     /**
-     * Priority, Interrupt and Thread Functions</p>
-     *
+     * Registers a callback for interrupts with WiringPi 3.x enhanced features.
      * <p>
-     * This function registers a function to received interrupts on the specified pin. The edgeType parameter is either
-     * INT_EDGE_FALLING, INT_EDGE_RISING, INT_EDGE_BOTH or INT_EDGE_SETUP. If it is INT_EDGE_SETUP then no
-     * initialisation of the pin will happen – it’s assumed that you have already setup the pin elsewhere
-     * (e.g. with the gpio program), but if you specify one of the other types, then the pin will be exported and
-     * initialised as specified. This is accomplished via a suitable call to the gpio utility program, so it need to
-     * be available
-     * </p>
+     * This function uses wiringPiISR2() which provides:
+     * <ul>
+     *   <li>Status information passed to callback (pin, edge, timestamp)</li>
+     *   <li>Built-in debounce support (microsecond precision)</li>
+     *   <li>User data pointer for context</li>
+     * </ul>
      *
-     * <p>
-     * The pin number is supplied in the current mode – native wiringPi, BCM_GPIO, physical or Sys modes.
-     * </p>
-     *
-     * <p>
-     * This function will work in any mode, and does not need root privileges to work.
-     * </p>
-     *
-     * <p>
-     * The function will be called when the interrupt triggers. When it is triggered, it’s cleared in the dispatcher
-     * before calling your function, so if a subsequent interrupt fires before you finish your handler, then it won’t
-     * be missed. (However it can only track one more interrupt, if more than one interrupt fires while one is being
-     * handled then they will be ignored)
-     * </p>
-     *
-     * <p>
-     * This function is run at a high priority (if the program is run using sudo, or as root) and executes
-     * concurrently with the main program. It has full access to all the global variables, open file handles
-     * and so on.
-     * </p>
-     *
-     * @see <a
-     *      href="http://wiringpi.com/reference/priority-interrupts-and-threads/">http://wiringpi.com/reference/priority-interrupts-and-threads/</a>
-     * @param pin The GPIO pin number. <i>(Depending on how wiringPi was initialized, this may
-     *            be the wiringPi pin number or the Broadcom GPIO pin number.)</i>
-     * @param edgeType The type of pin edge event to watch for: INT_EDGE_FALLING, INT_EDGE_RISING, INT_EDGE_BOTH or INT_EDGE_SETUP.
-     * @param callback The callback interface implemented by the consumer.  The 'callback' method of this interface
-     *                 will be invoked when the wiringPiISR issues a callback signal.
-     * @return The return value is -1 if an error occurred (and errno will be set appropriately), 0
-     *         if it timed out, or 1 on a successful interrupt event.
+     * @param pin                The GPIO pin number
+     * @param edgeMode           Edge type: INT_EDGE_FALLING, INT_EDGE_RISING, or INT_EDGE_BOTH
+     * @param callback           The callback to invoke on interrupt (receives WPIWfiStatus)
+     * @param debounce_period_us Debounce period in microseconds (0 to disable)
+     * @param userdata           User data pointer passed to callback (can be null)
+     * @return 0 on success, -1 on error
      */
-    private static native int  wiringPiISR( int pin, int edgeType, PinCallback callback );
+    private static native int wiringPiISR2( int pin, int edgeMode, PinCallback callback,
+                                            long debounce_period_us, Pointer userdata );
 
     /**
-     * Setup Functions</p>
-     *
+     * Stops the ISR handler for a specific pin.
      * <p>
-     * This initializes the wiringPi system and assumes that the calling program is going to be
-     * using the wiringPi pin numbering scheme.
-     * </p>
+     * Deregisters the interrupt handler and releases GPIO resources.
+     * Must be called before re-registering an ISR on the same pin.
      *
-     * @see <a href="http://wiringpi.com/reference/setup/">http://wiringpi.com/reference/setup/</a>
-     * @return If this function returns a value of '-1' then an error has occurred and the
-     *         initialization of the GPIO has failed. A return value of '0' indicates a successful
-     *         GPIO initialization.
+     * @param pin The GPIO pin number to stop ISR on
+     * @return 0 on success, -1 on error
      */
-    private static native int  wiringPiSetup();
+    public static native int wiringPiISRStop( int pin );
 
-    /**
-     * Setup Functions</p>
-     *
-     * <p>
-     * This initializes the wiringPi system and assumes that the calling program is going to be
-     * using the Broadcom pin numbering scheme.
-     * </p>
-     *
-     * @see <a href="http://wiringpi.com/reference/setup/">http://wiringpi.com/reference/setup/</a>
-     * @return If this function returns a value of '-1' then an error has occurred and the
-     *         initialization of the GPIO has failed. A return value of '0' indicates a successful
-     *         GPIO initialization.
-     */
-    private static native int  wiringPiSetupGpio();
+    //------------------------------------------------------------------------//
 
-    private static void initializeNative(boolean bUseBCM) throws MingleException
+    private static void initializeNative( boolean bUseBCM ) throws MingleException
     {
-        File fLib = new File( "/usr/lib/libwiringPi.so" );
-
-        if( ! fLib.exists() )
-            throw new MingleException( fLib +": file does not exist. Is WiringPi library installed?" );
+        checkPiModel();
+        checkWiringPiLibFile();
 
         try
         {
@@ -358,13 +439,109 @@ final class WiringPi
             throw new MingleException( ule );
         }
 
-        int nResult = ((! bUseBCM) ? wiringPiSetup()         // Initializes the WiringPi library using the WiringPi pin numbering scheme.
-                                   : wiringPiSetupGpio());   // Initializes the WiringPi library using the BCM GPIO numbering scheme.
+        int nResult = (bUseBCM ? wiringPiSetupGpio()   // Initializes the WiringPi library using the BCM GPIO numbering scheme.
+                               : wiringPiSetup());     // Initializes the WiringPi library using the WiringPi pin numbering scheme.
 
         if( nResult != 0 )
             throw new MingleException( "Error on WiringPi setup. Result="+ nResult );
+
+        checkWiringPiLibVersion();    // Must be after lib registration
     }
 
+    private static void checkPiModel()
+    {
+        String model = null;
+
+        try
+        {
+            String modelPath = "/sys/firmware/devicetree/base/model";    // Modern method: Read device tree model (works on Pi 2+)
+
+            if( Files.exists( Paths.get( modelPath ) ) )
+            {
+                model = new String( Files.readAllBytes( Paths.get( modelPath ) ) ).trim();
+                model = model.replaceAll( "\u0000.*", "" );   // Remove trailing null bytes (common in device tree strings)
+            }
+            else    // Fallback: Parse /proc/cpuinfo for older Pis
+            {
+                String   cpuInfo = new String( Files.readAllBytes( Paths.get( "/proc/cpuinfo" ) ) );
+                String[] lines   = cpuInfo.split( "\n" );
+
+                for( String line : lines )
+                {
+                    if( line.startsWith( "Model" ) || line.startsWith( "Hardware" ) )
+                    {
+                        model = line.split( ":" )[1].trim();
+
+                        if( model.contains( "Raspberry Pi" ) )
+                            break;
+                        else
+                            model = null;
+                    }
+                }
+            }
+        }
+        catch( IOException e )
+        {
+            model = null;
+        }
+
+        if( model != null )     // When null we have to assume it is fine: there is nothing that can be done
+        {
+            if( UtilStr.contains( model, "Pi 3", "Pi 4" ) )
+                return;
+
+            throw new MingleException( model +" is not supported. Only Pi 3 and 4 are" );
+        }
+    }
+
+    private static void checkWiringPiLibFile()
+    {
+        // Check multiple paths where WiringPi library might be installed
+        // (matches the paths checked by wiringpi.sh script)
+        String[] libDirs = {"/usr/lib",
+                            "/usr/local/lib",
+                            "/lib",
+                            "/usr/lib/arm-linux-gnueabihf",
+                            "/usr/lib/aarch64-linux-gnu",
+                            "/lib/arm-linux-gnueabihf",
+                            "/lib/aarch64-linux-gnu" };
+
+        boolean found = false;
+
+        for( String dir : libDirs )
+        {
+            File dirFile = new File( dir );
+
+            if( dirFile.isDirectory() )
+            {
+                // Check for libwiringPi.so or versioned variants (e.g., libwiringPi.so.3.16)
+                File[] matches = dirFile.listFiles( (d, name) -> name.startsWith( "libwiringPi.so" ) );
+
+                if( matches != null && matches.length > 0 )
+                {
+                    found = true;
+                    break;
+                }
+            }
+        }
+
+        if( ! found )
+            throw new MingleException( "WiringPi file does not exist in any standard location. Is WiringPi library installed?" );
+    }
+
+    private static void checkWiringPiLibVersion()
+    {
+        IntByReference majorRef = new IntByReference();
+        IntByReference minorRef = new IntByReference();
+
+        wiringPiVersion( majorRef, minorRef );
+
+        int major = majorRef.getValue();
+        int minor = minorRef.getValue();
+
+        if( major != 3 )
+            throw new MingleException( "Incorrect WiringPi version: expected=3.x, found="+ major +'.'+ minor );
+    }
 
 // ESTE ES EL OTRO MODO DE HACER LO MISMO (ES MÁS LENTO PERO PERMITE MÁS TIPOS DE OPERACIONES): A MI NO ME
 // HACE FALTA PORQUE LAS OPERACIONES QUE YO USO SON MUY BASICAS Y ESTÁN TODAS SOPORTADAS EN EL MODO MÁS RÁPIDO

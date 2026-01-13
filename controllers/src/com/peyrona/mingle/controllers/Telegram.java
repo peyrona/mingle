@@ -32,12 +32,12 @@ public final class   Telegram
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
+    public void set( String deviceName, Map<String, Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );   // Must be at begining: in case an error happens, Listener is needed
         setValid( true );          // This controller is always valid
-        set( deviceInit );         // Can be done because mapConfig values are not modified
+        setDeviceConfig( deviceConf );         // Can be done because mapConfig values are not modified
     }
 
     @Override

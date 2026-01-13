@@ -32,12 +32,12 @@ public final class MqttClientWrapper
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        set( mapConfig );
+        setDeviceConfig( deviceConf );
 
         if( isFaked() )
         {

@@ -188,10 +188,17 @@ public class Device
 
         super.start( rt );
 
-        if( (deviceInit != null) && deviceInit.containsKey( "value" ) )                              // This only works when using a driver of type Actuator
-            getRuntime().bus().post( new MsgChangeActuator( name(), deviceInit.get( "value" ) ) );   // Sets the initial state for this Actuator in the physical world (*)
+        if( deviceInit != null )                                                     // This only works when using a driver of type Actuator
+        {
+            Object value = deviceInit.getOrDefault( "value", null );
+
+            if( value != null )
+                getRuntime().bus().post( new MsgChangeActuator( name(), value ) );   // Sets the initial state for this Actuator in the physical world (*)
+        }
         else
-            getRuntime().bus().post( new MsgReadDevice( name() ) );                                  // Reads current state for this Actuator in the physical world
+        {
+            getRuntime().bus().post( new MsgReadDevice( name() ) );                  // Reads current state for this Actuator in the physical world
+        }
 
         // (*) This message is captured by the Actuator's Driver, which sends it to the Driver's Controller,
         // which changes the physical actuator and informs back (via its listener) to the Driver which

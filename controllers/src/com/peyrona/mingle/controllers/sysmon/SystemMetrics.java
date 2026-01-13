@@ -21,7 +21,7 @@ import java.util.Map;
  */
 public final class SystemMetrics
 {
-    private static final    OperatingSystemMXBean OSMXBean = (com.sun.management.OperatingSystemMXBean) ManagementFactory.getOperatingSystemMXBean();
+    private static final    OperatingSystemMXBean OSMXBean = ManagementFactory.getPlatformMXBean( com.sun.management.OperatingSystemMXBean.class );
     private static          Map<String,Long> mapRootsTotal = null;
     private static          Map<String,Long> mapRootsFree  = null;
     private static volatile int              nCPUs         = -1;
@@ -154,7 +154,9 @@ public final class SystemMetrics
      */
     public static float getCpuLoad()
     {
-        return round( (float) OSMXBean.getSystemCpuLoad() );
+        double v = (float) OSMXBean.getSystemCpuLoad();   // [0.0, 1.0] or negative if not available
+
+        return (v < 0.0) ? Float.NaN : round( (float) v );
     }
 
     /**

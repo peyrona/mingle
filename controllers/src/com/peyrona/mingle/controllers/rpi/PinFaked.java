@@ -26,15 +26,13 @@ import java.util.Random;
  */
 final class PinFaked implements IPin
 {
-    private final boolean bDigital;
     private final boolean bInput;
     private       Object  value = null;
 
     //------------------------------------------------------------------------//
 
-    PinFaked( boolean isDigital, boolean isInput )
+    PinFaked( boolean isInput )
     {
-        this.bDigital = isDigital;
         this.bInput   = isInput;
     }
 
@@ -44,12 +42,6 @@ final class PinFaked implements IPin
     public boolean isInput()
     {
         return bInput;
-    }
-
-    @Override
-    public boolean isDigital()
-    {
-        return bDigital;
     }
 
     @Override
@@ -64,11 +56,7 @@ final class PinFaked implements IPin
         if( (! bInput) && (value != null) )
             return value;
 
-        int min = 0;
-        int max = (bDigital ? 1 : 255);
-        int val = new Random().nextInt( max - min + 1 ) + min;
-
-        return bDigital ? (val == 1) : val;
+        return new Random().nextInt( 2 );
     }
 
     @Override
@@ -77,19 +65,11 @@ final class PinFaked implements IPin
         if( ! bInput)
             this.value = value;
     }
-
-    @Override
-    public void write( int value )
-    {
-        if( ! bInput)
-            this.value = value;
-    }
-
+    
     @Override
     public int hashCode()
     {
         int hash = 5;
-        hash = 37 * hash + (this.bDigital ? 1 : 0);
         hash = 37 * hash + (this.bInput ? 1 : 0);
         return hash;
     }
@@ -107,9 +87,6 @@ final class PinFaked implements IPin
             return false;
 
         final PinFaked other = (PinFaked) obj;
-
-        if( this.bDigital != other.bDigital )
-            return false;
 
         return this.bInput == other.bInput;
     }

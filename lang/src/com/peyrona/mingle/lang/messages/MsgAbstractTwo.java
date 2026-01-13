@@ -1,6 +1,8 @@
 
 package com.peyrona.mingle.lang.messages;
 
+import com.peyrona.mingle.lang.MingleException;
+
 /**
  * The Virtual World requests to change an Actuator in Real (physical) World.
  *
@@ -28,6 +30,9 @@ public abstract class MsgAbstractTwo extends MsgAbstractOne
     public MsgAbstractTwo( String name, Object value, boolean isOwn )
     {
         super( name, isOwn );
+
+        if( value == null )
+            throw new MingleException( MingleException.INVALID_ARGUMENTS );
 
         this.value = value;
     }

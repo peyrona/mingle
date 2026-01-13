@@ -23,7 +23,7 @@ import java.util.function.Consumer;
 
 /**
  * This Controller can be imagined as a simple spreadsheet: it is an arbitrary
- * set of cells and every cell can contain a value or a formula.<br>
+setDeviceConfig of cells and every cell can contain a value or a formula.<br>
  * Cells have a name to refer to them (a cell is the equivalent to a variable
  * in traditional languages).
  * <p>
@@ -52,7 +52,7 @@ public final class   CellSet
     {
         setDeviceName( deviceName );                       // Must be 1st
         setListener( listener );                           // Must be at begining: in case an error happens, Listener is needed
-        set( deviceConf );
+        setDeviceConfig( deviceConf );
         set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );     // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
 
         // Can not validate the value now because caould be a formula and for thisd case, the Runtime is needed.
@@ -77,7 +77,7 @@ public final class   CellSet
     {
         super.start( rt );
 
-        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
+        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::setDeviceConfig(...)) for this CellSet instance
 
              if( cv.hasErrors() )        sendIsInvalid( "Formula has errors: unusable device" );
         else if( hasCircularRef( cv ) )  sendIsInvalid( "Formula has circular references: unusable device" );

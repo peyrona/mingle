@@ -55,13 +55,13 @@ public final class   Excel
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String,Object> mapConfig, IController.Listener listener )
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        String    sFileName  = (String) mapConfig.get( "file" );        // Mandatory
-        String    sSheetName = (String) mapConfig.get( "sheetname" );   // Optional
+        String    sFileName  = (String) deviceConf.get( "file" );        // Mandatory
+        String    sSheetName = (String) deviceConf.get( "sheetname" );   // Optional
         List<URI> lstURL     = new ArrayList<>();
 
         try
@@ -95,13 +95,13 @@ public final class   Excel
         if( sSheetName != null )
             book.setSheetName( book.getSheetIndex( sheet ), sSheetName );
 
-        String sHeads = (String) mapConfig.get( "heads" );   // Optional
+        String sHeads = (String) deviceConf.get( "heads" );   // Optional
 
         if( sHeads != null )
             writeHead( book, sheet, UtilColls.toMap( sHeads ) );
 
         // Read flush interval from configuration
-        Integer nWriteInterval = (Integer) mapConfig.get( KEY_WRITE_INTERVAL );
+        Integer nWriteInterval = (Integer) deviceConf.get( KEY_WRITE_INTERVAL );
 
         if( nWriteInterval == null )
             nWriteInterval = 5;
@@ -109,7 +109,7 @@ public final class   Excel
         set( KEY_WRITE_INTERVAL, UtilUnit.setBetween( 1, nWriteInterval, Integer.MAX_VALUE ) );
 
         setValid( true );
-        set( mapConfig );     // Can be done because mapConfig values are not modified
+        setDeviceConfig( deviceConf );     // Can be done because mapConfig values are not modified
     }
 
     @Override

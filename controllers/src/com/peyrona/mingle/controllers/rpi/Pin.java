@@ -18,7 +18,6 @@ package com.peyrona.mingle.controllers.rpi;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -35,17 +34,15 @@ final class Pin implements IPin
     private static final int DOUBLE_CLICK_LAPSE = 800;     // Max interval of millisecs between two consecutive clicks to consider it as double-click event
 
     private final int     nWhich;
-    private final boolean isDigital;
     private final boolean isInput;
     private final int     nDebounce;
     private final boolean bInvert;
     private final boolean isButton;                                   // Considers this input as being a push-button and launches button events: "pressed", "released", "clicked" and "doubleclicked"
-    private final WiringPi.PinCallback callback;                      // The only purpose of this var is to avoid the GC to destroy it
+    private final WiringPi.PinCallback callback;                      // Callback reference (kept to avoid GC)
     private final Consumer<String> onError;                           // Function "pointer" to report errors
     private final AtomicLong    nWhenPressed  = new AtomicLong( 0 );  // TimeStamp when button was pressed (to mesure the time between pressed and released) (Can not be volatile because 32 bits systems)
     private final AtomicLong    nWhenClicked  = new AtomicLong( 0 );  // TimeStamp when button was clicked (to mesure the time between 2 consecutive clicks) (Can not be volatile because 32 bits systems)
     private final AtomicBoolean isDispatching = new AtomicBoolean( false );
-    private       Boolean       bLastValue    = null;                 // Used only when isDigital is true
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
@@ -67,7 +64,6 @@ final class Pin implements IPin
     Pin( int     nWhich,
          int     nPull,
          int     nDebounce,
-         boolean isDigital,
          boolean isInput,
          boolean isInverted,
          boolean isButton,
@@ -78,7 +74,6 @@ final class Pin implements IPin
         // This constructor does not need to check the consistency of the parameters because it is done at RPiGpioPin class
 
         this.isInput   = isInput;
-        this.isDigital = isDigital;
         this.nDebounce = ((nDebounce < 0) ? 0 : nDebounce);
         this.nWhich    = createNativePin( isBCM, nWhich, nPull, isInput );
         this.bInvert   = isInverted;
@@ -91,12 +86,14 @@ final class Pin implements IPin
         {
             cb = createCallback( callback );
 
-            int nCode = WiringPi.setCallBack( nWhich, WiringPi.INT_EDGE_BOTH, cb );
+            // Use WiringPi 3.x API with built-in debounce (convert ms to microseconds)
+            long debounceUs = this.nDebounce * 1000L;
+            int  nErrCode   = WiringPi.setCallBack( nWhich, WiringPi.INT_EDGE_BOTH, cb, debounceUs );
 
-            if( nCode != 0 )
+            if( nErrCode != 0 )
             {
                 cb = null;
-                throw new MingleException( "Can not set Callback for pin "+ nWhich );
+                throw new MingleException( "Can not set Callback for pin "+ nWhich +". Error: "+ nErrCode );
             }
         }
 
@@ -112,26 +109,15 @@ final class Pin implements IPin
     }
 
     @Override
-    public boolean isDigital()
-    {
-        return isDigital;
-    }
-
-    @Override
     public Object read()
     {
         // Not needed -->  if( ! isOutput() ) { ... }
         // because you can still use GPIO.input() for a pin setted up as an OUTPUT.
         // Seen here: https://www.raspberrypi.org/forums/viewtopic.php?t=136104
 
-        if( isDigital )
-        {
-            boolean bValue = (WiringPi.digitalRead( nWhich ) == WiringPi.HIGH);
+        boolean bValue = (WiringPi.digitalRead( nWhich ) == WiringPi.HIGH);
 
-            return (bInvert ? (! bValue) : bValue);
-        }
-
-        return WiringPi.analogRead( nWhich );
+        return (bInvert ? (! bValue) : bValue);
     }
 
     @Override
@@ -139,7 +125,7 @@ final class Pin implements IPin
     {
         // As bButton is only for Sensors, it has no sense to consider it in this method
 
-        if( isInput )
+            if( isInput )
             throw new MingleException( "Pin "+ nWhich +" is for input: can not write." );
 
         if( bInvert )
@@ -149,27 +135,15 @@ final class Pin implements IPin
     }
 
     @Override
-    public void write( int value )
-    {
-        if( isInput )
-            throw new MingleException( "Pin "+ nWhich +" is for input: can not write." );
-
-        if( isDigital )
-            throw new MingleException( "Pin "+ nWhich +" is digital: boolean expected but received integer. Value = "+ value );
-
-        WiringPi.analogWrite( nWhich, value );
-    }
-
-    @Override
     public void cleanup()
     {
-        if( callback != null )                                                 // Most probably it had a CallBack associated.
-            WiringPi.setCallBack( nWhich, WiringPi.INT_EDGE_BOTH, () -> {} );  // Replaces previous callback with a dummy callback
+        if( callback != null )                                // WiringPi 3.x: Properly stop the ISR handler to release GPIO resources
+            WiringPi.wiringPiISRStop( nWhich );
 
         if( ! isInput )
-            WiringPi.digitalWrite( nWhich, WiringPi.LOW );                     // Needed because pins can keep their state from one use to next use
+            WiringPi.digitalWrite( nWhich, WiringPi.LOW );    // Needed because pins can keep their state from one use to next use
 
-        WiringPi.pinMode( nWhich, WiringPi.INPUT );                            // It is a good idea to set used pins back to input
+        WiringPi.pinMode( nWhich, WiringPi.INPUT );           // It is a good idea to set used pins back to input
     }
 
     @Override
@@ -226,81 +200,37 @@ final class Pin implements IPin
         return pinNumber;
     }
 
+    /**
+     * Creates a callback that wraps the Consumer.
+     * <p>
+     * The callback receives WPIWfiStatus with interrupt details:
+     * <ul>
+     *   <li>statusOK: 1 = success, 0 = timeout, -1 = error</li>
+     *   <li>pinBCM: GPIO pin number in BCM format</li>
+     *   <li>edge: INT_EDGE_FALLING (1) or INT_EDGE_RISING (2)</li>
+     *   <li>timeStamp_us: Microsecond timestamp of interrupt</li>
+     * </ul>
+     */
     private WiringPi.PinCallback createCallback( final Consumer<Object> callback )
     {
-        if( ! isDigital )
-        {
-            return  () ->
-                    {
-                        if( isDispatching.get() )    // To avoid re-entrance
-                            return;
-
-                        isDispatching.set( true );
-
-                        try
-                        {
-                            callback.accept( read() );
-                        }
-                        catch( Exception exc )
-                        {
-                            onError.accept( UtilStr.toStringBrief( exc ) );
-                        }
-                        finally
-                        {
-                            isDispatching.set( false );   // It is crucial to ensure this is false
-                        }
-                    };
-        }
-
-        // For analog pins debounce is always 0 (they do not have debounce, but they have delta)
-        // NOTE: A RPi Model B+ can execute around 700 read() per millisecond
-
-        return  () ->
+        return  ( status, userdata ) ->
                 {
+                    if( status.statusOK != 1 )   // Check if interrupt was processed successfully
+                        return;
+
                     if( isDispatching.get() )    // To avoid re-entrance
                         return;
 
                     isDispatching.set( true );
 
-                    boolean bValue;
-
                     try
                     {
-                        if( nDebounce <= 1 )
-                        {
-                            bValue = (WiringPi.digitalRead( nWhich ) == WiringPi.HIGH);
-                        }
-                        else
-                        {
-                            int nCount = 0, nHigh = 0, nLow = 0;
-                            int nItera = UtilUnit.setBetween( 8, nDebounce / 8, 32 );
-
-                            while( nCount++ < nItera )
-                            {
-                                if( WiringPi.digitalRead( nWhich ) == WiringPi.HIGH ) nHigh++;
-                                else                                                  nLow++;
-
-                                try { Thread.sleep( Math.max( nDebounce / nItera, 1 ) ); }
-                                catch( InterruptedException ex ) { break; }     // This break cancels the while loop
-                            }
-
-                            bValue = nHigh > nLow;
-                        }
-
-                        if( bInvert )
-                            bValue = ! bValue;
-
-                        if( (bLastValue == null) || (bLastValue != bValue) )
-                        {
-                            bLastValue = bValue;
-
-                            if( isButton )  actAsButton( bValue, callback );    // PushButtons are always digital
-                            else            callback.accept( bValue );
-                        }
+                        if( isButton )  actAsButton( (boolean) read(), callback );
+                        else            callback.accept( read() );                  // Normal mode: emit the raw value (true/false)
                     }
                     catch( Exception exc )
                     {
-                        onError.accept( UtilStr.toString( exc ) );
+                        onError.accept( UtilStr.toStringBrief( exc ) );
                     }
                     finally
                     {

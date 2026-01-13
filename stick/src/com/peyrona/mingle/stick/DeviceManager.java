@@ -3,12 +3,13 @@ package com.peyrona.mingle.stick;
 
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
+import com.peyrona.mingle.lang.japi.OneToMany;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -25,6 +26,11 @@ import java.util.concurrent.atomic.AtomicReference;
 final class   DeviceManager
       extends BaseManager<IDevice>
 {
+    // Inverted Index: Group Name -> List of Devices
+    private final OneToMany<String, IDevice> groupsMap = new OneToMany<>();
+
+    //------------------------------------------------------------------------//
+
     /**
      * Creates a new DeviceManager instance.
      *
@@ -37,6 +43,44 @@ final class   DeviceManager
 
     //----------------------------------------------------------------------------//
 
+    @Override
+    void add( IDevice device )
+    {
+        // 1. Check if it already exists to avoid desync (BaseManager logs duplication but doesn't throw)
+        if( named( device.name() ) != null )
+        {
+            super.add( device ); // Call super to trigger the standard "already exists" logging
+            return;
+        }
+
+        // 2. Add to main storage
+        super.add( device );
+
+        // 3. Update Group Index
+        for( String group : device.groups() )
+        {
+            if( UtilStr.isNotEmpty( group ) )
+                groupsMap.put( group, device );
+        }
+    }
+
+    @Override
+    boolean remove( IDevice device )
+    {
+        boolean removed = super.remove( device );
+
+        if( removed )
+        {
+            for( String group : device.groups() )
+            {
+                if( UtilStr.isNotEmpty( group ) )
+                    groupsMap.remove( group, device );
+            }
+        }
+
+        return removed;
+    }
+
     /**
      * Creates (and adds) some kind of stub to a Device existing in another ExEn to
      * be partially managed in this ExEn.<br>
@@ -46,7 +90,7 @@ final class   DeviceManager
      */
     void createRemoteDevice( String name )
     {
-        super.add( new RemoteDevice( name ) );
+        this.add( new RemoteDevice( name ) );
     }
 
     /**
@@ -60,23 +104,7 @@ final class   DeviceManager
         if( UtilStr.isEmpty( name ) )
             return false;
 
-        // Simplicity over efficiency
-
-        AtomicBoolean found = new AtomicBoolean( false );
-
-        forEach( device ->
-                {
-                    if( ! found.get() )
-                    {
-                        for( String sGroup : device.groups() )
-                        {
-                            if( name.equals( sGroup ) )
-                                found.set( true );
-                        }
-                    }
-                } );
-
-        return found.get();
+        return groupsMap.containsKey( name );
     }
 
     /**
@@ -92,22 +120,13 @@ final class   DeviceManager
 
         Set<IDevice> toReturn = new HashSet<>();
 
-        for( int n = 0; n < group.length; n++ )
+        for( String sGroup : group )
         {
-            group[n] = (group[n] == null) ? "" : group[n].trim();
-        }
+            if( UtilStr.isEmpty( sGroup ) )
+                continue;
 
-        forEach( device ->
-                {
-                    for( String sGroup : device.groups() )
-                    {
-                        for( String sParamGroup : group )
-                        {
-                            if( sGroup.equals( sParamGroup ) )      // Meanwhile sDevGroup is guaranteed to be not null, sParamGroup could be null
-                                toReturn.add( device );
-                        }
-                    }
-                } );
+            toReturn.addAll( groupsMap.get( sGroup.trim() ) );
+        }
 
         return toReturn;
     }
@@ -120,31 +139,7 @@ final class   DeviceManager
      */
     Set<IDevice> getInAnyGroup( String... group )
     {
-        if( UtilColls.isEmpty( group ) )
-            return null;
-
-        Set<IDevice> toReturn = new HashSet<>();
-
-        for( int n = 0; n < group.length; n++ )
-        {
-            group[n] = (group[n] == null) ? "" : group[n].trim();
-        }
-
-        forEach( device ->
-                {
-                    for( String sGroup : device.groups() )
-                    {
-                        for( String sParamGroup : group )
-                        {
-                            if( sGroup.equals( sParamGroup ) )        // Meanwhile sDevGroup is guaranteed to be not null, sParamGroup could be null
-                            {
-                                toReturn.add( device );
-                            }
-                        }
-                    }
-                } );
-
-        return toReturn;
+        return getMembersOf( group );
     }
 
     /**
@@ -155,36 +150,69 @@ final class   DeviceManager
      */
     Set<IDevice> getInAllGroups( String... group )
     {
+        if( UtilColls.isEmpty( group ) )
+            return new HashSet<>();
+
+        // 1. Sanitize inputs. If any requested group is invalid (null/empty),
+        // the intersection is logically empty because no device has an empty group name.
+
+        String[] sanitized = new String[group.length];
+
+        for( int i = 0; i < group.length; i++ )
+        {
+            if( UtilStr.isEmpty( group[i] ) )
+                return new HashSet<>();
+
+            sanitized[i] = group[i].trim();
+        }
+
+        // 2. Start with the devices from the first group
+
+        List<IDevice> candidates = groupsMap.get( sanitized[0] );
+
+        if( candidates.isEmpty() )
+            return new HashSet<>();
+
         Set<IDevice> toReturn = new HashSet<>();
 
-        if( UtilColls.isNotEmpty( group ) )
+        // 3. Check if these candidates belong to ALL other groups
+
+        for( IDevice device : candidates )
         {
-            for( int n = 0; n < group.length; n++ )
+            // Retrieve device groups only once per candidate (hoisted out of inner loop)
+
+            String[] devGroups = device.groups();
+
+            if( devGroups == null )
+                continue;
+
+            boolean inAll = true;
+
+            // Start from 1 since we already grabbed candidates from sanitized[0]
+
+            for( int i = 1; i < sanitized.length; i++ )
             {
-                group[n] = (group[n] == null) ? null : group[n].trim();
+                String  targetGroup = sanitized[i];
+                boolean matches     = false;
+
+                for( String g : devGroups )
+                {
+                    if( targetGroup.equals( g ) )
+                    {
+                        matches = true;
+                        break;
+                    }
+                }
+
+                if( ! matches )
+                {
+                    inAll = false;
+                    break;
+                }
             }
 
-            forEach( device ->
-                    {
-                        for( String sGroup : device.groups() )
-                        {
-                            boolean bInAll = true;
-
-                            for( String sParamGroup : group )
-                            {
-                                if( ! sGroup.equals( sParamGroup ) )      // Meanwhile sDevGroup is guaranteed to be not null, sParamGroup could be null
-                                {
-                                    bInAll = false;
-                                    break;
-                                }
-                            }
-
-                            if( bInAll )
-                            {
-                                toReturn.add( device );
-                            }
-                        }
-                    } );
+            if( inAll )
+                toReturn.add( device );
         }
 
         return toReturn;
@@ -196,6 +224,7 @@ final class   DeviceManager
     //------------------------------------------------------------------------//
     private static final class RemoteDevice implements IDevice
     {
+        private static final String[]         EMPTY_GROUPS = new String[0];
         private final String                  name;
         private final AtomicReference<Object> value = new AtomicReference<>( null );
 
@@ -250,7 +279,7 @@ final class   DeviceManager
         @Override
         public String[] groups()
         {
-            return null;
+            return EMPTY_GROUPS;
         }
 
         @Override

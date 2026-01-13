@@ -12,6 +12,7 @@ import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 
 /**
@@ -58,7 +59,7 @@ public final class      Rule
 
         this.sWhen = sWhen;
         this.sIf   = sIf;
-        this.then  = UtilColls.toList( (Object[]) actions );
+        this.then  = new CopyOnWriteArrayList<>( UtilColls.toList( (Object[]) actions ) );
 
         Consumer<Object[]> consumer = (change) ->
             {
@@ -162,6 +163,8 @@ public final class      Rule
         if( when != null )                                                    // when == null -> rule has errors (remember: rules can be added on the fly)
             onDeviceChangedTask.add( new Object[] { devName, devValue } );    // Need to create a new reference to put it into the queue
 
+        // To create a new reference for every call is not aproblem beacuse modern JVMs handle small, short-lived Object[2] allocations very efficiently.
+
         return this;
     }
 
@@ -218,21 +221,18 @@ public final class      Rule
     {
         Action action = new Action( delay, targetName, valueToSet );
 
-        synchronized( then )
+        if( ! then.contains( action ) )
         {
-            if( ! then.contains( action ) )
-            {
-                then.add( action );
-                action.setRuntime( getRuntime() );
-                return action;
-            }
+            then.add( action );
+            action.setRuntime( getRuntime() );
+            return action;
         }
 
         return null;
     }
 
     @Override
-    public synchronized boolean removeAction( IAction action )
+    public boolean removeAction( IAction action )
     {
         return then.remove( action );
     }
@@ -251,7 +251,7 @@ public final class      Rule
             getRuntime().log( ILogger.Level.RULE, "[RULE '"+ name() +"'+satisfied]" );
         }
 
-        for( IAction action : then )     // There is no needed to sync the 'then' List because it is inmutable: once created, there is no way to add or remove items
+        for( IAction action : then )
         {
             try
             {
@@ -280,7 +280,7 @@ public final class      Rule
 
             for( Map.Entry<String,Object> entry : eval.getVars().entrySet() )
             {
-                expr = expr.replaceAll( entry.getKey(), entry.getKey() +'{'+ entry.getValue() +'}' );
+                expr = expr.replace( entry.getKey(), entry.getKey() +'{'+ entry.getValue() +'}' );
             }
 
             getRuntime().log( ILogger.Level.RULE, name() +" ["+ ((eval == when) ? "WHEN" : "IF") +" -> "+ expr +']' );

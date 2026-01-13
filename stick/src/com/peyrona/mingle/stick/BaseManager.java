@@ -5,6 +5,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -65,6 +66,16 @@ abstract class BaseManager<T extends ICommand>
     }
 
     /**
+     * Returns all ICommands of type T.
+     *
+     * @return All ICommands of type T.
+     */
+    Collection<T> getAll()
+    {
+        return map.values();
+    }
+
+    /**
      * Returns the command named as received argument or null if it does not exist.
      *
      * @param name Of the command to be retrieved (case-insensitive).
@@ -72,7 +83,12 @@ abstract class BaseManager<T extends ICommand>
      */
     T named( String name )
     {
-        return map.get( name.toLowerCase() );
+        T t = map.get( name );    // Most probably this will work
+
+        if( t != null )
+            return t;
+
+        return map.get( name.toLowerCase() );    // If not, check lower-case
     }
 
     /**

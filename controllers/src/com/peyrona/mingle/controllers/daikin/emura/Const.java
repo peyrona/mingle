@@ -56,7 +56,7 @@ final class Const
     static enum Mode
     {
         Auto( "0" ),
-        Dry ( "2" ),
+        Dry ( "2" ),   // The “dehumidifier” function is exposed as 'Dry' mode
         Cool( "3" ),
         Heat( "4" ),
         Fan ( "6" );

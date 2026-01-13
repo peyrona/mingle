@@ -27,17 +27,17 @@ public class Kronos
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String, Object> deviceInit, Listener listener )
+    public void set( String deviceName, Map<String, Object> deviceConf, Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        if( deviceInit.isEmpty() )
+        if( deviceConf.isEmpty() )
             sendGenericError( ILogger.Level.SEVERE, "Driver config is empty" );
 
         pair pairConfig = new pair();
 
-        for( Map.Entry<String,Object> entry : deviceInit.entrySet() )
+        for( Map.Entry<String,Object> entry : deviceConf.entrySet() )
             pairConfig.put( entry.getKey(), entry.getValue() );
 
         try
@@ -45,7 +45,7 @@ public class Kronos
             cron = new Cron( pairConfig );
 
             setValid( true );
-            set( deviceInit );
+            setDeviceConfig( deviceConf );
         }
         catch( MingleException me )
         {
@@ -61,7 +61,7 @@ public class Kronos
     {
         if( isInvalid() )
             return;
-        
+
         super.start( rt );
 
         if( cron != null )
@@ -71,7 +71,7 @@ public class Kronos
     @Override
     public void stop()
     {
-        // Can not make 'cron = null' because it is created at ::set(...), not at ::start(...)
+        // Can not make 'cron = null' because it is created at ::setDeviceConfig(...), not at ::start(...)
 
         if( future != null )
         {

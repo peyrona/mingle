@@ -51,7 +51,7 @@ final class   ScriptManager
                     }
                     else
                     {
-                        for( IDriver drv : aDrivers )    // Add all that are used by DRIVERs
+                        for( IDriver drv : aDrivers )    // Add all scripts that are used by DRIVERs
                         {
                             if( scpt.name().equals( drv.getScriptName() ) )
                             {
@@ -60,7 +60,7 @@ final class   ScriptManager
                             }
                         }
 
-                        for( IRule rule : aRules )       // Add all that are used by RULEs
+                        for( IRule rule : aRules )       // Add all scripts that are used by RULEs
                         {
                             for( IRule.IAction action : rule.getActions() )
                             {

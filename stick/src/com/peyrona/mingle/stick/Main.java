@@ -151,11 +151,11 @@ public final class Main
             }
             catch( IOException ioe )
             {
-                System.err.println( "Can not load: "+ sName );
+                // Nothing to do: try with the next one
             }
         }
 
-        throw new IOException( "None of the proposed models can be loaded." );
+        throw new IOException( "None of the proposed models can be loaded:\n"+ Arrays.toString( asModel ) );
     }
 
     //-----------------------------------------------------------------------//
