@@ -1,0 +1,86 @@
+#==================================================================================================================================
+# This example shows the use of AFTER and WITHIN modifiers in RULEs (CELL driver is used to store generated random values).
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE MAX_VALUE AS 80
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 9s
+
+
+DEVICE Data_1
+    INIT
+        groups SET "metric, metrics"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET 0
+
+
+DEVICE Data_2
+     INIT
+         groups SET "metric, metrics"
+     DRIVER CellSetDriver
+         CONFIG
+             value SET 0
+
+
+DEVICE Data_3
+    INIT
+        groups SET "metric, metrics"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET 0
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN clock
+    THEN Data_1  SET rand( 60 , 100 )
+         Data_2  SET rand( 60 , 100 )
+         Data_3 SET rand( 60 , 100 )
+
+
+WHEN ALL metrics ABOVE MAX_VALUE
+    THEN console SET "["+ time() +"] All are above {*MAX_VALUE*}%: Data_1 = "+ Data_1 +", Data_2 = "+ Data_2 +", Data_3 = "+ Data_3
+
+
+WHEN ANY metric ABOVE MAX_VALUE
+    THEN console SET "["+ time() +"] At least one is above {*MAX_VALUE*}%: Data_1 = "+ Data_1 +", Data_2 = "+ Data_2 +", Data_3 = "+ Data_3
+
+
+# Following RULE is activated when the value for all members of the 'metric' group (Data_1, Data_2 and Data_3) are above MAX_VALUE.
+# But to be triggered, the IF clause must be true; and this will happen if after 20 seconds at least one of the members of
+# the 'metric' group has a value of MAX_VALUE: it does not matter if one (or even all metrics) where below MAX_VALUE during
+# these 20 seconds as far as after the 20 seconds there is one or more above MAX_VALUE.
+
+#WHEN ALL metrics ABOVE MAX_VALUE
+#     THEN console SET "["+ time() +"] All metrics were above {*MAX_VALUE*}% when rule was triggered and \
+#                       at least one metric was also after 20 seconds",
+#          console SET "Data_1 = "+ Data_1 +", Data_2 = "+ Data_2 +", Data_3 = "+ Data_3
+#     IF ANY metric ABOVE MAX_VALUE AFTER 20s
+
+
+# Notice that following RULE is activated everytime one or more 'metric' value is above MAX_VALUE, but only if at least one
+# of the 'metric' values was above MAX_VALUE% throughout the time of 20 seconds (all the time).
+
+WHEN ALL metrics ABOVE MAX_VALUE
+     THEN console SET "["+ time() +"] One or more metrics were above {*MAX_VALUE*}% throughout the last 20 seconds"
+          console SET "Data_1 = "+ Data_1 +", Data_2 = "+ Data_2 +", Data_3 = "+ Data_3
+     IF ANY metric ABOVE MAX_VALUE WITHIN 20s
+
+
+# NOTE: By combining ANY and ALL plus WITHIN and AFTER, you can create powerfull RULEs. You can make RULEs even more
+#       powerfull by adding more expressions using AND, OR and NOT. But remember: it is better to have lots of simple
+#       RULEs than fewer RULEs but more complex.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

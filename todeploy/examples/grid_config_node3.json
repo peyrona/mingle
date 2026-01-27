@@ -1,0 +1,87 @@
+# ----------------------------------------------------------------------------------------------------------------------------------
+# Initial note: Mingle Standard Platform (MSP) allows Une-style comments in JSON files.
+#
+# This file contains all the configuration needed by the MSP tools.
+# For detailed information, please refer to the MSP handbook.
+# ----------------------------------------------------------------------------------------------------------------------------------
+
+[
+    # Common configuration to all Mingle modules
+    {
+      "module": "common",
+      "log_level": "warning",
+      "faked_drivers": false
+    },
+
+    # Excution Environment configuration
+    {
+      "module": "exen",
+      "write_disk": true
+    },
+
+    # Plugable Commmands Library to be used
+    {
+      "module": "pcl",
+      "class": "com.peyrona.mingle.pcl.PclBuilder",
+      "uris": ["file://{*home.lib*}pcl.jar"]
+    },
+
+    # Other languages that can be used (this info is needed by transpiler and ExEn)
+    {
+      "module"   : "candi",
+      "builder"  : { "class": "com.peyrona.mingle.candi.LangBuilder",
+                     "uris" : ["file://{*home.lib*}candi.jar"] },
+      "languages": [
+                       {
+                         "name" : "Une",
+                         "class": "com.peyrona.mingle.candi.unescript.UneScriptRT",
+                         "uris" : ["file://{*home.lib*}candi.jar"]
+                       },
+                       {
+                         "name" : "Java",
+                         "class": "com.peyrona.mingle.candi.javac.JavaRT",
+                         "uris" : ["file://{*home.lib*}candi.jar"]
+                       },
+                       {
+                         "name" : "JavaScript",
+                         "class": "com.peyrona.mingle.candi.javascript.NashornRT",
+                         "uris" : ["file://{*home.lib*}candi.jar"]
+                       },
+                       {
+                         "name" : "Python",
+                         "class": "com.peyrona.mingle.candi.python.JythonRT",
+                         "uris" : ["file://{*home.lib*}candi.jar",
+                                   "file://{*home.lib*}jython-standalone-2.7.2.jar"]
+                       }
+                   ]
+    },
+
+    # Nework
+    {
+      "module": "network",
+
+      # Transport channels to attend requests sent by other ExEns and tools (e.g. Glue)
+      "channels": [
+                      {
+                          "name"  : "Plain Socket",
+                          "init"  : { "port": 65535, "ssl": false, "allow": "intranet" },  # "allow": "local", "intranet", "any". Default is "subnet"
+                          "server": "com.peyrona.mingle.network.plain.PlainSocketServer",          # How to create the server
+                          "uris"  : ["file://{*home.lib*}network.jar"]
+                      }
+                  ],
+
+      # Network grid: to send changes and requests that happen in this ExEn to other ExEns in the grid.
+      "grid": {
+                "reconnect": "5s",     # For lost connections. Can be an Une Time unit or a number of milliseconds. When ommited or -1, the default value is used.
+                "deaf" : false,        # A node is "deaf" when it will not pay attention to received messages from other nodes.
+                "nodes": [
+                             {  # All following nodes share comm protocol ("client" and "uris"). Adding another group, new nodes can have different comm protocol.
+                                 "targets": [{ "host": "localhost", "port":65533, "ssl": false, "timeout": "5s" },   # 0 waits forever. When ommited: takes default value.
+                                             { "host": "localhost", "port":65534, "ssl": false, "timeout": 4000 }],
+                                 "client" : "com.peyrona.mingle.network.plainsocket.PlainSocketClient",              # How to create the client
+                                 "uris"   : ["file://{*home.lib*}network.jar"]
+                             }
+                         ]
+              }
+    }
+]

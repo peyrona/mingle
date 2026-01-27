@@ -1,0 +1,43 @@
+#==================================================================================================================================
+# This example shows how to use other languages (Java in this case) to perform tasks written this language.
+#
+# IMPORTANT! THIS EXAMPLE CAN NOT BE EXECUTED because 'scripts.jar' does not exits. This simply shows how to use JARs from Une.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# IMPORTANT! THIS EXAMPLE CAN NOT BE EXECUTED
+# because 'scripts.jar' does not exits.
+
+SCRIPT CopyFiles                             # The script name
+   LANGUAGE java                             # The language used to write the script
+   CALL "com.peyrona.scripts.copy_files"     # This is the 'function' that starts (runs) the Java code
+   FROM "file://{*home.lib*}scripts.jar"     # Where is the Java application
+
+
+SCRIPT DeleteFiles
+   LANGUAGE java
+   CALL "com.peyrona.scripts.delete_files"
+   FROM "file://{*home.lib*}scripts.jar"
+
+# As previous SCRIPTs does not change any device's state, RULEs will not be re-evaluated after the SCRIPTs invocation.
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 59m                   # It is not needed to execute the RULE more tha once per hour: 59 minutes is good.
+
+
+WHEN clock AND time():hour() == 10
+THEN CopyFiles                               # 'CopyFiles' SCRIPT will be launched by this RULE (at any mininute at 07 hours).
+                                             # To be launched at 07:00 set clock to 1m instead of 59m
+
+WHEN clock AND time():hour() == 23
+THEN DeleteFiles                             # 'DeleteFiles' SCRIPT will be launched by this RULE (at any mininute at 23 hours).
+                                             # To be launched at 23:00 set clock to 1m instead of 59m
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

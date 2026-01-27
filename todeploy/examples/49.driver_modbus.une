@@ -1,0 +1,214 @@
+#==================================================================================================================================
+# This example shows the use of Modbus (one of the most IoT protocols).
+# To know more about Modbus, visit: https://modbus.org
+# Although Modbus can use RS-232, RS-485 and others, this implementation of the Modbus made in this driver works only via TCP.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This DRIVER works slightly different to others: you have to create a new DRIVER configuration per each DEVICE.
+# So if you have, lets say 3 temperature probes, you have to declare 3 DRIVERs.
+# ---------------------------------------------------------------------------------------------------------------------------------
+#
+# DRIVER ModbusTcpClientDriver
+#    SCRIPT ModbusTcpClientController
+#    CONFIG
+#        uri      AS string REQUIRED     # e.g.: "192.168.1.234:502" (if no port is declared, 502 is assumed)
+#        address  AS number REQUIRED     # Register address (0-65535)
+#        type     AS string REQUIRED     # One of: "boolean" (1 bit), "int" (2 bytes), "long" & "float" (4 bytes)
+#        unitid   AS number              # Unit ID / Slave ID (0-255). By default: 1
+#        function AS string              # One of: "coils" (FC01), "discrete" (FC02), "holding" (FC03), "input" (FC04).
+#                                        # By default: "coils" for boolean, "holding" for numeric types
+#        order    AS string              # Byte order for 32-bit values. One of: "ABCD", "BADC", "CDAB" or "DCBA". By default: "ABCD"
+#        interval AS number              # Time between reads (min: 30 ms). By default: 5000 ms
+#        timeout  AS number              # Connection/response timeout. By default: 4000 ms
+#        retries  AS number              # Number of retries on failure (0-10). By default: 2
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# FUNCTION CODES:
+#   - "coils"    (FC01) - Read/Write discrete outputs (boolean). Use for relays, switches, etc.
+#   - "discrete" (FC02) - Read-only discrete inputs (boolean). Use for digital sensors, buttons, etc.
+#   - "holding"  (FC03) - Read/Write 16-bit registers. Use for setpoints, configuration values, etc.
+#   - "input"    (FC04) - Read-only 16-bit registers. Use for sensor readings, measurements, etc.
+#
+# BYTE ORDER (for 32-bit long and float values):
+#   Different manufacturers use different byte orderings. Common patterns:
+#   - "ABCD" - Big-endian (most common: ABB, Schneider Electric)
+#   - "CDAB" - Word-swapped (Modicon, some Siemens)
+#   - "BADC" - Byte-swapped within words
+#   - "DCBA" - Little-endian (some Asian manufacturers)
+#   If you get strange values, try different byte orders until you get the correct reading.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Everytime a RULE changes the value of a DEVICE, this new value is sent to Modbus and the device's value will be updated using
+# the value returned by Modbus.
+# To update the value of a DEVICE (to read current state from Modbus), place an interval when creating the DRIVER definition.
+#
+# For more information about Drivers, please refer to the "Mingle Standard Platform" handbook.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE _URI_     AS "192.168.1.100:502"    # IMPORTANT: change this URI to your Modbus server address
+USE _UNIT_ID_ AS 1                       # IMPORTANT: change this to your device's Unit ID (slave address)
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 1: Reading temperature sensors (float values from input registers)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE t_boiler_1                        # Temperature sensor for boiler #1
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 100              # Register address for temperature sensor 1
+             type     = "float"          # 32-bit IEEE 754 float (uses 2 registers)
+             unitid   = _UNIT_ID_
+             function = "input"          # FC04 - Read Input Registers (read-only sensors)
+             order    = "CDAB"           # Word-swapped byte order (common for Modicon)
+             interval = 3s
+             timeout  = 3000
+             retries  = 2
+
+
+DEVICE t_boiler_2                        # Temperature sensor for boiler #2
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 102              # Register address for temperature sensor 2
+             type     = "float"
+             unitid   = _UNIT_ID_
+             function = "input"
+             order    = "CDAB"
+             interval = 5s
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 2: Reading a counter (32-bit long value from holding registers)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE energy_counter                    # Energy meter pulse counter
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 200
+             type     = "long"           # 32-bit unsigned integer (uses 2 registers)
+             unitid   = _UNIT_ID_
+             function = "holding"        # FC03 - Read Holding Registers
+             order    = "ABCD"           # Big-endian (most common)
+             interval = 10s
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 3: Reading/Writing a setpoint (16-bit int in holding registers)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE temperature_setpoint              # Writable setpoint for temperature control
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 300
+             type     = "int"            # 16-bit integer (single register)
+             unitid   = _UNIT_ID_
+             function = "holding"        # FC03/FC06 - Holding registers are read/write
+             interval = 30s              # Read less frequently since it's a setpoint
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 4: Reading/Writing a relay (boolean coil)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE pump_relay                        # Relay controlling a pump
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 0                # Coil address
+             type     = "boolean"
+             unitid   = _UNIT_ID_
+             function = "coils"          # FC01/FC05 - Coils are read/write booleans
+             interval = 2s
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 5: Reading a digital input (read-only boolean)
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE door_sensor                       # Door open/close sensor
+    DRIVER ModbusTcpClientDriver
+        CONFIG
+             uri      = _URI_
+             address  = 10
+             type     = "boolean"
+             unitid   = _UNIT_ID_
+             function = "discrete"       # FC02 - Discrete inputs are read-only booleans
+             interval = 1s
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Output devices for logging
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE file
+    DRIVER FileDriver
+        CONFIG
+            file = "{*home.tmp*}modbus.csv"
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Rules for displaying and logging values
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+WHEN t_boiler_1 > -999
+    THEN console = "["+ time() +"] Boiler #1 = "+ t_boiler_1:format( "#,##0.00" ) +" C"
+
+
+WHEN t_boiler_2 > -999
+    THEN console = "["+ time() +"] Boiler #2 = "+ t_boiler_2:format( "#,##0.00" ) +" C"
+
+
+WHEN energy_counter CHANGES
+    THEN console = "["+ time() +"] Energy counter = "+ energy_counter
+
+
+WHEN door_sensor CHANGES
+    THEN console = "["+ time() +"] Door is "+ iif( door_sensor, "OPEN", "CLOSED" )
+
+
+# Example: Turn on pump when temperature exceeds setpoint
+WHEN t_boiler_1 > temperature_setpoint
+    THEN pump_relay = true
+
+
+WHEN t_boiler_1 <= temperature_setpoint - 2    # 2 degree hysteresis
+    THEN pump_relay = false
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Periodic logging to CSV file
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 2m    # Log every 2 minutes
+
+
+WHEN clock
+    THEN file SET time() +", "+ t_boiler_1:format( "#,##0.00" ) +", "+ t_boiler_2:format( "#,##0.00" ) +", "+ energy_counter
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Include standard libraries
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"
+        "file://{*home.inc*}basic-drivers.une"
+        "file://{*home.inc*}protocol-drivers.une"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,53 @@
+#==================================================================================================================================
+# This script shows how to write SENSOR's values into an MS-Excel sheet.
+#
+#----------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+DEVICE SysMonExcel                  # This actuator uses the ExcelDriver, which allows to send data to a MS Excel spread-sheet
+    DRIVER MsExcelDriver            # (refer to '{*home*}/include/common-drivers.une' file)
+        CONFIG
+            file  = "{*home.tmp*}sysmon"
+            heads = "1=When, 2=CPU, 3=RAM, 4=Disk"
+
+
+DEVICE UsedCPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "cpu"
+            interval = 3s
+
+
+DEVICE UsedJvmRam
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "jvmram"
+            interval = 10s
+
+
+DEVICE UsedDisk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 53s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN ANY metric >= 0                   # This RULE adds values to Excel
+THEN SysMonExcel = "1=" + utc() + ", 2=" + UsedCPU:format("#0.0") + ", 3=" + UsedJvmRam:format("#0.0") + ", 4=" + UsedDisk
+     console     = "New row added to Excel"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

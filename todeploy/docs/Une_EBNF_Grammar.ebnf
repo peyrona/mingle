@@ -1,0 +1,783 @@
+(* ============================================================================
+   Une Language - EBNF Grammar Specification
+   ============================================================================
+
+   Version: 1.0
+   Date: December 2025
+
+   Une is a declarative DSL (Domain-Specific Language) for the Mingle Platform,
+   designed for IoT and automation applications. It uses human-friendly syntax
+   that doesn't require programming knowledge.
+
+   This grammar follows the ISO/IEC 14977 EBNF standard notation:
+   - =          definition
+   - ,          concatenation
+   - |          alternation
+   - [ ... ]    optional (0 or 1)
+   - { ... }    repetition (0 or more)
+   - ( ... )    grouping
+   - " ... "    terminal string
+   - ' ... '    terminal string (alternative)
+   - (* ... *)  comment
+   - ? ... ?    special sequence
+   - -          exception
+
+   ============================================================================ *)
+
+
+(* ============================================================================
+   TOP-LEVEL STRUCTURE
+   ============================================================================ *)
+
+program = { command_separator }, { command , { command_separator } } ;
+
+command = include_command
+        | use_command
+        | device_command
+        | driver_command
+        | rule_command
+        | script_command ;
+
+command_separator = blank_line | ( newline , newline ) ;
+
+blank_line = { whitespace } , newline , { whitespace } , newline ;
+
+
+(* ============================================================================
+   LEXICAL ELEMENTS
+   ============================================================================ *)
+
+(* --- Character Classes --- *)
+
+letter = "A" | "B" | "C" | "D" | "E" | "F" | "G" | "H" | "I" | "J" | "K" | "L"
+       | "M" | "N" | "O" | "P" | "Q" | "R" | "S" | "T" | "U" | "V" | "W" | "X"
+       | "Y" | "Z"
+       | "a" | "b" | "c" | "d" | "e" | "f" | "g" | "h" | "i" | "j" | "k" | "l"
+       | "m" | "n" | "o" | "p" | "q" | "r" | "s" | "t" | "u" | "v" | "w" | "x"
+       | "y" | "z" ;
+
+digit = "0" | "1" | "2" | "3" | "4" | "5" | "6" | "7" | "8" | "9" ;
+
+underscore = "_" ;
+
+whitespace = " " | "\t" ;
+
+newline = "\n" ;
+
+quote = '"' ;
+
+
+(* --- Comments --- *)
+
+comment = "#" , { ? any character except newline ? } ;
+
+(* Note: Comments extend from '#' to end of line.
+   Comment-only lines are skipped without consuming the newline for command separation. *)
+
+
+(* --- Line Continuation --- *)
+
+line_continuation = "\" , [ comment ] , newline ;
+
+(* Note: Line continuation allows breaking long statements across multiple lines.
+   Any content after '\' until newline is ignored. *)
+
+
+(* --- Identifiers / Names --- *)
+
+identifier = ( letter | underscore ) , { letter | digit | underscore } ;
+
+name = identifier ;
+(* Note: Names are case-insensitive and limited to 48 characters.
+   Names cannot start with a digit. *)
+
+
+(* --- Reserved Keywords --- *)
+
+reserved_keyword = "AFTER"    | "ALL"      | "ANY"      | "AS"
+                 | "CALL"     | "CONFIG"   | "DEVICE"   | "DRIVER"
+                 | "FROM"     | "IF"       | "INCLUDE"  | "INIT"
+                 | "LANGUAGE" | "ONSTART"  | "ONSTOP"   | "REQUIRED"
+                 | "RULE"     | "SCRIPT"   | "THEN"     | "USE"
+                 | "WHEN"     | "WITHIN"
+                 (* Reserved for future use: *)
+                 | "ALIAS"    | "BY"       | "FOR"      | "ONERROR" ;
+
+(* Note: Keywords are case-insensitive. DEVICE, Device, device are all equivalent. *)
+
+
+(* --- Device Keyword Aliases --- *)
+
+device_keyword = "DEVICE" | "SENSOR" | "ACTUATOR" ;
+(* Note: SENSOR and ACTUATOR are aliases for DEVICE *)
+
+
+(* ============================================================================
+   DATA TYPES
+   ============================================================================ *)
+
+(* --- Basic Data Types --- *)
+
+literal = boolean_literal
+        | number_literal
+        | string_literal ;
+
+boolean_literal = boolean_true | boolean_false ;
+
+boolean_true  = "TRUE"   | "ON"  | "YES" | "CLOSED" ;
+boolean_false = "FALSE"  | "OFF" | "NO"  | "OPEN" ;
+(* Note: Boolean aliases are case-insensitive *)
+
+number_literal = [ sign ] , integer_part , [ fractional_part ] , [ unit_suffix ] ;
+
+sign = "+" | "-" ;
+
+integer_part = digit , { digit | "_" } ;
+(* Note: Underscores in numbers are ignored (visual separators): 1_234.56 = 1234.56 *)
+
+fractional_part = "." , digit , { digit | "_" } ;
+
+string_literal = quote , { string_character } , quote ;
+
+string_character = ? any character except unescaped quote ?
+                 | macro ;
+(* Note: Strings use double quotes. Newlines within strings are preserved.
+   Macros like {*name*} are expanded within strings. *)
+
+
+(* --- Extended Data Types --- *)
+
+extended_type = date_type | time_type | list_type | pair_type ;
+
+date_type = "date" , "(" , [ date_arguments ] , ")" ;
+date_arguments = expression , { "," , expression } ;
+(* Creates a date object. Without arguments, returns current date. *)
+
+time_type = "time" , "(" , [ time_arguments ] , ")" ;
+time_arguments = expression , { "," , expression } ;
+(* Creates a time object. Without arguments, returns current time. *)
+
+list_type = "list" , "(" , [ list_elements ] , ")" ;
+list_elements = expression , { "," , expression } ;
+(* Creates an ordered collection. *)
+
+pair_type = "pair" , "(" , [ pair_elements ] , ")" ;
+pair_elements = expression , { "," , expression } ;
+(* Creates a key-value dictionary.
+   Alias: pairs() *)
+
+
+(* --- Unit Suffixes --- *)
+
+unit_suffix = time_suffix | temperature_suffix ;
+
+time_suffix = "u" | "U"   (* centiseconds: x * 10 ms *)
+            | "t" | "T"   (* deciseconds:  x * 100 ms *)
+            | "s" | "S"   (* seconds:      x * 1000 ms *)
+            | "m" | "M"   (* minutes:      x * 60000 ms *)
+            | "h" | "H"   (* hours:        x * 3600000 ms *)
+            | "d" | "D" ; (* days:         x * 86400000 ms *)
+(* Note: Time suffixes convert the number to milliseconds *)
+
+temperature_suffix = "c" | "C"   (* Celsius: unchanged *)
+                   | "f" | "F"   (* Fahrenheit: converted to Celsius *)
+                   | "k" | "K" ; (* Kelvin: converted to Celsius *)
+(* Note: Temperature suffixes convert to Celsius *)
+
+
+(* ============================================================================
+   OPERATORS
+   ============================================================================ *)
+
+(* --- Arithmetic Operators --- *)
+
+arithmetic_operator = "+"     (* Addition *)
+                    | "-"     (* Subtraction *)
+                    | "*"     (* Multiplication *)
+                    | "/"     (* Division *)
+                    | "%"     (* Modulo *)
+                    | "^" ;   (* Power / Exponentiation *)
+
+
+(* --- Relational Operators --- *)
+
+relational_operator = "=="    (* Equal - aliases: IS, EQUALS, ARE *)
+                    | "!="    (* Not equal - aliases: UNEQUAL, IS_NOT *)
+                    | "<>"    (* Not equal - alternative *)
+                    | "<"     (* Less than - alias: BELOW *)
+                    | ">"     (* Greater than - alias: ABOVE *)
+                    | "<="    (* Less or equal - alias: MOST *)
+                    | ">=" ;  (* Greater or equal - alias: LEAST *)
+
+
+(* --- Relational Operator Aliases --- *)
+
+relational_alias = "IS" | "EQUALS" | "ARE"    (* == *)
+                 | "UNEQUAL" | "IS_NOT"       (* != *)
+                 | "BELOW"                    (* < *)
+                 | "ABOVE"                    (* > *)
+                 | "MOST"                     (* <= *)
+                 | "LEAST" ;                  (* >= *)
+
+
+(* --- Conditional / Boolean Operators --- *)
+
+conditional_operator = "&&"   (* Logical AND - alias: AND *)
+                     | "||"   (* Logical OR - alias: OR *)
+                     | "|&"   (* Logical XOR - alias: XOR *)
+                     | "!" ;  (* Logical NOT - alias: NOT *)
+
+conditional_alias = "AND" | "OR" | "XOR" | "NOT" ;
+
+
+(* --- Bitwise Operators --- *)
+
+bitwise_operator = "&"        (* Bitwise AND - alias: BAND *)
+                 | "|"        (* Bitwise OR - alias: BOR *)
+                 | "><"       (* Bitwise XOR - alias: BXOR *)
+                 | "~"        (* Bitwise NOT - alias: BNOT *)
+                 | ">>"       (* Right shift *)
+                 | "<<" ;     (* Left shift *)
+
+bitwise_alias = "BAND" | "BOR" | "BXOR" | "BNOT" ;
+
+
+(* --- Assignment Operator --- *)
+
+assign_operator = "=" ;
+assign_alias = "SET" ;
+
+
+(* --- Send / Chain Operator --- *)
+
+send_operator = ":" ;
+(* Used for method chaining and function invocation on values.
+   Example: "hello":upper() or device:format("##") *)
+
+
+(* --- Operator Precedence (highest to lowest) --- *)
+(*
+   1. ()                  - Parentheses (grouping)
+   2. :                   - Send/chain operator (method calls)
+   3. ! ~ NOT BNOT        - Unary NOT
+   4. ^                   - Power
+   5. * / %               - Multiplicative
+   6. + -                 - Additive
+   7. << >>               - Shift
+   8. < <= > >=           - Relational comparison
+   9. == !=               - Equality
+   10. &                  - Bitwise AND
+   11. ><                 - Bitwise XOR
+   12. |                  - Bitwise OR
+   13. &&                 - Logical AND
+   14. |&                 - Logical XOR
+   15. ||                 - Logical OR
+   16. =                  - Assignment
+*)
+
+
+(* ============================================================================
+   EXPRESSIONS
+   ============================================================================ *)
+
+expression = logical_or_expression ;
+
+logical_or_expression = logical_xor_expression , { ( "||" | "OR" ) , logical_xor_expression } ;
+
+logical_xor_expression = logical_and_expression , { ( "|&" | "XOR" ) , logical_and_expression } ;
+
+logical_and_expression = bitwise_or_expression , { ( "&&" | "AND" ) , bitwise_or_expression } ;
+
+bitwise_or_expression = bitwise_xor_expression , { ( "|" | "BOR" ) , bitwise_xor_expression } ;
+
+bitwise_xor_expression = bitwise_and_expression , { ( "><" | "BXOR" ) , bitwise_and_expression } ;
+
+bitwise_and_expression = equality_expression , { ( "&" | "BAND" ) , equality_expression } ;
+
+equality_expression = relational_expression ,
+                      { ( "==" | "!=" | "<>" | "IS" | "EQUALS" | "ARE" | "UNEQUAL" | "IS_NOT" ) ,
+                        relational_expression } ;
+
+relational_expression = shift_expression ,
+                        { ( "<" | ">" | "<=" | ">=" | "BELOW" | "ABOVE" | "MOST" | "LEAST" ) ,
+                          shift_expression } ;
+
+shift_expression = additive_expression , { ( "<<" | ">>" ) , additive_expression } ;
+
+additive_expression = multiplicative_expression , { ( "+" | "-" ) , multiplicative_expression } ;
+
+multiplicative_expression = power_expression , { ( "*" | "/" | "%" ) , power_expression } ;
+
+power_expression = unary_expression , { "^" , unary_expression } ;
+
+unary_expression = [ unary_operator ] , chain_expression ;
+
+unary_operator = "-" | "!" | "~" | "NOT" | "BNOT" ;
+
+chain_expression = primary_expression , { send_operator , method_call } ;
+
+method_call = identifier , "(" , [ argument_list ] , ")" ;
+
+argument_list = expression , { "," , expression } ;
+
+primary_expression = literal
+                   | name
+                   | function_call
+                   | extended_type
+                   | "(" , expression , ")"
+                   | macro ;
+
+function_call = identifier , "(" , [ argument_list ] , ")" ;
+
+
+(* ============================================================================
+   MACROS
+   ============================================================================ *)
+
+macro = "{*" , macro_content , "*}" ;
+
+macro_content = identifier | predefined_macro ;
+
+predefined_macro = "home"       (* MSP home directory *)
+                 | "home.inc"   (* includes directory *)
+                 | "home.lib"   (* libraries directory *)
+                 | "home.log"   (* logs directory *)
+                 | "home.tmp" ; (* temporal directory *)
+
+(* Note: Macros are expanded during preprocessing.
+   Custom macros can be defined using USE command.
+   Inside strings, macros are also expanded: "Value is {*myconst*}" *)
+
+
+(* ============================================================================
+   URI SCHEMES
+   ============================================================================ *)
+
+uri = string_literal ;
+(* URIs must be enclosed in quotes *)
+
+uri_scheme = file_uri | http_uri | https_uri ;
+
+file_uri = "file://" , file_path , [ wildcard ] ;
+(* Wildcards allowed: * for all files, ** for recursive *)
+
+http_uri = "http://" , host_path ;
+(* No wildcards allowed *)
+
+https_uri = "https://" , host_path ;
+(* No wildcards allowed *)
+
+file_path = ? valid file path with optional macros ? ;
+host_path = ? valid URL host and path ? ;
+
+wildcard = "*" | "**" ;
+
+
+(* ============================================================================
+   INCLUDE COMMAND (Preprocessor)
+   ============================================================================ *)
+
+include_command = "INCLUDE" , include_target , { clause_separator , include_target } ;
+
+include_target = uri
+               | "*" ;
+(* Note: "*" enables auto-include mode where the compiler discovers needed includes *)
+
+clause_separator = ";" | newline ;
+
+
+(* ============================================================================
+   USE COMMAND (Preprocessor - Text Substitution)
+   ============================================================================ *)
+
+use_command = "USE" , use_definition , { clause_separator , use_definition } ;
+
+use_definition = use_name , "AS" , use_replacement ;
+
+use_name = name | string_literal ;
+(* Note: Can be a simple name or quoted string for multi-token sequences *)
+
+use_replacement = literal | expression ;
+
+(* Examples:
+   USE INTERVAL AS 3s
+   USE sensor AS "DEVICE"
+   USE "IS GREATER THAN" AS ">"
+
+   Note: INCLUDE and USE keywords cannot be replaced.
+   Inside strings, use macro syntax: "Value is {*INTERVAL*}" *)
+
+
+(* ============================================================================
+   DEVICE COMMAND (Sensors & Actuators)
+   ============================================================================ *)
+
+device_command = device_keyword , name ,
+                 [ init_clause ] ,
+                 driver_reference ,
+                 [ config_clause ] ;
+
+init_clause = "INIT" , property_assignment , { clause_separator , property_assignment } ;
+
+property_assignment = property_name , assign_operator , property_value ;
+
+property_name = name ;
+(* Standard properties: groups, value, delta, downtime *)
+
+property_value = literal | expression ;
+(* Note: If expression, must be resolvable at compile time *)
+
+driver_reference = "DRIVER" , name ;
+
+config_clause = "CONFIG" , config_assignment , { clause_separator , config_assignment } ;
+
+config_assignment = config_name , ( assign_operator | assign_alias ) , config_value ;
+
+config_name = name ;
+
+config_value = literal | expression ;
+(* Note: If expression, must be resolvable at compile time *)
+
+(* Example:
+   DEVICE LightKitchen
+       INIT
+           groups SET "lights, ground_floor"
+           value  SET FALSE
+       DRIVER ShellyDriver
+           CONFIG
+               IP   SET "192.168.1.110"
+               type SET "relay"
+*)
+
+
+(* ============================================================================
+   DRIVER COMMAND (Custom Driver Definition)
+   ============================================================================ *)
+
+driver_command = "DRIVER" , name ,
+                 "SCRIPT" , name ,
+                 [ driver_config_clause ] ;
+
+driver_config_clause = "CONFIG" , driver_config_item , { clause_separator , driver_config_item } ;
+
+driver_config_item = config_name , "AS" , ( data_type | "ANY" ) , [ "REQUIRED" ] ;
+
+data_type = "BOOLEAN" | "NUMBER" | "STRING" | "ANY" ;
+
+(* Example:
+   DRIVER MyCustomDriver
+       SCRIPT myDriverScript
+       CONFIG
+           url      AS STRING REQUIRED
+           interval AS NUMBER
+           enabled  AS BOOLEAN
+*)
+
+
+(* ============================================================================
+   RULE COMMAND (Trigger-Action Rules)
+   ============================================================================ *)
+
+rule_command = [ "RULE" , name ] ,
+               when_clause ,
+               then_clause ,
+               [ if_clause ] ,
+               [ use_local_clause ] ;
+
+(* Note: If RULE keyword is omitted, the rule is anonymous.
+   Named rules can be triggered from other rules. *)
+
+
+(* --- WHEN Clause (Preconditions) --- *)
+
+when_clause = "WHEN" , condition_expression , { condition_connector , condition_expression } ;
+
+condition_expression = [ group_modifier ] , expression ;
+
+group_modifier = ( "ANY" | "ALL" ) , group_name ;
+
+group_name = name ;
+(* References a group of devices defined via INIT groups property *)
+
+condition_connector = "AND" | "OR" | "&&" | "||" ;
+
+
+(* --- THEN Clause (Actions) --- *)
+
+then_clause = "THEN" , action , { clause_separator , action } ;
+
+action = script_invocation
+       | rule_invocation
+       | device_assignment
+       | group_assignment
+       | expression_action
+       , [ after_modifier ] ;
+
+script_invocation = name ;
+(* Invokes a named SCRIPT *)
+
+rule_invocation = name ;
+(* Triggers another named RULE *)
+
+device_assignment = name , assign_operator , expression ;
+
+group_assignment = name , assign_operator , expression ;
+(* Assigns to all devices in the group *)
+
+expression_action = expression ;
+(* Executes expression for side effects, e.g., cache operations *)
+
+after_modifier = "AFTER" , time_value ;
+
+time_value = number_literal ;
+(* Time in milliseconds (can use time suffix for readability: 5s, 2m, etc.) *)
+
+
+(* --- IF Clause (Future Conditions - Optional) --- *)
+
+if_clause = "IF" , future_condition , { condition_connector , future_condition } ;
+
+future_condition = [ group_modifier ] , expression , [ time_modifier ] ;
+
+time_modifier = after_time_modifier | within_time_modifier ;
+
+after_time_modifier = "AFTER" , time_value ;
+(* Condition must be true after the specified time has elapsed *)
+
+within_time_modifier = "WITHIN" , time_value ;
+(* Condition must remain true throughout the specified time period *)
+
+
+(* --- USE Clause (Local Aliases - Optional) --- *)
+
+use_local_clause = "USE" , local_alias , { clause_separator , local_alias } ;
+
+local_alias = name , "AS" , expression ;
+(* Defines local name aliases for use within the rule.
+   Aliases are evaluated once and cached for the rule's duration. *)
+
+
+(* Rule Examples:
+
+   (* Simple rule *)
+   WHEN alarm IS ON
+   THEN all_lights SET OFF
+
+   (* Rule with group modifiers *)
+   WHEN ANY contact IS OPEN AND alarm IS ON
+   THEN MyTelegram SET "Danger: intruders at home"
+   IF (alarm IS ON) AFTER 20s
+
+   (* Rule with WITHIN condition *)
+   WHEN ANY door IS OPEN OR ANY window IS OPEN
+   THEN heater SET OFF
+   IF (ANY door IS OPEN OR ANY window IS OPEN) WITHIN 3m
+
+   (* Named rule with local aliases *)
+   RULE DailyCheck
+   WHEN clock > 0 AND dows:has(date():weekday())
+   THEN console = "Today is a workday"
+   USE dows AS list(Monday,Tuesday,Wednesday,Thursday,Friday)
+*)
+
+
+(* ============================================================================
+   SCRIPT COMMAND (Embedded Code)
+   ============================================================================ *)
+
+script_command = "SCRIPT" , [ name ] ,
+                 language_clause ,
+                 from_clause ,
+                 [ call_clause ] ,
+                 [ lifecycle_modifiers ] ;
+
+(* Note: Name is optional only when ONSTART or ONSTOP is specified *)
+
+language_clause = "LANGUAGE" , language_name ;
+
+language_name = "java" | "Java" | "JAVA"
+              | "javascript" | "JavaScript" | "JAVASCRIPT" | "js" | "JS"
+              | "python" | "Python" | "PYTHON"
+              | "une" | "Une" | "UNE" ;
+
+from_clause = "FROM" , ( inline_code | external_source ) ;
+
+inline_code = "{" , ? any code in target language ? , "}" ;
+(* Note: Inline code preserves indentation (important for Python).
+   Braces can be nested. *)
+
+external_source = uri , { clause_separator , uri } ;
+(* Reference to external code files (.jar, .py, .js, etc.) *)
+
+call_clause = "CALL" , string_literal ;
+(* Entry point function/method name. Case-sensitive.
+   Optional if the code calls itself or is inline with single anonymous block. *)
+
+lifecycle_modifiers = [ onstart_modifier ] , [ onstop_modifier ] ;
+
+onstart_modifier = "ONSTART" ;
+(* Script executes when the application starts *)
+
+onstop_modifier = "ONSTOP" ;
+(* Script executes when the application stops *)
+
+(* Script Examples:
+
+   (* Inline Java script *)
+   SCRIPT
+       ONSTART
+       LANGUAGE Java
+       CALL "myMethod"
+       FROM {
+           public void myMethod() {
+               System.out.println("Hello from Java");
+           }
+       }
+
+   (* Inline JavaScript *)
+   SCRIPT HelloJS
+       LANGUAGE JavaScript
+       ONSTART
+       FROM {
+           print("Hello from JavaScript");
+       }
+
+   (* Inline Python *)
+   SCRIPT HelloPython
+       LANGUAGE Python
+       ONSTART
+       FROM {
+   print("Hello from Python")
+       }
+
+   (* External Java library *)
+   SCRIPT ExternalLib
+       LANGUAGE Java
+       FROM "file://{*home.lib*}mylib.jar"
+       CALL "com.example.MyClass.run"
+
+   (* Inline Une script *)
+   SCRIPT InitCache
+       ONSTART
+       LANGUAGE Une
+       FROM {
+           put("counter", 0)
+           console = "Cache initialized"
+       }
+*)
+
+
+(* ============================================================================
+   BUILT-IN FUNCTIONS
+   ============================================================================ *)
+
+(* Note: Functions are invoked using the send operator (:) or direct call.
+   Example: "hello":upper() or upper("hello") *)
+
+(* --- Mathematical Functions --- *)
+(*
+   floor(n)        - Round down to nearest integer
+   ceil(n)         - Round up to nearest integer
+   round(n)        - Round to nearest integer
+   abs(n)          - Absolute value
+   min(a, b, ...)  - Minimum value
+   max(a, b, ...)  - Maximum value
+   sin(n)          - Sine (radians)
+   cos(n)          - Cosine (radians)
+   tan(n)          - Tangent (radians)
+   sqrt(n)         - Square root
+   log(n)          - Natural logarithm
+   rand(min, max)  - Random number in range
+   mod(a, b)       - Modulo (remainder)
+*)
+
+(* --- String Functions --- *)
+(*
+   len()           - String length
+   upper()         - Convert to uppercase
+   lower()         - Convert to lowercase
+   trim()          - Remove leading/trailing whitespace
+   left(n)         - First n characters
+   right(n)        - Last n characters
+   mid(start, len) - Substring
+   contains(s)     - Check if contains substring
+   startswith(s)   - Check if starts with string
+   endswith(s)     - Check if ends with string
+   replace(old,new)- Replace occurrences
+   split(delim)    - Split into list
+   format(pattern) - Format number/date
+*)
+
+(* --- Date/Time Functions --- *)
+(*
+   date()          - Current date
+   time()          - Current time
+   year()          - Year component
+   month()         - Month component (1-12)
+   day()           - Day of month (1-31)
+   weekday()       - Day of week (Monday, Tuesday, ...)
+   hour()          - Hour component (0-23)
+   minute()        - Minute component (0-59)
+   second()        - Second component (0-59)
+   millis()        - Milliseconds since epoch
+*)
+
+(* --- Collection Functions (list/pair) --- *)
+(*
+   add(item)       - Add item to list
+   put(key, val)   - Add/update key-value pair
+   get(key)        - Get value by key/index
+   has(item)       - Check if contains item/key
+   size()          - Number of elements
+   empty()         - Remove all elements
+   build()         - Convert pairs to string format
+   keys()          - Get all keys (pairs)
+   values()        - Get all values (pairs)
+*)
+
+(* --- Cache Functions (Global State) --- *)
+(*
+   put(key, value) - Store value in cache
+   get(key)        - Retrieve value from cache
+   has(key)        - Check if key exists
+   del(key)        - Delete key from cache
+*)
+
+(* --- Type Conversion Functions --- *)
+(*
+   str(x)          - Convert to string
+   num(x)          - Convert to number
+   bool(x)         - Convert to boolean
+*)
+
+
+(* ============================================================================
+   COMPLETE GRAMMAR SUMMARY
+   ============================================================================ *)
+
+(*
+   Une Program Structure:
+
+   [INCLUDE directives]
+   [USE definitions]
+   [DEVICE definitions]
+   [DRIVER definitions]
+   [SCRIPT definitions]
+   [RULE definitions]
+
+   Note: Commands can appear in any order.
+   Commands are separated by blank lines (LF + LF).
+
+   Key Characteristics:
+   - Case-insensitive (except string contents and embedded code)
+   - UTF-8 encoding for output
+   - Whitespace-flexible (indentation is cosmetic, except in Python scripts)
+   - Comment lines starting with # are ignored
+   - Line continuation with \
+   - Commands can have clauses in any order
+*)
+
+
+(* ============================================================================
+   END OF GRAMMAR SPECIFICATION
+   ============================================================================ *)

@@ -1,0 +1,52 @@
+#==================================================================================================================================
+# The use of USE ... AS ... clause with RULEs.
+#
+# 'USE' clause provides 2 main benefits:
+#
+#    a) Improves legibility: makes WHEN and IF clauses of RULE command easier to read.
+#
+#    b) Improves performance: every time that a name is used (a name is the left side of the 'AS'), its value can be accessed
+#       without needing to evaluate the expression again: the expression is evaluted only once.
+#
+# For more information, please refer to the RULE command in Une laguage handbook.
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 3s
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE strDoW
+    DRIVER CellSetDriver
+        CONFIG value SET list("Monday","Tuesday","Wednesday","Thursday","Friday","Saturday","Sunday")
+
+
+WHEN day  >= 0 AND day  <= 31     AND \      # Always true (and therefore unnecessary). Used only for teaching purposes.
+     hour >= 0 AND hour <= 23     AND \      # Always true (and therefore unnecessary). Used only for teaching purposes.
+     dows:has( date():weekday() ) AND \      # dows -> Days of Week
+     clock
+THEN console = "Today is "+ strDoW:get( date():weekday() )
+USE  day  AS date():day()                    # Names defined using clause USE can be used in all clauses
+     hour AS time():hour()
+     dows AS list(Monday,Tuesday,Wednesday,Thursday,Friday)
+
+
+WHEN day  >= 0 AND day  <= 31     AND \      # Always true (and therefore unnecessary). Used only for teaching purposes.
+     hour >= 0 AND hour <= 23     AND \      # Always true (and therefore unnecessary). Used only for teaching purposes.
+     dows:has( date():weekday() ) AND \      # dows -> Days of Week
+     clock
+THEN console = "Happy weekend! :-)"
+USE  day  AS date():day()                    # Because names are local to the RULE, the same
+     hour AS time():hour()                   # names ('day', 'hour' and 'dows') can be used
+     dows AS list(Saturday,Sunday)           # in this Rule too.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,63 @@
+#==================================================================================================================================
+# The use of AFTER modifier combined with ANY and ALL in RULEs.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE LIMIT AS 20     # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+    WAIT  AS 7000   # 7 seconds for the AFTER operator
+
+
+DEVICE CPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 5s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# Following RULE is activated (WHEN clause) the value for all members of the 'metric' group (CPU, RAM and Disk) are above LIMIT.
+# But to be triggered, the IF clause must be true; and this will happen if after 20 seconds at least one of the members of
+# the 'metric' group has a value of LIMIT: it does not matter if one (or even all metrics) where below LIMIT during these 20 seconds
+# as far as after the 20 seconds there is one or more above LIMIT.
+
+WHEN ALL metric ABOVE LIMIT
+THEN console SET "All metrics were above {*LIMIT*}% begining and at least one metric was also above {*LIMIT*}% after {*WAIT*} seconds"
+IF ANY metric ABOVE LIMIT AFTER WAIT
+
+
+# Following RULE is triggered if after 20 seconds there is at least one metric's value that is above LIMIT%. It does not matter if
+# one (or even all metrics) where below LIMIT during these 20 seconds as far as after the 20 seconds there is one or more above LIMIT.
+
+WHEN ANY metric ABOVE LIMIT
+THEN console SET "One or more metrics were above {*LIMIT*}% at begining and also after {*WAIT*} seconds"
+IF ANY metric ABOVE LIMIT AFTER WAIT
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

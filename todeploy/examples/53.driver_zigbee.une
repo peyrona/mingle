@@ -1,0 +1,283 @@
+#==================================================================================================================================
+# This example shows how to use the Zigbee driver for wireless device communication.
+#
+# Zigbee is a low-power mesh networking protocol commonly used for:
+#   - Smart home lighting (Philips Hue, IKEA Tradfri, etc.)
+#   - Temperature and humidity sensors
+#   - Motion and occupancy sensors
+#   - Door/window contact sensors
+#   - Smart plugs and switches
+#   - Thermostats and HVAC controls
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# HOW IT WORKS
+# ------------
+# The ZigbeeDriver acts as a Zigbee coordinator (the central node that manages the network).
+# It connects via a USB dongle to communicate with Zigbee end devices and routers.
+#
+# Zigbee devices are identified by:
+#   - IEEE Address: 64-bit unique identifier (e.g., "00:11:22:33:44:55:66:77")
+#   - Network Address: 16-bit address assigned when device joins (can change)
+#   - Endpoint: Logical endpoint on the device (1-240)
+#   - Cluster: Functionality type (On/Off, Level, Temperature, etc.)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# SUPPORTED DONGLES
+# -----------------
+# The driver supports multiple Zigbee coordinator dongles:
+#
+#   ember     - Silicon Labs Ember EM35x-based (most common, recommended)
+#               Examples: HUSBZB-1, Elelabs ELU013, ITead Sonoff Zigbee 3.0
+#
+#   cc2531    - Texas Instruments CC2531 USB stick
+#               Popular DIY option, requires firmware flashing
+#
+#   conbee    - Dresden Elektronik ConBee/ConBee II/RaspBee
+#               Popular with deCONZ/Phoscon users
+#
+#   xbee      - Digi XBee modules
+#               Industrial-grade, various form factors
+#
+#   telegesis - Telegesis ETRX series
+#               Older but still supported
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CONFIGURATION PARAMETERS
+# ------------------------
+#   port        (REQUIRED) Serial port for the Zigbee dongle. Examples:
+#                          Linux:   "/dev/ttyUSB0", "/dev/ttyACM0"
+#                          Windows: "COM3", "COM4"
+#                          macOS:   "/dev/tty.usbserial-1234"
+#
+#   dongle      (REQUIRED) Type of Zigbee coordinator dongle:
+#                          "ember", "cc2531", "conbee", "xbee", "telegesis"
+#
+#   channel     (optional) Zigbee channel (11-26). Default: 11
+#                          Channels 15, 20, 25 are often best (less WiFi interference)
+#
+#   pan_id      (optional) Personal Area Network ID. Default: "auto"
+#                          Use "auto" or hex value like "1234"
+#
+#   network_key (optional) 128-bit encryption key. Default: "auto"
+#                          Use "auto" or 32 hex characters
+#
+#   permit_join (optional) Allow new devices to join. Default: false
+#                          Set to true during initial setup
+#
+#   interval    (optional) Polling interval in milliseconds. Default: 0 (event-driven)
+#                          0 = event-driven (devices report changes automatically)
+#                          >= 500 = polling mode (actively poll devices)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# COMMON CLUSTER IDs
+# ------------------
+#   6      (0x0006) On/Off         - Binary switch control
+#   8      (0x0008) Level Control  - Dimming/brightness (0-254)
+#   768    (0x0300) Color Control  - Color temperature, hue, saturation
+#   1024   (0x0400) Illuminance    - Light level measurement
+#   1026   (0x0402) Temperature    - Temperature measurement
+#   1027   (0x0403) Pressure       - Atmospheric pressure
+#   1029   (0x0405) Humidity       - Relative humidity
+#   1030   (0x0406) Occupancy      - Motion/presence detection
+#   1280   (0x0500) IAS Zone       - Intruder Alarm System (sensors)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# WRITING TO DEVICES
+# ------------------
+# To control a Zigbee device, write a pair object with these keys:
+#   ieee      - Device's IEEE address (64-bit)
+#   endpoint  - Endpoint number (usually 1)
+#   cluster   - Cluster ID (e.g., 6 for On/Off)
+#   value     - Value to set (type depends on cluster)
+#
+# Special commands:
+#   command = "permit_join", duration = seconds   - Allow new devices to join
+#   command = "get_devices"                       - Get list of all devices
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# For more information about Drivers, please refer to the "Mingle Standard Platform" handbook.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco Jose Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 1: Basic Network Setup - Event-Driven Mode
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This creates a Zigbee network coordinator. Devices will report their state changes
+# automatically (event-driven mode is the default).
+
+DEVICE ZigbeeCoordinator
+    DRIVER ZigbeeDriver
+        CONFIG
+            port   AS "/dev/ttyUSB0"   # Change this to your dongle's port
+            dongle AS "ember"          # Change to match your dongle type
+
+# When a device reports a value change, this rule triggers
+RULE
+    WHEN ZigbeeCoordinator CHANGED
+    THEN log( "Zigbee event: " + ZigbeeCoordinator )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 2: Pairing New Devices
+# ---------------------------------------------------------------------------------------------------------------------------------
+# To pair new devices, you need to enable "permit join" mode. This allows devices
+# in pairing mode to join the network.
+
+# Create a button (could be a physical button or a virtual trigger)
+DEVICE PairButton
+    value AS false
+
+# When pairing is requested, enable permit join for 60 seconds
+RULE
+    WHEN PairButton = true
+    THEN ZigbeeCoordinator = pair( "command", "permit_join", "duration", 60 )
+         log( "Pairing mode enabled for 60 seconds - put device in pairing mode now" )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 3: Controlling a Zigbee Light (On/Off)
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Replace the IEEE address with your actual device's address.
+# You can find device addresses in the logs when they join.
+
+# Virtual switch to control the light
+DEVICE LightSwitch
+    value AS false
+
+# Turn light on/off based on switch state
+RULE
+    WHEN LightSwitch CHANGED
+    THEN ZigbeeCoordinator = pair( "ieee",     "00:11:22:33:44:55:66:77",    # Your light's IEEE address
+                                   "endpoint", 1,                              # Usually endpoint 1
+                                   "cluster",  6,                              # On/Off cluster (0x0006)
+                                   "value",    LightSwitch )                   # true = on, false = off
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 4: Controlling a Dimmable Light (Level Control)
+# ---------------------------------------------------------------------------------------------------------------------------------
+# For dimmable lights, use the Level Control cluster (0x0008).
+# Level values range from 0 (off) to 254 (full brightness).
+
+# Virtual dimmer (0-100 percent)
+DEVICE DimmerLevel
+    value AS 50
+
+# Convert percentage to Zigbee level (0-254) and send
+RULE
+    WHEN DimmerLevel CHANGED
+    THEN ZigbeeCoordinator = pair( "ieee",     "00:11:22:33:44:55:66:77",
+                                   "endpoint", 1,
+                                   "cluster",  8,                              # Level Control cluster
+                                   "value",    floor( DimmerLevel * 2.54 ) )   # Convert 0-100 to 0-254
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 5: Reading Temperature Sensor
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Temperature sensors report values automatically via attribute reporting.
+# The value is received in the event data.
+
+DEVICE IndoorTemp
+    value AS 20.0
+
+# Parse temperature from Zigbee event (cluster 1026 = temperature)
+RULE
+    WHEN ZigbeeCoordinator.cluster = 1026    # Temperature cluster
+    THEN IndoorTemp = ZigbeeCoordinator.value
+         log( "Temperature: " + IndoorTemp + "C" )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 6: Motion Sensor Automation
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Motion sensors typically use the Occupancy cluster (0x0406).
+# They report true when motion is detected.
+
+DEVICE MotionDetected
+    value AS false
+
+# Track motion state from Zigbee events
+RULE
+    WHEN ZigbeeCoordinator.cluster = 1030    # Occupancy cluster
+    THEN MotionDetected = ZigbeeCoordinator.value
+
+# Turn on lights when motion is detected
+RULE
+    WHEN MotionDetected = true
+    THEN LightSwitch = true
+         log( "Motion detected - lights on" )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 7: Door/Window Sensor
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Contact sensors typically use the IAS Zone cluster (0x0500).
+# They report true when open, false when closed.
+
+DEVICE DoorOpen
+    value AS false
+
+# Track door state from Zigbee events
+RULE
+    WHEN ZigbeeCoordinator.cluster = 1280    # IAS Zone cluster
+         AND ZigbeeCoordinator.ieee = "AA:BB:CC:DD:EE:FF:00:11"  # Your sensor's address
+    THEN DoorOpen = ZigbeeCoordinator.value
+
+# Alert when door opens
+RULE
+    WHEN DoorOpen = true
+    THEN log( "Door opened!" )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 8: Polling Mode (for devices without attribute reporting)
+# ---------------------------------------------------------------------------------------------------------------------------------
+# Some older devices don't support automatic attribute reporting.
+# Use polling mode to actively query device states.
+
+DEVICE ZigbeePolled
+    DRIVER ZigbeeDriver
+        CONFIG
+            port     AS "/dev/ttyUSB0"
+            dongle   AS "ember"
+            interval AS 5000              # Poll every 5 seconds (5000ms)
+
+# Polled values are received the same way as event-driven values
+RULE
+    WHEN ZigbeePolled CHANGED
+    THEN log( "Polled value: " + ZigbeePolled )
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 9: Network with Custom Channel and Security
+# ---------------------------------------------------------------------------------------------------------------------------------
+# For production setups, you may want to configure specific channel and security settings.
+
+DEVICE SecureZigbee
+    DRIVER ZigbeeDriver
+        CONFIG
+            port        AS "/dev/ttyUSB0"
+            dongle      AS "ember"
+            channel     AS 20                                  # Channel 20 (less WiFi interference)
+            pan_id      AS "CAFE"                              # Custom PAN ID
+            network_key AS "0123456789ABCDEF0123456789ABCDEF"  # Custom network key
+
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 10: Getting List of All Devices
+# ---------------------------------------------------------------------------------------------------------------------------------
+# You can query the list of all paired devices using a special command.
+
+DEVICE ListDevicesButton
+    value AS false
+
+RULE
+    WHEN ListDevicesButton = true
+    THEN ZigbeeCoordinator = pair( "command", "get_devices" )
+         log( "Device list: " + ZigbeeCoordinator )

@@ -1,0 +1,71 @@
+#==================================================================================================================================
+# This script shows how to write SENSOR's values into a DB table.
+#
+# Almost any DB server can be used, but for this example, we use the H2 DataBase Server.
+#
+#----------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+DEVICE UsedCPU
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "cpu"
+            interval = 1s
+
+
+DEVICE UsedJvmRam
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   = "jvmram"
+            interval = 5s
+
+
+DEVICE UsedDisk
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric = "disk"
+            interval = 1m
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE SysMonDB               # This actuator (by using the DataBaseDriver) sends SQL commands to a DataBase Server
+    DRIVER DataBaseDriver     # (refer to 'common-drivers.une' file)
+        CONFIG
+            jars    = "file://{*home.lib*}controllers/h2-2.1.210.jar"
+            jdbc    = "org.h2.Driver"
+            url     = "jdbc:h2:{*home.tmp*}sysmon"    # {*home.tmp*} will be expanded to its proper path: refer to documentation
+            user    = "test"
+            pwd     = "test"
+            initial = "CREATE TABLE IF NOT EXISTS cpu( "+ \                     # Normally you will connect with a DB Server
+                          " a_when  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"+ \    # instead of creating it here. But it can be done.
+                          " a_value INTEGER ); "+ \
+                       "CREATE TABLE IF NOT EXISTS disk( "+ \
+                          " a_when TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"+ \     # It is needed to use 'a_' becasue 'when' and 'value'
+                          " a_value INTEGER ); "+ \                             # are reserved words by some DataBase Servers.
+                       "CREATE TABLE IF NOT EXISTS jvm_ram( "+ \
+                          " a_when TIMESTAMP DEFAULT CURRENT_TIMESTAMP,"+ \
+                          " a_value INTEGER );"
+
+
+WHEN UsedCPU >= 0
+THEN SysMonDB = "INSERT INTO cpu (a_value) VALUES (" + UsedCPU:format("#0.00") + ")"   # SQL command to send to the DB Server
+     console  = "Added to DB --> UsedCPU = " + UsedCPU:format("#0.00")
+
+
+WHEN UsedDisk >= 0
+THEN SysMonDB = "INSERT INTO disk (a_value) VALUES (" + UsedDisk:format("#0.00") + ")"
+     console  = "Added to DB --> UsedDisk = " + UsedDisk:format("#0.00")
+
+
+WHEN UsedJvmRam >= 0
+THEN SysMonDB = "INSERT INTO jvm_ram (a_value) VALUES (" + UsedJvmRam:format("#0.00") + ")"
+     console  = "Added to DB --> UsedJvmRam = " + UsedJvmRam:format("#0.00")
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

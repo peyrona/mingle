@@ -1,0 +1,49 @@
+#==================================================================================================================================
+# This script shows how use the Device's "downtimed" property. This property allows to find out devices possibly damaged.
+# The idea is simple: if a device that should report its value let say every hour did not report it for 3 hours in a row, most
+# probably it will be damaged.
+#
+# This is what you have to do to make it work:
+#
+#     1. In "config.json" file there are 2 values under "exen" module:
+#            a) "downtimed_interval" : the interval (in seconds) to invoke the internal task that looks for the downtimed devices.
+#            b) "downtimed_report_device" A device's name. This device will change its value holding the downtimed devices list.
+#
+#     2. In the Une script, define this device and assign the CellSetDriver driver to it.
+#
+#     3. Define "downtime" property for every device you want to monitorize.
+#
+#     4. Declare a Rule having a WHEN like this: NOT <device_name>:empty() and all actions you want in the THEN clause.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------#
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# Check that values are properly sat in 'config.json' file
+
+DEVICE CPU
+    INIT
+        downtime SET 4s
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 7s
+
+
+DEVICE downtimed
+    DRIVER CellSetDriver
+        CONFIG
+            value SET list()
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+WHEN NOT downtimed:isEmpty()
+THEN console SET "Following devices did not report new values for long time: they could be damaged, check them: "+ downtimed
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

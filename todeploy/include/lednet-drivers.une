@@ -1,0 +1,60 @@
+#==================================================================================================================================
+# This file contains DRIVERs for several devices manufactured by the LedNet (http://www.ledenet.com) company.
+# These devices have 5 channels: Red, Green, Blue, ColdWhite and WarmWhite. So, 5 monochrome LED strips can be controlled or 1 RGB
+# LED strip, plus 2 monochrome LED strips.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# Smart WiFi LED Controller 5 Channels Control 4A5CH CW/WW RGB RGBW RGBWW LED light,
+# The physical actuator is managed using a string that represents a set of 6 pairs:
+#     power = on | off
+#     red   = 0 .. 100    --> percent of red (or white for monochrome)
+#     green = 0 .. 100    --> percent of green (or white for monochrome)
+#     blue  = 0 .. 100    --> percent of blue (or white for monochrome)
+#     cold  = 0 .. 100    --> ColdWhite: percent of monochrome
+#     warm  = 0 .. 100    --> WarmWhite: percent of monochrome
+# So:
+#     "power=on, red=255, green=0, blue=0"
+# will switch the LED strip on and se the color to pure red. You can send all values or just those you want to change:
+#     "green=255, blue=255"
+# as second command, will turn the LED strip into white color.
+#
+# Take a look to the example to uderstand how to these drivers work.
+
+DRIVER LednetWifi5ChDriver
+    SCRIPT LednetWifi5ChController
+    CONFIG
+        address AS string REQUIRED       # IP where the WiFi LED 5Ch attends. E.g.: "192.168.1.242"
+
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# Shelly Plus RGBW PM - Wi-Fi RGBW LED controller
+# Uses Shelly Gen2 HTTP RPC API. Supports RGBW color control, brightness, and transitions.
+# Device info: https://shelly-api-docs.shelly.cloud/gen2/Devices/Gen2/ShellyPlusRGBWPM/
+
+DRIVER ShellyRGBWPMDriver
+    SCRIPT ShellyRGBWPMController
+    CONFIG
+        address  AS string REQUIRED      # IP address of Shelly device. E.g.: "192.168.1.100"
+        channel  AS number               # Channel ID (usually 0). By default 0
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+SCRIPT LednetWifi5ChController
+   LANGUAGE java                                                                  # Which language was used to write the controller
+   FROM "file://{*home.lib*}controllers.jar"                                      # Where (which file) is the controller
+   CALL "com.peyrona.mingle.controllers.lights.lednet.ledwifi5ch.LednetWifi5Ch"   # The class constructor to create the controller
+
+
+SCRIPT ShellyRGBWPMController
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.lights.shelly.ShellyRGBWPM"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

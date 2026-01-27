@@ -1,0 +1,210 @@
+<!-- Pie Chart -->
+
+<div id="properties-pie" style="display:none;">
+    <form onsubmit="return false;">
+        <div class="container">
+
+            <div class="box" id="grid-fields">
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Gadget title (optional)</label>
+                            <div class="control">
+                                <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgPie.gehme.changed(this)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-third">
+                        <label class="label">Title location</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="north" onchange="dlgPie.gehme.changed(this)" checked>
+                                North
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="center" onchange="dlgPie.gehme.changed(this)">
+                                Center
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="south" onchange="dlgPie.gehme.changed(this)">
+                                South
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <div class="columns">
+                    <div class="column is-one-quarter">
+                        <div class="field">
+                            <label class="label">Labels color</label>
+                            <div class="control">
+                                <input class="input" name="lbl_clr" type="color" value="#000000" onchange="dlgPie.gehme.changed(this)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-quarter">
+                        <div class="field">
+                            <div class="control">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="show_lgnd" checked onchange="dlgPie.gehme.changed(this)">
+                                    Show legend
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-quarter">
+                        <div class="field">
+                            <label class="label">Legend position</label>
+                            <div class="control">
+                                <div class="select">
+                                    <select name="lgnd_pos" onchange="dlgPie.gehme.changed(this)">
+                                        <option value="top">Top</option>
+                                        <option value="right" selected>Right</option>
+                                        <option value="bottom">Bottom</option>
+                                        <option value="left">Left</option>
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-one-quarter">
+                        <div class="field">
+                            <div class="control">
+                                <label class="checkbox">
+                                    <input type="checkbox" name="doughnut" onchange="dlgPie.gehme.changed(this)">
+                                    Doughnut style
+                                </label>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="box">
+                <p class="is-size-5 mb-3"><b>Pie slices (data from Devices)</b></p>
+                <div class="columns">
+                    <div class="column">
+                        <table>
+                            <tr>
+                                <td><b>Slices:&nbsp;</b></td>
+                                <td><div id="div-dlg-pie-toolbar-slices"></div></td>
+                            </tr>
+                        </table>
+                        <table id="tbl-dlg-pie-slices" class="table is-bordered is-stripped is-fullwidth">
+                            <thead>
+                                <tr style="background-color:#444444;">
+                                    <th style="color:#F9E79F;">Target ExEn</th>
+                                    <th style="color:#F9E79F;">Device name</th>
+                                    <th style="color:#F9E79F;">Slice label</th>
+                                    <th style="color:#F9E79F;">Slice color</th>
+                                </tr>
+                            </thead>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+if( typeof dlgPie === "undefined" )
+{
+var dlgPie =
+{
+    gehme   : null,
+    teSlice : null,
+
+    setup : function( gadget, fnOnChanged, fnOnEditEnd )
+    {
+        this.gehme = new GadgetEditorHelperMultiExEn( 'properties-pie', gadget, fnOnChanged, fnOnEditEnd );
+
+        if( this.teSlice === null )
+            this._initTableEditor4Slices_();
+
+        this.teSlice.setData( gadget.slices );
+
+        if( gum.isUsingGridLayout() )  $('#grid-fields').show();
+        else                           $('#grid-fields').hide();
+
+        return this;
+    },
+
+    show()
+    {
+        this.gehme.showDialog();
+
+        return this;
+    },
+
+    //-------------------------------------------------------------------------------------------------//
+
+    _initTableEditor4Slices_()
+    {
+        this.teSlice = new TableEditor( {
+                                        table         : "tbl-dlg-pie-slices",
+                                        toolbar       : "div-dlg-pie-toolbar-slices",
+                                        onCellPreEdit : function( table, nRowIndex, sColName, value )
+                                                        {
+                                                            if( (sColName === "exen") || (sColName === "name") )
+                                                                dlgPie.gehme.setColEditor( table, sColName );
+
+                                                            return value;
+                                                        },
+                                        onCellPostEdit: function( table, nRowIndex, sColName, value, isChanged )
+                                                        {
+                                                            if( value && isChanged )
+                                                            {
+                                                                let slices = dlgPie.gehme.gadget.slices;
+
+                                                                switch( sColName )
+                                                                {
+                                                                    case "exen" : slices[nRowIndex].exen  = value = value.trim().replace( /\\"/g, '"' );   break;
+                                                                    case "name" : slices[nRowIndex].name  = value.trim().toLowerCase();                    break;
+                                                                    case "label": slices[nRowIndex].label = value.trim();                                  break;
+                                                                    case "color": slices[nRowIndex].color = (p_base.isEmpty( value ) ? "#00AA00" : value); break;
+                                                                }
+
+                                                                dlgPie.gehme.fnOnChanged();
+                                                            }
+
+                                                            return value;
+                                                        },
+                                        onRowAppended : function( table, nRow )
+                                                        {
+                                                            let oExEn = gum.getAllExEn()[0];
+                                                            let aoDev = gum.getDeviceNames4( oExEn );
+                                                            let sName = p_base.isEmpty(aoDev) ? "No devices in ExEn" : aoDev[0];
+                                                            let oRow  = { exen: JSON.stringify( oExEn ).replace( /\\"/g, '"' ), name: sName, label: sName, color: '#00AA00' };
+
+                                                            table.setValue( nRow, "exen" , oRow.exen  );
+                                                            table.setValue( nRow, "name" , oRow.name  );
+                                                            table.setValue( nRow, "label", oRow.label );
+                                                            table.setValue( nRow, "color", oRow.color );
+
+                                                            dlgPie.gehme.gadget.slices.push( oRow );
+                                                            dlgPie.gehme.fnOnChanged();
+                                                        },
+                                        onDeleteRow   : function( table, nRow )
+                                                        {
+                                                            dlgPie.gehme.gadget.slices.splice( nRow, 1 );
+                                                            dlgPie.gehme.fnOnChanged();
+                                                        },
+                                        onRowCloned   : function( table, nRow )
+                                                        {
+                                                            dlgPie.gehme.gadget.slices.push( table.getRowData( nRow ) );
+                                                            dlgPie.gehme.fnOnChanged();
+                                                        },
+                                        columns       : [
+                                                          { name: "exen" , minwidth: 12, maxwidth: 32, editor: '<select></select>'    },
+                                                          { name: "name" , minwidth:  8, maxwidth: 16, editor: '<select></select>'    },
+                                                          { name: "label", minwidth:  8, maxwidth: 16, editor: '<input type="text">'  },
+                                                          { name: "color", minwidth:  6, maxwidth:  8, editor: '<input type="color">' }
+                                                        ]
+                                    } );
+    }
+};
+}
+</script>

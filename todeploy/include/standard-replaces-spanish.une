@@ -1,0 +1,94 @@
+#-------------------------------------------------------------------------------
+# This file contains the standard (default) replaces for the Une language
+# ------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#-------------------------------------------------------------------------------
+
+# Constantes booleanas ----------
+USE CERRADO    AS true
+    ACTIVO     AS true
+    AFIRMATIVO AS true
+    ABIERTO    AS false
+    INACTIVO   AS false
+    NEGATIVO   AS false
+#--------------------------------
+
+# Operadores relacionales -------
+USE ES         AS ==
+    IGUAL      AS ==
+    SON        AS ==
+    MENOR      AS <
+    MAYOR      AS >
+    COMO_POCO  AS >=
+    COMO_MUCHO AS <=
+    DISTINTO   AS !=
+    NO_ES      AS !=
+    <>         AS !=
+#--------------------------------
+
+# Operadores booleanos ----------
+USE Y  AS &&
+    O  AS ||
+    XO AS |&
+    NO AS !
+#--------------------------------
+
+# Operadores sobre bits ---------
+USE BY  AS &
+    BO  AS |
+    BXO AS ><
+    BNO AS ~
+#--------------------------------
+
+# Guiones -----------------------
+USE NATIVO     AS SCRIPT
+    LENGUAJE   AS LANGUAGE
+    DESDE      AS FROM
+    INVOCAR    AS CALL
+    ALINICIO   AS ONSTART
+    ALTERMINAR AS ONEND
+#--------------------------------
+
+# Controladores -----------------
+USE CONTROLADOR   AS DRIVER
+    CONFIGURACION AS CONFIGURATION
+    TIPO          AS AS
+    NECESARIO     AS REQUIRED
+#--------------------------------
+
+# Reglas ------------------------
+USE REGLA    AS RULE
+    CUANDO   AS WHEN
+    ENTONCES AS THEN
+    SI       AS IF
+#--------------------------------
+
+# Días de la semana -------------
+USE LUNES     AS 1
+    MARTES    AS 2
+    MIERCOLES AS 3
+    JUEVES    AS 4
+    VIERNES   AS 5
+    SABADO    AS 6
+    DOMINGO   AS 7
+#--------------------------------
+
+# Meses -------------------------
+USE ENERO      AS  1
+    FEBRERO    AS  2
+    MARZO      AS  3
+    AbRIL      AS  4
+    MAYO       AS  5
+    JUNIO      AS  6
+    JULIO      AS  7
+    AGOSTO     AS  8
+    SEPTIEMBRE AS  9
+    OCTUBRE    AS 10
+    NOVIEMBRE  AS 11
+    DICIEMBRE  AS 12
+#--------------------------------
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

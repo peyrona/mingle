@@ -1,0 +1,145 @@
+#==================================================================================================================================
+# This example demonstrates the use of the Shelly Plus RGBW PM driver for Wi-Fi LED control.
+#
+# The Shelly Plus RGBW PM is a Wi-Fi enabled RGBW LED controller that can be controlled via HTTP.
+# This driver uses the Shelly Gen2 RPC API for communication.
+#
+# Device documentation: https://shelly-api-docs.shelly.cloud/gen2/Devices/Gen2/ShellyPlusRGBWPM/
+#
+# IMPORTANT: Before running this example:
+#   1. Replace "192.168.1.100" with your Shelly device's actual IP address
+#   2. Ensure your Shelly device is connected to the same network
+#   3. The device must be in RGBW mode (not "4 Lights" mode)
+#
+# Writing to the device accepts three formats:
+#   1. String "on" or "off": Simple power control
+#   2. Number 0-100: Set brightness (automatically turns on)
+#   3. pair: Advanced control with keys:
+#      - "on" (boolean): Turn on/off
+#      - "brightness" (0-100): Brightness percentage
+#      - "red" (0-255): Red channel
+#      - "green" (0-255): Green channel
+#      - "blue" (0-255): Blue channel
+#      - "white" (0-255): White channel
+#      - "transition" (seconds): Fade duration
+#
+# Reading returns a pair with:
+#   - "on": boolean - current power state
+#   - "brightness": number 0-100
+#   - "red", "green", "blue", "white": number 0-255
+#   - "power": number - current power consumption in watts (if available)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+#==================================================================================================================================
+# EXAMPLE 1: Basic LED strip control
+# Shows simple on/off and brightness control
+#==================================================================================================================================
+
+DEVICE led_strip
+    DRIVER ShellyRGBWPMDriver
+        CONFIG
+            address  SET "192.168.1.100"    # Replace with your Shelly's IP address
+            interval SET 5000               # Poll status every 5 seconds
+
+
+# Display status when it changes
+WHEN led_strip changed
+THEN console SET "LED Strip Status:"
+     console SET "  Power     : " + (led_strip:get("on") ? "ON" : "OFF")
+     console SET "  Brightness: " + led_strip:get("brightness") + "%"
+     console SET "  Color     : R=" + led_strip:get("red") + " G=" + led_strip:get("green") + " B=" + led_strip:get("blue")
+
+
+#==================================================================================================================================
+# EXAMPLE 2: Timer-based color cycling
+# Changes color every 10 seconds
+#==================================================================================================================================
+
+DEVICE color_timer
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 10000    # 10 seconds
+
+DEVICE color_index
+    DRIVER CellDriver
+        CONFIG
+            initial SET 0
+
+
+# Cycle through colors: Red -> Green -> Blue -> White -> Off
+WHEN color_timer
+THEN color_index SET (color_index + 1) % 5
+
+WHEN color_index == 0
+THEN led_strip SET pair():put("on", true):put("red", 255):put("green", 0):put("blue", 0):put("transition", 1)
+     console SET "Color: RED"
+
+WHEN color_index == 1
+THEN led_strip SET pair():put("on", true):put("red", 0):put("green", 255):put("blue", 0):put("transition", 1)
+     console SET "Color: GREEN"
+
+WHEN color_index == 2
+THEN led_strip SET pair():put("on", true):put("red", 0):put("green", 0):put("blue", 255):put("transition", 1)
+     console SET "Color: BLUE"
+
+WHEN color_index == 3
+THEN led_strip SET pair():put("on", true):put("red", 255):put("green", 255):put("blue", 255):put("transition", 1)
+     console SET "Color: WHITE"
+
+WHEN color_index == 4
+THEN led_strip SET "off"
+     console SET "LED Strip: OFF"
+
+
+#==================================================================================================================================
+# EXAMPLE 3: Brightness control based on time of day
+# Dims lights in the evening, brighter during the day
+#==================================================================================================================================
+
+# Uncomment to enable time-based brightness control:
+#
+# DEVICE clock
+#     DRIVER ClockDriver
+#         CONFIG
+#             interval SET 60000    # Check every minute
+#
+# WHEN clock > 0 AND hour() >= 22    # After 10 PM
+# THEN led_strip SET pair():put("brightness", 20):put("transition", 5)
+#      console SET "Night mode: Brightness 20%"
+#
+# WHEN clock > 0 AND hour() >= 7 AND hour() < 22    # Daytime
+# THEN led_strip SET pair():put("brightness", 100):put("transition", 5)
+#      console SET "Day mode: Brightness 100%"
+
+
+#==================================================================================================================================
+# EXAMPLE 4: Simple on/off control
+# Turn on/off with simple commands
+#==================================================================================================================================
+
+# To manually control the LED strip, you can use these simple commands:
+#
+# Turn on at full brightness:
+#     led_strip SET "on"
+#
+# Turn off:
+#     led_strip SET "off"
+#
+# Set brightness to 50%:
+#     led_strip SET 50
+#
+# Set specific color (warm white):
+#     led_strip SET pair():put("red", 255):put("green", 180):put("blue", 100):put("white", 200)
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

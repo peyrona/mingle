@@ -1,0 +1,158 @@
+#==================================================================================================================================
+# This script controls following garden stuff:
+#     * Watering,
+#     * Ambiance lights.
+#     * Presence detector.
+#     * Presence detection lights.
+#
+# Our garden has (all controlled by one Raspberry Pi)
+#     * 2 hygrometers (https://en.wikipedia.org/wiki/Hygrometer) in strategic places
+#     * 2 presence detectors
+#     * N ambient (soft) lights, all activated by a single relay
+#     * N alarm (high brightness) lights, all controlled by a single relay
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 1m
+
+
+DEVICE hygrometer_1
+    INIT
+        downtime SET 3h
+        groups   SET "humidity, humidities"
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 0
+           type SET "analog"
+           mode SET "input"
+
+
+DEVICE hygrometer_2
+    INIT
+        downtime SET 3h
+        groups   SET "humidity, humidities"
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 2
+           type SET "analog"
+           mode SET "input"
+
+
+DEVICE sensor_1
+    INIT
+        downtime SET 3d
+        groups   SET "above"
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 3
+           type SET "digital"
+           mode SET "input"
+
+
+DEVICE sensor_2
+    INIT
+        downtime SET 3d
+        groups   SET "sensor"
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 7
+           type SET "digital"
+           mode SET "input"
+
+
+DEVICE garden_watering
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 27
+           type SET "digital"
+           mode SET "output"
+
+
+DEVICE garden_soft_lights
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 28
+           type SET "digital"
+           mode SET "output"
+
+
+DEVICE garden_alarm_lights
+    DRIVER RPiGpioDriver
+        CONFIG
+           pin  SET 29
+           type SET "digital"
+           mode SET "output"
+
+
+DEVICE downtimed
+    DRIVER CellSetDriver
+        CONFIG
+            value SET list()
+
+
+DEVICE telegram
+    DRIVER TelegramDriver
+    CONFIG
+        chat  SET "ThisIsMyChatId"            # Change this to your chat id
+        token SET "ThisIsMyTelegramBotToken"  # Change this to your bot token
+
+
+DEVICE garden_log
+    DRIVER FileDriver
+        CONFIG
+            file SET "file://{*home.tmp*}garden.log"
+
+# WATERING ---------------------------------------------------------------------------------
+
+WHEN garden_watering IS OFF  \
+     AND (ANY Humidity < 30) \        # Soil humidity is lower than 30%
+     AND time() >= time("03:00")      # We want to water only in middle of the night
+THEN garden_watering SET ON
+     garden_log SET "["+ date() +" "+ time() +"] Watering ON"
+
+
+WHEN garden_watering IS ON \
+     AND ((time() >= time("06:00")) OR (ALL Humidities > 40))
+THEN garden_watering SET OFF
+     garden_log SET "["+ date() +" "+ time() +"] Watering OFF"
+
+# SOFT LIGHTS ------------------------------------------------------------------------------
+
+WHEN clock                         \
+     AND garden_soft_lights IS OFF \
+     AND time() >= time():twilightSunSet()
+THEN garden_soft_lights SET ON
+     garden_log SET "["+ date() +" "+ time() +"] Soft lights ON"
+
+
+WHEN clock                        \
+     AND garden_soft_lights IS ON \
+     AND time() >= time():twilightSunRise()
+THEN garden_soft_lights SET OFF
+     garden_log SET "["+ date() +" "+ time() +"] Soft lights OFF"
+
+# ALARM LIGHTS -----------------------------------------------------------------------------
+
+WHEN ANY Sensor IS ON
+     AND time() > time():twilightSunSet()
+     AND time() < time():twilightSunRise()
+THEN garden_alarm_lights SET ON
+     garden_log SET "["+ date() +" "+ time() +"] Sensor ON and Alarm lights ON"
+     garden_alarm_lights SET OFF AFTER 10m
+
+
+# POTENTIAL DAMAGED DEVICES CHECK ----------------------------------------------------------
+
+WHEN NOT downtimed:isEmpty()
+THEN telegram   SET "Following device(s) could be damaged, check: "+ downtimed
+     garden_log SET "["+ date() +" "+ time() +"] Following device(s) did not report new values for long time: "+ downtimed
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

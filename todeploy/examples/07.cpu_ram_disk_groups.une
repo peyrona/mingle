@@ -1,0 +1,70 @@
+#==================================================================================================================================
+# This example shows the use of groups combined with 'ALL' and 'ANY' modifiers inWHEN clause.
+# It also shows the use of groups in THEN clause.
+#
+# Please refer to the previous example to find the differences.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE MAX_VALUE AS 80
+
+DEVICE CPU
+    INIT
+        groups SET "metric"           # This sensor (and next two) belongs to a group of sensors named "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 5s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    INIT
+        groups SET "outputs"          # This actutator (and next) belongs to a group of sensors named "outputs"
+    DRIVER OutputDriver
+
+
+DEVICE file
+    INIT
+        groups SET "outputs"
+    DRIVER FileDriver
+        CONFIG
+            file SET "{*home.tmp*}07.contents.txt"
+
+
+# Because all devices belong to the same group, we can treat them together
+
+WHEN ANY metric ABOVE MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Care! At least one metric is above {*MAX_VALUE*}% (using ANY)"
+
+
+WHEN ALL metric ABOVE MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Danger! All metrics are above {*MAX_VALUE*}% (using ALL)"
+
+
+WHEN ALL metric BELOW MAX_VALUE
+THEN outputs SET "["+ date() +" "+ time() +"] Safe: all metrics are below {*MAX_VALUE*}% (using ALL)"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

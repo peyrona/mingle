@@ -1,0 +1,56 @@
+#==================================================================================================================================
+# This example proves that Une can be used for any RULE centric purpose: in this case instead of dealing with IoT devices, it is
+# shown how to deal with fluctuations in the Bitcoin price: we will simulate a simplistic trader.
+#
+# CARE: This example exists just for teaching purposes: it is not intended to be used in real scenarios.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+WHEN bitcoin_json
+THEN recent:add( pair():fromJSON( bitcoin_json ):get("data"):get("amount") )
+   # console SET "["+ time() +"] JSON = "+ bitcoin_json  # Uncomment this line to see the JSON raw data
+
+WHEN recent
+THEN console = "Price: "+ recent:last():format("###,###.00")
+
+# Observe this expression: 'recent = recent:add( bitcoin_json )'
+# The part 'recent:add( bitcoin_usd )' changes the number of items in the list contained in DEVICE 'recent', but does not
+# change the DEVICE's value, Therefore (because there were no changes in the DEVICE), RULEs will not be re-evaluated.
+# As we need the RULEs to be re-evaluated, we can (there are more ways to achive the same) simply 'tell' the DEVICE that
+# it its value have changed: we assign the value returned by :add(...) (which is the list itself) to the DEVICE.
+
+WHEN recent:len() == 3 AND (recent:get(3) - recent:get(1) > 0.1)
+THEN console = "Bitcoin price is increasing ("+ (recent:get(3) - recent:get(1)) +") --> BUY!"
+
+WHEN recent:len() == 3 AND (recent:get(3) - recent:get(1) < -0.1)
+THEN console = "Bitcoin price is decreasing ("+ (recent:get(3) - recent:get(1)) +") --> SELL!"
+
+WHEN recent:len() > 3
+THEN recent:del(1):del(1)    # Now the list has 2 items. Observe: because it is not needed to reevaluate all RULEs,
+                             # we change the list contained in 'recent' but do not assign it to 'recent'
+
+#==================================================================================================================================
+# DEVICES
+
+DEVICE bitcoin_json
+    DRIVER HttpClientDriver
+        CONFIG
+            uri      SET "https://api.coinbase.com/v2/prices/BTC-USD/spot"
+            interval SET 5s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE recent
+    DRIVER CellSetDriver
+        CONFIG
+            value = list()
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,51 @@
+#==================================================================================================================================
+# The use of WITHIN modifier in RULEs.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE LIMIT AS 20    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+
+
+DEVICE CPU
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 5s
+
+
+DEVICE RAM
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk
+    INIT
+        groups SET "metric"
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# This RULE is triggered if at least one of the 'metric' value is above 80% throughout the time of 20 seconds (all the time).
+
+WHEN ANY metric ABOVE LIMIT
+THEN console SET "One or more metrics were above {*LIMIT*}% throughout the last 20 seconds"
+IF ANY metric ABOVE LIMIT WITHIN 10s
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

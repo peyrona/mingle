@@ -1,0 +1,127 @@
+#==================================================================================================================================
+# This example demonstrates the use of the MCP (Model Context Protocol) driver for LLM communication.
+#
+# The MCPDriver allows you to interact with Large Language Model APIs such as OpenAI, Anthropic, or any
+# OpenAI-compatible endpoint (local models like Ollama, LM Studio, etc.).
+#
+# IMPORTANT: Before running this example, you need to:
+#   1. Replace "YOUR_API_KEY_HERE" with your actual API key
+#   2. Adjust the 'uri' and 'model' if using a different provider
+#
+# Common API endpoints:
+#   * OpenAI     : https://api.openai.com/v1/chat/completions
+#   * Anthropic  : https://api.anthropic.com/v1/messages
+#   * Ollama     : http://localhost:11434/v1/chat/completions
+#   * LM Studio  : http://localhost:1234/v1/chat/completions
+#
+# Writing to the LLM device accepts three formats:
+#   1. String        : Simple user message (e.g., "What is the capital of France?")
+#   2. pair          : Advanced request with keys "message", optionally "system", "temperature"
+#   3. list          : Conversation history as list of pairs with "role" and "content"
+#
+# The response is a pair containing:
+#   * "response" : The extracted text content from the LLM
+#   * "raw"      : The full JSON response from the API
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+#==================================================================================================================================
+# EXAMPLE 1: Simple chat with an LLM
+# This example shows the basic usage of the MCP driver with a simple question.
+#==================================================================================================================================
+
+DEVICE chatbot
+    DRIVER MCPDriver
+        CONFIG
+            uri         SET "https://api.openai.com/v1/chat/completions"
+            api_key     SET "YOUR_API_KEY_HERE"     # Replace with your actual API key
+            model       SET "gpt-4o-mini"           # Or "gpt-4", "gpt-3.5-turbo", etc.
+            max_tokens  SET 256
+            temperature SET 0.7
+            system      SET "You are a helpful assistant. Be concise in your answers."
+
+
+# When the chatbot receives a response, display it
+WHEN chatbot
+THEN console SET "LLM Response: " + chatbot:get( "response" )
+
+
+#==================================================================================================================================
+# EXAMPLE 2: Periodic question (every 30 seconds)
+# Asks the LLM for a random fun fact.
+#==================================================================================================================================
+
+DEVICE timer_facts
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 30000    # 30 seconds
+
+WHEN timer_facts
+THEN chatbot SET "Tell me a random fun fact about science or nature in one sentence."
+
+
+#==================================================================================================================================
+# EXAMPLE 3: Using pair for advanced requests with custom system prompt
+# This shows how to override the system prompt per-request.
+#==================================================================================================================================
+
+DEVICE timer_joke
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 60000    # 60 seconds
+
+WHEN timer_joke
+THEN chatbot SET pair():put( "message", "Tell me a short joke" ) \
+                       :put( "system", "You are a comedian. Be funny and brief." ) \
+                       :put( "temperature", 1.0 )
+
+
+#==================================================================================================================================
+# EXAMPLE 4: Weather-based LLM interaction
+# Combines weather data with LLM to get clothing recommendations.
+#==================================================================================================================================
+
+DEVICE weather
+    DRIVER OpenMeteoDriver
+        CONFIG
+            latitude  SET 40.4168    # Madrid, Spain
+            longitude SET -3.7038
+            interval  SET 3600000    # 1 hour
+
+WHEN weather
+THEN chatbot SET "The current temperature is " + weather:get( "temperature" ) + " degrees Celsius " + \
+                 "and humidity is " + weather:get( "humidity" ) + "%. " + \
+                 "What should I wear today? Answer in one sentence."
+
+
+#==================================================================================================================================
+# EXAMPLE 5: Using a local LLM (Ollama)
+# This example shows how to use a locally running LLM via Ollama.
+# Uncomment and adjust if you have Ollama running locally.
+#==================================================================================================================================
+
+# DEVICE local_llm
+#     DRIVER MCPDriver
+#         CONFIG
+#             uri         SET "http://localhost:11434/v1/chat/completions"
+#             api_key     SET "ollama"              # Ollama doesn't require a real key
+#             model       SET "llama3.2"            # Or any model you have pulled
+#             max_tokens  SET 512
+#             temperature SET 0.8
+#             system      SET "You are a helpful local assistant."
+#
+# WHEN local_llm:len() > 0
+# THEN console SET "Local LLM says: " + local_llm:get( "response" )
+
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

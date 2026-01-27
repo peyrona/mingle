@@ -1,0 +1,134 @@
+#==================================================================================================================================
+# This example shows how to use the Serial Port driver (RS-232/RS-485 communication).
+#
+# Serial ports are commonly used to communicate with:
+#   - Arduino and other microcontrollers
+#   - GPS receivers
+#   - Barcode scanners
+#   - Industrial sensors and PLCs
+#   - Modems and radio equipment
+#   - USB-to-Serial adapters
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# HOW IT WORKS
+# ------------
+# The SerialDriver opens a serial port connection and:
+#   1. READING: Data received from the serial port is automatically delivered to the device whenever a complete
+#               line (terminated by the configured terminator, default "\n") arrives.
+#   2. WRITING: When you assign a value to the device, that value is sent through the serial port.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# READING MODES
+# -------------
+# The driver supports two reading modes controlled by the 'interval' parameter:
+#
+#   AUTO mode (default, interval=0 or not specified):
+#       A background thread continuously reads from the serial port and notifies the device
+#       when data arrives. This provides real-time event-driven communication.
+#
+#   INTERVAL mode (interval >= 500):
+#       An internal timer reads from the serial port at the specified interval in milliseconds.
+#       Minimum interval is 500ms to prevent overloading devices.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CONFIGURATION PARAMETERS
+# ------------------------
+#   port        (REQUIRED) Serial port name. Examples:
+#                          Linux:   "/dev/ttyUSB0", "/dev/ttyACM0", "/dev/ttyS0"
+#                          Windows: "COM1", "COM3", "COM10"
+#                          macOS:   "/dev/tty.usbserial-1234", "/dev/tty.usbmodem1234"
+#
+#   baudrate    (optional) Communication speed. Default: 9600
+#                          Valid: 300, 1200, 2400, 4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800, 921600
+#
+#   databits    (optional) Number of data bits per byte. Default: 8
+#                          Valid: 5, 6, 7, 8
+#
+#   stopbits    (optional) Number of stop bits. Default: 1
+#                          Valid: 1, 1.5, 2
+#
+#   parity      (optional) Parity checking mode. Default: "none"
+#                          Valid: "none", "odd", "even", "mark", "space"
+#
+#   flowcontrol (optional) Hardware/software flow control. Default: "none"
+#                          Valid: "none", "rtscts" (hardware), "xonxoff" (software)
+#
+#   encoding    (optional) Character encoding for text conversion. Default: "UTF-8"
+#                          Valid: Any standard Java charset (e.g., "ISO-8859-1", "US-ASCII")
+#
+#   timeout     (optional) Read timeout in milliseconds. Default: 5000
+#
+#   terminator  (optional) Line terminator that marks end of a message. Default: "\n"
+#                          Common values: "\n" (Unix), "\r\n" (Windows), "\r" (old Mac)
+#
+#   interval    (optional) Read interval in milliseconds. Default: 0 (AUTO mode)
+#                          0 = AUTO mode (continuous background reading)
+#                          >= 500 = INTERVAL mode (read every N milliseconds)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# COMMON CONFIGURATIONS (8N1 = 8 data bits, No parity, 1 stop bit)
+# ----------------------------------------------------------------
+#   Arduino default:  9600 baud, 8N1
+#   GPS NMEA:         4800 or 9600 baud, 8N1
+#   Industrial:       9600 or 19200 baud, 8N1 or 8E1 (even parity)
+#   High-speed:       115200 baud, 8N1
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# For more information about Drivers, please refer to the "Mingle Standard Platform" handbook.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco Jose Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 1: AUTO Mode (Default) - Continuous Reading
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This device reads from an Arduino continuously. When the Arduino sends a line
+# (e.g. "T=25.4"), the rule is triggered automatically in real-time.
+
+DEVICE ArduinoTemp
+    DRIVER SerialDriver
+        CONFIG
+            port     AS "/dev/ttyUSB0"   # Change this to your port
+            baudrate AS 9600
+            # interval is not specified, so AUTO mode is used (default)
+
+RULE
+    WHEN ArduinoTemp CHANGED
+    THEN log( "New temperature received: " + ArduinoTemp )
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 2: INTERVAL Mode - Periodic Reading
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This device reads from a sensor at fixed intervals (every 2 seconds).
+# The internal timer handles the scheduling automatically.
+
+DEVICE SerialSensor
+    DRIVER SerialDriver
+        CONFIG
+            port     AS "/dev/ttyACM0"   # Change this to your port
+            baudrate AS 115200
+            interval AS 2s               # Read every 2000ms (2 seconds)
+
+RULE
+    WHEN SerialSensor CHANGED
+    THEN log( "Sensor value (read every 2s): " + SerialSensor )
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+# EXAMPLE 3: INTERVAL Mode - Slow Polling for Battery-Powered Devices
+# ---------------------------------------------------------------------------------------------------------------------------------
+# For battery-powered or low-bandwidth devices, use longer intervals.
+
+DEVICE BatteryDevice
+    DRIVER SerialDriver
+        CONFIG
+            port     AS "/dev/ttyUSB1"
+            baudrate AS 9600
+            interval AS 10_000           # Read every 10 seconds (10000ms)
+
+RULE
+    WHEN BatteryDevice CHANGED
+    THEN log( "Battery device reading: " + BatteryDevice )

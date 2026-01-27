@@ -1,0 +1,61 @@
+#==================================================================================================================================
+# This file contains DRIVERs for devices manufactured by the DAIKIN company.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# Emura Air Conditioner DRIVERs and SCRIPTs (its Controllers)
+# 2 drivers are exposed: one controlls the Air Conditioner section of the machine (target tempeature and humidity, fan etc.)
+# and the other driver allows to receive information about inside and outside temperatures: these 2 sensors are part of the
+#-------------------------------------------------
+#
+# Daikin Emura machine control.
+# Take a look to the example to uderstand how to these drivers work.
+#
+# They use a "pair" (dictionary) as follows:
+# pair().add( "power"    , <boolean> )
+#       .add( "mode"     , <String> )  --> One of: Auto, Dry, Cool, Heat, Fan
+#       .add( "fan"      , <String> )  --> One of: Auto, Off, Minimum, Low, Medium, High, Maximum
+#       .add( "wings"    , <String> )  --> One of: None, Vertical, Horizontal, Both
+#       .add( "t_target" , <Number> )  --> Target temperature
+#       .add( "h_target" , <Number> )  --> Target humidity
+
+DRIVER DaikinEmuraControlDriver
+    SCRIPT DaikinEmuraControlController
+    CONFIG
+        address AS string REQUIRED        # IP where the EMURA machine attends. E.g.: "192.168.1.242"
+
+
+# Daikin Emura machine Sensors.
+# They return a "pair" (dictionary) as follows:
+# pair().add( "t_inside" , <N> )  --> for temperature inside
+#       .add( "t_outside", <N> )  --> for temperature outside
+#       .add( "h_inside" , <N> )  --> for humidity
+#
+# ¡¡¡ CARE !!!
+# It is known that some Daikin AC machines and more precisely Emura machines do not always report these values properly.
+# When the machine reports a non numeric value, "NaN" will be the value (a string instead of a number).
+
+DRIVER DaikinEmuraSensorsDriver
+    SCRIPT DaikinEmuraSensorsController
+    CONFIG
+        address  AS string REQUIRED       # IP where the EMURA machine attends. E.g.: "192.168.1.242"
+        interval AS number                # Interval to report values: 1m >= interval <= 50h. By default 5m.
+
+SCRIPT DaikinEmuraControlController
+   LANGUAGE java                                                # Which language was used to write the controller
+   FROM "file://{*home.lib*}controllers.jar"                    # Where (which file) is the controller
+   CALL "com.peyrona.mingle.controllers.daikin.emura.Control"   # The 'function' (class constructor) to create the controller
+
+SCRIPT DaikinEmuraSensorsController
+   LANGUAGE java                                                # Which language was used to write the controller
+   FROM "file://{*home.lib*}controllers.jar"                    # Where (which file) is the controller
+   CALL "com.peyrona.mingle.controllers.daikin.emura.Sensors"   # The 'function' (class constructor) to create the controller
+#----------------------------------------------------------------------------------------------------------------------------------
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

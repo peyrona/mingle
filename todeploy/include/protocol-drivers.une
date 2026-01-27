@@ -1,0 +1,149 @@
+#==================================================================================================================================
+# This file contains DRIVERs for communication protocols.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+DRIVER MqttClientDriver                       # This driver provides access to a MQTT broker (server)
+    SCRIPT MqttClientController
+    CONFIG
+        uri       AS string REQUIRED          # Broker URI (e.g. "tcp://mqtt.eclipseprojects.io:1883")
+        name      AS string                   # Client name (UID). By default a random string (UUID)
+        user      AS string                   # User name. By default empty
+        password  AS string                   # User password. By default empty
+        initial   AS string                   # Messsage to send after connection (e.g. to read state). By default none
+        subscribe AS string                   # One or more (semicolon separated) pairs of topic and QoS. By default "#,2" (all
+                                              # topics with QoS equals to 2). E.g.: "lights,2; doors,1; acs,2"
+
+DRIVER ModbusTcpClientDriver                  # This driver provides access to devices connected to a Modbus
+    SCRIPT ModbusTcpClientController
+    CONFIG
+        uri      AS string REQUIRED           # e.g.: "192.168.1.234:502" (if no port is declared, 502 is assumed)
+        address  AS number REQUIRED           # Register address (0-65535)
+        type     AS string REQUIRED           # One of: "boolean" (1 bit), "int" (2 bytes), "long" & "float" (4 bytes)
+        unitid   AS number                    # Unit ID / Slave ID (0-255). By default: 1
+        order    AS string                    # Byte order for 32-bit values: "ABCD", "BADC", "CDAB" or "DCBA". By default: "ABCD".
+        interval AS number                    # Time between reads (min: 30 millis). Optional. Default: 5000 ms
+        timeout  AS number                    # Connection/response timeout. By default 4000 milliseconds
+        retries  AS number                    # Number of retries on failure (0-10). By default: 2
+        function AS string                    # One of: "coils" (FC01), "discrete" (FC02), "holding" (FC03), "input" (FC04).
+                                              # By default: "coils" for boolean, "holding" for numeric types
+
+DRIVER SocketClientDriver                     # This driver acts as a Socket (traditional ones) or WebSocket client
+    SCRIPT SocketClientController
+    CONFIG
+        url       AS string  REQUIRED         # e.g.: "192.168.1.234:502" (if no port is declared, 55888 is assumed)
+        ssl       AS boolean                  # By default false. Can be ignored if the implementation does not support it.
+        websocket AS boolean                  # Use websocket instead of plain old socket. By default false
+
+
+DRIVER HttpClientDriver                       # Generic HTTP client for REST API integration
+    SCRIPT HttpClientController
+    CONFIG
+        uri      AS string REQUIRED           # URI to connect to (e.g.: "https://api.example.com/data")
+        interval AS number                    # Polling interval in seconds. 0 = read once. If > 0, min is 1s. Default: 0
+        timeout  AS number                    # Request timeout in seconds (1-300). By default 30
+        headers  AS string                    # Custom headers as "name:value;name2:value2". By default none
+
+
+DRIVER MCPDriver                              # MCP (Model Context Protocol) driver for LLM communication
+    SCRIPT MCPController
+    CONFIG
+        uri         AS string REQUIRED        # API endpoint URL (e.g.: "https://api.openai.com/v1/chat/completions")
+        api_key     AS string REQUIRED        # API authentication key
+        model       AS string REQUIRED        # Model name (e.g.: "gpt-4", "claude-3-opus-20240229")
+        timeout     AS number                 # Request timeout in seconds. By default 60
+        max_tokens  AS number                 # Maximum tokens in response. By default 1024
+        temperature AS number                 # Sampling temperature 0.0-2.0. By default 0.7
+        system      AS string                 # System prompt/instructions. By default empty
+
+
+DRIVER SerialDriver                           # Serial port (RS-232/RS-485) communication driver
+    SCRIPT SerialController
+    CONFIG
+        port        AS string REQUIRED        # Serial port name (e.g.: "/dev/ttyUSB0", "COM3", "/dev/ttyACM0")
+        baudrate    AS number                 # Baud rate. By default 9600. Valid: 300, 1200, 2400, 4800, 9600, 19200,
+                                              # 38400, 57600, 115200, 230400, 460800, 921600
+        databits    AS number                 # Data bits: 5, 6, 7, or 8. By default 8
+        stopbits    AS number                 # Stop bits: 1, 1.5, or 2. By default 1
+        parity      AS string                 # Parity: "none", "odd", "even", "mark", "space". By default "none"
+        flowcontrol AS string                 # Flow control: "none", "rtscts", "xonxoff". By default "none"
+        encoding    AS string                 # Character encoding (e.g.: "UTF-8", "ISO-8859-1"). By default "UTF-8"
+        timeout     AS number                 # Read timeout in milliseconds. By default 5000
+        terminator  AS string                 # Line terminator for reading: "\n", "\r", "\r\n". By default "\n"
+        interval    AS number                 # Polling interval in millis. When x <= 0, auto-read. Min interval: 500 millis.
+        reconnect   AS boolean                # Enable/disable automatic reconnection. By default true
+        max_retries AS number                 # Maximum reconnection attempts (-1 = unlimited). By default 7
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+SCRIPT MqttClientController                           # A controller that sends and receives messages to/from MQTT broker.
+   LANGUAGE java
+   FROM     "file://{*home.lib*}controllers.jar"
+            "file://{*home.lib*}controllers/org.eclipse.paho.client.mqttv3_1.2.5.jar"
+   CALL     "com.peyrona.mingle.controllers.mqtt.MqttClientWrapper"
+
+
+SCRIPT ModbusTcpClientController                      # A controller to send/receive messages to/from devices in Modbus vis TCP.
+   LANGUAGE java
+   FROM     "file://{*home.lib*}controllers.jar"
+            "file://{*home.lib*}controllers/slf4j-api-2.0.9.jar"
+            "file://{*home.lib*}controllers/j2mod-3.2.1.jar"
+   CALL     "com.peyrona.mingle.controllers.modbus.ModbusTcpClientWrapper"
+
+
+SCRIPT SocketClientController
+   LANGUAGE java
+   FROM     "file://{*home.lib*}controllers.jar"
+   CALL     "com.peyrona.mingle.controllers.SocketClient"
+
+
+SCRIPT HttpClientController                           # The controller for the HttpClientDriver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.HttpClient"
+
+
+SCRIPT MCPController                                  # MCP controller for LLM API communication
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.MCP"
+
+
+SCRIPT SerialController                               # Serial port controller for RS-232/RS-485 communication
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+        "file://{*home.lib*}controllers/nrjavaserial-5.2.1.jar"
+   CALL "com.peyrona.mingle.controllers.serial.SerialClient"
+
+
+DRIVER ZigbeeDriver                                   # Zigbee network coordinator driver
+    SCRIPT ZigbeeController
+    CONFIG
+        port        AS string REQUIRED                # Serial port for Zigbee dongle (e.g.: "/dev/ttyUSB0", "COM3")
+        dongle      AS string REQUIRED                # Dongle type: "ember", "cc2531", "conbee", "xbee", "telegesis"
+        channel     AS number                         # Zigbee channel 11-26. By default: 11
+        pan_id      AS string                         # PAN ID as hex (0x0000-0xFFFF) or "auto". By default: "auto"
+        network_key AS string                         # 128-bit key as 32 hex chars or "auto". By default: "auto"
+        permit_join AS boolean                        # Allow new devices to join on startup. By default: false
+        interval    AS number                         # Polling interval in ms (0 = event-driven). By default: 0
+
+
+SCRIPT ZigbeeController                               # Zigbee controller for ZHA device communication
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+        "file://{*home.lib*}controllers/nrjavaserial-5.2.1.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.serial-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.ember-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.cc2531-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.conbee-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.xbee-1.4.14.jar"
+        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.telegesis-1.4.14.jar"
+   CALL "com.peyrona.mingle.controllers.zigbee.ZigbeeClient"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -1,0 +1,33 @@
+#==================================================================================================================================
+# Template for machine monitoring
+# Parameters: _NAME_, _IP_
+#
+# This file is intended to be included with parameterized INCLUDE:
+#   INCLUDE "check_machine.template" USE _IP_ AS "192.168.6.9"; _NAME_ AS "E1"
+#==================================================================================================================================
+
+DEVICE {*_NAME_*}_counter
+    DRIVER CellSetDriver
+        CONFIG
+            value = 0
+
+
+DEVICE {*_NAME_*}_isDown
+    DRIVER CellSetDriver
+        CONFIG
+            value = FALSE
+
+
+WHEN clock
+THEN {*_NAME_*}_counter SET IIF( isReachable( _IP_, 2s ), 0, {*_NAME_*}_counter + 1 )
+
+
+WHEN {*_NAME_*}_counter >= 3
+THEN console            SET "SERVER {*_NAME_*} (IP = {*_IP_*}) IS DOWN"
+     {*_NAME_*}_isDown  SET TRUE
+     {*_NAME_*}_counter SET 0
+
+
+WHEN clock AND {*_NAME_*}_isDown AND isReachable( _IP_, 2s )
+THEN {*_NAME_*}_isDown SET FALSE
+     console           SET "{*_NAME_*} (IP = {*_IP_*}) is back"

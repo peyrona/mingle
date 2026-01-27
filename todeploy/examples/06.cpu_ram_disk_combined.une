@@ -1,0 +1,49 @@
+#==================================================================================================================================
+# This example is very similiar to the previous one, but now we are combining more than one value in same RULE condition (WHEN
+# clause).
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+WHEN cpu ABOVE 80 OR ram ABOVE 80 OR disk ABOVE 80
+THEN console SET "Care! At least one metric is above 80%"
+
+
+WHEN cpu ABOVE 80 AND ram ABOVE 80 AND disk ABOVE 80
+THEN console SET "Danger! All metrics are above 80%"
+
+
+WHEN cpu BELOW 80 AND ram BELOW 80 AND disk BELOW 80
+THEN console SET "Safe: all metrics are below 80%"
+
+# ---------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE CPU
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 5s
+
+
+DEVICE RAM
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 10s
+
+
+DEVICE Disk
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "disk"
+            interval SET 30s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

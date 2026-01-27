@@ -1,0 +1,87 @@
+#==================================================================================================================================
+# This example shows how to operate with a Daikin Emura Air Conditioned machine. Shows how to check its state and how to change it.
+#
+# Please, for more information, refer to file: {*home*}/include/daikin-drivers.une
+# ---------------------------------------------------------------------------------------------------------------------------------
+#
+# Daikin Emura machine control.
+# 'DaikinEmuraControlDriver' generates a "pair" (dictionary) as follows:
+# pair().put( "power"    , <Boolean> )
+#       .put( "mode"     , <String>  )  --> One of: Auto, Dry, Cool, Heat, Fan
+#       .put( "fan"      , <String>  )  --> One of: Auto, Off, Minimum, Low, Medium, High, Maximum
+#       .put( "wings"    , <String>  )  --> One of: None, Vertical, Horizontal, Both
+#       .put( "t_target" , <Number>  )  --> Target temperature
+#       .put( "h_target" , <Number>  )  --> Target humidity
+#
+#
+# Daikin Emura machine Sensors.
+# They return a "pair" (dictionary) as follows:
+# pair().put( "t_inside" , <N> )  --> for temperature inside
+#       .put( "t_outside", <N> )  --> for temperature outside
+#       .put( "h_inside" , <N> )  --> for humidity
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE SENSOR   AS DEVICE
+    ACTUATOR AS DEVICE
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 59m
+
+SENSOR ac_kitchen_sensor
+    DRIVER DaikinEmuraSensorsDriver
+       CONFIG
+           address  SET "192.168.7.246"
+           interval SET 7m
+
+ACTUATOR ac_kitchen_ctrl
+    INIT
+        value SET pair():put( "power", false )
+    DRIVER DaikinEmuraControlDriver
+        CONFIG
+            address SET "192.168.7.246"
+
+# -----------------------------------------------------------------------------------------------------------------
+# During Summer time, we allow a higher temperature for sleeping and restore previous temperature when not sleeping
+# Note that power is not changed: if it is ON, new settings takes inmediate effect, otherwise, when it will be ON.
+
+WHEN date():month():isBetween(JUNE,SEPTEMBER) AND time():hour() IS 22 AND clock
+THEN ac_kitchen_ctrl SET pair():put("t_target", pair():split(ac_kitchen_ctrl):get("t_target") + 2.5)
+
+WHEN date():month():isBetween(JUNE,SEPTEMBER) AND time():hour() IS 7 AND clock
+THEN ac_kitchen_ctrl SET pair():put("t_target", pair():split(ac_kitchen_ctrl):get("t_target") - 2.5)
+
+# -----------------------------------------------------------------------------------------------------------------
+# We do the opposite during Winter time.
+# Observe that now we can not use isBetween(...) because NOVEMBER is replaced by 11 and MARCH by 3,
+# Therefore, the function would be like this: isBetween( x, 11, 3 ) what is always false because there is
+# no number that is above or equals to 11 and lower or equals to 3.
+
+WHEN list(NOVEMBER,DECEMBER,JANUARY,FEBRUARY,MARCH):has( date():month() ) AND time():hour() IS 22 AND clock
+THEN ac_kitchen_ctrl SET pair():put("t_target", pair():split(ac_kitchen_ctrl):get("t_target") - 2.5)
+
+WHEN list(NOVEMBER,DECEMBER,JANUARY,FEBRUARY,MARCH):has( date():month() ) AND time():hour() IS 7 AND clock
+THEN ac_kitchen_ctrl SET pair():put("t_target", pair():split(ac_kitchen_ctrl):get("t_target") + 2.5)
+
+# -----------------------------------------------------------------------------------------------------------------
+# This is useful if we are on vacations: we do not want the pipes to be frozen
+
+DEVICE on_vacations
+    DRIVER CellSetDriver
+        CONFIG
+            value SET false    # This value could be changed e.g. from a web-page
+
+WHEN on_vacations AND ac_kitchen_sensor:get("t_inside") BELOW 5C
+THEN ac_kitchen_ctrl SET pair():put( "power", true ):put( "t_target", 17C )
+
+WHEN on_vacations AND ac_kitchen_sensor:get("t_inside") ABOVE 17C
+THEN ac_kitchen_ctrl SET pair():put( "power", false )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

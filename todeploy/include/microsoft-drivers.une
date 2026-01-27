@@ -1,0 +1,27 @@
+#==================================================================================================================================
+# This file contains DRIVERs for Microsoft products.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#==================================================================================================================================
+
+DRIVER MsExcelDriver                                # This DRIVER create or opens an MS Excel file and writes into it.
+    SCRIPT MsExcelController
+    CONFIG
+        file          AS string REQUIRED            # Excel file name
+        sheetName     AS string                     # Sheet name (default is Excel's default name)
+        heads         AS string                     # "<col_num> = <col_name>" [, ...] ("1=Time, 2=Indoor, 3=Outdoor")
+        writeInterval AS number                     # Number of accumulated changes to write (flush) them. By default 5.
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+SCRIPT MsExcelController                            # A controller to manage MS Excel files
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+        "file://{*home.lib*}controllers/poi-bin-5.1.0/**/*"   # '**/*' to recursively load all files inside 'poi-bin-5.1.0' folder
+   CALL "com.peyrona.mingle.controllers.Excel"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

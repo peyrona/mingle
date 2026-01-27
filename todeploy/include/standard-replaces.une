@@ -1,0 +1,82 @@
+#-------------------------------------------------------------------------------
+# This file contains the standard (default) replaces for the Une language
+# ------------------------------------------------------------------------------
+# This file is part of the Mingle project.
+# This project is licensed under Apache 2.0 License
+#
+# @author: Francisco José Morero Peyrona
+#-------------------------------------------------------------------------------
+
+# Boolean constants -------------
+USE CLOSED AS true
+    ON     AS true
+    YES    AS true
+    OPEN   AS false
+    OFF    AS false
+    NO     AS false
+#--------------------------------
+
+# Relational operators ----------
+USE IS       AS ==
+    EQUALS   AS ==
+    ARE      AS ==
+    BELOW    AS <
+    ABOVE    AS >
+    LEAST    AS >=
+    MOST     AS <=
+    UNEQUALS AS !=
+    IS_NOT   AS !=
+    <>       AS !=
+#--------------------------------
+
+# Boolean operators -------------
+USE AND AS &&
+    OR  AS ||
+    XOR AS |&
+    NOT AS !
+
+#--------------------------------
+
+# Bitwise operators -------------
+USE BAND AS &
+    BOR  AS |
+    BXOR AS ><
+    BNOT AS ~
+
+#--------------------------------
+
+# Other operators ---------------
+USE SET AS =
+#--------------------------------
+
+# Funcitons ---------------------
+USE _NL_ AS newLine()
+#--------------------------------
+
+
+# Days of week ------------------
+USE MONDAY    AS 1
+    TUESDAY   AS 2
+    WEDNESDAY AS 3
+    THURSDAY  AS 4
+    FRIDAY    AS 5
+    SATURDAY  AS 6
+    SUNDAY    AS 7
+#--------------------------------
+
+# Month names -------------------
+USE JANUARY   AS  1
+    FEBRUARY  AS  2
+    MARCH     AS  3
+    APRIL     AS  4
+    MAY       AS  5
+    JUNE      AS  6
+    JULY      AS  7
+    AUGUST    AS  8
+    SEPTEMBER AS  9
+    OCTOBER   AS 10
+    NOVEMBER  AS 11
+    DECEMBER  AS 12
+#--------------------------------
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

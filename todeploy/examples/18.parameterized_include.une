@@ -1,0 +1,66 @@
+#==================================================================================================================================
+# Example: Parameterized INCLUDE
+#
+# This example demonstrates how to use INCLUDE with a table-like USE...AS syntax to create reusable templates with parameters.
+#
+# Syntax:
+#   INCLUDE "file.une"
+#       USE col1 , col2 , ... AS
+#           val1a, val2a, ...
+#           val1b, val2b, ...
+#
+# Table-like syntax: declare columns once, then list values row by row.
+# Each row in the table creates one instantiation of the included file, with column values substituted.
+#
+# Rows can also be separated by semicolons for a more compact form:
+# INCLUDE "{*home*}examples/check_machine.template"
+#     USE _NAME_, _IP_ AS "Server", "192.168.7.9"; "Station", "192.168.7.222"; "NAS", "192.168.7.111"
+#
+# Example of use:
+#
+# Suppose you want to monitor several machines to detect when they go offline. Instead of repeating the same code for each machine,
+# create a template file: 'check_machine.template':
+#
+#   DEVICE {*_NAME_*}_counter
+#       DRIVER CellSetDriver
+#           CONFIG value = 0
+#
+#   WHEN clock
+#   THEN {*_NAME_*}_counter = IIF( isReachable( _IP_, 2s ), 0, {*_NAME_*}_counter + 1 )
+#
+#   WHEN {*_NAME_*}_counter >= 3
+#   THEN console = "ALERT: {*_NAME_*} (IP = {*_IP_*}) is DOWN"
+#
+# How It Works
+#
+#   The transpiler replaces:
+#   - {*column*} inside strings (e.g., {*_NAME_*} becomes Server)
+#   - Bare column names as identifiers (e.g., _IP_ becomes "192.168.7.9")
+#
+#   Each row in the USE table generates independent devices and rules with unique names.
+#==================================================================================================================================
+
+DEVICE clock                # Notice that this DEVICE, although declared here, is used at the file declared in the INCLUDE command.
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+DEVICE console              # The same with this device.
+    DRIVER OutputDriver
+
+# Here we decided to use '.template.une' to easily identify this Une file will be used as a parameterized INCLUDE.
+
+INCLUDE "{*home*}examples/check_machine.template.une"
+    USE _NAME_   , _IP_
+    AS  "Server" , "192.168.7.9"
+        "Station", "192.168.7.222"
+        "NAS"    , "192.168.7.111"
+
+# As shown in some initial examples, there is a reule about INCLUDE command: when source code has no INCLUDE, the default ones
+# are automatically added, But if there is one or more INCLUDE, then the user manages them. Tehrefore, in this case, the next
+# is mandatory in order to compile:
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"
+        "file://{*home.inc*}basic-drivers.une"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

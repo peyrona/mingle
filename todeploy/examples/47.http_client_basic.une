@@ -1,0 +1,262 @@
+#==================================================================================================================================
+# This example demonstrates the HTTP Client driver for REST API integration.
+#
+# The HttpClientDriver provides HTTP/HTTPS communication capabilities, enabling
+# integration with web services, REST APIs, and any HTTP-based data sources.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# CONFIGURATION PARAMETERS
+# ------------------------
+#   uri      (REQUIRED) Target URL (e.g., "https://api.example.com/data")
+#   interval (optional) Polling interval in seconds. Default: 0 (read once at start)
+#                       If > 0, minimum is 1 second
+#   timeout  (optional) Request timeout in seconds (1-300). Default: 30
+#   headers  (optional) Custom HTTP headers as "name:value;name2:value2"
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# READING DATA (GET requests)
+# ---------------------------
+# When you read from an HttpClientDriver device (or it polls automatically), it performs
+# a GET request and the response body becomes the device's value. You can then:
+#   - Display it directly: console = my_api
+#   - Parse JSON: pair():fromJSON( my_api ):get( "field" )
+#   - Use in conditions: WHEN my_api:contains( "error" )
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# WRITING DATA (POST/PUT/PATCH/DELETE requests)
+# ---------------------------------------------
+# To send data to an API, assign a 'pair' to the device containing:
+#   - "method" (REQUIRED): "POST", "PUT", "PATCH", "DELETE", "HEAD", or "OPTIONS"
+#   - "body"   (optional):  Request body (usually JSON string)
+#
+# Examples:
+#   # POST request with JSON body
+#   my_api = pair():put( "method", "POST" ):put( "body", "{\"name\":\"value\"}" )
+#
+#   # PUT request
+#   my_api = pair():put( "method", "PUT" ):put( "body", "{\"status\":\"active\"}" )
+#
+#   # DELETE request (no body needed)
+#   my_api = pair():put( "method", "DELETE" )
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco Jose Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+# Output device for displaying results
+DEVICE console
+    DRIVER OutputDriver
+
+
+#==================================================================================================================================
+# EXAMPLE 1: Simple GET request (read once at startup)
+#==================================================================================================================================
+# This device performs a single GET request when the program starts.
+# The response (your external IP address) becomes the device value.
+
+DEVICE external_ip
+    DRIVER HttpClientDriver
+        CONFIG
+            uri = "https://api.ipify.org?format=text"
+
+
+WHEN external_ip
+    THEN console = "["+ time() +"] External IP: " + external_ip
+
+
+#==================================================================================================================================
+# EXAMPLE 2: JSON API with data extraction
+#==================================================================================================================================
+# Many APIs return JSON data. Use pair():fromJSON() to parse and extract fields.
+# This example queries geolocation data for Google's DNS server.
+
+DEVICE geo_info
+    DRIVER HttpClientDriver
+        CONFIG
+            uri = "http://ip-api.com/json/8.8.8.8"
+
+
+WHEN geo_info
+    THEN console = "----- Geolocation Info -----"
+         console = "Country  : " + geo:get( "country" )
+         console = "City     : " + geo:get( "city" )
+         console = "Latitude : " + geo:get( "lat" )
+         console = "Longitude: " + geo:get( "lon" )
+         console = "ISP      : " + geo:get( "isp" )
+USE geo AS pair():fromJSON( geo_info )
+
+
+#==================================================================================================================================
+# EXAMPLE 3: Periodic polling (monitoring)
+#==================================================================================================================================
+# Use 'interval' to automatically poll an API at regular intervals.
+# This is useful for monitoring dashboards, sensor data, or any changing data.
+
+DEVICE bitcoin_price
+    DRIVER HttpClientDriver
+        CONFIG
+            uri      = "https://api.coindesk.com/v1/bpi/currentprice/USD.json"
+            interval = 60                     # Poll every 60 seconds
+            timeout  = 10                     # 10 second timeout
+
+
+WHEN bitcoin_price
+    THEN console = "["+ time() +"] Bitcoin: $" + btc:get( "rate" ) + " USD"
+USE btc AS pair():fromJSON( bitcoin_price ):get( "bpi" ):get( "USD" )
+
+
+#==================================================================================================================================
+# EXAMPLE 4: API with custom headers (authentication)
+#==================================================================================================================================
+# Many APIs require authentication via headers. Use the 'headers' parameter.
+# Format: "HeaderName:HeaderValue;AnotherHeader:AnotherValue"
+#
+# Common authentication headers:
+#   - Authorization: Bearer <token>
+#   - X-API-Key: <key>
+#   - Api-Key: <key>
+
+# Note: This is a placeholder - replace with a real API endpoint and key
+#DEVICE secure_api
+#    DRIVER HttpClientDriver
+#        CONFIG
+#            uri     = "https://api.example.com/protected/data"
+#            headers = "Authorization:Bearer YOUR_TOKEN_HERE;X-Custom-Header:value"
+#            timeout = 15
+
+
+#==================================================================================================================================
+# EXAMPLE 5: Sending POST requests
+#==================================================================================================================================
+# This example shows how to send data to an API using POST method.
+# We use a test endpoint that echoes back what we send.
+
+DEVICE echo_api
+    DRIVER HttpClientDriver
+        CONFIG
+            uri     = "https://httpbin.org/post"
+            timeout = 10
+
+
+# Device to trigger POST request (using a button simulation)
+DEVICE send_button
+    DRIVER CellDriver
+        CONFIG
+            value = false
+
+
+# When button is pressed, send a POST request
+WHEN send_button = true
+    THEN echo_api  = pair():put( "method", "POST" ) \
+                          :put( "body", "{\"message\":\"Hello from Mingle!\",\"timestamp\":\""+ time() +"\"}" )
+         console   = "["+ time() +"] POST request sent"
+
+
+# Display the API response
+WHEN echo_api
+    THEN console = "["+ time() +"] API Response received"
+         console = "Response: "+ echo_api
+
+
+#==================================================================================================================================
+# EXAMPLE 6: REST API CRUD operations demo
+#==================================================================================================================================
+# This demonstrates all common HTTP methods using JSONPlaceholder (a free fake REST API).
+# In real applications, you would use these methods to Create, Read, Update, Delete resources.
+
+DEVICE rest_api
+    DRIVER HttpClientDriver
+        CONFIG
+            uri     = "https://jsonplaceholder.typicode.com/posts/1"
+            timeout = 15
+
+
+# Trigger devices for demo
+DEVICE do_get
+    DRIVER CellDriver
+        CONFIG
+            value = false
+
+
+DEVICE do_put
+    DRIVER CellDriver
+        CONFIG
+            value = false
+
+
+DEVICE do_patch
+    DRIVER CellDriver
+        CONFIG
+            value = false
+
+
+DEVICE do_delete
+    DRIVER CellDriver
+        CONFIG
+            value = false
+
+
+# GET - Read a resource (triggered by do_get or automatically on start)
+WHEN do_get = true
+    THEN console = "["+ time() +"] Executing GET request..."
+
+
+# Display GET response
+WHEN rest_api
+    THEN console = "["+ time() +"] REST Response: " + rest_api:substring( 0, 100 ) + "..."
+
+
+# PUT - Replace entire resource
+WHEN do_put = true
+    THEN rest_api = pair():put( "method", "PUT" ) \
+                         :put( "body", "{\"id\":1,\"title\":\"Updated Title\",\"body\":\"Updated content\",\"userId\":1}" )
+         console  = "["+ time() +"] PUT request sent"
+
+
+# PATCH - Partial update
+WHEN do_patch = true
+    THEN rest_api = pair():put( "method", "PATCH" ) \
+                         :put( "body", "{\"title\":\"Patched Title\"}" )
+         console  = "["+ time() +"] PATCH request sent"
+
+
+# DELETE - Remove resource
+WHEN do_delete = true
+    THEN rest_api = pair():put( "method", "DELETE" )
+         console  = "["+ time() +"] DELETE request sent"
+
+
+#==================================================================================================================================
+# EXAMPLE 7: Error handling and conditional logic
+#==================================================================================================================================
+# You can use conditions to handle different API responses.
+
+DEVICE health_check
+    DRIVER HttpClientDriver
+        CONFIG
+            uri      = "https://httpbin.org/status/200"
+            interval = 30
+            timeout  = 5
+
+
+WHEN health_check:contains( "error" )
+    THEN console = "[ALERT] Health check failed: " + health_check
+
+
+WHEN health_check AND NOT health_check:contains( "error" )
+    THEN console = "["+ time() +"] Health check OK"
+
+
+#==================================================================================================================================
+# Include standard libraries
+#==================================================================================================================================
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"
+        "file://{*home.inc*}basic-drivers.une"
+        "file://{*home.inc*}protocol-drivers.une"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

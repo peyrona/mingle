@@ -1,0 +1,106 @@
+#==================================================================================================================================
+# This script shows how to use Cron-Driver and its differences with similar cases using Clock-Driver.
+# Goal: to write a message in a log file every Monday, Wednesday and Friday at 10 and 18 hours.
+#
+# Note: Cron is much more efficent in terms of CPU than its Clock equivalent, but Clock is easier to used and more flexible.
+#
+# DRIVER CronDriver
+#    SCRIPT KronosController
+#    CONFIG                   # None of the following fields is REQUIRED, but consistent values have to be provided.
+#        start AS string      # As Une "<date>,<time>". When only 'start' is defined, it occurs only once.
+#        stop  AS string      # As Une "<date>,<time>". Moment of last repetition, or empty for repeating for ever.
+#        time  AS string      # Time of the day to execute: one or more comma separated Une times (hh[:mm[:ss]]).
+#        dow   AS string      # DayOfweek: one or more comma separated of: 1 to 7 (Monday to Sunday; 0 is Sunday too).
+#        dom   AS string      # DayOfMonth: one or more comma separated of: 1 to 31 (31 is used also as 'last-day').
+#        month AS string      # Month: one or more comma separated of: 1 to 12.
+#        every AS number      # Repetition interval ("repeat every"). Use 0 or ommit it to not repeat.
+#        mode  AS string      # Repetition mode: "Daily, "Weekly, "Monthly" or "Yearly" (only the first letter is used).
+#
+#----------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# Using ClockDriver ---------------------------------------------------------------------------------------------------------------
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 59m   # We can be sure that the event will occur at some moment in time between 11:00 and 11:59
+                               # If we SET to 1m, the event will occur at some moment in time between 11:00 and 11:01 (same at 18)
+
+DEVICE log
+    DRIVER FileDriver
+        CONFIG
+            file SET "{*home.tmp*}cron_vs_clock.log"
+
+
+WHEN clock                                        AND \
+     (time():hour() IS 11 OR time():hour() IS 18) AND \
+     list( Monday, Wednesday, Friday ):has( date():weekday() )
+THEN log SET "["+ date() +" "+ time() +"] The application is working (msg via clock)"
+
+
+# Using CronDriver ----------------------------------------------------------------------------------------------------------------
+
+DEVICE cron_1
+    DRIVER CronDriver
+        CONFIG
+            time  SET "11, 18"   # "11" is equivalent to "11:00" and to "11:00:00" (Cron finest grain is second)
+            dow   SET "{*Monday*}, {*Wednesday*}, {*Friday*}"   # This is equivalent to: "1, 3, 5" or "1,3,5"
+            mode  SET "Weekly"   # The cadence: every week Cron will search for the events in next week
+            every SET 1          # Repeat every week. To repeat alternate weeks, set to 2 (By default it is 1)
+
+# Using Cron we can be sure that the event will occur exactly at 11:00:00 and at 18:00:00.
+# If you need to go down to the second, a powerfull hardware might be needed: using an RPi 3 the max error we've found is 1 second.
+# Besides wrong values (e.g. 32 as day of month), Cron does not accept all combinations of values: check log files to be sure that
+# your settings are correct (if you need something that Cron-Driver does not accept, you can always use Clock-Driver instead).
+
+WHEN cron_1             # Cron-Driver sets the value of its associated device to millis since 1970-01-01 midnight
+THEN log  SET "["+ date() +" "+ time() +"] Now is Mon, Wed or Fri at 11 o 18 hrs (msg via cron)"
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+# Following will be triggered at 11:00:00 and 18:00:00 hours the days of month: 5, 10, 15, 20, 25, 31 (31 means last day of month),
+# for the months: March, June and September (notice that in this example, 'cron_another' device is not used)
+
+DEVICE cron_2
+    DRIVER CronDriver
+        CONFIG
+            time  SET "11, 18:30"  # "11" is equivalent to "11:00" and to "11:00:00" (Cron finest time grain is second)
+            dom   SET "5, 10, 15, 20, 25, 31"
+            month SET "3, 6, 9"    # This is equivalent to: "{*March*}, {*June*}, {*September*}"
+            mode  SET "Yearly"     # The cadence: every year Cron will search for the events in next year
+            every SET 1            # Repeat every year
+
+WHEN cron_2             # Cron-Driver sets the value of its associated device to millis since 1970-01-01 midnight
+THEN log  SET "["+ date() +" "+ time() +"] Now is day 5, 10, 15, 20, 25 or 31 at 11 or 18:30 hrs and is March, June or Sept."
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+# Lets say you need to trigger a task the 15th of June at 20:00 hrs only if it is Wednesday.
+# Under these circumstances, you can not use CronDriver (there is now way to tell CronDriver such),
+# but you can do it using ClockDriver.
+# Assuming we have a ClockDriver that 'ticks' every minute, following will be way to achive it:
+
+DEVICE clock_minute
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 1m
+
+
+WHEN date():month()   IS July      AND \
+     date():weekday() IS Wednesday AND \
+     time():hour()    IS 20        AND \
+     clock_minute
+THEN log SET "Today is July the 15th and it is Wednesday; now it is 20:00 hours"
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+# FINAL NOTE:
+#     * Use Cron-Driver or Clock-Driver or both as you prefer.
+#     * As rule of thumb, Cron-Driver is more efficient, ClockDriver is more flexible.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

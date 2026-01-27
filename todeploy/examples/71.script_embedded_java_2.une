@@ -1,0 +1,76 @@
+#==================================================================================================================================
+# Please refer to the previous example: this is a remake of it.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+SCRIPT CopyFiles
+   LANGUAGE java
+   ONSTART
+   FROM {
+            java.io.File tmpDir      = new java.io.File( System.getProperty("java.io.tmpdir") );
+            java.io.File origin      = new java.io.File( tmpDir, "my_files/origin" );
+            java.io.File destination = new java.io.File( tmpDir, "my_files/destination" );
+
+           if( origin.exists() )
+           {
+                if( ! destination.exists() )
+                    destination.mkdirs();
+
+                for( java.io.File file : origin.listFiles() )
+                {
+                     java.nio.file.Files.copy( file.toPath(),
+                                               (new java.io.File( destination, file.getName() )).toPath(),
+                                               java.nio.file.StandardCopyOption.REPLACE_EXISTING );
+                }
+            }
+
+            System.out.println( "Files copied" );
+        }
+
+
+SCRIPT DeleteFiles
+   LANGUAGE java
+   ONSTOP
+   FROM {
+            java.io.File tmpDir = new java.io.File( System.getProperty("java.io.tmpdir") );
+            java.io.File dir    = new java.io.File( tmpDir, "my_files/destination" );
+
+            if( dir.exists() )
+            {
+                 for( java.io.File file : dir.listFiles() )
+                 {
+                     if( ! file.isDirectory() )
+                         file.delete();
+                 }
+            }
+
+            System.out.println( "Files deleted" );
+        }
+
+
+# Note that invoking these SCRIPTs does not change any device's state, therefore the RULEs will
+# not be evaluated again after SCRIPTs invocation (there is no re-entrance).
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 59m
+
+
+WHEN clock AND time():hour() == 7
+THEN CopyFiles
+
+
+WHEN clock AND time():hour() == 23
+THEN DeleteFiles
+
+
+INCLUDE "file://{*home.inc*}standard-replaces.une"      # This one provides common replacements that improve readability.
+        "file://{*home.inc*}basic-drivers.une"          # This one contains several commonly used DRIVERS.
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<
