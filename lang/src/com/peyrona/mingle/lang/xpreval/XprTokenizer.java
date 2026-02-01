@@ -181,11 +181,23 @@ public final class XprTokenizer
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Determines if the operator at the given index is a unary operator.
+     * <p>
+     * Unary operators are: ! (NOT), ~ (bitwise NOT), + (unary plus), - (unary minus).
+     * The + and - are unary when they appear at the start of an expression,
+     * after an open parenthesis, after a parameter separator, or after another operator.
+     *
+     * @param list The list of lexemes.
+     * @param index The index of the operator lexeme.
+     * @return true if the operator is unary, false otherwise.
+     */
     private boolean isUnaryOp( List<Lexeme> list, int index )
     {
-        String s = list.get( index ).text();
+        Lexeme lexeme = list.get( index );
+        String s = lexeme.text();
 
-        if( s.length() != 1 )
+        if( s == null || s.length() != 1 )
             return false;
 
         char cOp = s.charAt( 0 );
@@ -198,7 +210,10 @@ public final class XprTokenizer
             if( index == 0 )    // 1st token in expression: +12 * 3
                 return true;
 
-            Lexeme lexPrev = UtilColls.getAt( list, index - 1 );           // Previous token isType:
+            Lexeme lexPrev = UtilColls.getAt( list, index - 1 );           // Previous token
+
+            if( lexPrev == null )
+                return true;    // No previous token, treat as unary
 
             return lexPrev.isOpenParenthesis() ||    // e.g.: (-12 * 3)
                    lexPrev.isParamSep()        ||    // e.g.: max(4,-2)

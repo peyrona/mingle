@@ -510,39 +510,6 @@ public class UtilStr
     }
 
     /**
-     * Removes Une-style comments from received string.
-     *
-     * @param input To use
-     * @return The input after comments being removed.
-     */
-    public static String removeComments( String input )
-    {
-        if( isEmpty( input ) )
-            return "";
-
-        StringBuilder output    = new StringBuilder();
-        boolean       inComment = false;
-
-        for( int n = 0; n < input.length(); n++ )
-        {
-            char c = input.charAt( n );
-
-            if( inComment )
-            {
-                if( c == '\n' )
-                    inComment = false;
-            }
-            else
-            {
-                if( c == '#' ) inComment = true;
-                else           output.append( c );
-            }
-        }
-
-        return output.toString();
-    }
-
-    /**
      * Replaces (ignoring case) first occurrence of 'find' in 'where' by 'replace'.
      *
      * @param where String to make the replacement.

@@ -1,4 +1,3 @@
-
 package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.peyrona.mingle.lang.MingleException;
@@ -52,8 +51,11 @@ public final class StdXprFns
     private static final Class[] TWO_CLASS_ARRAY   = { Object.class, Object.class };
     private static final Class[] THREE_CLASS_ARRAY = { Object.class, Object.class, Object.class };
 
-    private        final pair    pairTriggered     = new pair().put( "name" , "" )  // Last device name and value
-                                                               .put( "value", "" );
+    // ThreadLocal for rule-scoped triggered device info (WHEN sets it, THEN reads it on same thread)
+    private static final ThreadLocal<pair> threadTriggered = ThreadLocal.withInitial( () -> new pair() );
+
+    // Single instance for MethodHandle invocations (protected methods are instance methods)
+    private static final StdXprFns INSTANCE = new StdXprFns();
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE (NON STATIC)
@@ -61,11 +63,11 @@ public final class StdXprFns
     /**
      * Evaluates a function with certain arguments.
      *
-     * @param sFnName Function name to e evaluated.
+     * @param sFnName Function name to be evaluated.
      * @param aoArgs  Arguments to pass to function: can be null.
      * @return The function's result.
      */
-    public Object invoke( String sFnName, Object[] aoArgs )
+    public static Object invoke( String sFnName, Object... aoArgs )
     {
         if( aoArgs == null || aoArgs.length == 0 )    // Fast path for null/empty args
             return invokeNoArgs( sFnName );
@@ -110,7 +112,7 @@ public final class StdXprFns
 
         if( target == null )
         {
-            target = this;
+            target = INSTANCE;
             clazz = StdXprFns.class;
         }
         else
@@ -150,13 +152,13 @@ public final class StdXprFns
     }
 
     // Fast path methods for common cases
-    private Object invokeNoArgs( String sFnName )
+    private static Object invokeNoArgs( String sFnName )
     {
         MethodHandle metHdle = getMethod( StdXprFns.class, sFnName, EMPTY_CLASS_ARRAY, null );
 
         try
         {
-            return metHdle.invoke( this );
+            return metHdle.invoke( INSTANCE );
         }
         catch( Throwable exc )
         {
@@ -168,7 +170,7 @@ public final class StdXprFns
         }
     }
 
-    private Object invokeNoArgsOnTarget( String sFnName, Object target )
+    private static Object invokeNoArgsOnTarget( String sFnName, Object target )
     {
         MethodHandle metHdle = getMethod( target.getClass(), sFnName, EMPTY_CLASS_ARRAY, null );
 
@@ -186,7 +188,7 @@ public final class StdXprFns
         }
     }
 
-    private MethodHandle getMethod( Class clazz, String sFnName, Class[] aParamType, Object[] actualArgs )
+    private static MethodHandle getMethod( Class clazz, String sFnName, Class[] aParamType, Object[] actualArgs )
     {
         MapKey mapKey = new MapKey( clazz, sFnName, aParamType );
 
@@ -197,7 +199,7 @@ public final class StdXprFns
                 Method method = UtilReflect.getMethod( clazz, sFnName, aParamType );
 
                 if( method == null )
-                    throw new MingleException( '"' + sFnName + "\" does not exist, in: " + toInvocation( clazz, sFnName, actualArgs ) );
+                    throw new MingleException( '"' + sFnName + "\" does not exist, in: \"" + toInvocation( clazz, sFnName, actualArgs ) +'"' );
 
                 method.setAccessible( true );
                 return MethodHandles.lookup().unreflect( method );
@@ -210,21 +212,30 @@ public final class StdXprFns
     }
 
     //------------------------------------------------------------------------//
-    // PUBLIC METHOD
+    // PUBLIC METHODS
 
-    // sync because .put(...) is not atomic
-    public void setTriggeredBy( String devName, Object devValue )
+    /**
+     * Sets the device information that triggered the current rule evaluation.
+     * This information is stored in a {@link ThreadLocal} to ensure thread-safety.
+     *
+     * @param devName  The name of the device that triggered the rule.
+     * @param devValue The current value of the device.
+     */
+    public static void setTriggeredBy( String devName, Object devValue )
     {
-        synchronized( pairTriggered )
-        {
-            pairTriggered.put( "name" , devName  )
-                         .put( "value", devValue );
-        }
+        threadTriggered.get().put( "name" , devName  )
+                             .put( "value", devValue );
     }
 
     //------------------------------------------------------------------------//
     // PUBLIC STATIC METHODS
 
+    /**
+     * Checks if the given object is of a basic Une type (Number, String, or Boolean).
+     *
+     * @param o The object to check.
+     * @return {@code true} if the object is a basic type, {@code false} otherwise.
+     */
     public static boolean isBasicType( Object o )       // This method is better here than in YAJER or any other place
     {
         // if( o == null )  return null;   --> Not needed
@@ -234,6 +245,12 @@ public final class StdXprFns
                (o instanceof Boolean);      // we save CPU
     }
 
+    /**
+     * Checks if the given object is of an extended Une type (date, time, list, or pair).
+     *
+     * @param o The object to check.
+     * @return {@code true} if the object is an extended type, {@code false} otherwise.
+     */
     public static boolean isExtendedType( Object o )    // This method is better here than in NAXE or any other place
     {
         return (o instanceof date) ||
@@ -242,7 +259,13 @@ public final class StdXprFns
                (o instanceof pair);
     }
 
-    // Fast class-based check to avoid instanceof overhead
+    /**
+     * Checks if the given class represents an extended Une type (date, time, list, or pair).
+     * Fast class-based check to avoid {@code instanceof} overhead.
+     *
+     * @param clazz The class to check.
+     * @return {@code true} if the class is an extended type, {@code false} otherwise.
+     */
     public static boolean isExtendedType( Class<?> clazz )
     {
         return (clazz == date.class) ||
@@ -251,6 +274,12 @@ public final class StdXprFns
                (clazz == pair.class);
     }
 
+    /**
+     * Checks if the given string name matches one of the extended Une types.
+     *
+     * @param sFn The name to check (e.g., "date", "time", "list", "pair").
+     * @return {@code true} if the name matches an extended type, {@code false} otherwise.
+     */
     public static boolean isExtendedType( String sFn )
     {
         sFn = sFn.trim();
@@ -266,6 +295,13 @@ public final class StdXprFns
                "pair".equals( sFn );
     }
 
+    /**
+     * Returns the return type of the specified function.
+     *
+     * @param sFn   The function name.
+     * @param nArgs The number of arguments the function receives, or -1 to ignore the number of arguments.
+     * @return The {@link Class} representing the return type, or {@code null} if the function is not found.
+     */
     public static Class<?> getReturnType( String sFn, int nArgs )    // -1 --> Ignore number of arguments
     {
         Method method = getFunction( sFn, nArgs );    // A function always returns the same type of argument despiting the number of args it receives
@@ -290,9 +326,10 @@ public final class StdXprFns
 
     /**
      * Returns the method that represents any extended Une classes.
-     * @param sFn
+     *
+     * @param sFn   Function name.
      * @param nArgs Function number of arguments. Use any value below zero to check only function name.
-     * @return This class Method that represents requested function.
+     * @return This class {@link Method} that represents requested function.
      */
     public static Method getMethod( String sFn, int nArgs )
     {
@@ -322,10 +359,11 @@ public final class StdXprFns
     }
 
     /**
-     * Returns this class Method that represents requested function.
-     * @param sFn
+     * Returns this class {@link Method} that represents requested function.
+     *
+     * @param sFn   Function name.
      * @param nArgs Function number of arguments. Use any value below zero to check only function name.
-     * @return This class Method that represents requested function.
+     * @return This class {@link Method} that represents requested function.
      */
     public static Method getFunction( String sFn, int nArgs )
     {
@@ -345,7 +383,7 @@ public final class StdXprFns
     }
 
     /**
-     * Returns all methods in this class that form the MSP standard functions (all private methods).
+     * Returns all methods in this class that form the MSP standard functions (all protected methods).
      *
      * @return All methods in this class that form the MSP standard functions.
      */
@@ -355,8 +393,8 @@ public final class StdXprFns
 
         for( Method method : StdXprFns.class.getDeclaredMethods() )    // getDeclaredMethods() include even private methods
         {
-            if( Modifier.isPrivate( method.getModifiers() ) &&         // Methods managed by the XpreEval in this class are all private
-                (method.getName().charAt( 0 ) != '_')       &&         // Methods starting with '_' are for internal use only
+            if( Modifier.isProtected( method.getModifiers() ) &&       // Methods managed by the XpreEval in this class are all private
+                (method.getName().charAt( 0 ) != '_')         &&       // Methods starting with '_' are for internal use only
                 (! list.contains( method.getName() )) )                // Because some methods have same name and different num of params
             {
                 list.add( method.getName() );
@@ -373,7 +411,7 @@ public final class StdXprFns
     /**
      * Returns all extended data types and all their methods.
      *
-     * @return All extended data types and all their methods.
+     * @return A map where keys are extended data type names and values are lists of their method names.
      */
     public static Map<String,List<String>> getAllMethods()
     {
@@ -395,36 +433,108 @@ public final class StdXprFns
         return map;
     }
 
-    //------------------------------------------------------------------------//
-    // PRIVATE INTERFACE: used via reflection
-    //------------------------------------------------------------------------//
-
-    // All and only the methods in this class that form the MSP standard functions
-    // API, are private, so it is easy to find them (::getAllFunctions())
+    /*--------------------------------------------------------------------------------------------
+     * PROTECTED INTERFACE: used via reflection
+     * All and only the methods in this class that form the MSP standard functions
+     * API, are private, so it is easy to find them (::getAllFunctions())
+     *
+     * IMPORTANT:
+     * It is better to keep the protected methods as instance methods. Here's why:
+     *
+     * The MethodHandle invocation pattern
+     *
+     * The current code handles both:
+     * 1. Methods on StdXprFns (like max(), floor(), date())
+     * 2. Methods on extended types (date, time, list, pair instances)
+     *
+     * For instance methods, MethodHandle invocation works like:
+     * metHdle.invoke(target, arg1, arg2)  // target is the object to call the method on
+     *
+     * For static methods, it would be:
+     * metHdle.invoke(arg1, arg2)  // no target needed
+     *
+     * Making them static would add complexity
+     *
+     * If you made StdXprFns methods static, you'd need to:
+     *    1. Detect whether you're calling a static method (StdXprFns) vs instance method (date/time/list/pair)
+     *    2. Use different invocation patterns for each case
+     *    3. Add branching logic throughout invoke(), invokeNoArgs(), etc.
+    ---------------------------------------------------------------------------------------------*/
 
     //------------------------------------------------------------------------//
     // EXTENDED DATA TYPES
 
+    /**
+     * Creates a new Une {@link date} instance.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>date()</code> returns current date (e.g. 2023-10-27)</li>
+     *    <li><code>date("2023-12-31")</code> returns date object for Dec 31, 2023</li>
+     *    <li><code>date(2023, 12, 31)</code> returns date object for Dec 31, 2023</li>
+     * </ul>
+     *
+     * @param aoArgs Optional arguments for the date constructor.
+     * @return A new date object.
+     */
     @SuppressWarnings("unused")
-    private date date( Object... aoArgs )
+    protected date date( Object... aoArgs )
     {
         return new date( aoArgs );
     }
 
+    /**
+     * Creates a new Une {@link time} instance.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>time()</code> returns current time (e.g. 14:30:00)</li>
+     *    <li><code>time("14:30")</code> returns time object for 14:30</li>
+     *    <li><code>time(14, 30, 0)</code> returns time object for 14:30:00</li>
+     * </ul>
+     *
+     * @param aoArgs Optional arguments for the time constructor.
+     * @return A new time object.
+     */
     @SuppressWarnings("unused")
-    private time time( Object... aoArgs )
+    protected time time( Object... aoArgs )
     {
         return new time( aoArgs );
     }
 
+    /**
+     * Creates a new Une {@link list} instance.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>list()</code> returns an empty list <code>[]</code></li>
+     *    <li><code>list(1, 2, 3)</code> returns <code>[1, 2, 3]</code></li>
+     *    <li><code>list("a", "b")</code> returns <code>["a", "b"]</code></li>
+     * </ul>
+     *
+     * @param aoArgs Optional arguments for the list constructor.
+     * @return A new list object.
+     */
     @SuppressWarnings("unused")
-    private list list( Object... aoArgs )
+    protected list list( Object... aoArgs )
     {
         return new list( aoArgs );
     }
 
+    /**
+     * Creates a new Une {@link pair} instance.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>pair()</code> returns an empty pair/map <code>{}</code></li>
+     *    <li><code>pair("name", "John", "age", 30)</code> returns <code>{"name":"John", "age":30}</code></li>
+     * </ul>
+     *
+     * @param aoArgs Optional arguments for the pair constructor.
+     * @return A new pair object.
+     */
     @SuppressWarnings("unused")
-    private pair pair( Object... aoArgs )
+    protected pair pair( Object... aoArgs )
     {
         return new pair( aoArgs );
     }
@@ -432,16 +542,32 @@ public final class StdXprFns
     //------------------------------------------------------------------------//
     // NUMERIC RELATED FUNCTIONS
 
+    /**
+     * Converts an object to an integer. Supports decimal, binary (0b prefix),
+     * and hexadecimal (0x prefix) string representations.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>Int(12.34)</code> returns <code>12</code></li>
+     *    <li><code>Int("123")</code> returns <code>123</code></li>
+     *    <li><code>Int("0xFF")</code> returns <code>255</code></li>
+     *    <li><code>Int("0b101")</code> returns <code>5</code></li>
+     * </ul>
+     *
+     * @param number The object to convert (typically a Number or String).
+     * @return The integer value.
+     * @throws MingleException If the input is not a number or string.
+     */
     @SuppressWarnings("unused")
-    private int Int( Object o )
+    protected int Int( Object number )
     {
-        if( o instanceof Number )
-            return  ((Number) o).intValue();
+        if( number instanceof Number )
+            return  ((Number) number).intValue();
 
-        if( ! (o instanceof String) )
-            throw new MingleException( "Invalid value: number or string expected, but received: "+ o.getClass().getSimpleName() );
+        if( ! (number instanceof String) )
+            throw new MingleException( "Invalid value: number or string expected, but received: "+ number.getClass().getSimpleName() );
 
-        String sNum = ((String) o).trim();
+        String sNum = ((String) number).trim();
 
         if( UtilStr.startsWith( sNum, "0b" ) )
             return Integer.parseInt( sNum.substring( 2 ), 2 );
@@ -452,56 +578,80 @@ public final class StdXprFns
         return UtilType.toInteger( sNum );
     }
 
+    /**
+     * Returns the maximum value from a list of arguments.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>max(1, 5, 2)</code> returns <code>5.0</code></li>
+     *    <li><code>max(-1, -5)</code> returns <code>-1.0</code></li>
+     * </ul>
+     *
+     * @param numbers One or more numeric values to compare.
+     * @return The maximum value as a float.
+     */
     @SuppressWarnings("unused")
-    private float max( Object... objs )
+    protected float max( Object... numbers )
     {
-        if( objs == null || objs.length == 0 )
+        if( numbers == null || numbers.length == 0 )
             return Float.MIN_VALUE;
 
-        if( objs.length == 1 )
-            return UtilType.toFloat( objs[0] );
+        if( numbers.length == 1 )
+            return UtilType.toFloat( numbers[0] );
 
         // Optimization for the most frecuent case ------------
-        if( objs.length == 2 )
+        if( numbers.length == 2 )
         {
-            Float f1 = UtilType.toFloat( objs[0] );
-            Float f2 = UtilType.toFloat( objs[1] );
+            Float f1 = UtilType.toFloat( numbers[0] );
+            Float f2 = UtilType.toFloat( numbers[1] );
 
             return (f1 > f2 ? f1 : f2);
         }
         // ----------------------------------------------------
 
-        Float max = UtilType.toFloat( objs[0] );
+        Float max = UtilType.toFloat( numbers[0] );
 
-        for( int n = 1; n < objs.length; n++ )
-            max = Math.max( max, UtilType.toFloat( objs[n] ) );
+        for( int n = 1; n < numbers.length; n++ )
+            max = Math.max( max, UtilType.toFloat( numbers[n] ) );
 
         return max;
     }
 
+    /**
+     * Returns the minimum value from a list of arguments.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>min(1, 5, 2)</code> returns <code>1.0</code></li>
+     *    <li><code>min(-1, -5)</code> returns <code>-5.0</code></li>
+     * </ul>
+     *
+     * @param numbers The numeric values to compare.
+     * @return The minimum value as a float.
+     */
     @SuppressWarnings("unused")
-    private float min( Object... objs )
+    protected float min( Object... numbers )
     {
-        if( objs == null || objs.length == 0 )
+        if( numbers == null || numbers.length == 0 )
             return Float.MAX_VALUE;
 
-        if( objs.length == 1 )
-            return UtilType.toFloat( objs[0] );
+        if( numbers.length == 1 )
+            return UtilType.toFloat( numbers[0] );
 
         // Optimization for the most frecuent case ------------
-        if( objs.length == 2 )
+        if( numbers.length == 2 )
         {
-            Float f1 = UtilType.toFloat( objs[0] );
-            Float f2 = UtilType.toFloat( objs[1] );
+            Float f1 = UtilType.toFloat( numbers[0] );
+            Float f2 = UtilType.toFloat( numbers[1] );
 
             return (f1 < f2 ? f1 : f2);
         }
         // -----------------------------------------------------
 
-        Float max = UtilType.toFloat( objs[0] );
+        Float max = UtilType.toFloat( numbers[0] );
 
-        for( int n = 1; n < objs.length; n++ )
-            max = Math.min( max, UtilType.toFloat( objs[n] ) );
+        for( int n = 1; n < numbers.length; n++ )
+            max = Math.min( max, UtilType.toFloat( numbers[n] ) );
 
         return max;
     }
@@ -513,26 +663,38 @@ public final class StdXprFns
      *    <li>If the argument value is already equal to a mathematical integer, then the result is the same as the argument.</li>
      *    <li>If the argument is NaN or an infinity or positive zero or negative zero, then the result is the same as the argument.</li>
      * </ul>
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>floor(3.14)</code> returns <code>3.0</code></li>
+     *    <li><code>floor(-3.14)</code> returns <code>-4.0</code></li>
+     * </ul>
      *
      * @param   number  A value.
      * @return  the largest (closest to positive infinity) floating-point value that less than or equal to the argument
      *          and is equal to a mathematical integer.
      */
     @SuppressWarnings("unused")
-    private float floor( Object number )
+    protected float floor( Object number )
     {
         return (float) Math.floor( UtilType.toDouble( number ) );
     }
 
     /**
      * Rounds number down, toward zero, to the nearest multiple of significance.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>floor(158, 10)</code> returns <code>150.0</code> (nearest multiple of 10)</li>
+     *    <li><code>floor(0.56, 0.1)</code> returns <code>0.5</code></li>
+     * </ul>
      *
      * @param number The numeric value you want to round.
      * @param significance  The multiple to which you want to round.
      * @return float number.
      */
     @SuppressWarnings("unused")
-    private float floor( Object number, Object significance )
+    protected float floor( Object number, Object significance )
     {
         double nSig = UtilType.toDouble( significance );     // Math.floor(...) requieres double
 
@@ -556,6 +718,12 @@ public final class StdXprFns
      *    <li>If the argument value is less than zero but greater than -1.0, then the result is negative zero.</li>
      * </ul>
      * Note that the value of {@code Math.ceil(x)} is exactly the value of <code>floor(-x)</code>.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>ceiling(3.14)</code> returns <code>4.0</code></li>
+     *    <li><code>ceiling(-3.14)</code> returns <code>-3.0</code></li>
+     * </ul>
      *
      * @param   number A value.
      * @return  the smallest (closest to negative infinity)
@@ -563,7 +731,7 @@ public final class StdXprFns
      *          the argument and is equal to a mathematical integer.
      */
     @SuppressWarnings("unused")
-    private float ceiling( Object number )
+    protected float ceiling( Object number )
     {
         return (float) Math.ceil( UtilType.toDouble( number ) );
     }
@@ -572,13 +740,19 @@ public final class StdXprFns
      * Returns number rounded up, away from zero, to the nearest multiple of significance.<br>
      * <br>
      * Note: In MS Excel the name is "ceiling" not "ceil" like in Java.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>ceiling(152, 10)</code> returns <code>160.0</code></li>
+     *    <li><code>ceiling(0.51, 0.1)</code> returns <code>0.6</code></li>
+     * </ul>
      *
      * @param number The numeric value you want to round.
      * @param significance  The multiple to which you want to round.
      * @return float number.
      */
     @SuppressWarnings("unused")
-    private float ceiling( Object number, Object significance )
+    protected float ceiling( Object number, Object significance )
     {
         float nNum = UtilType.toFloat( number );
         float nSig = UtilType.toFloat( significance );
@@ -596,25 +770,37 @@ public final class StdXprFns
 
     /**
      * Rounds to the closest integer (from 0.1 to 0.4 rounds down and from 0.5 to 0.9 rounds up).
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>round(3.4)</code> returns <code>3.0</code></li>
+     *    <li><code>round(3.6)</code> returns <code>4.0</code></li>
+     * </ul>
      *
      * @param number Number to round.
      * @return float number.
      */
     @SuppressWarnings("unused")
-    private float round( Object number )
+    protected float round( Object number )
     {
         return (float) Math.round( UtilType.toFloat( number ) );
     }
 
     /**
      * Rounds a number to a specified number of digits.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>round(3.14159, 2)</code> returns <code>3.14</code></li>
+     *    <li><code>round(3.14159, 3)</code> returns <code>3.142</code></li>
+     * </ul>
      *
      * @param number Number to round.
      * @param decimals Decimal places.
      * @return float number.
      */
     @SuppressWarnings("unused")
-    private float round( Object number, Object decimals )
+    protected float round( Object number, Object decimals )
     {
         float nNum = UtilType.toFloat( number );
         int   nDec = UtilType.toInteger( decimals );
@@ -626,44 +812,103 @@ public final class StdXprFns
 
     /**
      * Returns the absolute value of a number. The absolute value of a number is the number without its sign.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>abs(-5)</code> returns <code>5.0</code></li>
+     *    <li><code>abs(3)</code> returns <code>3.0</code></li>
+     * </ul>
      *
      * @param number
      * @return Its absolute value.
      */
     @SuppressWarnings("unused")
-    private float abs( Object number )
+    protected float abs( Object number )
     {
         return Math.abs( UtilType.toFloat( number ) );
     }
 
+    /**
+     * Checks if a value is within a specified range (inclusive).
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>isBetween(5, 1, 10)</code> returns <code>true</code></li>
+     *    <li><code>isBetween(0, 1, 10)</code> returns <code>false</code></li>
+     * </ul>
+     *
+     * @param value The value to check.
+     * @param min The minimum value of the range.
+     * @param max The maximum value of the range.
+     * @return {@code true} if val is between min and max, {@code false} otherwise.
+     */
     @SuppressWarnings("unused")
-    private boolean isBetween( Object val, Object min, Object max )
+    protected boolean isBetween( Object value, Object min, Object max )
     {
-        return UtilUnit.isBetween( UtilType.toFloat( min ),
-                                   UtilType.toFloat( val ),
+        return UtilUnit.isBetween( UtilType.toFloat( min   ),
+                                   UtilType.toFloat( value ),
                                    UtilType.toFloat( max ) );
     }
 
+    /**
+     * Constraints a value within a specified range.
+     * If the value is less than min, returns min.
+     * If the value is greater than max, returns max.
+     * Otherwise, returns the value itself.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>setBetween(5, 1, 10)</code> returns <code>5.0</code></li>
+     *    <li><code>setBetween(-5, 1, 10)</code> returns <code>1.0</code></li>
+     *    <li><code>setBetween(50, 1, 10)</code> returns <code>10.0</code></li>
+     * </ul>
+     *
+     * @param value The value to constraint.
+     * @param min The minimum allowed value.
+     * @param max The maximum allowed value.
+     * @return The constrained value.
+     */
     @SuppressWarnings("unused")
-    private float setBetween( Object val, Object min, Object max )
+    protected float setBetween( Object value, Object min, Object max )
     {
-        return UtilUnit.setBetween( UtilType.toFloat( min ),
-                                    UtilType.toFloat( val ),
+        return UtilUnit.setBetween( UtilType.toFloat( min   ),
+                                    UtilType.toFloat( value ),
                                     UtilType.toFloat( max ) );
     }
 
     /**
-     * Returns the remainder after number is divided by divisor. The result has the same sign as divisor.
+     * Returns the remainder after number is divided by divisor.
+     * <p>
+     * The result has the same sign as the divisor (mathematical modulo).
+     * This differs from Java's {@code %} operator which returns a result
+     * with the same sign as the dividend.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>mod(10, 3)</code> returns <code>1.0</code></li>
+     *    <li><code>mod(10, 5)</code> returns <code>0.0</code></li>
+     *    <li><code>mod(-10, 3)</code> returns <code>2.0</code> (not -1.0)</li>
+     *    <li><code>mod(10, -3)</code> returns <code>-2.0</code> (not 1.0)</li>
+     * </ul>
      *
-     * @return The remainder after number is divided by divisor. The result has the same sign as divisor.
+     * @param number The dividend.
+     * @param divisor The divisor (cannot be zero).
+     * @return The remainder after number is divided by divisor, with the same sign as divisor.
      */
     @SuppressWarnings("unused")
-    private float mod( Object number, Object divisor )
+    protected float mod( Object number, Object divisor )
     {
         float n = UtilType.toFloat( number  );
         float d = UtilType.toFloat( divisor );
 
-        return (n % d);
+        // Mathematical modulo: result has same sign as divisor
+        // This handles negative numbers correctly
+        float result = n % d;
+
+        if( (result != 0) && ((result < 0) != (d < 0)) )
+            result += d;
+
+        return result;
     }
 
     /**
@@ -671,6 +916,11 @@ public final class StdXprFns
      * (inclusive) and upper (exclusive) from the random number generator's sequence.<br>
      * <br>
      * Note: In MS Excel it is named RAND (not random).
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>rand(1, 10)</code> returns a float between 1.0 and 10.0</li>
+     * </ul>
      *
      * @param lower Lower limit (minimum number to be returned).
      * @param upper Upper limit (maximum number to be returned).
@@ -678,7 +928,7 @@ public final class StdXprFns
      *         (inclusive) and upper (exclusive).
      */
     @SuppressWarnings("unused")
-    private float rand( Object lower, Object upper )
+    protected float rand( Object lower, Object upper )
     {
         float min = UtilType.toFloat( lower );
         float max = UtilType.toFloat( upper );
@@ -688,16 +938,22 @@ public final class StdXprFns
 
     /**
      * Formats a number using Java DecimalFormat class.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>format(1234.567, "#.##")</code> returns <code>"1234.57"</code></li>
+     *    <li><code>format(0.25, "#%")</code> returns <code>"25%"</code></li>
+     * </ul>
      *
-     * @param number
-     * @param pattern
+     * @param num_str The numeric value or the pattern string.
+     * @param format The numeric value or the pattern string.
      * @return The number after being formatted.
      */
     @SuppressWarnings("unused")
-    private String format( Object o1, Object o2 )
+    protected String format( Object num_str, Object format )
     {
-        String        sPattern = String.valueOf(   (o1 instanceof String ? o1 : o2) );
-        Float         nNumber  = UtilType.toFloat( (o1 instanceof Number ? o1 : o2) );
+        String        sPattern = String.valueOf(   (num_str instanceof String ? num_str : format) );
+        Float         nNumber  = UtilType.toFloat( (num_str instanceof Number ? num_str : format) );
         DecimalFormat formater = mapFormats.computeIfAbsent( sPattern, DecimalFormat::new );
 
         synchronized( formater )   // JavaDocs: "Decimal formats are generally not synchronized."
@@ -709,69 +965,166 @@ public final class StdXprFns
     //------------------------------------------------------------------------//
     // STRING RELATED FUNCTIONS
 
+    /**
+     * Returns the length of the string representation of an object.
+     * Equivalent to {@link #len(Object)}.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>size("hello")</code> returns <code>5</code></li>
+     *    <li><code>size(12345)</code> returns <code>5</code></li>
+     * </ul>
+     *
+     * @param string The object to measure.
+     * @return The number of characters.
+     */
     @SuppressWarnings("unused")
-    private int size( Object obj )
+    protected int size( Object string )
     {
-        return obj.toString().length();
+        return string.toString().length();
     }
 
+    /**
+     * Returns the length of the string representation of an object.
+     * Equivalent to {@link #size(Object)}.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>len("hello")</code> returns <code>5</code></li>
+     * </ul>
+     *
+     * @param string The object to measure.
+     * @return The number of characters.
+     */
     @SuppressWarnings("unused")
-    private int len( Object obj )
+    protected int len( Object string )
     {
-        return obj.toString().length();
+        return string.toString().length();
     }
 
+    /**
+     * Removes leading and trailing whitespace from the string representation of an object.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>trim("  hello  ")</code> returns <code>"hello"</code></li>
+     * </ul>
+     *
+     * @param string The object to trim.
+     * @return The trimmed string.
+     */
     @SuppressWarnings("unused")
-    private String trim( Object string )
+    protected String trim( Object string )
     {
         return string.toString().trim();
     }
 
+    /**
+     * Reverses the string representation of an object.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>reverse("abc")</code> returns <code>"cba"</code></li>
+     * </ul>
+     *
+     * @param string The object to reverse.
+     * @return The reversed string.
+     */
     @SuppressWarnings("unused")
-    private String reverse( Object string )
+    protected String reverse( Object string )
     {
         return (new StringBuilder( string.toString() )).reverse().toString();
     }
 
+    /**
+     * Returns a specified number of characters from the left side of a string.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>left("abcdef", 3)</code> returns <code>"abc"</code></li>
+     * </ul>
+     *
+     * @param string The source object.
+     * @param numOfChars  The number of characters to extract.
+     * @return The extracted substring.
+     */
     @SuppressWarnings("unused")
-    private String left( Object string, Object chars )
+    protected String left( Object string, Object numOfChars )
     {
-        return string.toString().substring(0, UtilType.toInteger( chars ) );
+        return string.toString().substring(0, UtilType.toInteger( numOfChars ) );
     }
 
+    /**
+     * Returns a specified number of characters from the right side of a string.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>right("abcdef", 2)</code> returns <code>"ef"</code></li>
+     * </ul>
+     *
+     * @param string The source object.
+     * @param numOfChars  The number of characters to extract.
+     * @return The extracted substring.
+     */
     @SuppressWarnings("unused")
-    private String right( Object string, Object chars )
+    protected String right( Object string, Object numOfChars )
     {
         String s = string.toString();
 
-        return s.substring( s.length() - UtilType.toInteger( chars ) );
+        return s.substring( s.length() - UtilType.toInteger( numOfChars ) );
     }
 
+    /**
+     * Converts the string representation of an object to lowercase.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>lower("HeLLo")</code> returns <code>"hello"</code></li>
+     * </ul>
+     *
+     * @param string The object to convert.
+     * @return The lowercase string.
+     */
     @SuppressWarnings("unused")
-    private String lower( Object obj )
+    protected String lower( Object string )
     {
-        return obj.toString().toLowerCase();
+        return string.toString().toLowerCase();
     }
 
+    /**
+     * Converts the string representation of an object to uppercase.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>upper("hello")</code> returns <code>"HELLO"</code></li>
+     * </ul>
+     *
+     * @param string The object to convert.
+     * @return The uppercase string.
+     */
     @SuppressWarnings("unused")
-    private String upper( Object obj )
+    protected String upper( Object string )
     {
-        return obj.toString().toUpperCase();
+        return string.toString().toUpperCase();
     }
 
+    /**
+     * Capitalizes the first letter of each word in the string representation of an object.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>proper("mr. smith")</code> returns <code>"Mr. Smith"</code></li>
+     * </ul>
+     *
+     * @param string The object to capitalize.
+     * @return The capitalized string.
+     */
     @SuppressWarnings("unused")
-    private String proper( Object obj )       // Excel name for my Capitalize
+    protected String proper( Object string )       // Excel name for my Capitalize
     {
-        return UtilStr.capitalize( obj.toString() );
+        return UtilStr.capitalize( string.toString() );
     }
 
-    @SuppressWarnings("unused")
-    private int search( Object find, Object within )
-    {
-        return search( find, within, 1 );
-    }
-
-    @SuppressWarnings("unused")
     /**
     * Converts the given {@code codePoint} object into a {@link String}
     * representing the Unicode character.
@@ -787,13 +1140,20 @@ public final class StdXprFns
     * For supplementary characters (above {@code U+FFFF}), the resulting string
     * will contain a surrogate pair (length 2).
     * </p>
+    * <p>
+    * Examples:
+    * <ul>
+    *    <li><code>Char(65)</code> returns <code>"A"</code></li>
+    *    <li><code>Char(8364)</code> returns <code>"€"</code></li>
+    * </ul>
     *
     * @param codePoint an {@code Object} representing a numeric Unicode code point;
     *                  must be convertible to {@code int} via {@link UtilType#toInteger(Object)}.
     * @return a {@code String} representing the Unicode character if the code point is valid;
     *         otherwise, an empty {@code String}.
     */
-    private String Char(Object codePoint)
+    @SuppressWarnings("unused")
+    protected String Char( Object codePoint )
     {
         int code = UtilType.toInteger( codePoint );
 
@@ -803,20 +1163,34 @@ public final class StdXprFns
         return new String( Character.toChars( code ) );
     }
 
-    @SuppressWarnings("unused")
     /**
-     * Returns the system-dependent line separator string.<br>
-     * On UNIX systems, it returns "\n"; on Microsoft Windows systems it returns "\r\n".
+     * Performs a case-insensitive search for a substring within a string, starting from the first character.
+     * Supports wildcards: '?' for any single character and '*' for any sequence of characters.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>search("l", "Hello")</code> returns <code>3</code></li>
+     *    <li><code>search("H?l", "Hello")</code> returns <code>1</code></li>
+     *    <li><code>search("e*", "Hello")</code> returns <code>2</code></li>
+     * </ul>
      *
-     * @return the system-dependent line separator string.
+     * @param find   The substring to search for.
+     * @param within The text to search within.
+     * @return The 1-based index of the first occurrence, or 0 if not found.
      */
-    private String newLine()
+    @SuppressWarnings("unused")
+    protected int search( Object find, Object within )
     {
-        return System.lineSeparator();
+        return search( find, within, 1 );
     }
 
     /**
      * SEARCH: case-insensitive search of a substring in a string.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>search("l", "Hello", 4)</code> returns <code>4</code></li>
+     * </ul>
      *
      * @param find   The substring to search for: wildcards ('?' and '*')are allowed.
      * @param within The text to search within.
@@ -824,7 +1198,7 @@ public final class StdXprFns
      * @return The 1-based index of the first occurrence of substring in text, or 0 if not found.
      */
     @SuppressWarnings("unused")
-    private int search( Object find, Object within, Object index )
+    protected int search( Object find, Object within, Object index )
     {
         if( UtilStr.isEmpty( find ) || UtilStr.isEmpty( within ) )
             return 0;
@@ -860,13 +1234,40 @@ public final class StdXprFns
         return 0;
     }
 
+    /**
+     * Replaces occurrences of a substring within a string with another substring.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>substitute("Sales Data", "Sales", "Cost")</code> returns <code>"Cost Data"</code></li>
+     * </ul>
+     *
+     * @param source  The source string.
+     * @param oldText The text to be replaced.
+     * @param newText The replacement text.
+     * @return The resulting string.
+     */
     @SuppressWarnings("unused")
-    private String substitute( Object source, Object oldText, Object newText )     // substitute is the Excel name
+    protected String substitute( Object source, Object oldText, Object newText )     // substitute is the Excel name
     {
         return substitute( source, oldText, newText, -1 );
     }
 
-    private String substitute( Object source, Object oldText, Object newText, Object occurrence )     // substitute is the Excel name
+    /**
+     * Replaces a specific occurrence of a substring within a string with another substring.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>substitute("one, one, one", "one", "two", 2)</code> returns <code>"one, two, one"</code></li>
+     * </ul>
+     *
+     * @param source     The source string.
+     * @param oldText    The text to be replaced.
+     * @param newText    The replacement text.
+     * @param occurrence The 1-based index of the occurrence to replace (if &lt; 1, all occurrences are replaced).
+     * @return The resulting string.
+     */
+    protected String substitute( Object source, Object oldText, Object newText, Object occurrence )     // substitute is the Excel name
     {
         String sInput = source.toString();
         String sRegEx = oldText.toString();
@@ -898,8 +1299,20 @@ public final class StdXprFns
         return output.toString();
     }
 
+    /**
+     * Checks for case-sensitive equality between multiple objects.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>equals("a", "a", "a")</code> returns <code>true</code></li>
+     *    <li><code>equals("a", "A")</code> returns <code>false</code></li>
+     * </ul>
+     *
+     * @param data The objects to compare.
+     * @return {@code true} if all objects are equal, {@code false} otherwise.
+     */
     @SuppressWarnings("unused")
-    private boolean equals( Object... data )     // To check string case-sensitive equality
+    protected boolean equals( Object... data )     // To check string case-sensitive equality
     {
         if( data == null || data.length == 0 )
             return false;                        // If no data is provided, return false
@@ -915,8 +1328,21 @@ public final class StdXprFns
         return true;
     }
 
+    /**
+     * Extracts a substring from the specified position to the end of the string.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>mid("Fluid Flow", 7)</code> returns <code>"Flow"</code></li>
+     *    <li><code>mid("Fluid Flow", " ")</code> returns <code>"Flow"</code> (starts after the space)</li>
+     * </ul>
+     *
+     * @param target The source object.
+     * @param from   The 1-based starting index or a substring to search for.
+     * @return The extracted substring.
+     */
     @SuppressWarnings("unused")
-    private String mid( Object target, Object from )      // Like Excel but this is more flexible
+    protected String mid( Object target, Object from )      // Like Excel but this is more flexible
     {
         return mid( target, from, null );
     }
@@ -925,23 +1351,21 @@ public final class StdXprFns
      * Extracts a given specific number of characters from the middle part of a supplied object
      * (previously the object is transformed into its string representation).
      * <p>
-     * The starting and ending characters can be defined as numbers or as portions of the where itself.<br>
-     * Lets see some examples:
+     * The starting and ending characters can be defined as numbers or as portions of the where itself.
+     * <p>
+     * Examples:
      * <ul>
-     *    <li><code>"En un lugar de la mancha...":mid(7,4)</code> returns <code>"lugar"</code></li>
-     *    <li><code>"En un lugar de la mancha...":mid(12)</code> returns <code>"de la mancha..."</code></li>
-     *    <li><code>"A horse, my kingdom for a horse":mid("my "," for")</code> returns <code>"kingdom"</code></li>
-     *    <li><code>"A horse, my kingdom for a horse":mid("my ",4)</code> returns <code>"king"</code></li>
-     *    <li><code>"A une passante":mid(0,99)</code> returns <code>""</code></li>
+     *    <li><code>mid("En un lugar de la mancha...", 7, 4)</code> returns <code>"lugar"</code></li>
+     *    <li><code>mid("A horse, my kingdom for a horse", "my ", " for")</code> returns <code>"kingdom"</code></li>
      * </ul>
      * If the start and end points are out of bounds, then an empty string is returned.
      *
-     * @param where Any object that internally will be converted into String.
-     * @param start Either a number (1 based) or a String
-     * @param end Either a number (chars to extract) or a String (if omit, to the end of the target)
+     * @param where Any object: internally it will be converted into a string.
+     * @param start Either a number (1 based) or a string.
+     * @param end Either a number (chars to extract) or a string (if omitted, to the end).
      * @return The portion of 'where' defined by 'from' and 'to'.
      */
-    private String mid( Object where, Object start, Object end )
+    protected String mid( Object where, Object start, Object end )
     {
         String S = where.toString();
         String s = null;                 // s == S in lower case
@@ -995,6 +1419,23 @@ public final class StdXprFns
         return "";
     }
 
+    /**
+     * Returns the system-dependent line separator string.<br>
+     * On UNIX systems, it returns "\n"; on Microsoft Windows systems it returns "\r\n".
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>"Hello" + newLine() + "World"</code></li>
+     * </ul>
+     *
+     * @return the system-dependent line separator string.
+     */
+    @SuppressWarnings("unused")
+    protected String newLine()
+    {
+        return System.lineSeparator();
+    }
+
     //------------------------------------------------------------------------//
     // MISCELLANEOUS FUNCTIONS
 
@@ -1005,9 +1446,16 @@ public final class StdXprFns
      * granularity of the value depends on the underlying operating system and may
      * be larger. For example, many operating systems measure time in units of tens
      * of milliseconds.
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>utc()</code> returns something like <code>1698412345678</code></li>
+     * </ul>
+     *
+     * @return Current time in milliseconds.
      */
     @SuppressWarnings("unused")
-    private long utc()
+    protected long utc()
     {
         return System.currentTimeMillis();
     }
@@ -1015,18 +1463,25 @@ public final class StdXprFns
     /**
      * Returns true if:
      * <ul>
-     *    <li>Received parameter is of type string and ii is empty or contains only blank spaces.</li>
+     *    <li>Received parameter is of type string and it is empty or contains only blank spaces.</li>
      *    <li>Received parameter is of type 'list' and it's ::isEmpty() returns true.</li>
      *    <li>Received parameter is of type 'pair' and it's ::isEmpty() returns true.</li>
      * </ul>
      * Returns false in any other case.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>isEmpty("")</code> returns <code>true</code></li>
+     *    <li><code>isEmpty("   ")</code> returns <code>true</code></li>
+     *    <li><code>isEmpty(list())</code> returns <code>true</code></li>
+     *    <li><code>isEmpty(0)</code> returns <code>false</code></li>
+     * </ul>
      *
      * @param obj Object to check
      * @return true or false as described.
-     * @throws
      */
     @SuppressWarnings("unused")
-    private boolean isEmpty( Object obj )
+    protected boolean isEmpty( Object obj )
     {
         if( obj instanceof String )
             return obj.toString().trim().isEmpty();
@@ -1061,11 +1516,20 @@ public final class StdXprFns
      *    <li>"B" if received parameter is of type boolean or a boolean inside a string. </li>
      *    <li>"S" in any other case. </li>
      * </ul>
-     * @param obj
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>type(123)</code> returns <code>"N"</code></li>
+     *    <li><code>type("123")</code> returns <code>"N"</code></li>
+     *    <li><code>type(true)</code> returns <code>"B"</code></li>
+     *    <li><code>type("Hello")</code> returns <code>"S"</code></li>
+     * </ul>
+     *
+     * @param obj The object to check.
      * @return "N" or "B" or "S"
      */
     @SuppressWarnings("unused")
-    private String type( Object obj )
+    protected String type( Object obj )
     {
         if( obj instanceof Number )
             return "N";
@@ -1095,19 +1559,21 @@ public final class StdXprFns
     /**
      * A function that works like the ternary operator "? :"<br>
      * <br>
-     * IIF( window, "closed", "open" )    // device window is of type boolean
-     * IIF( celsius ABOVE 25, "hot", IIF( celsius BELOW 17, "cold", "nice" ) )<br>
+     * Examples:
+     * <ul>
+     *    <li><code>iif(true, "Yes", "No")</code> returns <code>"Yes"</code></li>
+     *    <li><code>iif(window, "Closed", "Open")</code> (if window is boolean)</li>
+     * </ul>
      * <br>
      * NOTE: IF is a reserved Une word.
      *
-     * @param oXprResult Expression result
-     * @param onTrue
-     * @param onFalse
-     * @param mapVars
+     * @param oXprResult Expression result.
+     * @param onTrue     Value to return if true.
+     * @param onFalse    Value to return if false.
      * @return 'onTrue' if 'oXpreRes' is TRUE, 'onFalse' in any other case.
      */
     @SuppressWarnings("unused")
-    private Object iif( Object oXprResult, Object onTrue, Object onFalse )
+    protected Object iif( Object oXprResult, Object onTrue, Object onFalse )
     {
         if( oXprResult instanceof Boolean )                                              // This is what will happen 99% of times, so first
             return ((Boolean) oXprResult) ? onTrue : onFalse;
@@ -1123,31 +1589,43 @@ public final class StdXprFns
     }
 
     /**
-     * Returns a <code>pair</code> with 1 pair:
+     * Returns a <code>pair</code> with 2 entries:
      * <ul>
      *    <li>"name" : the name of the device.
      *    <li>"value": the value of the device.
      * </ul>
      *
-     * Both corresponds with the last device that was changed and therefore the cause of current
+     * Both correspond with the last device that was changed and therefore the cause of current
      * evaluation of the rule.
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>getTriggeredBy().get("name")</code> returns the name of the triggering device.</li>
+     * </ul>
      *
-     * @return A <code>pair</code> with 2 pairs: name and "value".
+     * @return A <code>pair</code> with 2 entries: "name" and "value".
      */
     @SuppressWarnings("unused")
-    private pair getTriggeredBy()    // This method is needed here so it can be invoked from an expession
-    {
-        return pairTriggered;
+    protected pair getTriggeredBy()    // This method is needed here so it can be invoked from an expession
+    {                                  // (although it is not commonly used).
+        if( threadTriggered.get().isEmpty() )
+            threadTriggered.get().put( "name", "" ).put( "value", "" );
+
+        return threadTriggered.get();
     }
 
     /**
-     * Finish ExEn execution.<br>
-     * Returned value is useless.
+     * Requests to the ExEn to terminate the execution.
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>exit()</code> - Stops the application.</li>
+     * </ul>
      *
-     * @return ""
+     * @return Nothing.
      */
     @SuppressWarnings("unused")
-    private Object exit()
+    protected Object exit()
     {
         System.exit( 0 );    // The Runtime.getRuntime().addShutdownHook( ... ) will be invoked
         return "";
@@ -1165,11 +1643,19 @@ public final class StdXprFns
      * should take. If the operation times out before getting an answer, the host is deemed
      * unreachable. A negative value will be converted into positive (abs).<br>
      * If an internal error occurs, <code>false</code> is returned.
-     * @param host
-     * @param timeout In millis.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>isReachable("google.com", 1000)</code></li>
+     *    <li><code>isReachable("192.168.1.1", 500)</code></li>
+     * </ul>
+     *
+     * @param host    The host to test.
+     * @param timeout Timeout in milliseconds.
+     * @return {@code true} if reachable, {@code false} otherwise.
      */
     @SuppressWarnings("unused")
-    private boolean isReachable( Object host, Object timeout )
+    protected boolean isReachable( Object host, Object timeout )
     {
         try
         {
@@ -1184,8 +1670,18 @@ public final class StdXprFns
         }
     }
 
+    /**
+     * Returns a list of all local non-loopback IP addresses.
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>localIPs()</code> returns <code>["192.168.1.50"]</code></li>
+     * </ul>
+     *
+     * @return A {@link list} of IP address strings.
+     */
     @SuppressWarnings("unused")
-    private list localIPs()
+    protected list localIPs()
     {
         list ips = new list();
 
@@ -1219,8 +1715,20 @@ public final class StdXprFns
     //------------------------------------------------------------------------//
     // Global Variables Map
 
+    /**
+     * Stores a value in the global variables map.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>put("myVar", 100)</code> stores 100 in "myVar"</li>
+     * </ul>
+     *
+     * @param key   The variable name (case-insensitive).
+     * @param value The value to store.
+     * @return {@code true} if the operation was successful.
+     */
     @SuppressWarnings("unused")
-    private boolean put( Object key, Object value )
+    protected boolean put( Object key, Object value )
     {
         if( key instanceof String )
             key = key.toString().toLowerCase();
@@ -1228,14 +1736,37 @@ public final class StdXprFns
         return UtilSys.put( key, value );
     }
 
+    /**
+     * Retrieves a value from the global variables map. Returns an empty string if not found.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>get("myVar")</code> returns <code>100</code> (if previously set)</li>
+     * </ul>
+     *
+     * @param key The variable name (case-insensitive).
+     * @return The stored value, or an empty string if not found.
+     */
     @SuppressWarnings("unused")
-    private Object get( Object key )
+    protected Object get( Object key )
     {
         return get( key, "" );
     }
 
+    /**
+     * Retrieves a value from the global variables map, with a default value if not found.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>get("missingVar", 0)</code> returns <code>0</code></li>
+     * </ul>
+     *
+     * @param key The variable name (case-insensitive).
+     * @param def The default value to return if the key is not found.
+     * @return The stored value, or the default value.
+     */
     @SuppressWarnings("unused")
-    private Object get( Object key, Object def )
+    protected Object get( Object key, Object def )
     {
         if( key instanceof String )
             key = key.toString().toLowerCase();
@@ -1243,13 +1774,32 @@ public final class StdXprFns
         return UtilSys.get( key, def );
     }
 
+    /**
+     * Deletes a value from the global variables map.
+     * <p>
+     * Examples:
+     * <ul>
+     *    <li><code>del("myVar")</code> removes "myVar" from the map</li>
+     * </ul>
+     *
+     * @param key The variable name (case-insensitive).
+     * @return {@code true} if the key was removed.
+     */
     @SuppressWarnings("unused")
-    private boolean del( Object key )
+    protected boolean del( Object key )
     {
         if( key instanceof String )
             key = key.toString().toLowerCase();
 
         return UtilSys.del( key );
+    }
+
+    //------------------------------------------------------------------------//
+    // PRIVATE CONSTRUCTOR
+
+    private StdXprFns()
+    {
+        // To avoid instances creation
     }
 
     //------------------------------------------------------------------------//
@@ -1263,16 +1813,23 @@ public final class StdXprFns
         if( clazz != null )
             sFn = clazz.getSimpleName() +':'+ sFn;
 
-        StringBuilder sb = new StringBuilder( sFn +'(' );
+        // Pre-size StringBuilder: function name + parentheses + estimated arg size
+        int estimatedSize = sFn.length() + 2 + (aoArgs.length * 12);
+        StringBuilder sb = new StringBuilder( estimatedSize );
+        sb.append( sFn ).append( '(' );
 
         for( Object obj : aoArgs )
         {
             if( obj instanceof Number )
             {
-                Float floa = ((Number) obj).floatValue();
-                int   inte = floa.intValue();
+                // Format numbers nicely: use integer format if no decimal part
+                float floatVal = ((Number) obj).floatValue();
+                int   intVal   = (int) floatVal;
 
-                obj = ((floa - inte) <= 0.00001) ? inte : floa;
+                if( Math.abs( floatVal - intVal ) <= 0.00001f )
+                    sb.append( intVal );
+                else
+                    sb.append( floatVal );
             }
             else if( obj instanceof String )
             {

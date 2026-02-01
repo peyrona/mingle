@@ -148,7 +148,7 @@ public class UtilUI
     public static boolean confirm( String prompt )
     {
         String input = readInput( prompt + " [y/N]: " );
-        return input.equals( "y" );
+        return input.equalsIgnoreCase( "y" );
     }
 
     public static void pause()

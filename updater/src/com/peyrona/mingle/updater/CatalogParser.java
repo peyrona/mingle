@@ -1,3 +1,4 @@
+
 package com.peyrona.mingle.updater;
 
 import com.eclipsesource.json.Json;
@@ -31,9 +32,9 @@ public final class CatalogParser
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Catalog content is null or empty" );
             return new ArrayList<>();
         }
-        
+
         List<CatalogFileEntry> entries = new ArrayList<>();
-        
+
         try
         {
             JsonObject catalog = Json.parse(catalogContent).asObject();
@@ -44,7 +45,7 @@ public final class CatalogParser
                 String path = fileObject.getString("path", null);
                 String hash = fileObject.getString("hash", null);
 
-                if( path != null && ! path.trim().isEmpty() && 
+                if( path != null && ! path.trim().isEmpty() &&
                     hash != null && ! hash.trim().isEmpty() )
                 {
                     CatalogFileEntry entry = new CatalogFileEntry();
@@ -63,11 +64,11 @@ public final class CatalogParser
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error parsing catalog JSON" );
             return new ArrayList<>();
         }
-        
+
         UtilSys.getLogger().log( ILogger.Level.INFO, "Parsed " + entries.size() + " file entries from catalog.json" );
         return entries;
     }
-    
+
     /**
      * Extracts version from catalog.json content.
      *
@@ -80,7 +81,7 @@ public final class CatalogParser
         {
             return null;
         }
-        
+
         try
         {
             JsonObject catalog = Json.parse(catalogContent).asObject();
@@ -91,14 +92,14 @@ public final class CatalogParser
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error parsing version from catalog" );
         }
-        
+
         return null;
     }
-    
+
     //------------------------------------------------------------------------//
     // INNER CLASS
     //------------------------------------------------------------------------//
-    
+
     /**
      * Represents a file entry from catalog.json.
      */

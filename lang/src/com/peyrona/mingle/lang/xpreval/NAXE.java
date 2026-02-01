@@ -67,6 +67,8 @@ public final class NAXE implements IXprEval
     @Override
     public IXprEval build( String sXprInfix, Consumer<Object> onSolved, Function<String,String[]> fnGroupWise )
     {
+        Objects.requireNonNull( sXprInfix, "Expression can not be null" );
+
         this.sOriginal   = sXprInfix;
         this.fnGroupWise = fnGroupWise;
 
@@ -105,13 +107,19 @@ public final class NAXE implements IXprEval
     @Override
     public boolean set( String varName, Object varValue )
     {
-        return evaluator.set( varName, varValue );    // NullPointerException can be thrown: this is intended
+        if( evaluator == null )
+            throw new MingleException( "Cannot set variable: expression has errors. Check getErrors() before calling set()." );
+
+        return evaluator.set( varName, varValue );
     }
 
     @Override
     public Object eval( String varName, Object varValue )
     {
-        return evaluator.set( varName, varValue ) ? eval() : null;    // NullPointerException can be thrown: this is intended
+        if( evaluator == null )
+            throw new MingleException( "Cannot evaluate: expression has errors. Check getErrors() before calling eval()." );
+
+        return evaluator.set( varName, varValue ) ? eval() : null;
     }
 
     @Override
@@ -124,8 +132,8 @@ public final class NAXE implements IXprEval
         catch( Exception exc )          // Only happens when improper use of this class
         {
             if( UtilColls.isNotEmpty( lstErrors ) )
-                throw new MingleException( "Expression:"+ sOriginal +
-                                           "\n has errors. Check '::getErrors()' prior to evalute" );    // This Exception is intended
+                throw new MingleException( "Expression: "+ sOriginal +
+                                           "\n has errors. Check getErrors() prior to evaluate" );
 
             if( evaluator == null )
                 return null;
@@ -137,6 +145,9 @@ public final class NAXE implements IXprEval
     @Override
     public Map<String,Object> getVars()
     {
+        if( evaluator == null )
+            throw new MingleException( "Cannot get variables: expression has errors. Check getErrors() before calling getVars()." );
+
         return evaluator.getVars();    // This is already unmodifiable
     }
 
@@ -150,13 +161,30 @@ public final class NAXE implements IXprEval
     @Override
     public boolean isBoolean()
     {
-        return evaluator.isBoolean();      // NullPointerException can be thrown: this is intended
+        if( evaluator == null )
+            throw new MingleException( "Cannot check boolean type: expression has errors. Check getErrors() before calling isBoolean()." );
+
+        return evaluator.isBoolean();
     }
 
     @Override
+    public boolean isFuturing()
+    {
+        if( evaluator == null )
+            throw new MingleException( "Cannot check future state: expression has errors. Check getErrors() before calling isFuturing()." );
+
+        return evaluator.isFutureing();
+    }
+
+    /**
+     * @deprecated Use {@link #isFuturing()} instead. This method name has a typo.
+     * @return true if the expression is currently evaluating futures.
+     */
+    @Deprecated
+    @Override
     public boolean isFutureing()
     {
-        return evaluator.isFutureing();    // NullPointerException can be thrown: this is intended
+        return isFuturing();
     }
 
     @Override

@@ -282,6 +282,32 @@ public final class Dispatcher<T>
         return queue.size();
     }
 
+    /**
+     * Blocks until all pending messages are processed (queue becomes empty).
+     * <p>
+     * This method is useful for graceful shutdown scenarios where you want to
+     * ensure all queued messages are delivered before stopping the dispatcher.
+     *
+     * @return this Dispatcher instance for method chaining.
+     */
+    public Dispatcher<T> flush()
+    {
+        while( (! queue.isEmpty()) || isProcessing )
+        {
+            try
+            {
+                Thread.sleep( 10 );    // Small sleep to avoid busy-waiting
+            }
+            catch( InterruptedException e )
+            {
+                Thread.currentThread().interrupt();
+                break;
+            }
+        }
+
+        return this;
+    }
+
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 

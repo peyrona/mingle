@@ -99,7 +99,7 @@ public final class      Rule
                                                             logVarChanged();
                                                     };
 
-            xprIf = getRuntime().newXprEval().build( sIf, onSolved, rt.newGroupWiseFn() );
+            xprIf = getRuntime().newXprEval().build( sIf, onSolved, rt::getGroupMemberNames );
         }
 
         Consumer<Object> onSolved = (result) -> {
@@ -115,7 +115,7 @@ public final class      Rule
 
         synchronized( this )
         {
-            when = getRuntime().newXprEval().build( sWhen, onSolved, rt.newGroupWiseFn() );
+            when = getRuntime().newXprEval().build( sWhen, onSolved, rt::getGroupMemberNames );
             when = checkXprEval( when , "WHEN" );
             _if_ = checkXprEval( xprIf, "IF"   );
 

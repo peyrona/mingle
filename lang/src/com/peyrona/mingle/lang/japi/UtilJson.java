@@ -4,9 +4,11 @@ package com.peyrona.mingle.lang.japi;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonObject.Member;
 import com.eclipsesource.json.JsonValue;
 import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
+import static com.peyrona.mingle.lang.japi.UtilStr.isEmpty;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 
@@ -37,15 +39,13 @@ public final class UtilJson
 
         try
         {
-            return Json.parse( sJSON );
+            return Json.parse( removeComments( sJSON ) );
         }
         catch( ParseException pe )
         {
             throw new MingleException( pe );
         }
     }
-
-    //------------------------------------------------------------------------//
 
     /**
      * Converts JSON string to Une data type.
@@ -108,6 +108,61 @@ public final class UtilJson
             ja.add( s );
 
         return ja;
+    }
+
+    /**
+     * Merges two JsonValue objects into a new JsonValue.
+     * <p>
+     * This method performs a shallow merge of two {@link JsonObject} instances.
+     * The resulting object will contain the union of keys from both input objects.
+     * </p>
+     * <p>
+     * <strong>Conflict Resolution:</strong>
+     * As per the requirement, for keys present in both parameters, the values from
+     * <code>js1</code> take precedence and will overwrite the values from <code>js2</code>.
+     * </p>
+     * <p>
+     * <strong>Behavior for Non-Object Types:</strong>
+     * If either provided value is not a {@link JsonObject} (e.g., it is a JsonArray,
+     * JsonString, or null), the method assumes <code>js1</code> is the intended
+     * result (conceptually treating the merge as an overwrite) and returns <code>js1</code>.
+     *
+     * @param js1 The primary JsonValue. Its values take precedence in case of key conflicts.
+     * @param js2 The secondary JsonValue. Its values are used for keys not present in js1.
+     * @return A new JsonValue containing the merged key-value pairs.
+     */
+    public static JsonValue merge( JsonValue js1, JsonValue js2 )
+    {
+        if( js1 == null )
+            return js2;
+
+        if( js2 == null )
+            return js1;
+
+        if( ! js1.isObject() || ! js2.isObject() )
+            return js1;
+
+        // Cast to JsonObject to access members
+
+        JsonObject object1 = js1.asObject();
+        JsonObject object2 = js2.asObject();
+
+        // Create a new result object to ensure immutability of inputs
+
+        JsonObject mergedResult = new JsonObject();
+
+        // Add all entries from js2 (the "base") first.
+
+        for( Member member : object2 )
+            mergedResult.set( member.getName(), member.getValue() );
+
+        // Add all entries from js1 (the "priority").
+        // We use set(), which will overwrite any existing keys added from js2.
+
+        for( Member member : object1 )
+            mergedResult.set( member.getName(), member.getValue() );
+
+        return mergedResult;
     }
 
     //------------------------------------------------------------------------//
@@ -421,7 +476,54 @@ public final class UtilJson
     }
 
     //------------------------------------------------------------------------//
-    // AUN FUNCS FOR ::toUneType
+    // AUXILIARY
+
+    /**
+     * Removes Une-style comments from received string.
+     * <p>
+     * A newline character is appended to the output buffer when a comment ends.
+     * This preserves the line count of the original JSON string.
+     * </p>
+     * <p>
+     * NOTE: this method is here instead of being in UtilStr class to force to use
+     * this class when parsing JSON contents.
+     * </p>
+     *
+     * @param input To use
+     * @return The input after comments being removed.
+     */
+    private static String removeComments( String input )
+    {
+        if( isEmpty( input ) )
+            return "";
+
+        StringBuilder output    = new StringBuilder();
+        boolean       inComment = false;
+
+        for( int n = 0; n < input.length(); n++ )
+        {
+            char c = input.charAt( n );
+
+            if( inComment )
+            {
+                if( c == '\n' )
+                {
+                    inComment = false;
+                    output.append( c );
+                }
+            }
+            else
+            {
+                if( c == '#' ) inComment = true;
+                else           output.append( c );
+            }
+        }
+
+        return output.toString();
+    }
+
+    //------------------------------------------------------------------------//
+    // FUNCS FOR ::toUneType
     //------------------------------------------------------------------------//
 
     private static Object convertJsonValue( JsonValue jv )

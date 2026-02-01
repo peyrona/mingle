@@ -170,14 +170,6 @@ public final class UneMultiEditorPanel extends JPanel
 
                                     parent.setSize( 1024, (int) (Toolkit.getDefaultToolkit().getScreenSize().height * 0.9) );
 
-                                    parent.addWindowListener( new WindowAdapter()
-                                                                {
-                                                                    @Override
-                                                                    public void windowClosing( WindowEvent we )
-                                                                    {
-                                                                        UneMultiEditorPanel.this.closeAll( we.getWindow() );
-                                                                    }
-                                                                } );
                                     restoreOpenedFiles();
                                     JTools.hideWaitFrame();
 
@@ -189,7 +181,7 @@ public final class UneMultiEditorPanel extends JPanel
         SwingUtilities.invokeLater( () ->
                                     {
                                         autoSaveStateChanged();
-                                        toolBar.chk4Grid.setSelected( UtilSys.getConfig().getGridNodes() != null );
+                                        toolBar.chk4Grid.setSelected( UtilSys.getConfig().get( null, "grid", false ) );
                                         toolBar.chkFaked.setSelected( UtilSys.getConfig().get( "exen", "faked_drivers", false ) );
                                         toolBar.setLogLevel( UtilSys.getLogger().getLevel() );
                                         toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
@@ -497,18 +489,15 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
     }
 
-    private void closeAll( final Window window )
+    public void closeAll( final Window window )
     {
         saveOpenedFilesList();
         cleanup();
 
-        SwingUtilities.invokeLater( () ->
-                                    {
-                                        while( tabbedPane.getTabCount() > 0 )
-                                            close( 0 );
+        while( tabbedPane.getTabCount() > 0 )
+            close( 0 );
 
-                                        window.dispose();
-                                    } );
+        window.dispose();
     }
 
     /**

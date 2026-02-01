@@ -38,6 +38,8 @@ public final class      Script
     private final String     langName;          // Language name
     private final boolean    isOnStart;         // AutoExecute at start
     private final boolean    isOnStop;          // AutoExecute at stop
+    private final boolean    isPreStart;        // AutoExecute in PRE ONSTART phase (before entities are created)
+    private final boolean    isPreStop;         // AutoExecute in PRE ONSTOP phase (while entities still work)
     private final boolean    isInline;          // This inf. is not part of the language, it is provided by the transpiler (True when Une source code FROM clause contents (SCRIPT command) is in between brackets ({...}))
     private final String     call;              // Function or method to call (invoke) inside FROM (can be null for some languages (not for Java))
     private final String[]   asFrom;            // URI(s) or Code
@@ -47,16 +49,20 @@ public final class      Script
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
 
-    Script( String name, String language, boolean onStart, boolean onStop, boolean inline, String[] from, String call )
+    Script( String name, String language,
+            boolean onStart, boolean onStop, boolean preStart, boolean preStop,
+            boolean inline, String[] from, String call )
     {
         super( name );
 
-        this.langName  = language;    // Needed because ::unbuild() uses it
-        this.isOnStart = onStart;
-        this.isOnStop  = onStop;
-        this.isInline  = inline;
-        this.asFrom    = from;        // Needed because ::unbuild() uses it
-        this.call      = call;        // Case must be preserved. But can be null
+        this.langName   = language;    // Needed because ::unbuild() uses it
+        this.isOnStart  = onStart;
+        this.isOnStop   = onStop;
+        this.isPreStart = preStart;
+        this.isPreStop  = preStop;
+        this.isInline   = inline;
+        this.asFrom     = from;        // Needed because ::unbuild() uses it
+        this.call       = call;        // Case must be preserved. But can be null
     }
 
     //------------------------------------------------------------------------//
@@ -71,6 +77,18 @@ public final class      Script
     public boolean isOnStop()
     {
         return isOnStop;
+    }
+
+    @Override
+    public boolean isPreStart()
+    {
+        return isPreStart;
+    }
+
+    @Override
+    public boolean isPreStop()
+    {
+        return isPreStop;
     }
 
     @Override
@@ -106,7 +124,6 @@ public final class      Script
 //        return new String[] { sCode };
     }
 
-
     @Override
     public void start( IRuntime runtime )
     {
@@ -120,8 +137,11 @@ public final class      Script
         // SCRIPTs must be executed by posting a message into the bus because (among other reasons) this is the way it
         // will not be executed until ExEn is fully functional (functional == everything is in memory and initilized).
         // Stick (which is a higher level entity and has a broader vision) is responsible for invoking ::execute()
+        //
+        // Note: PRE ONSTART scripts are NOT posted to the bus. They are executed directly by Stick before entities
+        // are created, so they cannot use the EventBus mechanism. Stick handles their execution synchronously.
 
-        if( isOnStart && canExecute() )
+        if( isOnStart && ! isPreStart )
             getRuntime().bus().post( new MsgExecute( name(), false ) );
     }
 

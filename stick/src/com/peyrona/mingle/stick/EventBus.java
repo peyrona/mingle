@@ -136,6 +136,13 @@ public class EventBus implements IEventBus
     }
 
     @Override
+    public IEventBus flush()
+    {
+        dispatcher.flush();
+        return this;
+    }
+
+    @Override
     public IEventBus stop()
     {
         dispatcher.stop();

@@ -258,9 +258,7 @@ public final class JTools
     {
         // If received string is long and does not contains '\n', then, split it manually
         if( msg.indexOf( '\n' ) == -1 )
-        {
             msg = String.join( "\n", UtilStr.splitByLength( msg, 80, "null" ) );
-        }
 
         JOptionPane.showMessageDialog( origin,
                                        msg,

@@ -1,12 +1,13 @@
 
 package com.peyrona.mingle.lang.interfaces;
 
-import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.japi.GridNode;
 import java.io.IOException;
-import java.util.List;
 
 /**
+ *
+ * <p>
+ * This interface does not have a set(...) method because this would be a critical security vulnerability.
+ * </p>
  *
  * @author francisco
  */
@@ -19,7 +20,14 @@ public interface IConfig
      * @return Itself.
      * @throws IOException If an I/O error occurs while loading the configuration.
      */
-    IConfig load(String sUri) throws IOException;
+    IConfig load( String sUri ) throws IOException;
+
+    /**
+     * Returns true if a module named as passed parameter exist, false otherwise.
+     * @param name Module name to check.
+     * @return true if a module named as passed parameter exist, false otherwise.
+     */
+    boolean isModule( String name );
 
     /**
      * Returns the Java value for 'varName' (case is ignored), or 'defValue' if 'varName' was not found.<br>
@@ -39,21 +47,7 @@ public interface IConfig
      * @param defValue To be returned if the variable does not exist or null if 'varName' is an empty string or null.
      * @return The value (an Une valid data value) for passed variable name (case is ignored), or null if not such variable.
      */
-    <T> T get(String module, String varName, T defValue);
-
-    /**
-     * Replaces an existing value for an existing variable in an existing module by a new value.<br>
-     * If the variable does not exists, it will be appended to the module.<br>
-     * If new value is a string, it must be enclosed by double quotes ("").<br>
-     * If the module does not exists, an exception is thrown.
-     *
-     * @param module
-     * @param varName
-     * @param  newValue
-     * @return Itself.
-     * @throws MingleException
-     */
-    IConfig set(String module, String varName, Object newValue) throws MingleException;
+    <T> T get( String module, String varName, T defValue );
 
     /**
      * Add received Command Line arguments to config, so config will also use these arguments to look into.
@@ -104,30 +98,4 @@ public interface IConfig
      * @return The configuration encoded as a JSON string.
      */
     String toStrJSON();
-
-    //------------------------------------------------------------------------//
-    // GRID RELATED METHODS
-
-    /**
-     * Returns the number of nodes in the section "grid" or null if the section does
-     * not exists or if the section is empty.
-     *
-     * @return the number of nodes in the section "grid" or null if the section does
-     *         not exists or if the section is empty.
-     */
-    List<GridNode> getGridNodes();
-
-    /**
-     * Checks if the grid is in "deaf" mode, meaning it won't send or receive messages from other grid nodes.
-     *
-     * @return {@code true} if the grid is deaf, {@code false} otherwise.
-     */
-    boolean isGridDeaf();
-
-    /**
-     * Returns the reconnection interval for grid nodes in seconds.
-     *
-     * @return The number of seconds to wait between reconnection attempts to grid nodes.
-     */
-    int getGridReconectInterval();
 }

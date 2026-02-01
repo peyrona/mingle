@@ -237,7 +237,10 @@ public abstract class   BaseServer4IP
     @Override
     public String toString()
     {
-        return getClass().getSimpleName() +" at "+ sHost +":"+ nPort +", Timeout="+ nTimeout +", Allow="+ allow2Str();
+        String host = (sHost == null) ? "localhost" : sHost;
+        String port = (nPort <= 0)    ? "<default>" : String.valueOf( nPort );
+
+        return getClass().getSimpleName() +" at: "+ host +":"+ port +", Timeout="+ nTimeout +", Allow="+ allow2Str();
     }
 
     //------------------------------------------------------------------------//

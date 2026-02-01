@@ -66,18 +66,32 @@ public abstract class ExtraTypeCollection<T>
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Adds a property change listener to this collection.
+     * <p>
+     * The listener will be notified when collection elements are added, removed, or modified.
+     *
+     * @param pcl The property change listener to add.
+     */
     public void addPropertyChangeListener( PropertyChangeListener pcl )
     {
-        if( support == null )
+        // Thread-safe lazy initialization using double-check locking with volatile field
+        PropertyChangeSupport localSupport = support;  // Read volatile once
+
+        if( localSupport == null )
         {
             synchronized( this )
             {
-                if( support == null )
-                    support = new PropertyChangeSupport( this );
+                localSupport = support;  // Read again inside synchronized block
+                if( localSupport == null )
+                {
+                    localSupport = new PropertyChangeSupport( this );
+                    support = localSupport;  // Write to volatile field
+                }
             }
         }
 
-        support.addPropertyChangeListener( pcl );
+        localSupport.addPropertyChangeListener( pcl );
     }
 
     public void removePropertyChangeListener( PropertyChangeListener pcl )

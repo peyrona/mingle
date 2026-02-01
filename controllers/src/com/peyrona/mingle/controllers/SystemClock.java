@@ -5,7 +5,9 @@ import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This Controller periodically informs about the time elapsed since ExEn started.
@@ -21,7 +23,7 @@ public final class   SystemClock
 {
     private static final String KEY = "interval";
 
-    private ScheduledFuture timer = null;
+    private volatile ScheduledExecutorService timer = null;
 
     //------------------------------------------------------------------------//
 
@@ -30,10 +32,12 @@ public final class   SystemClock
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );
 
-        int interval = ((Number) deviceInit.getOrDefault( KEY, 1000f )).intValue();
+        Object oInterval = get( KEY );
+        long   interval  = (oInterval != null) ? ((Number) oInterval).longValue() : 1000L;
 
-        setBetween( KEY, 10, interval, Integer.MAX_VALUE );
+        setBetween( KEY, 10L, interval, Long.MAX_VALUE );
 
         setValid( true );
     }
@@ -53,28 +57,31 @@ public final class   SystemClock
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
-        super.start( rt );
+        long interval = ((Number) get( KEY )).longValue();
 
-        synchronized( this )
-        {
-            timer = UtilSys.executeAtRate( getClass().getName(),
-                                           getLong( KEY ),     // 'interval' must also be the initial delay
-                                           getLong( KEY ),
-                                           () -> read() );
-        }
+        timer = Executors.newSingleThreadScheduledExecutor( r ->
+                            {
+                                Thread t = new Thread( r, getClass().getName() + interval +"ms" );
+                                t.setDaemon( true );
+                                return t;
+                            } );
+
+        timer.scheduleAtFixedRate( this::read, interval, interval, TimeUnit.MILLISECONDS );
+
+        return isValid();
     }
 
     @Override
-    public synchronized void stop()
+    public void stop()
     {
         if( timer != null )
         {
-            timer.cancel( true );
+            timer.shutdownNow();
             timer = null;
         }
 

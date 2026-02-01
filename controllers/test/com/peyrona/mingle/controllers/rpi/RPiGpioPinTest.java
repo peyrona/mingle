@@ -374,7 +374,7 @@ public class RPiGpioPinTest
         // Implement other IRuntime methods with defaults or no-op
 
         @Override public com.peyrona.mingle.lang.interfaces.exen.IEventBus bus()  { return null; }
-        @Override public java.util.function.Function<String,String[]> newGroupWiseFn() { return (s) -> new String[0]; }
+        @Override public String[] getGroupMemberNames( String group ) { return new String[0]; }
         @Override public com.peyrona.mingle.lang.interfaces.IXprEval newXprEval() { return null; }
         @Override public com.peyrona.mingle.lang.interfaces.ICandi.IBuilder newLanguageBuilder() { return null; }
         @Override public boolean isGridNode() { return false; }

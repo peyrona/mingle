@@ -1,6 +1,7 @@
 package com.peyrona.mingle.menu;
 
 import com.peyrona.mingle.menu.util.UtilUI;
+import com.peyrona.mingle.updater.Updater;
 import java.awt.GraphicsEnvironment;
 import java.util.Arrays;
 import java.util.List;
@@ -20,6 +21,8 @@ public final class Main
 
     public static void main( String[] args )
     {
+        checkForUpdates();
+
         final Menu menu = new Menu();
 
         if( args != null && args.length > 0 )
@@ -45,7 +48,7 @@ public final class Main
             }
             else    // GUI mode with no args: directly launch Glue
             {
-                if( UtilUI.confirm( "No parameter received.\nDo you want to launch 'Glue'?" ) )
+                if( UtilUI.confirm( "No parameter received. Do you want to launch 'Glue'?" ) )
                 {
                     menu.run( "g" );
                     isInteractive = false;
@@ -65,14 +68,16 @@ public final class Main
 
     //------------------------------------------------------------------------//
 
-//    private static void checkPermissions()
-//    {
-//        if( )
-//
-//        if(  )
-//
-//        boolean isFileOwnerAdmin = false;
-//
-//        if( ! UtilSys.isAdmin() )
-//    }
+    private static void checkForUpdates()
+    {
+        Updater.updateIfNeeded( false,
+                                () ->
+                                {   // This callback is invoked only if a newer version exists
+                                    System.out.println( "\nA newer version of Mingle is available." );
+                                    System.out.println( "\nNew versions will take effect the next time each tool is launched.\n" );
+                                    System.out.println( "\nNote that the update would run in background." );
+
+                                    return UtilUI.confirm( "Do you want to update now?" );
+                                } );
+    }
 }

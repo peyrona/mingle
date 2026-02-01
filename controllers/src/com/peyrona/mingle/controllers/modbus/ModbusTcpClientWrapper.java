@@ -103,7 +103,6 @@ public final class ModbusTcpClientWrapper extends ControllerBase
 
         String sHost = UtilComm.getHost( sURI );
         int    nPort = UtilComm.getPort( sURI, DEFAULT_PORT );
-
         if( UtilStr.isEmpty( sHost ) )
         {
             sendIsInvalid( "Invalid URI: host is empty" );
@@ -201,8 +200,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
             nInterval = ((Number) oInterval).intValue();
             if( nInterval < 30 )
             {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Interval " + nInterval + "ms is very low. Minimum recommended is 30ms. Using 30ms." );
+                sendGenericError( ILogger.Level.WARNING, "Interval " + nInterval + "ms is very low. Minimum recommended is 30ms. Using 30ms." );
                 nInterval = 30;
             }
         }
@@ -215,8 +213,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
             nTimeout = ((Number) oTimeout).intValue();
             if( nTimeout < 100 )
             {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Timeout " + nTimeout + "ms is very low. Minimum recommended is 100ms. Using 100ms." );
+                sendGenericError( ILogger.Level.WARNING, "Timeout " + nTimeout + "ms is very low. Minimum recommended is 100ms. Using 100ms." );
                 nTimeout = 100;
             }
         }
@@ -229,8 +226,7 @@ public final class ModbusTcpClientWrapper extends ControllerBase
             nRetries = ((Number) oRetries).intValue();
             if( nRetries < 0 || nRetries > 10 )
             {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Retries " + nRetries + " out of range 0-10. Using default: " + DEFAULT_RETRIES );
+                sendGenericError( ILogger.Level.WARNING, "Retries " + nRetries + " out of range 0-10. Using default: " + DEFAULT_RETRIES );
                 nRetries = DEFAULT_RETRIES;
             }
         }
@@ -238,24 +234,24 @@ public final class ModbusTcpClientWrapper extends ControllerBase
         // All validation passed - create the client
         setValid( true );
 
-        client = new ModbusTcpClient4J2mod(
-            sHost, nPort, nUnitId, nAddress,
-            sType, sFunction, sOrder,
-            nInterval, nTimeout, nRetries,
-            new ModbusListener() );
+        client = new ModbusTcpClient4J2mod( sHost, nPort, nUnitId, nAddress,
+                                            sType, sFunction, sOrder,
+                                            nInterval, nTimeout, nRetries,
+                                            new ModbusListener() );
 
         setDeviceConfig( deviceConf );
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         if( client != null )
-        {
             client.open();
-        }
+
+        return isValid();
     }
 
     @Override
@@ -369,10 +365,10 @@ public final class ModbusTcpClientWrapper extends ControllerBase
         public void onError( Exception exc )
         {
             String message = exc.getMessage();
+
             if( message == null || message.isEmpty() )
-            {
                 message = exc.getClass().getSimpleName();
-            }
+
             sendGenericError( ILogger.Level.SEVERE, "Modbus error: " + message );
         }
     }

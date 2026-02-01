@@ -5,6 +5,7 @@ import com.peyrona.mingle.candi.unec.parser.ParseBase;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.lang.interfaces.ICandi;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
@@ -13,6 +14,7 @@ import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.Font;
+import java.awt.KeyboardFocusManager;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
@@ -28,6 +30,7 @@ import java.nio.charset.Charset;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -71,40 +74,81 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
  */
 public final class UneIntelliSense extends JPopupMenu
 {
-    // Completion item categories
-    private static final String CAT_COMMAND   = "command";
-    private static final String CAT_CLAUSE    = "clause";
-    private static final String CAT_FUNCTION  = "function";
-    private static final String CAT_METHOD    = "method";
-    private static final String CAT_TYPE      = "type";
-    private static final String CAT_DRIVER    = "driver";
-    private static final String CAT_BOOLEAN   = "boolean";
-    private static final String CAT_OPERATOR  = "operator";
-    private static final String CAT_MACRO     = "macro";
+    // Completion item categories (numbers are to sort)
+    private static final String CAT_FUNCTION = "1.function";
+    private static final String CAT_METHOD   = "2.method";
+    private static final String CAT_TYPE     = "3.type";
+    private static final String CAT_BOOLEAN  = "4.boolean";
+    private static final String CAT_OPERATOR = "5.operator";
+    private static final String CAT_COMMAND  = "6.command";
+    private static final String CAT_CLAUSE   = "7.clause";
+    private static final String CAT_DRIVER   = "8.driver";
+    private static final String CAT_MACRO    = "9.macro";
 
     // Cached completion data (loaded once)
-    private static Map<String, String>        driversCache   = null;
-    private static String[]                   functionsCache = null;
-    private static Map<String, List<String>>  extendedCache  = null;
+    // signaturesCache is the single source of truth for all functions, types, and methods
+    // extendedCache is still needed to distinguish types from functions
+    private static Map<String, String>        driversCache    = null;
+    private static Map<String, List<String>>  extendedCache   = null;
+    private static Map<String, List<String>>  signaturesCache = null;
+
+    // Initialization error tracking
+    private static final List<Exception>      initErrors      = new ArrayList<>();
 
     // UI components
-    private final JList<CompletionItem>       completionList;
-    private final DefaultListModel<CompletionItem> listModel;
-    private final RSyntaxTextArea             editor;
+    private        final JList<CompletionItem> completionList;
+    private        final DefaultListModel<CompletionItem> listModel;
+    private        final RSyntaxTextArea       editor;
+    private        final UneFunctionDocPopup   docPopup;
 
     // State
-    private String                            filterPrefix   = "";
-    private List<CompletionItem>              allItems       = new ArrayList<>();
-    private int                               insertOffset   = 0;
+    private              String                filterPrefix   = "";
+    private final        List<CompletionItem>  allItems       = new ArrayList<>();
+    private              int                   insertOffset   = 0;
 
     //------------------------------------------------------------------------//
     // STATIC INITIALIZATION
 
     static
     {
-        UtilSys.execute( null, () -> driversCache   = initDrivers() );
-        UtilSys.execute( null, () -> functionsCache = UtilSys.getConfig().newXprEval().getFunctions() );
-        UtilSys.execute( null, () -> extendedCache  = UtilSys.getConfig().newXprEval().getExtendedTypes() );
+        UtilSys.execute( null, () ->
+                        {
+                            try
+                            {
+                                driversCache = initDrivers();
+                            }
+                            catch( Exception e )
+                            {
+                                initErrors.add( e );
+                                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Drivers init failed" );
+                            }
+                        } );
+
+        UtilSys.execute( null, () ->
+                        {
+                            try
+                            {
+                                extendedCache = UtilSys.getConfig().newXprEval().getExtendedTypes();
+                            }
+                            catch( Exception e )
+                            {
+                                initErrors.add( e );
+                                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Extended types init failed" );
+                            }
+                        } );
+
+        UtilSys.execute( null, () ->
+                        {
+                            try
+                            {
+                                signaturesCache = UneFunctionDocPopup.getSignatures();
+                            }
+                            catch( Exception e )
+                            {
+                                initErrors.add( e );
+                                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Signatures init failed" );
+                            }
+                        } );
     }
 
     //------------------------------------------------------------------------//
@@ -115,6 +159,7 @@ public final class UneIntelliSense extends JPopupMenu
         this.editor = editor;
         this.listModel = new DefaultListModel<>();
         this.completionList = new JList<>( listModel );
+        this.docPopup = new UneFunctionDocPopup( editor );
 
         setupUI();
         setupListeners();
@@ -129,9 +174,16 @@ public final class UneIntelliSense extends JPopupMenu
      */
     public void showCompletions()
     {
-        if( driversCache == null || functionsCache == null || extendedCache == null )
+        if( driversCache == null || extendedCache == null || signaturesCache == null )
         {
+            if( ! initErrors.isEmpty() )
+            {
+                showInitializationErrors();
+                return;
+            }
+
             JTools.info( "IntelliSense is initializing, please try again in a few seconds" );
+
             return;
         }
 
@@ -142,13 +194,13 @@ public final class UneIntelliSense extends JPopupMenu
             return;
 
         // Apply any existing filter
-        applyFilter();
+        if( applyFilter() )
+            return;
 
         // Show popup at caret position
         try
         {
             Rectangle2D rect = editor.modelToView2D( editor.getCaretPosition() );
-            pack();
             show( editor, (int) rect.getX(), (int) rect.getY() + (int) rect.getHeight() );
             SwingUtilities.invokeLater( () -> completionList.grabFocus() );
         }
@@ -164,7 +216,7 @@ public final class UneIntelliSense extends JPopupMenu
     private void setupUI()
     {
         JScrollPane scrollPane = new JScrollPane( completionList );
-        scrollPane.setBorder( BorderFactory.createLineBorder( Color.GRAY ) );
+                    scrollPane.setBorder( BorderFactory.createLineBorder( Color.GRAY ) );
         add( scrollPane );
 
         setMinimumSize( new Dimension( 280, 200 ) );
@@ -182,52 +234,52 @@ public final class UneIntelliSense extends JPopupMenu
     private void setupListeners()
     {
         completionList.addKeyListener( new KeyAdapter()
-        {
-            @Override
-            public void keyPressed( KeyEvent e )
             {
-                switch( e.getKeyCode() )
+                @Override
+                public void keyPressed( KeyEvent e )
                 {
-                    case KeyEvent.VK_ESCAPE:
-                        setVisible( false );
-                        editor.grabFocus();
-                        break;
+                    switch( e.getKeyCode() )
+                    {
+                        case KeyEvent.VK_ESCAPE:
+                            setVisible( false );
+                            editor.grabFocus();
+                            break;
 
-                    case KeyEvent.VK_ENTER:
-                    case KeyEvent.VK_TAB:
-                        insertSelectedCompletion();
-                        break;
+                        case KeyEvent.VK_ENTER:
+                        case KeyEvent.VK_TAB:
+                            insertSelectedCompletion();
+                            break;
 
-                    case KeyEvent.VK_BACK_SPACE:
-                        if( filterPrefix.length() > 0 )
-                        {
-                            filterPrefix = filterPrefix.substring( 0, filterPrefix.length() - 1 );
-                            applyFilter();
-                        }
-                        break;
+                        case KeyEvent.VK_BACK_SPACE:
+                            if( filterPrefix.length() > 0 )
+                            {
+                                filterPrefix = filterPrefix.substring( 0, filterPrefix.length() - 1 );
+                                applyFilter();
+                            }
+                            break;
 
-                    default:
-                        // Handle typing for filter
-                        char c = e.getKeyChar();
+                        default:
+                            // Handle typing for filter
+                            char c = e.getKeyChar();
 
-                        if( Character.isLetterOrDigit( c ) || c == '_' )
-                        {
-                            filterPrefix += c;
-                            applyFilter();
-                        }
+                            if( Character.isLetterOrDigit( c ) || c == '_' )
+                            {
+                                filterPrefix += c;
+                                applyFilter();
+                            }
+                    }
                 }
-            }
-        });
+            } );
 
         completionList.addMouseListener( new MouseAdapter()
-        {
-            @Override
-            public void mouseClicked( MouseEvent e )
             {
-                if( e.getClickCount() == 2 )
-                    insertSelectedCompletion();
-            }
-        });
+                @Override
+                public void mouseClicked( MouseEvent e )
+                {
+                    if( e.getClickCount() == 2 )
+                        insertSelectedCompletion();
+                }
+            } );
     }
 
     //------------------------------------------------------------------------//
@@ -240,20 +292,31 @@ public final class UneIntelliSense extends JPopupMenu
 
         try
         {
-            int caretPos = editor.getCaretPosition();
-            int line = editor.getLineOfOffset( caretPos );
-            int lineStart = editor.getLineStartOffset( line );
-            String lineText = editor.getText( lineStart, caretPos - lineStart );
-            String trimmedLine = lineText.trim().toUpperCase();
+            int    caretPos    = editor.getCaretPosition();
+            int    line        = editor.getLineOfOffset( caretPos );
+            int    lineStart   = editor.getLineStartOffset( line );
+            String rawLineText = editor.getText( lineStart, caretPos - lineStart );
+            String lineText    = rawLineText.toUpperCase();       // Preserve leading whitespace for indentation check
+            String trimmedLine = lineText.trim();                 // Trimmed version for keyword matching
 
             insertOffset = caretPos;
 
-            // Determine filter prefix (word being typed)
+            // Determine filter prefix (word being typed at cursor position)
+            // Use lineText (with whitespace) so trailing space means empty filter
             filterPrefix = extractWordAtCursor( lineText );
             insertOffset = caretPos - filterPrefix.length();
 
             // Determine context and add appropriate completions
-            Context ctx = determineContext( trimmedLine, line );
+            Context ctx = determineContext( lineText, trimmedLine, line );
+
+            // If the filter prefix is actually a keyword that triggered the context, clear it
+            // (e.g., user typed "DRIVER" to get driver names, not to filter by "DRIVER")
+            if( ctx == Context.AFTER_DRIVER_KEYWORD && filterPrefix.equalsIgnoreCase( "DRIVER" ) )
+                filterPrefix = "";
+            else if( ctx == Context.AFTER_LANGUAGE && filterPrefix.equalsIgnoreCase( "LANGUAGE" ) )
+                filterPrefix = "";
+            else if( ctx == Context.AFTER_CONFIG && filterPrefix.equalsIgnoreCase( "CONFIG" ) )
+                filterPrefix = "";
 
             switch( ctx )
             {
@@ -309,6 +372,10 @@ public final class UneIntelliSense extends JPopupMenu
                 default:
                     addGeneralCompletions();
             }
+
+            // Sort items by category and then by text to ensure alphabetical order within groups
+            allItems.sort( Comparator.comparing( (CompletionItem item) -> item.category )
+                                     .thenComparing( item -> item.text ) );
         }
         catch( BadLocationException e )
         {
@@ -333,27 +400,57 @@ public final class UneIntelliSense extends JPopupMenu
         return word.toString();
     }
 
-    private Context determineContext( String trimmedLine, int line )
+    private Context determineContext( String lineText, String trimmedLine, int line )
     {
         if( trimmedLine.isEmpty() )
             return Context.LINE_START;
 
-        // Check for specific contexts based on line content
-        if( trimmedLine.endsWith( ":" ) )
+        // Check if we are after a colon (optionally with some prefix already typed)
+        int prefixStart = lineText.length() - filterPrefix.length();
+        String beforePrefix = lineText.substring( 0, prefixStart ).trim();
+        if( beforePrefix.endsWith( ":" ) )
             return Context.AFTER_COLON;
+
+        // Check if line has leading whitespace (indicates clause within a command block)
+        boolean hasIndentation = lineText.length() > trimmedLine.length()
+                                 && Character.isWhitespace( lineText.charAt( 0 ) );
 
         if( trimmedLine.startsWith( "DEVICE" ) || trimmedLine.startsWith( "SENSOR" ) || trimmedLine.startsWith( "ACTUATOR" ) )
         {
-            if( trimmedLine.contains( "DRIVER" ) && ! trimmedLine.endsWith( "DRIVER" ) )
-                return Context.AFTER_DRIVER_KEYWORD;
+            if( trimmedLine.contains( "DRIVER" ) )
+            {
+                String[] parts = trimmedLine.split( "\\s+" );
+                int lastPartIndex = parts.length - 1;
+
+                while( lastPartIndex >= 0 && parts[lastPartIndex].isEmpty() )
+                    lastPartIndex--;
+
+                if( lastPartIndex >= 0 && parts[lastPartIndex].equals( "DRIVER" ) )
+                    return Context.AFTER_DRIVER_KEYWORD;
+            }
 
             return Context.AFTER_DEVICE;
         }
 
+        // Handle DRIVER keyword - could be a clause within DEVICE or a standalone DRIVER command
         if( trimmedLine.startsWith( "DRIVER" ) && ! trimmedLine.contains( "SCRIPT" ) )
         {
             if( containsOnlyKeyword( trimmedLine, "DRIVER" ) )
-                return Context.LINE_START;  // DRIVER command definition
+            {
+                // If indented, it's a DRIVER clause within a DEVICE block - show driver names
+                if( hasIndentation || isInsideDeviceBlock( line ) )
+                    return Context.AFTER_DRIVER_KEYWORD;
+
+                // Non-indented "DRIVER" alone at line start is a DRIVER command definition
+                return Context.LINE_START;
+            }
+
+            // DRIVER followed by something else
+            if( hasIndentation || isInsideDeviceBlock( line ) )
+            {
+                // Inside DEVICE block with driver name already typed - could want CONFIG
+                return Context.AFTER_DEVICE;
+            }
 
             return Context.AFTER_DRIVER_COMMAND;
         }
@@ -387,6 +484,53 @@ public final class UneIntelliSense extends JPopupMenu
             return Context.LINE_START;
 
         return Context.IN_EXPRESSION;
+    }
+
+    /**
+     * Checks if the current line is inside a DEVICE/SENSOR/ACTUATOR block by looking at previous lines.
+     */
+    private boolean isInsideDeviceBlock( int currentLine )
+    {
+        try
+        {
+            // Look at previous lines (up to 20 lines back) to find context
+            for( int i = currentLine - 1; i >= 0 && i >= currentLine - 20; i-- )
+            {
+                int lineStart = editor.getLineStartOffset( i );
+                int lineEnd = editor.getLineEndOffset( i );
+                String prevLine = editor.getText( lineStart, lineEnd - lineStart ).trim().toUpperCase();
+
+                // Skip empty lines and comments
+                if( prevLine.isEmpty() || prevLine.startsWith( "#" ) )
+                    continue;
+
+                // If we hit a DEVICE/SENSOR/ACTUATOR, we're inside its block
+                if( prevLine.startsWith( "DEVICE" ) || prevLine.startsWith( "SENSOR" ) || prevLine.startsWith( "ACTUATOR" ) )
+                    return true;
+
+                // If we hit another top-level command (RULE, SCRIPT, standalone DRIVER), we're not in a device block
+                if( prevLine.startsWith( "RULE" ) || prevLine.startsWith( "INCLUDE" ) || prevLine.startsWith( "USE" ) )
+                    return false;
+
+                // SCRIPT at line start (no indentation) indicates we've left any device block
+                if( prevLine.startsWith( "SCRIPT" ) )
+                {
+                    String originalLine = editor.getText( lineStart, lineEnd - lineStart );
+                    if( originalLine.length() > 0 && ! Character.isWhitespace( originalLine.charAt( 0 ) ) )
+                        return false;
+                }
+
+                // DRIVER at line start with SCRIPT clause indicates a driver definition block
+                if( prevLine.startsWith( "DRIVER" ) && prevLine.contains( "SCRIPT" ) )
+                    return false;
+            }
+        }
+        catch( BadLocationException e )
+        {
+            // Ignore - return false as fallback
+        }
+
+        return false;
     }
 
     private boolean containsOnlyKeyword( String line, String keyword )
@@ -498,18 +642,50 @@ public final class UneIntelliSense extends JPopupMenu
 
     private void addExpressionCompletions()
     {
-        // Functions
-        if( functionsCache != null )
+        // Functions and types - use signaturesCache as single source of truth
+        if( signaturesCache != null )
         {
-            for( String fn : functionsCache )
-                addItem( fn + "()", CAT_FUNCTION, "Function" );
+            for( String key : signaturesCache.keySet() )
+            {
+                // Skip qualified names (like "pair.get", "stdxprfns.mid") to avoid duplicates
+                if( key.contains( "." ) )
+                    continue;
+
+                // Skip methods that belong to types (they should only appear in AFTER_COLON context)
+                if( isMethodOfAnyType( key ) )
+                    continue;
+
+                List<String> sigs = signaturesCache.get( key );
+
+                // Determine category: type if in extendedCache, otherwise function
+                boolean isType = (extendedCache != null && extendedCache.containsKey( key ));
+                String category = isType ? CAT_TYPE : CAT_FUNCTION;
+                String description = isType ? "Extended data type" : "Function";
+
+                if( sigs != null && ! sigs.isEmpty() )
+                {
+                    for( String sig : sigs )
+                        addItem( sig, category, description );
+                }
+                else
+                {
+                    addItem( key + "()", category, description );
+                }
+            }
         }
 
-        // Extended types
+        // Extended types that might not be in signaturesCache (e.g., list, pair, date, time)
         if( extendedCache != null )
         {
             for( String type : extendedCache.keySet() )
-                addItem( type + "()", CAT_TYPE, "Extended data type" );
+            {
+                boolean alreadyAdded = (signaturesCache != null && signaturesCache.containsKey( type ));
+
+                if( ! alreadyAdded )
+                {
+                    addItem( type + "()", CAT_TYPE, "Extended data type" );
+                }
+            }
         }
 
         // Boolean values
@@ -554,7 +730,20 @@ public final class UneIntelliSense extends JPopupMenu
         if( extendedCache != null && extendedCache.containsKey( typeName ) )
         {
             for( String method : extendedCache.get( typeName ) )
-                addItem( method + "()", CAT_METHOD, "Method of " + typeName );
+            {
+                String qualified = typeName + "." + method;
+                List<String> sigs = (signaturesCache != null) ? signaturesCache.get( qualified.toLowerCase() ) : null;
+
+                if( sigs != null && ! sigs.isEmpty() )
+                {
+                    for( String sig : sigs )
+                        addItem( sig, CAT_METHOD, "Method of " + typeName );
+                }
+                else
+                {
+                    addItem( method + "()", CAT_METHOD, "Method of " + typeName );
+                }
+            }
         }
         else
         {
@@ -569,8 +758,22 @@ public final class UneIntelliSense extends JPopupMenu
         {
             for( Map.Entry<String, List<String>> entry : extendedCache.entrySet() )
             {
+                String typeName = entry.getKey();
                 for( String method : entry.getValue() )
-                    addItem( method + "()", CAT_METHOD, "Method" );
+                {
+                    String qualified = typeName + "." + method;
+                    List<String> sigs = (signaturesCache != null) ? signaturesCache.get( qualified.toLowerCase() ) : null;
+
+                    if( sigs != null && ! sigs.isEmpty() )
+                    {
+                        for( String sig : sigs )
+                            addItem( sig, CAT_METHOD, "Method" );
+                    }
+                    else
+                    {
+                        addItem( method + "()", CAT_METHOD, "Method" );
+                    }
+                }
             }
         }
     }
@@ -579,6 +782,33 @@ public final class UneIntelliSense extends JPopupMenu
     {
         String[] parts = text.split( "\\s+" );
         return parts.length > 0 ? parts[parts.length - 1] : "";
+    }
+
+    /**
+     * Checks if the given name is a method of any extended type.
+     * This is used to exclude methods from the function/type completion list,
+     * since methods should only be shown in the AFTER_COLON context.
+     *
+     * @param name the name to check
+     * @return true if the name is a method of any type in extendedCache
+     */
+    private boolean isMethodOfAnyType( String name )
+    {
+        if( extendedCache == null )
+            return false;
+
+        String lowerName = name.toLowerCase();
+
+        for( List<String> methods : extendedCache.values() )
+        {
+            for( String method : methods )
+            {
+                if( method.toLowerCase().equals( lowerName ) )
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     private void addGeneralCompletions()
@@ -595,7 +825,7 @@ public final class UneIntelliSense extends JPopupMenu
     //------------------------------------------------------------------------//
     // PRIVATE METHODS - FILTERING AND INSERTION
 
-    private void applyFilter()
+    private boolean applyFilter()
     {
         listModel.clear();
 
@@ -604,13 +834,233 @@ public final class UneIntelliSense extends JPopupMenu
         for( CompletionItem item : allItems )
         {
             if( filter.isEmpty() || item.text.toLowerCase().startsWith( filter ) )
+            {
                 listModel.addElement( item );
+            }
+        }
+
+        // Check if there are multiple items with the same function name but different signatures
+        // (e.g., "mid(target, from)" and "mid(where, start, end)")
+        // In this case, show the list so user can choose, even if filter matches exactly
+        if( listModel.size() > 1 && ! filter.isEmpty() )
+        {
+            // Count how many items have the same base name as the filter
+            int exactMatches = 0;
+            for( int i = 0; i < listModel.size(); i++ )
+            {
+                String itemText = listModel.get( i ).text;
+                int parenPos = itemText.indexOf( '(' );
+                String baseName = (parenPos > 0) ? itemText.substring( 0, parenPos ) : itemText;
+                if( baseName.equalsIgnoreCase( filter ) )
+                    exactMatches++;
+            }
+
+            // If multiple signatures match the same name, show the list for user selection
+            if( exactMatches > 1 )
+            {
+                completionList.setSelectedIndex( 0 );
+                return false;
+            }
+        }
+
+        // If exactly one match, check if we should auto-insert and show documentation
+        if( listModel.size() == 1 )
+        {
+            CompletionItem item = listModel.get( 0 );
+
+            if( CAT_FUNCTION.equals( item.category ) || CAT_TYPE.equals( item.category )
+                || CAT_METHOD.equals( item.category ) )
+            {
+                // Extract the function/type name from the signature (e.g., "mid" from "mid(target, from)")
+                String itemName = item.text;
+                int parenPos = itemName.indexOf( '(' );
+                if( parenPos > 0 )
+                    itemName = itemName.substring( 0, parenPos );
+
+                // Only auto-insert and show docs if filter exactly matches the function/type name
+                // This prevents auto-completion when user types partial match like "mi" for "mid"
+                if( ! itemName.equalsIgnoreCase( filter ) )
+                {
+                    // Partial match - show completion list, don't auto-insert
+                    completionList.setSelectedIndex( 0 );
+                    return false;
+                }
+
+                // Exact match - proceed with documentation and auto-insert
+                String docKey = item.text;
+
+                // Try to show documentation popup
+                boolean shown = false;
+
+                // For methods, try qualified name first (e.g. "pair.put")
+                if( CAT_METHOD.equals( item.category ) )
+                {
+                    String desc = item.description;
+                    if( desc != null && desc.startsWith( "Method of " ) )
+                    {
+                        String type = desc.substring( 10 ).trim();
+                        shown = docPopup.showDocumentation( type + "." + docKey, insertOffset );
+                    }
+                }
+
+                // Fallback to simple name (or for functions/types)
+                if( ! shown )
+                    shown = docPopup.showDocumentation( docKey, insertOffset );
+
+                if( shown )
+                {
+                    // Automatically insert the completion text (only name() - no parameters)
+                    insertCompletion( item );
+                    setVisible( false );  // Hide completion popup
+                    return true;
+                }
+                else
+                {
+                    // If documentation not found AND it was the only match, hide completion list and show warning
+                    setVisible( false );
+                    JTools.info( "Documentation for '" + docKey + "' not found" );
+                    return true;
+                }
+            }
         }
 
         if( listModel.size() > 0 )
+        {
             completionList.setSelectedIndex( 0 );
+            return false;
+        }
         else
+        {
             setVisible( false );
+            return true;
+        }
+    }
+
+    private void showInitializationErrors()
+    {
+        boolean driversLoaded    = (driversCache != null);
+        boolean extendedLoaded   = (extendedCache != null);
+        boolean signaturesLoaded = (signaturesCache != null);
+
+        if( ! driversLoaded && ! extendedLoaded && ! signaturesLoaded )
+        {
+            StringBuilder msg = new StringBuilder();
+            msg.append( "IntelliSense initialization failed.\n\n" );
+            msg.append( "The following errors occurred:\n\n" );
+
+            for( Exception e : initErrors )
+            {
+                msg.append( "  " ).append( e.getMessage() ).append( "\n" );
+            }
+
+            msg.append( "\nNone of the IntelliSense features are available." );
+            JTools.error( msg.toString(), getFocusedWindow() );
+            return;
+        }
+
+        StringBuilder msg = new StringBuilder();
+        msg.append( "IntelliSense partially initialized.\n\n" );
+        msg.append( "The following components failed to load:\n\n" );
+
+        int failedCount = 0;
+        if( ! driversLoaded )
+        {
+            msg.append( "  - Drivers (driver completion not available)\n" );
+            failedCount++;
+        }
+        if( ! signaturesLoaded )
+        {
+            msg.append( "  - Signatures (function completion not available)\n" );
+            failedCount++;
+        }
+        if( ! extendedLoaded )
+        {
+            msg.append( "  - Extended types (method completion not available)\n" );
+            failedCount++;
+        }
+
+        if( failedCount > 0 )
+        {
+            msg.append( "\nError details:\n\n" );
+            for( Exception e : initErrors )
+            {
+                msg.append( "  " ).append( e.getMessage() ).append( "\n" );
+            }
+        }
+
+        if( driversLoaded || signaturesLoaded || extendedLoaded )
+        {
+            msg.append( "\nAvailable IntelliSense features:\n\n" );
+            if( driversLoaded )
+                msg.append( "  - Driver completion (works)\n" );
+            if( signaturesLoaded )
+                msg.append( "  - Function completion (works)\n" );
+            if( extendedLoaded )
+                msg.append( "  - Extended type methods (works)\n" );
+        }
+
+        msg.append( "\nSome IntelliSense features may not be available." );
+        JTools.error( msg.toString(), getFocusedWindow() );
+    }
+
+    private static java.awt.Window getFocusedWindow()
+    {
+        return KeyboardFocusManager.getCurrentKeyboardFocusManager().getFocusedWindow();
+    }
+
+    private void insertCompletion( CompletionItem item )
+    {
+        try
+        {
+            String insertion = item.text;
+
+            // For functions/methods/types, extract just the name (without signature parameters)
+            if( CAT_FUNCTION.equals( item.category ) || CAT_TYPE.equals( item.category )
+                || CAT_METHOD.equals( item.category ) )
+            {
+                int parenPos = insertion.indexOf( '(' );
+                if( parenPos > 0 )
+                    insertion = insertion.substring( 0, parenPos );  // Extract just the name
+
+                // Check if parentheses already exist after cursor position
+                boolean hasParentheses = false;
+                int caretPos = editor.getCaretPosition();
+                if( caretPos < editor.getDocument().getLength() )
+                {
+                    char nextChar = editor.getText( caretPos, 1 ).charAt( 0 );
+                    hasParentheses = (nextChar == '(');
+                }
+
+                if( ! hasParentheses )
+                    insertion += "()";
+
+                // For methods, check if colon is needed before the method name
+                if( CAT_METHOD.equals( item.category ) )
+                {
+                    boolean needsColon = true;
+                    if( insertOffset > 0 )
+                    {
+                        char charBefore = editor.getText( insertOffset - 1, 1 ).charAt( 0 );
+                        needsColon = (charBefore != ':');
+                    }
+
+                    if( needsColon )
+                        insertion = ":" + insertion;
+                }
+            }
+
+            editor.replaceRange( insertion, insertOffset, editor.getCaretPosition() );
+
+            // If it ends with "()", move cursor inside the parentheses
+            if( insertion.endsWith( "()" ) )
+            {
+                editor.setCaretPosition( insertOffset + insertion.length() - 1 );
+            }
+        }
+        catch( Exception e )
+        {
+            // Ignore
+        }
     }
 
     private void insertSelectedCompletion()
@@ -622,13 +1072,12 @@ public final class UneIntelliSense extends JPopupMenu
 
         setVisible( false );
 
-        try
+        // For drivers, insert the CONFIG template
+        if( CAT_DRIVER.equals( selected.category ) && driversCache != null )
         {
-            String insertion = selected.text;
-
-            // For drivers, insert the CONFIG template
-            if( CAT_DRIVER.equals( selected.category ) && driversCache != null )
+            try
             {
+                String insertion = selected.text;
                 String config = driversCache.get( selected.text );
 
                 if( config != null && ! config.isEmpty() )
@@ -646,14 +1095,43 @@ public final class UneIntelliSense extends JPopupMenu
 
                     insertion = sb.toString();
                 }
+                editor.replaceRange( insertion, insertOffset, editor.getCaretPosition() );
             }
-
-            // Remove the filter prefix before inserting
-            editor.replaceRange( insertion, insertOffset, editor.getCaretPosition() );
+            catch( Exception e )
+            {
+                JTools.alert( "Error inserting completion: " + e.getMessage() );
+            }
         }
-        catch( Exception e )
+        else
         {
-            JTools.alert( "Error inserting completion: " + e.getMessage() );
+            insertCompletion( selected );
+
+            // For functions/methods/types, show documentation for the selected signature
+            if( CAT_FUNCTION.equals( selected.category ) || CAT_TYPE.equals( selected.category )
+                || CAT_METHOD.equals( selected.category ) )
+            {
+                String docKey = selected.text;
+
+                // For methods, try qualified name first (e.g., "pair.get")
+                if( CAT_METHOD.equals( selected.category ) )
+                {
+                    String desc = selected.description;
+                    if( desc != null && desc.startsWith( "Method of " ) )
+                    {
+                        String type = desc.substring( 10 ).trim();
+                        if( ! docPopup.showDocumentation( type + "." + docKey, insertOffset ) )
+                            docPopup.showDocumentation( docKey, insertOffset );
+                    }
+                    else
+                    {
+                        docPopup.showDocumentation( docKey, insertOffset );
+                    }
+                }
+                else
+                {
+                    docPopup.showDocumentation( docKey, insertOffset );
+                }
+            }
         }
 
         editor.grabFocus();
@@ -838,38 +1316,65 @@ public final class UneIntelliSense extends JPopupMenu
 
             while( (line = br.readLine()) != null )
             {
-                line = line.trim();
+                String trimmed = line.trim();
+                String upper = trimmed.toUpperCase();
 
-                if( line.isEmpty() )
+                if( trimmed.isEmpty() )
                 {
+                    // Empty line ends the current driver definition
                     configSection = false;
 
-                    if( driverName != null && configBuilder != null )
-                        driverConfigMap.put( driverName, configBuilder.toString().trim() );
+                    if( driverName != null )
+                    {
+                        String config = (configBuilder != null) ? configBuilder.toString().trim() : "";
+                        driverConfigMap.put( driverName, config );
+                    }
 
                     driverName = null;
                     configBuilder = null;
                 }
-                else if( line.toUpperCase().startsWith( "DRIVER" ) )
+                else if( upper.startsWith( "DRIVER " ) && ! upper.contains( "SCRIPT" ) )
                 {
-                    String[] parts = line.split( "\\s+" );
+                    // New DRIVER definition - store previous if any
+                    if( driverName != null )
+                    {
+                        String config = (configBuilder != null) ? configBuilder.toString().trim() : "";
+                        driverConfigMap.put( driverName, config );
+                    }
+
+                    // Extract new driver name (second word, removing any trailing comment)
+                    String[] parts = trimmed.split( "\\s+" );
 
                     if( parts.length > 1 )
+                    {
                         driverName = parts[1];
+                        configBuilder = null;
+                        configSection = false;
+                    }
                 }
-                else if( line.toUpperCase().startsWith( "CONFIG" ) )
+                else if( upper.startsWith( "CONFIG" ) )
                 {
                     configSection = true;
                     configBuilder = new StringBuilder();
                 }
-                else if( configSection )
+                else if( upper.startsWith( "SCRIPT" ) )
                 {
-                    configBuilder.append( line ).append( System.lineSeparator() );
+                    // SCRIPT clause ends CONFIG section but driver continues
+                    configSection = false;
+                }
+                else if( configSection && ! upper.startsWith( "#" ) )
+                {
+                    // Capture config parameter line (skip comment-only lines)
+                    configBuilder.append( trimmed ).append( System.lineSeparator() );
                 }
             }
 
-            if( driverName != null && configBuilder != null )
-                driverConfigMap.put( driverName, configBuilder.toString().trim() );
+            // Store last driver if any
+            if( driverName != null )
+            {
+                String config = (configBuilder != null) ? configBuilder.toString().trim() : "";
+                driverConfigMap.put( driverName, config );
+            }
         }
 
         return driverConfigMap;

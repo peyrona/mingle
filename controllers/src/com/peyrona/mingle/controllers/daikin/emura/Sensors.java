@@ -32,7 +32,7 @@ import java.util.concurrent.ScheduledFuture;
 public final class   Sensors
              extends ControllerBase
 {
-    private static final String KEY_ADRESS   = "address";
+    private static final String KEY_ADDRESS  = "address";
     private static final String KEY_INTERVAL = "interval";
 
     private Talker          talker = null;
@@ -44,27 +44,58 @@ public final class   Sensors
     public void set( final String deviceName, Map<String,Object> deviceInit, IController.Listener listener )
     {
         setDeviceName( deviceName );
-        setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
 
-        try
+        String sIpAddr   = deviceInit.get( KEY_ADDRESS ).toString();    // This is mandatory
+        long   nInterval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (5 * UtilUnit.MINUTE) )).longValue();
+
+        if( ! UtilSys.isDevEnv )     // When under development, any value is accepted
+            nInterval = UtilUnit.setBetween( 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
+
+        setValid( true );
+
+        set( KEY_ADDRESS , sIpAddr   );
+        set( KEY_INTERVAL, nInterval );
+    }
+
+    @Override
+    public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        if( ! isFaked() )   // isFaked() is initialized by super:start(...)
         {
-            String sIpAddr   = deviceInit.get( KEY_ADRESS ).toString();    // This is mandatory
-            long   nInterval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (5 * UtilUnit.MINUTE) )).longValue();
-
-            if( ! UtilSys.isDevEnv )     // When under development, any value is accepted
-                nInterval = UtilUnit.setBetween( 1 * UtilUnit.MINUTE, nInterval, 50 * UtilUnit.HOUR );
-
-            if( ! isFaked() )
-                talker = new Talker( sIpAddr );
-
-            setValid( true );
-            set( KEY_ADRESS  , sIpAddr   );
-            set( KEY_INTERVAL, nInterval );
+            try
+            {
+                talker = new Talker( get( KEY_ADDRESS ).toString() );
+            }
+            catch( IOException ioe )    // MalformedURLException extends IOException
+            {
+                sendIsInvalid( ioe.getMessage() );
+            }
         }
-        catch( IOException ioe )    // MalformedURLException extends IOException
+
+        timer = UtilSys.executeWithDelay( null,
+                                          5000L,                      // Initial delay
+                                          ((Number) get( KEY_INTERVAL )).longValue(),
+                                          () -> read() );
+
+        return isValid();
+    }
+
+    @Override
+    public void stop()
+    {
+        if( timer != null )
         {
-            sendIsInvalid( ioe.getMessage() );
+            timer.cancel( true );
+            timer = null;
         }
+
+        talker = null;
+
+        super.stop();
     }
 
     @Override
@@ -75,10 +106,8 @@ public final class   Sensors
 
         if( isFaked() )
         {
-            StdXprFns fn = new StdXprFns();
-
-            sendReaded( new pair().put( "t_inside" , fn.invoke( "rand", new Integer[] { 5,44} ))
-                                  .put( "t_outside", fn.invoke( "rand", new Integer[] {-9,44} )) );
+            sendReaded( new pair().put( "t_inside" , StdXprFns.invoke( "rand", new Integer[] { 5,44} ))
+                                  .put( "t_outside", StdXprFns.invoke( "rand", new Integer[] {-9,44} )) );
         }
         else
         {
@@ -115,42 +144,4 @@ public final class   Sensors
     {
         sendIsNotWritable();
     }
-
-    @Override
-    public void start( IRuntime rt )
-    {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
-
-        synchronized( this )
-        {
-            timer = UtilSys.executeWithDelay( null,
-                                              5000l,                      // Initial delay
-                                              getLong( KEY_INTERVAL ),
-                                              () -> read() );
-        }
-    }
-
-    @Override
-    public void stop()
-    {
-        timer.cancel( true );
-
-        timer  = null;
-        talker = null;
-
-        super.stop();
-    }
-
-    //----------------------------------------------------------------------------//
-    // FOR TESTING PURPOSES
-
-//    public static void main( String[] as ) throws MalformedURLException, IOException
-//    {
-//        Talker t = new Talker( "192.168.7.246" );
-//
-//        System.out.println( t.get() );
-//    }
 }

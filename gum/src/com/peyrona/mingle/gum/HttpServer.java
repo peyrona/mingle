@@ -28,6 +28,7 @@ import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import javax.servlet.MultipartConfigElement;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
 import javax.servlet.http.HttpServletRequest;
@@ -340,8 +341,21 @@ final class HttpServer
         // Add authentication filter
         context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
 
-        // Add servlet
-        context.addServlet( new ServletHolder( new ServletUpload() ), "/*" );
+        // Add servlet with multipart configuration for file uploads
+        ServletHolder uploadHolder = new ServletHolder( new ServletUpload() );
+
+        // IMPORTANT: Add servlet FIRST, then configure multipart
+        // In Jetty, getRegistration() requires the servlet to be registered first
+        context.addServlet( uploadHolder, "/*" );
+
+        uploadHolder.getRegistration().setMultipartConfig(
+            new MultipartConfigElement(
+                System.getProperty( "java.io.tmpdir" ),  // Temp directory
+                100 * 1024 * 1024,                        // Max file size: 100MB
+                150 * 1024 * 1024,                        // Max request size: 150MB
+                1024 * 1024                               // File size threshold: 1MB
+            )
+        );
 
         return context;
     }
@@ -517,8 +531,8 @@ final class HttpServer
             if( UtilIO.canRead( fUsers ) != null )
                 return null;
 
-            String    sJSON  = UtilStr.removeComments( UtilIO.getAsText( fUsers ) );
-            JsonArray jArray = Json.parse( sJSON ).asArray();
+            String    sJSON  = UtilIO.getAsText( fUsers );
+            JsonArray jArray = UtilJson.parse( sJSON ).asArray();
 
             for( int n = 0; n < jArray.size(); n++ )
             {

@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.glue;
 
+import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
@@ -384,7 +385,29 @@ public final class ConnectDlg extends GDialog
 
     private void btnConnectActionPerformed(java.awt.event.ActionEvent evt) {//GEN-FIRST:event_btnConnectActionPerformed
 
-        joSelected = ltbProtocols.getSelected();   // This value will be read by the invoker of this dialog
+        joSelected = ltbProtocols.getSelected();   // Get the protocol definition
+
+        // Merge user's input into the protocol's init object
+        JPanel pnlConfig = (JPanel) spConfig.getViewport().getView();
+
+        if( pnlConfig instanceof ProtocolConfigPanel )
+        {
+            JsonObject joUserInput = ((ProtocolConfigPanel) pnlConfig).getConfig();
+
+            if( joUserInput == null )
+                return;   // Validation failed, don't close dialog
+
+            // Create a copy of the selected protocol and merge user input into init
+            joSelected = Json.parse( joSelected.toString() ).asObject();
+            JsonObject joInit = joSelected.get( "init" ) != null ? joSelected.get( "init" ).asObject() : Json.object();
+
+            // Merge user input into init (user values override defaults)
+            for( JsonObject.Member member : joUserInput )
+                joInit.set( member.getName(), member.getValue() );
+
+            joSelected.set( "init", joInit );
+        }
+
         dispose();
     }//GEN-LAST:event_btnConnectActionPerformed
 
@@ -400,7 +423,25 @@ public final class ConnectDlg extends GDialog
                 return;
         }
 
-        SettingsManager.setConnection( name, ltbProtocols.getSelected() );
+        // Get the config panel and collect user input
+        JPanel pnlConfig = (JPanel) spConfig.getViewport().getView();
+
+        if( !(pnlConfig instanceof ProtocolConfigPanel) )
+        {
+            JTools.error( "No protocol configuration available." );
+            return;
+        }
+
+        JsonObject joUserInput = ((ProtocolConfigPanel) pnlConfig).getConfig();
+
+        if( joUserInput == null )
+            return;  // Validation failed
+
+        // Add protocol name to identify which protocol to use on load
+        JsonObject joProtocol = ltbProtocols.getSelected();
+        joUserInput.add( "name", joProtocol.getString( "name", "" ) );
+
+        SettingsManager.setConnection( name, joUserInput );
 
         sSavedName = name;    // Because no problem on saving
     }//GEN-LAST:event_btnSaveActionPerformed
@@ -416,7 +457,7 @@ public final class ConnectDlg extends GDialog
             return;
         }
 
-        JLabel lbl = new JLabel( "Select: [ ↑ ]  [ ↓ ]      Delete: [Del]      Select: [Enter] or Dbl-click      Close: [Esc]" );
+        JLabel lbl = new JLabel( "Select: [ ↑ ]  [ ↓ ]      Delete: [Del]      Load: [ ↵ ] [Dbl-click]      Close: [Esc]" );
                lbl.setHorizontalAlignment( SwingConstants.CENTER );
 
         JPanel pnlAll = new JPanel( new BorderLayout( 0, 10 ) );
@@ -436,7 +477,7 @@ public final class ConnectDlg extends GDialog
                                              if( JTools.confirm( "Delete the selected saved connection?" ) )
                                              {
                                                 JsonObject jo = ((GList<JsonObject>) list).remove();
-                                                SettingsManager.removeConnection( jo.getString( "name", null ) );
+                                                SettingsManager.removeConnection( jo.getString( "label", null ) );
                                              }
                                          } )
                                 .onPicked( (list) ->

@@ -16,13 +16,44 @@ import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 /**
+ * Configuration manager for the Mingle Standard Platform.
+ * <p>
+ * This class loads, manages, and provides access to platform-wide configuration settings.
+ * Configuration is loaded from JSON files and supports multiple configuration sources with
+ * the following precedence order (highest to lowest):
+ * <ol>
+ *   <li>Command Line Interface (CLI) arguments</li>
+ *   <li>Java System properties</li>
+ *   <li>Operating System environment variables</li>
+ *   <li>Configuration JSON file values</li>
+ * </ol>
+ * <p>
+ * The configuration is organized as modules, where each module is a JSON object
+ * containing settings specific to a particular component (e.g., "common", "exen", "network").
+ * Variable name lookups are case-insensitive for all sources except the config file,
+ * which supports both case-sensitive and case-insensitive matching.
+ * <p>
+ * Key responsibilities:
+ * <ul>
+ *   <li>Load configuration from JSON files with support for file path expansion</li>
+ *   <li>Retrieve configuration values with automatic type conversion</li>
+ *   <li>Manage and preserve CLI arguments separately from config file data</li>
+ *   <li>Create plugin instances via reflection (LanguageBuilder, CILBuilder, XprEval)</li>
+ *   <li>Export configuration to JSON format for persistence</li>
+ * </ul>
+ * <p>
+ * The class uses a factory pattern for plugin instantiation, loading classes dynamically
+ * from configurable JAR URIs. If plugin instantiation fails, the application terminates.
+ *
+ * <p>
+ * <b>Security Note</b>: for security, user defined configuration can not be modified using Une code.
+ * </p>
  *
  * @author Francisco José Morero Peyrona
  *
@@ -83,11 +114,14 @@ public final class Config implements IConfig
 
             sURI = lstURIs.get( 0 ).toString();
 
+            if( sURI.startsWith( "file:" ) )
+                sURI = sURI.substring( 5 );
+
             String sJSON = UtilIO.getAsText( lstURIs.get( 0 ) );
 
             if( UtilStr.isNotEmpty( sJSON ) )     // If empty, default values will be used
             {
-                JsonValue jv = UtilJson.parse( UtilStr.removeComments( sJSON ) );
+                JsonValue jv = UtilJson.parse( sJSON );
 
                 if( ! jv.isArray() )
                     throw new IOException( "Invalid config" );
@@ -127,6 +161,12 @@ public final class Config implements IConfig
     //------------------------------------------------------------------------//
 
     @Override
+    public boolean isModule( String name )
+    {
+        return getModule( name ) != null;
+    }
+
+    @Override
     public String getURI()
     {
         return sURI;
@@ -141,32 +181,13 @@ public final class Config implements IConfig
     }
 
     @Override
-    public IConfig set( String module, String varName, Object newValue )
-    {
-        JsonObject jo = getModule( module );
-
-        if( jo == null )
-            throw new MingleException( module +": module does not exists" );
-
-        if( newValue == null )
-            newValue = Json.NULL;
-
-        JsonValue jv = (newValue instanceof JsonValue) ? ((JsonValue) newValue)
-                                                       : UtilType.toJson( newValue.toString() );    // toString() is needed to invoke proper UtilType.toJson(...) method
-
-        jo.remove( varName ).add( varName, jv );
-
-        return this;
-    }
-
-    @Override
     public <T> T get( String module, String varName, T defValue )
     {
         // Personal note: In my NetBeans, I run Stick and Glue passing: -Dfaked_drivers="true"
         //                It is done at: NB -> Project Properties -> Run -> VM Options
 
         if( UtilStr.isEmpty( varName ) )
-            return null;
+            return toSameType( getModule( module ), defValue );
 
         varName = varName.trim();
 
@@ -324,52 +345,6 @@ public final class Config implements IConfig
     }
 
     //------------------------------------------------------------------------//
-    // GRID RELATED METHODS
-
-    @Override
-    public List<GridNode> getGridNodes()
-    {
-        JsonObject     joGrid  = getGridModule();
-        JsonValue      jaNodes = (joGrid  == null) ? null : joGrid.get( "nodes" );
-        List<GridNode> lst2Ret = (jaNodes == null) ? null : new ArrayList<>();
-
-        if( (jaNodes != null) && jaNodes.isArray() )
-        {
-            jaNodes.asArray()
-                     .forEach( (JsonValue jv) ->
-                                {
-                                    JsonObject jo = (jv.isObject()) ? jv.asObject() : null;
-
-                                    lst2Ret.add( new GridNode( (jo == null) ? null : jo.get( "targets" ),
-                                                               (jo == null) ? null : jo.get( "client"  ),
-                                                               (jo == null) ? null : jo.get( "uris"    ) ) );
-                                });
-        }
-
-        return lst2Ret;
-    }
-
-    @Override
-    public int getGridReconectInterval()
-    {
-        JsonObject joGrid = getGridModule();
-        JsonValue  jvTime = (joGrid == null) ? new JsonObject().add( "reconnect", -1 )
-                                             : joGrid.get( "reconnect" );
-
-        return (jvTime.isNumber() ? joGrid.getInt( "reconnect", -1 )
-                                  : UtilType.toInteger( UtilUnit.toMillis( joGrid.getString( "reconnect", "-1" ) ) ));
-    }
-
-    @Override
-    public boolean isGridDeaf()
-    {
-        JsonObject joGrid = getGridModule();
-        JsonValue  jvDeaf = (joGrid == null) ? null : joGrid.get( "deaf" );
-
-        return (jvDeaf != null) && jvDeaf.isBoolean() && jvDeaf.asBoolean();
-    }
-
-    //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
     private JsonObject getModule( String sName )
@@ -384,16 +359,6 @@ public final class Config implements IConfig
                     return joModule;
             }
         }
-
-        return null;
-    }
-
-    private JsonObject getGridModule()
-    {
-        JsonObject jo = getModule( "network" );
-
-        if( (jo != null) && (jo.get( "grid" ) != null) )
-            return jo.get( "grid" ).asObject();
 
         return null;
     }
@@ -421,6 +386,9 @@ public final class Config implements IConfig
 
     private <T> T toSameType( String sValue, T def )
     {
+        if( def == null )
+            throw new MingleException( "default value can not be null (for strings, use \"\")" );
+
         if( sValue == null )
             return def;
 
@@ -509,7 +477,11 @@ public final class Config implements IConfig
                 return (T) UtilType.convertArray( UtilJson.toArray( value ), defClass );
             }
         }
+        else if( def instanceof JsonValue )
+        {
+            return (T) value;
+        }
 
-        throw new MingleException( "Conversion is not supported or types don't match" );
+        throw new MingleException( "Conversion is not supported or types don't match: "+ value +" <--> "+ def );
     }
 }

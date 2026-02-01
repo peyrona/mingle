@@ -278,8 +278,9 @@ public final class      Driver
         }
 
         @Override
-        public void start(IRuntime rt)
+        public boolean start(IRuntime rt)
         {
+            return true;
         }
 
         @Override
@@ -295,12 +296,6 @@ public final class      Driver
 
         @Override
         public String getDeviceName()
-        {
-            return null;
-        }
-
-        @Override
-        public Map<String, Object> getDeviceConfig()
         {
             return null;
         }

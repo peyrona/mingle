@@ -16,7 +16,6 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.time.LocalDate;
-import java.util.function.Supplier;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
 import javax.swing.UIManager;
@@ -71,15 +70,15 @@ public class Main
                                "Suggested actions:\n"+
                                "     a) Connect with a running ExEn ('plug' icon or F2)\n"+
                                "     b) Start a local ExEn ('play' icon or F5)\n"+
-                               "     c) Open the Script-Editor ('pencil' icon or F4)." );
+                               "     c) Open the Script-Editor ('pencil' icon or F4).\n"+
+                               "\n"+
+                               "By default, configuration is read from: {*home*}config.json\n"+
+                               "It can be changed at command line by passing: -config=<URI>" );
 
                     if( shouldCheckForUpdates() )
                     {
-                        File              fBase   = new File( (UtilSys.isDevEnv ? "../todeploy" : ".") );
-                        boolean           bDryRun = UtilSys.isDevEnv;
-                        Supplier<Boolean> fnAsk   = () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); };
-
-                        Updater.updateIfNeeded( fBase, bDryRun, fnAsk );
+                        Updater.updateIfNeeded( UtilSys.isDevEnv,
+                                                () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); } );
                     }
                 } );
         }
@@ -168,25 +167,6 @@ public class Main
             JTools.resizeAsPercent( this, (UtilSys.isDevEnv ? 50 : 85), 90 );
             setLocationRelativeTo( null );
             setVisible( true );
-
-            if( UtilSys.isDevEnv )
-            {
-//                UtilSys.execute( getClass().getName(),
-//                                 500,
-//                                 () ->
-//                                    {
-//                                        try
-//                                        {
-//                                            Robot robot = new Robot();
-//                                                  robot.keyPress( KeyEvent.VK_F4 );
-//                                                  robot.keyRelease( KeyEvent.VK_F4 );
-//                                        }
-//                                        catch( AWTException ex )
-//                                        {
-//                                            JTools.error( ex );
-//                                        }
-//                                    } );
-            }
         }
 
         private void close()

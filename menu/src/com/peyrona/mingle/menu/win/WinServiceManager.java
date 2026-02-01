@@ -238,7 +238,7 @@ public class WinServiceManager extends AbstractServiceManager
         command.append( "cd '" ).append( scriptDir ).append( "'; " );
 
         // Build Java command directly instead of calling menu.ps1
-        command.append(UtilJVM.buildJavaCmd( service, lstOptions, args ) );
+        command.append( UtilJVM.javaCmdToString( UtilJVM.buildJavaCmd( service, lstOptions, args ) ) );
         command.append( "\"" );
 
         return command.toString();

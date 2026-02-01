@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Supplier;
 
 /**
@@ -19,7 +20,7 @@ import java.util.function.Supplier;
  */
 public final class Updater
 {
-    private static final java.util.concurrent.atomic.AtomicBoolean isWorking = new java.util.concurrent.atomic.AtomicBoolean( false );
+    private static final AtomicBoolean isWorking = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//
 
@@ -33,30 +34,20 @@ public final class Updater
 
         UtilCLI cli = new UtilCLI( args );
 
-        if( (args.length == 0) || cli.hasOption( "help" ) || cli.hasOption( "h" ) )
+        if( cli.hasOption( "help" ) || cli.hasOption( "h" ) )
         {
-            System.out.println( "Usage: java Updater <folder> [-dry]" );
-            System.out.println( "   folder  : Path to Mingle base directory" );
+            System.out.println( "Usage: java Updater [-dry]" );
             System.out.println( "   -dry    : Optional flag to simulate updates without modifying files" );
             System.out.println( "   -help|-h: Show this help" );
-            System.exit( (args.length == 0) ? 1 : 0 );
+            System.exit( 0 );
         }
 
         UtilSys.setLogger( "Updater", UtilSys.getConfig() )
                .setLevel( ILogger.Level.ALL );
 
-        boolean dryRun   = cli.hasOption( "dry" );
-        String pathArg   = args[0];
+        boolean dryRun  = cli.hasOption( "dry" );
 
-        if( pathArg == null || pathArg.trim().isEmpty() )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error: Base directory path cannot be null or empty" );
-            System.exit( 1 );
-        }
-
-        File fBaseDir = new File( pathArg );
-
-        updateIfNeeded( fBaseDir, dryRun, () -> { return true; } );
+        updateIfNeeded( dryRun, () -> { return true; } );
 
         System.exit( 0 );
     }
@@ -71,33 +62,18 @@ public final class Updater
         return isWorking.get();
     }
 
-    //------------------------------------------------------------------------//
-
     /**
      * Checks if updates are needed by comparing catalog.json versions.
      * If versions differ, executes the consumer with the number of files needing updates.
      *
-     * @param fMingleDir Base directory path to check
      * @param bDryRun If true, simulate updates without modifying files
      * @param fnExcuteUpdate Receives the number of files that are needed to be updated and returns true if the update method has to be invoked.
      */
-    public static void updateIfNeeded( File fMingleDir, boolean bDryRun, Supplier<Boolean> fnExcuteUpdate )
+    public static void updateIfNeeded( boolean bDryRun, Supplier<Boolean> fnExcuteUpdate )
     {
-        if( fMingleDir == null )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
-            return;
-        }
-
         if( fnExcuteUpdate == null )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, "Update function cannot be null" );
-            return;
-        }
-
-        if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
             return;
         }
 
@@ -106,11 +82,11 @@ public final class Updater
         try
         {
             UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions" );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             // Get local catalog version
-            File localCatalogFile = new File( fMingleDir, "etc/catalog.json" );
-            String localVersion = null;
+            File   localCatalogFile = new File( UtilSys.getEtcDir(), "catalog.json" );
+            String localVersion     = null;
 
             if( localCatalogFile.exists() && localCatalogFile.isFile() )
             {
@@ -143,7 +119,7 @@ public final class Updater
 
             tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
 
-            if( GitHubApiClient.downloadFileFromRoot( "todeploy/etc/catalog.json", tempRemoteCatalog.toPath() ) )
+            if( GitHubApiClient.downloadFileFromRoot( "catalog.json", tempRemoteCatalog.toPath() ) )
             {
                 String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath(), StandardCharsets.UTF_8 );
 
@@ -156,11 +132,6 @@ public final class Updater
                 {
                     UtilSys.getLogger().log( ILogger.Level.WARNING, "Remote catalog.json is empty" );
                 }
-            }
-            else
-            {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to download remote catalog.json" );
-                return;
             }
 
             // Compare versions
@@ -177,7 +148,20 @@ public final class Updater
                 UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
 
                 if( fnExcuteUpdate.get() )
-                    update( fMingleDir, bDryRun, tempRemoteCatalog );
+                {
+                    if( update( bDryRun, tempRemoteCatalog ) && ! bDryRun )
+                    {
+                        try
+                        {
+                            Files.copy( tempRemoteCatalog.toPath(), localCatalogFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING );
+                            UtilSys.getLogger().log( ILogger.Level.INFO, "Updated local catalog.json" );
+                        }
+                        catch( Exception e )
+                        {
+                            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Failed to update local catalog.json" );
+                        }
+                    }
+                }
             }
         }
         catch( Exception e )
@@ -194,20 +178,12 @@ public final class Updater
     /**
      * Updates files from GitHub repository for the specified path.
      *
-     * @param fMingleDir Base directory path to check
      * @param bDryRun If true, simulate updates without modifying files
      * @param catalogFile The catalog file to use for the update.
      * @return true if update process completed successfully, false otherwise
      */
-    public static boolean update( File fMingleDir, boolean bDryRun, File catalogFile )
+    public static boolean update( boolean bDryRun, File catalogFile )
     {
-        // Input validation
-        if( fMingleDir == null )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory cannot be null" );
-            return false;
-        }
-
         // Set working state to true before starting the update process
         if( ! isWorking.compareAndSet( false, true ) )
         {
@@ -217,16 +193,16 @@ public final class Updater
 
         try
         {
-            if( ! fMingleDir.exists() || ! fMingleDir.isDirectory() )
+            if( ! UtilSys.fHomeDir.exists() || ! UtilSys.fHomeDir.isDirectory() )
             {
-                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + fMingleDir.getAbsolutePath() );
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Base directory does not exist or is not a directory: " + UtilSys.fHomeDir.getAbsolutePath() );
                 return false;
             }
 
             UtilSys.getLogger().log( ILogger.Level.INFO, "Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + fMingleDir.getAbsolutePath() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
-            GitHubFileUpdater updater = new GitHubFileUpdater( fMingleDir, bDryRun );
+            GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun );
             updater.checkAndUpdateFiles(catalogFile);
 
             UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );

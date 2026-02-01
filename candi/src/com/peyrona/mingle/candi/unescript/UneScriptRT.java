@@ -16,6 +16,7 @@ import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Lexeme;
 import com.peyrona.mingle.lang.lexer.Lexer;
@@ -43,7 +44,7 @@ public class UneScriptRT implements ICandi.ILanguage
     @Override
     public ICandi.IPrepared prepare( String source, String call )
     {
-        assert call == null || call.isEmpty();    // Une does not have 'function' concept
+        assert UtilStr.isEmpty( call );    // Une does not have 'function' (entry-point) concept
 
         Prepared prep  = new Prepared( source );
         Lexer    lexer = new Lexer( source );
@@ -156,20 +157,20 @@ public class UneScriptRT implements ICandi.ILanguage
 
                 case AssignExpression:
                     if( xprEval == null )
-                        xprEval = runtime.newXprEval().build( action.getValueToSet().toString(), null, runtime.newGroupWiseFn() );
+                        xprEval = runtime.newXprEval().build( action.getValueToSet().toString(), null, runtime::getGroupMemberNames );
 
                     value = eval( runtime );
                     break;
 
                 case Expression:
                     if( xprEval == null )
-                        xprEval = runtime.newXprEval().build( action.getTargetName(), null, runtime.newGroupWiseFn() );
+                        xprEval = runtime.newXprEval().build( action.getTargetName(), null, runtime::getGroupMemberNames );
 
                     eval( runtime );     // Do not assign return value (if any) to value
                     break;
 
                 case RuleOrScript:
-                    runtime.bus().post(new MsgExecute( action.getTargetName(), false ), action.getDelay() );
+                    runtime.bus().post( new MsgExecute( action.getTargetName(), false ), action.getDelay() );
                     break;
             }
 

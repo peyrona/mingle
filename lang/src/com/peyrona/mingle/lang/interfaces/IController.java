@@ -66,13 +66,6 @@ public interface IController
     String getDeviceName();
 
     /**
-     * Returns the configuration for the associated device.
-     *
-     * @return The configuration for the associated device.
-     */
-    Map<String,Object> getDeviceConfig();
-
-    /**
      * Reads device's value: Boolean, Number or String (can not be null).
      * <p>
      * Controller has to invoke ::Listener:onChanged(...) method passing device's
@@ -108,8 +101,9 @@ public interface IController
      * initialization tasks.
      *
      * @param rt
+     * @return true the first time this method is being invoked, false otherwise (it was invoked previously).
      */
-    void start( IRuntime rt );
+    boolean start( IRuntime rt );
 
     /**
      * This method provides the Controller the opportunity to make some housekeeping before

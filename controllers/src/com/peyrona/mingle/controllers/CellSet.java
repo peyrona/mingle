@@ -73,9 +73,10 @@ public final class   CellSet
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        super.start( rt );
+        if( ! super.start( rt ) )
+            return false;
 
         CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::setDeviceConfig(...)) for this CellSet instance
 
@@ -84,12 +85,12 @@ public final class   CellSet
         else                             map.put( getDeviceName(), cv );
 
         if( isInvalid() )
-            return;
+            return false;
 
         synchronized( this )
         {
             if( dis != null )
-                return;
+                return true;
 
             Consumer<MsgDeviceChanged> consumer = (msg) ->
                 {
@@ -120,6 +121,8 @@ public final class   CellSet
 
             rt.bus().add( ebl, MsgDeviceChanged.class );
         }
+
+        return isValid();
     }
 
     @Override
@@ -320,7 +323,7 @@ public final class   CellSet
                     str = str.substring( 1 )          // substr to avoid '='
                              .replace( '\'', '"' );   // e.g.: "myDevice +'%'"
 
-                    xpreval = getRuntime().newXprEval().build( str, null, getRuntime().newGroupWiseFn() );
+                    xpreval = getRuntime().newXprEval().build( str, null, getRuntime()::getGroupMemberNames );
 
                     if( xpreval != null )
                     {

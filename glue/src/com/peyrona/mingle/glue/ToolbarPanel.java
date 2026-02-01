@@ -75,12 +75,7 @@ final class ToolbarPanel extends javax.swing.JPanel
     {
         if( (frmEditor != null) && (! frmEditor.isClosed()) )
         {
-            UneMultiEditorPanel umep = JTools.getChild( frmEditor, UneMultiEditorPanel.class );
-
-            if( umep.isAnyScriptUnsaved() && JTools.confirm( "There is one or more unsaved modified scripts.\nDo you want to cancel exiting?" ) )
-                return false;
-
-            frmEditor.dispatchEvent( new WindowEvent( frmEditor, WindowEvent.WINDOW_CLOSING ) );    // Gently tells the editor to close
+            JTools.getChild( frmEditor, UneMultiEditorPanel.class ).closeAll( frmEditor );
         }
 
         if( (procExEn != null) && JTools.confirm( "You started an 'ExEn'.\nDo you want to stop it?" ) )
@@ -314,7 +309,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                           .title( "Editor for the Mingle Standard Platform (MSP)" )
                           .icon( "editor-256x256.png" )
                           .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
-                          .onClose( GFrame.DISPOSE_ON_CLOSE )
+                          .onClose( (frm) -> JTools.getChild( frm, UneMultiEditorPanel.class ).closeAll( frm ) )
                           .setVisible()
                           .sizeAsPercent( -1, 90 );    // -1 keeps width, but works only after :pack()
     }

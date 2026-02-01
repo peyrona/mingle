@@ -273,12 +273,6 @@ public class UtilComm
     }
 
     /**
-     * Passing "https://peyrona.com:8080", returns "peyrona.com"
-     *
-     * @param sURI To extract the host from.
-     * @return The host or null if passed URI has no host.
-     */
-    /**
      * Returns the host from the given URI, or null if the URI has no host.
      * <p>
      * Example: "https://peyrona.com:8080" returns "peyrona.com"
@@ -456,6 +450,23 @@ public class UtilComm
                address.isAnyLocalAddress()  ||
                address.isLinkLocalAddress() ||
                isPrivateAddress( address );
+    }
+
+    /**
+     * Checks if the given host is localhost (including "127.0.0.1" and "::1").
+     * @param host The host to test.
+     * @return true or false.
+     */
+    public static boolean isLocalhost( String host )
+    {
+        if( UtilStr.isEmpty( host ) )
+            return false;
+
+        String hostOnly = getHost( host );
+
+        return "localhost".equalsIgnoreCase( hostOnly )
+            || "127.0.0.1".equals( hostOnly )
+            || "::1".equals( hostOnly );
     }
 
     /**

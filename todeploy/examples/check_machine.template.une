@@ -2,8 +2,7 @@
 # Template for machine monitoring
 # Parameters: _NAME_, _IP_
 #
-# This file is intended to be included with parameterized INCLUDE:
-#   INCLUDE "check_machine.template" USE _IP_ AS "192.168.6.9"; _NAME_ AS "E1"
+# This file is intended to be included with parameterized INCLUDE
 #==================================================================================================================================
 
 DEVICE {*_NAME_*}_counter

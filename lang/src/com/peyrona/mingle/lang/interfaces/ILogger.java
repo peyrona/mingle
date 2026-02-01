@@ -11,8 +11,9 @@ public interface ILogger
 {
     public static enum Level
     {
-        OFF(     60 ),
-        SEVERE(  50 ),
+        OFF(     70 ),
+        SEVERE(  60 ),
+        ERROR(   50 ),     // Used only by the Expressions Evaluator
         WARNING( 40 ),
         INFO(    30 ),
         RULE(    20 ),     // Trace rules only

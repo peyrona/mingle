@@ -70,19 +70,16 @@ final class Checker
                 return;
         }
 
-        boolean isForGrid = config.get( null, "grid", false ) || (config.getGridNodes() != null);
+        boolean isForGrid = config.get( null, "grid", false );
 
-        if( ! isForGrid )
+        checkCmdsName( tus, isForGrid );
+
+        // When there are errors in names, can not continue with further checks
+
+        for( TransUnit tu : tus )
         {
-            checkCmdsName( tus );
-
-            // When there are errors in names, can not continue with further checks
-
-            for( TransUnit tu : tus )
-            {
-                if( tu.hasErrors() )
-                    return;
-            }
+            if( tu.hasErrors() )
+                return;
         }
 
         for( TransUnit tu : tus )
@@ -183,6 +180,10 @@ final class Checker
                         if( ! oDrvConfItem.isSameType( oDvcDrvCfgValue ) )
                         {
                             tuDeviceOwner.addError( new CodeError( '"'+ sDvcDrvCfgName +"\": invalid data type. Expected '"+ oDrvConfItem.type, oDvcDrvCfgValue ) );
+                        }
+                        else if( oDvcDrvCfgValue.isString() && oDvcDrvCfgValue.text().isEmpty() )
+                        {
+                            tuDeviceOwner.addError( new CodeError( '"'+ sDvcDrvCfgName +"\": invalid value: empty string", oDvcDrvCfgValue ) );
                         }
 
                         bFound = true;
@@ -355,23 +356,27 @@ final class Checker
      * Checks that all referred names (for Devices, Scripts, Drivers and Rules) exist and that there are no duplicated names.
      *
      * @param tus
+     * @param isForGrid
      */
-    private void checkCmdsName( List<TransUnit> tus )
+    private void checkCmdsName( List<TransUnit> tus, boolean isForGrid )
     {
         // Fills a map to look for duplicated names while filling
 
         Map<String, Pair<TransUnit, ParseBase>> mapNames = new HashMap<>();    // To check all command names are unique
 
-        for( TransUnit tu : tus )
+        if( ! isForGrid )
         {
-            for( ParseBase pc : tu.getCommands() )
+            for( TransUnit tu : tus )
             {
-                if( UtilStr.isNotEmpty( pc.getName() ) )
+                for( ParseBase pc : tu.getCommands() )
                 {
-                    String name = pc.getName().text().toLowerCase();
+                    if( UtilStr.isNotEmpty( pc.getName() ) )
+                    {
+                        String name = pc.getName().text().toLowerCase();
 
-                    if( mapNames.containsKey( name ) )  createDuplicateNameError( tu, pc, mapNames );     // Name is duplicated
-                    else                                mapNames.put( name, new Pair( tu, pc ) );
+                        if( mapNames.containsKey( name ) )  createDuplicateNameError( tu, pc, mapNames );     // Name is duplicated
+                        else                                mapNames.put( name, new Pair( tu, pc ) );
+                    }
                 }
             }
         }
@@ -392,7 +397,9 @@ final class Checker
             {
                 if( pd.drvName != null )    // Although it is mandatory it could be null at this moment
                 {
-                    if( bAuto && ! AutoInclude.addDriver2Unit( pd.drvName, tu ) )
+                    boolean bFound = bAuto && AutoInclude.addDriver2Unit( pd.drvName, tu );
+
+                    if( bAuto && ! bFound && ! isForGrid )
                     {
                         tu.addError( new CodeError( "DEVICE refers to a DRIVER named \""+ pd.drvName +"\", but there is no DRIVER with such name.",
                                                     pd.findInClause( "driver", pd.drvName ) ) );
@@ -406,7 +413,9 @@ final class Checker
             {
                 if( pd.script != null  )    // Although it is mandatory it could be null at this moment
                 {
-                    if( bAuto && ! AutoInclude.addScript2Unit( pd.script, tu ) )
+                    boolean bFound = bAuto && AutoInclude.addScript2Unit( pd.script, tu );
+
+                    if( bAuto && ! bFound && ! isForGrid )
                     {
                         tu.addError( new CodeError( "DRIVER refers to a SCRIPT named \""+ pd.script +"\", but there is no SCRIPT with such name.",
                                                     pd.findInClause( "script", pd.script ) ) );
@@ -558,8 +567,10 @@ final class Checker
         static boolean addDriver2Unit( String name, TransUnit tu )
         {
             for( ParseDriver driver : tu.getCommands( ParseDriver.class ) )
+            {
                 if( driver.getName().isText( name ) )
-                        return true;     // The driver is already part of the Transpiler Unit
+                    return true;     // The driver is already part of the Transpiler Unit
+            }
 
             ParseDriver driver = mapDrivers.get( name.toLowerCase() );
 
@@ -571,9 +582,11 @@ final class Checker
 
         static boolean addScript2Unit( String name, TransUnit tu )
         {
-            for( ParseDriver driver : tu.getCommands( ParseDriver.class ) )
-                if( driver.getName().isText( name ) )
-                        return true;     // The driver is already part of the Transpiler Unit
+            for( ParseScript script : tu.getCommands( ParseScript.class ) )
+            {
+                if( UtilStr.isNotEmpty( script.getName() ) && script.getName().isText( name ) )
+                    return true;     // The script is already part of the Transpiler Unit
+            }
 
             ParseScript script = mapScripts.get( name.toLowerCase() );
 

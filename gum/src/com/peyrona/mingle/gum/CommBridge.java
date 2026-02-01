@@ -2,17 +2,17 @@ package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.lang.MingleException;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.Pair;
-import com.peyrona.mingle.lang.japi.UtilReflect;
+import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URISyntaxException;
+import com.peyrona.mingle.network.NetworkBuilder;
+import com.peyrona.mingle.network.NetworkConfig;
+import com.peyrona.mingle.network.socket.SocketClient;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -67,7 +67,9 @@ public class CommBridge extends WebSocketAdapter
         EXECUTE( "Execute" ),
         ERROR(   "Error" ),
         ADDED(   "Added" ),
-        REMOVED( "Removed" );
+        REMOVED( "Removed" ),
+        PING(    "PING" ),
+        PONG(    "PONG" );
 
         private final String value;
 
@@ -207,6 +209,15 @@ public class CommBridge extends WebSocketAdapter
                 return;
 
             JsonObject messageJson = Json.parse( message ).asObject();
+
+            // Handle PING messages immediately (heartbeat mechanism)
+            if( messageJson.get( "type" ) != null && "PING".equals( messageJson.getString( "type", "" ) ) )
+            {
+                long timestamp = messageJson.getLong( "ts", System.currentTimeMillis() );
+                sendPong( session, timestamp );
+                return;
+            }
+
             JsonObject exenAddress = extractExEnAddress( messageJson );
 
             if( exenAddress == null )
@@ -324,7 +335,7 @@ public class CommBridge extends WebSocketAdapter
             try
             {
                 // 1. Prepare and connect the client (Heavy operation in background thread)
-                client = getNetClient();
+                client = getNetClient( exenAddress );
                 client.add( new ExEnListener() );
                 client.connect( exenAddress.toString() );  // This may block
 
@@ -359,34 +370,162 @@ public class CommBridge extends WebSocketAdapter
                 // Clean up the partially created client if it exists
                 if( client != null )
                 {
-                    try { client.disconnect(); } catch( Exception ignored ) {}
+                    try { client.disconnect(); }
+                    catch( Exception ignored ) {}
                 }
 
-                // Send error to client
                 sendErrorToClient( session, exenAddress, "Cannot connect to ExEn: " + exenAddress );
             }
             finally
             {
-                // Remove from pending connections
                 pendingConnections.remove( pendingKey );
             }
         });
     }
 
-    private static INetClient getNetClient()
+    /**
+     * Creates a network client for connecting to the specified ExEn.
+     * Attempts to find matching network protocol from grid configuration,
+     * falls back to plain SocketClient if not found.
+     *
+     * @param exenAddress The target ExEn address from browser message
+     * @return INetClient instance configured for the target ExEn
+     */
+    private static INetClient getNetClient( JsonObject exenAddress )
     {
-        String   sClass = UtilSys.getConfig().get( "monitoring", "client", "com.peyrona.mingle.network.socket.SocketClient" );
-        String[] asURIs = UtilSys.getConfig().get( "monitoring", "uris"  , new String[] { "file://{*home.lib*}network.jar" } );
+        try
+        {
+            String targetAddress = normalizeAddress( exenAddress );
+
+            if( UtilStr.isNotEmpty( targetAddress ) )
+            {
+                JsonValue networkRef = findMatchingGridNode( targetAddress );
+
+                if( networkRef != null && ! networkRef.isNull() )
+                {
+                    // Resolve the network configuration (handles string names and objects with overrides)
+                    JsonValue resolvedConfig = NetworkConfig.getAsNetwork( networkRef );
+
+                    if( resolvedConfig != null && ! resolvedConfig.isNull() && resolvedConfig.isObject() )
+                    {
+                        // Build client using NetworkBuilder
+                        INetClient client = NetworkBuilder.buildClient( resolvedConfig.toString() );
+
+                        if( client != null )
+                        {
+                            if( logger.isLoggable( ILogger.Level.INFO ) )
+                                logger.log( Level.INFO, "Created network client from grid config for: " + targetAddress );
+
+                            return client;
+                        }
+                    }
+                }
+            }
+        }
+        catch( Exception e )
+        {
+            logWarning( "Failed to create client from grid config, falling back to SocketClient", e );
+        }
+
+        // Fallback: When no network protocol is found, use SocketClient
+        if( logger.isLoggable( ILogger.Level.INFO ) )
+            logger.log( Level.INFO, "Using default SocketClient for: " + exenAddress );
+
+        return new SocketClient();
+    }
+
+    /**
+     * Extracts a normalized host:port string from an ExEn address JsonObject.
+     * Handles both formats: {"host": "hostname:port"} and {"host": "hostname", "port": port}
+     *
+     * @param exenAddress The ExEn address JsonObject
+     * @return Normalized "host:port" string for matching, or just "host" if no port
+     */
+    private static String normalizeAddress( JsonObject exenAddress )
+    {
+        if( exenAddress == null )
+            return null;
+
+        String host = exenAddress.getString( "host", null );
+
+        if( UtilStr.isEmpty( host ) )
+            return null;
+
+        // Check if host already contains port (e.g., "192.168.1.100:55880")
+        int port = UtilComm.getPort( host, -1 );
+
+        if( port > 0 )
+            return UtilComm.getHost( host ) + ":" + port;
+
+        // Try to get port from separate field
+        port = exenAddress.getInt( "port", -1 );
+
+        return (port > 0) ? (host + ":" + port) : host;
+    }
+
+    /**
+     * Finds the grid node configuration that matches the given target address.
+     * Searches the "grid.nodes" array in config.json for a matching host.
+     * Localhost entries are skipped (they define local servers, not remote ExEns).
+     *
+     * @param targetHost The target host (may include :port)
+     * @return The matching grid node's network configuration, or null if no match
+     */
+    private static JsonValue findMatchingGridNode( String targetHost )
+    {
+        if( UtilStr.isEmpty( targetHost ) )
+            return null;
 
         try
         {
-            return UtilReflect.newInstance( INetClient.class, sClass, asURIs );
+            List<JsonValue> nodes = NetworkConfig.getGridNodes();
+
+            if( nodes == null || nodes.isEmpty() )
+                return null;
+
+            String targetHostOnly = UtilComm.getHost( targetHost );
+            int    targetPort     = UtilComm.getPort( targetHost, -1 );
+
+            for( JsonValue nodeValue : nodes )
+            {
+                if( ! nodeValue.isObject() )
+                    continue;
+
+                JsonObject node     = nodeValue.asObject();
+                String     nodeHost = node.getString( "host", null );
+
+                if( UtilStr.isEmpty( nodeHost ) )
+                    continue;
+
+                // Skip localhost entries (they define local servers, not remote ExEns)
+                if( UtilComm.isLocalhost( nodeHost ) )
+                    continue;
+
+                String nodeHostOnly = UtilComm.getHost( nodeHost );
+                int    nodePort     = UtilComm.getPort( nodeHost, -1 );
+
+                // Match host (case-insensitive)
+                if( targetHostOnly.equalsIgnoreCase( nodeHostOnly ) )
+                {
+                    // If both have ports, they must match; otherwise host match is sufficient
+                    if( targetPort > 0 && nodePort > 0 )
+                    {
+                        if( targetPort == nodePort )
+                            return node.get( "network" );
+                    }
+                    else
+                    {
+                        return node.get( "network" );
+                    }
+                }
+            }
         }
-        catch( ClassNotFoundException | InstantiationException | IllegalAccessException   | NoSuchMethodException |
-               URISyntaxException     | IOException            | IllegalArgumentException | InvocationTargetException exc )
+        catch( Exception e )
         {
-            throw new MingleException( exc );
+            logWarning( "Error searching grid nodes", e );
         }
+
+        return null;
     }
 
     /**
@@ -475,6 +614,34 @@ public class CommBridge extends WebSocketAdapter
     }
 
     /**
+     * Sends a PONG response to the client (heartbeat mechanism).
+     *
+     * @param session   The WebSocket session
+     * @param timestamp The timestamp from the PING message to echo back
+     */
+    private static void sendPong( Session session, long timestamp )
+    {
+        if( session == null || ! session.isOpen() )
+            return;
+
+        try
+        {
+            JsonObject pongResponse = new JsonObject()
+                    .add( "type", MessageType.PONG.getValue() )
+                    .add( "ts", timestamp );
+
+            sendToWebSocket( session, pongResponse.toString() );
+
+            if( logger.isLoggable( Level.INFO ) )
+                logger.log( Level.INFO, "PONG sent to session: " + session );
+        }
+        catch( Exception e )
+        {
+            logWarning( "Failed to send PONG response", e );
+        }
+    }
+
+    /**
      * Sends an error message to the client without closing the session.
      * Use this for recoverable errors like invalid messages or temporarily unavailable ExEn.
      */
@@ -531,6 +698,7 @@ public class CommBridge extends WebSocketAdapter
         {
             if( logger.isLoggable( ILogger.Level.INFO ) )
                 logWarning( "Attempted to send to closed WebSocket: " + session, null );
+
             return;
         }
 

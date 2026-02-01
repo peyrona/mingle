@@ -24,6 +24,8 @@ public final class ParseScript extends ParseBase
     public  final        String[] from;
     public  final        boolean  isOnStart;
     public  final        boolean  isOnStop;
+    public  final        boolean  isPreStart;   // PRE ONSTART phase: executes before entities are created
+    public  final        boolean  isPreStop;    // PRE ONSTOP phase: executes while entities still work
     public  final        boolean  isInline;
     private final static String   sKEY = "SCRIPT";
 
@@ -40,7 +42,7 @@ public final class ParseScript extends ParseBase
 
     public ParseScript( List<Lexeme> lstToken )
     {
-        super( lstToken, "script", "from", "language", "call", "onstart", "onstop" );
+        super( lstToken, "script", "from", "language", "call", "onstart", "onstop", "pre" );
 
         List<Lexeme> lstTokenFrom = getClauseContents( "FROM" );
 
@@ -49,11 +51,19 @@ public final class ParseScript extends ParseBase
         language  = getLang( getClauseContents( "language" ) );                               // Before 'from' because 'from' uses it
         callName  = getCall( getClauseContents( "call"     ) );                               // This must preserve the string-case
         from      = getFrom( getClauseContents( "from"     ) );
-        isOnStart = getClauseContents( "onstart" ) != null;
-        isOnStop  = getClauseContents( "onstop"  ) != null;
 
-        if( (name == null) && (! (isOnStart || isOnStop)) )
-            addError( "SCRIPT has no name: this is allowed only when it is either ONSTART or ONSTOP:", lstToken.get(0) );
+        // Detect PRE ONSTART and PRE ONSTOP compound clauses
+        boolean hasPreOnStart = hasClauseSequence( "pre", "onstart" );
+        boolean hasPreOnStop  = hasClauseSequence( "pre", "onstop"  );
+
+        // Regular ONSTART/ONSTOP only if not preceded by PRE
+        isPreStart = hasPreOnStart;
+        isPreStop  = hasPreOnStop;
+        isOnStart  = !hasPreOnStart && getClauseContents( "onstart" ) != null;
+        isOnStop   = !hasPreOnStop  && getClauseContents( "onstop"  ) != null;
+
+        if( (name == null) && (! (isOnStart || isOnStop || isPreStart || isPreStop)) )
+            addError( "SCRIPT has no name: this is allowed only when it is either ONSTART, ONSTOP, PRE ONSTART or PRE ONSTOP:", lstToken.get(0) );
     }
 
     //------------------------------------------------------------------------//
@@ -66,6 +76,8 @@ public final class ParseScript extends ParseBase
                                          language.toLowerCase(),
                                          isOnStart,
                                          isOnStop,
+                                         isPreStart,
+                                         isPreStop,
                                          isInline,
                                          from,
                                          callName );    // Must preserve case

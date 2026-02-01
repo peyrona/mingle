@@ -22,6 +22,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
+import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import java.util.Map;
 import java.util.Random;
 import java.util.concurrent.ScheduledFuture;
@@ -42,16 +43,35 @@ import java.util.function.Consumer;
 public final class   RPiGpioPin
              extends ControllerBase
 {
-    private static volatile boolean isBCM = false;
-
     private ScheduledFuture timer = null;
     private IPin            pin   = null;
 
     //------------------------------------------------------------------------//
+    // PUBLIC SCOPE
 
-    public RPiGpioPin()
+    @Override
+    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
-        if( isFaked() )
+        setListener( listener );         // Must be at begining: in case an error happens, Listener is needed
+        setDeviceName( deviceName );     // Must be second line to have name of device in case of error
+        setDeviceConfig( deviceConf );   // Stores the device configuration
+        setValid( true );                // So far this is valid, but start() can change it
+    }
+
+    @Override
+    public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        Object  value = StdXprFns.invoke( "get", "RPiNumberingModel" );
+        boolean isBCM = value.toString().equalsIgnoreCase( "BCM" );
+
+        initWiringPi( isBCM );          // Must be 2nd line because in case of error, the start(...) is needed
+        createPin( isBCM );
+        setValid( pin != null );
+
+        if( isValid() && isFaked() )    // isFaked() is initialized by super:start(...)
         {
             timer = UtilSys.executeWithDelay( getClass().getName(),
                                               5000l, 3000l,    // After 5 secs (initial delay), every 3 secs
@@ -60,31 +80,8 @@ public final class   RPiGpioPin
                                                             sendReaded( pin.read() );                               // a new random value
                                                     } );
         }
-    }
 
-    //------------------------------------------------------------------------//
-    // PUBLIC SCOPE
-
-    @Override
-    public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
-    {
-        setListener( listener );      // Must be at begining: in case an error happens, Listener is needed
-        setDeviceName( deviceName );  // Must be second line to have name of device in case of error
-        setValid( true );             // So far this is valid, but start() can change it
-        setDeviceConfig( deviceConf );
-    }
-
-    @Override
-    public void start( IRuntime rt )
-    {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
-
-        initWiringPi();         // Must be 2nd line because in case of error, the start(...) is needed
-        createPin( getDeviceConfig() );
-        setValid( pin != null );
+        return isValid();
     }
 
     @Override
@@ -166,7 +163,7 @@ public final class   RPiGpioPin
      * @param deviceName
      * @param mapConfig
      */
-    private void createPin( Map<String,Object> mapConfig )
+    private void createPin( boolean isBCM )
     {
         // GPIO pin category	      Recommended state
         // -----------------------    ------------------
@@ -182,30 +179,30 @@ public final class   RPiGpioPin
         boolean isButton  = false;
         int     nPull     = (isInput ? WiringPi.PULL_DOWN : WiringPi.PULL_UP);   // Default value
         int     debounce  = 0;                                                   // Default value
-        int     address   = UtilType.toInteger( mapConfig.get( "pin" ) );        // Transpiler ensures this value is a number (exists because is REQUIRED)
+        int     address   = UtilType.toInteger( get( "pin" ) );                  // Transpiler ensures this value is a number (exists because is REQUIRED)
 
-        if( mapConfig.containsKey( "pull" ) )
+        if( get( "pull" ) != null )
         {
-            String sPull = mapConfig.get( "pull" ).toString().toLowerCase();
+            String sPull = get( "pull" ).toString().toLowerCase();
 
             switch( sPull )
             {
                 case "off" : nPull = WiringPi.PULL_OFF;  break;     // Done in this way for cality sake
                 case "up"  : nPull = WiringPi.PULL_UP;   break;
                 case "down": nPull = WiringPi.PULL_DOWN; break;
-                default    : sendIsInvalid( address +": invalid type: "+ mapConfig.get( "pull" ) );
+                default    : sendIsInvalid( address +": invalid type: "+ get( "pull" ) );
                              bSuccesss = false;
             }
         }
 
-        if( mapConfig.containsKey( "debounce" ) )
-            debounce = UtilType.toInteger( mapConfig.get( "debounce" ) );
+        if( get( "debounce" ) != null )
+            debounce = UtilType.toInteger( get( "debounce" ) );
 
-        if( mapConfig.containsKey( "isbutton" ) )
-            isButton = (boolean) mapConfig.get( "isbutton" );              // Transpiler ensures this value is a boolean
+        if( get( "isbutton" ) != null )
+            isButton = (boolean) get( "isbutton" );                 // Transpiler ensures this value is a boolean
 
-        if( mapConfig.containsKey( "invert" ) )
-            isInvert = (boolean) mapConfig.get( "invert" );                // Transpiler ensures this value is a boolean
+        if( get( "invert" ) != null )
+            isInvert = (boolean) get( "invert" );                   // Transpiler ensures this value is a boolean
 
         // Now it is needed to check the consistency of the parameters -------------------------------------------------
 
@@ -213,7 +210,7 @@ public final class   RPiGpioPin
             sendGenericError( ILogger.Level.WARNING, "\"pull\" is \"off\": most applications do not want this" );
 
         if( isInput && (nPull != WiringPi.PULL_DOWN) )
-            sendGenericError( ILogger.Level.WARNING, "When \"mode\" is \"input\", the \"pull\" normally is \"down\", but it is \""+ mapConfig.get( "pull" ) +'\"' );
+            sendGenericError( ILogger.Level.WARNING, "When \"mode\" is \"input\", the \"pull\" normally is \"down\", but it is \""+ get( "pull" ) +'\"' );
 
         if( (address < 0) || (address > 31) )     // Both BMC and WiringPi pins are from 0 to 31
         {
@@ -241,8 +238,8 @@ public final class   RPiGpioPin
             debounce = 0;
         }
 
-        if( isButton && (! mapConfig.containsKey( "debounce" )) )
-            debounce = 50;
+        if( isButton && (get( "debounce" ) == null) )
+            debounce = 50;    // Default debounce value
 
         //------------------------------------------------------------------------//
 
@@ -278,7 +275,7 @@ public final class   RPiGpioPin
     /**
      * To initiate WiringPi it is needed to know the Numbering Model and it is set inside config.json or a O.S. environment variable
      */
-    private void initWiringPi()
+    private void initWiringPi( boolean isBCM )
     {
         if( isFaked() || WiringPi.isInited() )
             return;
@@ -302,10 +299,12 @@ public final class   RPiGpioPin
 
     private boolean get( String sKey, String sValue, boolean bDefault )    // Just to make code more clear
     {
-        if( getDeviceConfig().containsKey( sKey ) )
-            return ! getDeviceConfig().get( sKey ).toString().equalsIgnoreCase( sValue );
+        Object oValue = get( sKey );
 
-        return bDefault;
+        if( oValue == null )
+            return bDefault;
+
+        return ! oValue.toString().equalsIgnoreCase( sValue );
     }
 
     private void failed( String msg )

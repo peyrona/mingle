@@ -146,6 +146,12 @@ public final class Lexeme implements ITokenable
         return this;
     }
 
+    /**
+     * Returns true if passed string is equals (case ignored) to the internal text.
+     *
+     * @param text
+     * @return true if equals to internal text
+     */
     public boolean isText( String text )
     {
         return this.text.equalsIgnoreCase( text );

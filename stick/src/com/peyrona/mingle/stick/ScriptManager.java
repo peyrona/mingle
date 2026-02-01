@@ -31,6 +31,33 @@ final class   ScriptManager
     //------------------------------------------------------------------------//
 
     /**
+     * Executes all PRE ONSTART phase scripts (before entities are created).
+     */
+    void runPreStartScripts()
+    {
+        forEach( script ->
+                {
+                    if( script.isPreStart() )
+                    {
+                        script.start( runtime );    // Prepare the script
+                        script.execute();           // Direct execution - no EventBus involved
+                    }
+                } );
+    }
+
+    /**
+     * Executes all PRE ONSTOP phase scripts (while entities still work).
+     */
+    void runPreStopScripts()
+    {
+        forEach( script ->
+                {
+                    if( script.isPreStop() )
+                        script.execute();     // Direct execution - entities are still available
+                } );
+    }
+
+    /**
      * This method is invoked by Stick::remove(...) and can not be auto-invoked because so far
      * I can not find a way to solve this: what if the script is going to be used by another
      * native SCRIPT (from Java, Une, etc...)
@@ -45,7 +72,9 @@ final class   ScriptManager
 
         forEach( (IScript scpt) ->
                 {
-                    if( (! isStarted() && scpt.isOnStart()) || scpt.isOnStop() )    // Add all that are ONSTART (if not started yet) or ONSTOP
+                    // Add all that are ONSTART (if not started yet), ONSTOP, PRE ONSTART, or PRE ONSTOP
+                    if( (! isStarted() && scpt.isOnStart()) || scpt.isOnStop() ||
+                        scpt.isPreStart() || scpt.isPreStop() )
                     {
                         lstUsed.add( scpt );
                     }

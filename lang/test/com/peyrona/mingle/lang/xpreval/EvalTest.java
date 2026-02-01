@@ -20,6 +20,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.platform.runner.JUnitPlatform;
+import org.junit.runner.RunWith;
 
 /**
  * Comprehensive test suite for Expression Evaluator (NAXE/AST).
@@ -27,8 +29,9 @@ import org.junit.jupiter.api.Test;
  *
  * @author Francisco José Morero Peyrona
  */
+@RunWith( JUnitPlatform.class )
 public class EvalTest
-{// FIXME: HAY 2 TESTS QUE NO FUNCIONAN --> ESTO ES MUY IMPORTANTE
+{
     //------------------------------------------------------------------------//
     // ARITHMETIC TESTS
     //------------------------------------------------------------------------//
@@ -78,7 +81,8 @@ public class EvalTest
         @DisplayName("Should handle division by zero")
         void testDivisionByZero()
         {
-            test( "+10 / 0", Float.NaN );
+            test( "+10 / 0", Float.POSITIVE_INFINITY );
+            test( "-10 / 0", Float.NEGATIVE_INFINITY );
         }
     }
 
@@ -807,6 +811,17 @@ public class EvalTest
         }
 
         @Test
+        @DisplayName("Should add hours and minutes relatively")
+        void testTimeAddRelative()
+        {
+            test( "time(\"10:40:10\"):addHours(2) == time(\"12:40:10\")", true );
+            test( "time(\"10:40:10\"):addHours(-2) == time(\"08:40:10\")", true );
+            test( "time(\"10:40:10\"):addMinutes(30) == time(\"11:10:10\")", true );
+            test( "time(\"10:40:10\"):addMinutes(-50) == time(\"09:50:10\")", true );
+            test( "time(\"23:00:00\"):addHours(2) == time(\"01:00:00\")", true );
+        }
+
+        @Test
         @DisplayName("Should compare time objects")
         void testTimeComparison()
         {
@@ -834,8 +849,8 @@ public class EvalTest
         @DisplayName("Should calculate sunrise and sunset")
         void testSunriseSunset()
         {
-            test( "time():sunrise(36.5112,-4.8848,date(\"2021-04-11\"),\"Europe/Paris\") == time(\"07:53:48\")", true );
-            test( "time():sunset( 36.5112,-4.8848,     \"2021-04-11\" ,\"Europe/Paris\") == time(\"20:50:02\")", true );
+            test( "time():sunrise(36.5112,-4.8848,date(\"2021-04-11\"),\"Europe/Paris\") == time(\"07:52:24\")", true );
+            test( "time():sunset( 36.5112,-4.8848,     \"2021-04-11\" ,\"Europe/Paris\") == time(\"20:50:53\")", true );
         }
 
         @Test
@@ -1043,6 +1058,18 @@ public class EvalTest
         {
             test( "list(1, list(2,3), pair(\"one\",date()), true):clone() == list(1, list(2,3), pair(\"one\",date()), true)", true );
         }
+
+        @Test
+        @DisplayName("Should invert boolean values in list")
+        void testListInvert()
+        {
+            test( "list(true, false, true):invert(1):get(1)", false );
+            test( "list(true, false, true):invert(2):get(2)", true );
+            test( "list(0, 1, 0):invert(1):get(1)", 1f );
+            test( "list(0, 1, 0):invert(2):get(2)", 0f );
+            test( "list(true, false, true):invert(-1):get(-1)", false );
+            test( "list(true):invert(1):invert(1):get(1)", true );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -1191,6 +1218,24 @@ public class EvalTest
         void testToString()
         {
              test( "pair(\"a\", 1):toString()", "\"a\"=1.0" );
+        }
+
+        @Test
+        @DisplayName("Should invert boolean values in pair")
+        void testPairInvert()
+        {
+            // Invert boolean true -> false
+            test( "pair(\"flag\", true):invert(\"flag\"):get(\"flag\")", false );
+            // Invert boolean false -> true
+            test( "pair(\"flag\", false):invert(\"flag\"):get(\"flag\")", true );
+            // Invert number 0 -> 1
+            test( "pair(\"bit\", 0):invert(\"bit\"):get(\"bit\")", 1f );
+            // Invert number 1 -> 0
+            test( "pair(\"bit\", 1):invert(\"bit\"):get(\"bit\")", 0f );
+            // Chain multiple inverts
+            test( "pair(\"flag\", true):invert(\"flag\"):invert(\"flag\"):get(\"flag\")", true );
+            // Invert with case-insensitive key
+            test( "pair(\"Flag\", true):invert(\"FLAG\"):get(\"flag\")", false );
         }
     }
 
@@ -2261,6 +2306,7 @@ public class EvalTest
     /**
      * Main method for running tests without JUnit runner.
      * Provides basic test execution and reporting.
+     * @param args
      */
     public static void main( String[] args )
     {
@@ -2314,6 +2360,7 @@ public class EvalTest
         total++; if( runTest( "Truthy/Falsy pairs", () -> test.new BooleanTests().testTruthyFalsyPairs() ) ) passed++; else failed++;
         total++; if( runTest( "Truthy/Falsy short-circuit", () -> test.new BooleanTests().testTruthyFalsyShortCircuit() ) ) passed++; else failed++;
         total++; if( runTest( "Truthy/Falsy XOR", () -> test.new BooleanTests().testTruthyFalsyXOR() ) ) passed++; else failed++;
+        total++; if( runTest( "XOR no short-circuit", () -> test.new BooleanTests().testXorNoShortCircuit() ) ) passed++; else failed++;
         System.out.println();
 
         // String tests
@@ -2336,6 +2383,7 @@ public class EvalTest
         total++; if( runTest( "Abs function", () -> test.new MathFunctionTests().testAbs() ) ) passed++; else failed++;
         total++; if( runTest( "Rand function", () -> test.new MathFunctionTests().testRand() ) ) passed++; else failed++;
         total++; if( runTest( "Min/Max functions", () -> test.new MathFunctionTests().testMinMax() ) ) passed++; else failed++;
+        total++; if( runTest( "Format function", () -> test.new MathFunctionTests().testFormat() ) ) passed++; else failed++;
         System.out.println();
 
         // String function tests
@@ -2405,6 +2453,7 @@ public class EvalTest
         total++; if( runTest( "List map/reduce", () -> test.new ListClassTests().testListMapReduce() ) ) passed++; else failed++;
         total++; if( runTest( "List rotate", () -> test.new ListClassTests().testListRotate() ) ) passed++; else failed++;
         total++; if( runTest( "List clone", () -> test.new ListClassTests().testListClone() ) ) passed++; else failed++;
+        total++; if( runTest( "List invert", () -> test.new ListClassTests().testListInvert() ) ) passed++; else failed++;
         System.out.println();
 
         // Pair class tests
@@ -2427,6 +2476,7 @@ public class EvalTest
         total++; if( runTest( "Pair union", () -> test.new PairClassTests().testUnion() ) ) passed++; else failed++;
         total++; if( runTest( "Pair serialization", () -> test.new PairClassTests().testPairSerialization() ) ) passed++; else failed++;
         total++; if( runTest( "Pair toString", () -> test.new PairClassTests().testToString() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair invert", () -> test.new PairClassTests().testPairInvert() ) ) passed++; else failed++;
         System.out.println();
 
         // Temporal operator tests

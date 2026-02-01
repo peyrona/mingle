@@ -302,7 +302,7 @@ final class UneEditorToolBar extends JToolBar
         row2.add( newSpace() );
 
         chk4Grid = new JCheckBox( "Grid" );
-        chk4Grid.setToolTipText("Check it when the code will be used in a Grid environment");
+        chk4Grid.setToolTipText("Check it to produce transpiled code that will be used in a Grid environment");
         chk4Grid.setFocusable(false);
         chk4Grid.setHorizontalAlignment(javax.swing.SwingConstants.TRAILING);
         row2.add( chk4Grid );

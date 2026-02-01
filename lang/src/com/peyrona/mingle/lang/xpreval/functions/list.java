@@ -144,18 +144,51 @@ public final class list
      *         or 0 if this list does not contain the element.
      * @see #has(java.lang.Object)
      */
+    /**
+     * Returns the index of the first occurrence of the specified element in this list,
+     * or 0 if this list does not contain the element.
+     * <p>
+     * This method performs type-aware comparison:
+     * <ul>
+     *   <li>Numbers are compared by value (e.g., Integer 5 equals Float 5.0)</li>
+     *   <li>Strings are compared case-insensitively</li>
+     *   <li>Other types use standard equals() comparison</li>
+     * </ul>
+     *
+     * @param item What to check.
+     * @return The index of the first occurrence of the specified element in this list (1-based),
+     *         or 0 if this list does not contain the element.
+     * @see #has(java.lang.Object)
+     */
     public int index( Object item )
     {
         int index = inner.indexOf( item );
 
-        if( index > -1 )        // This should be the most of tha cases
+        if( index > -1 )        // This should be the most of the cases
             return index + 1;
 
-        if( item instanceof Integer )
+        // Handle numeric type comparison (Integer vs Float)
+        if( item instanceof Number )
         {
-            return inner.indexOf( ((Integer) item).floatValue() ) + 1;
+            float itemValue = ((Number) item).floatValue();
+
+            synchronized( inner )
+            {
+                for( int n = 0; n < inner.size(); n++ )
+                {
+                    Object element = inner.get( n );
+                    if( (element instanceof Number) &&
+                        Float.compare( ((Number) element).floatValue(), itemValue ) == 0 )
+                    {
+                        return n + 1;
+                    }
+                }
+            }
+
+            return 0;
         }
 
+        // Handle case-insensitive string comparison
         if( item instanceof String )
         {
             String sItem = (String) item;
@@ -218,6 +251,40 @@ public final class list
     }
 
     /**
+     * Inverts the value at the specified index.<br>
+     * <br>
+     * Negative index counts back from the end of the list, so -1 is the last item of
+     * the list, -2 is the last before the last item and so on.
+     * <ul>
+     *   <li>If value is Boolean: true becomes false, false becomes true.</li>
+     *   <li>If value is Number 0: becomes 1.</li>
+     *   <li>If value is Number 1: becomes 0.</li>
+     *   <li>Otherwise: throws MingleException.</li>
+     * </ul>
+     *
+     * @param index The ordinal position of the item to be inverted (1-based).
+     * @return The list itself.
+     * @throws MingleException If value at index is not boolean, 0, or 1.
+     */
+    public list invert( Object index )
+    {
+        Object value = get( index );
+
+        if( value instanceof Boolean )
+            return set( index, ! ((Boolean) value) );
+
+        if( value instanceof Number )
+        {
+            Integer n = UtilType.toInteger( value );
+
+                 if( n == 0 )  return set( index, 1f );
+            else if( n == 1 )  return set( index, 0f );
+        }
+
+        throw new MingleException( "Value at "+ index +" is neither boolean nor 0 or 1" );
+    }
+
+    /**
      * Returns the last item in the list.
      * <pre>last()</pre>
      * is equivalent to
@@ -264,15 +331,16 @@ public final class list
 
         synchronized( inner )
         {
-            if( inner.size() > maxLen )
+            // Remove oldest element if list is at max capacity
+            if( inner.size() >= maxLen )
             {
                 Object old = inner.get( 0 );
                 inner.remove( 0 );
-                firePropertyChanged( old, inner.get( 0 ) );   // 1 because lists are 1 based
+                firePropertyChanged( old, inner.isEmpty() ? "" : inner.get( 0 ) );
             }
 
             inner.add( item );
-            firePropertyChanged( "", item );      // size() because lists are 1 based
+            firePropertyChanged( "", item );
         }
 
         return this;
@@ -299,11 +367,12 @@ public final class list
 
         synchronized( inner )
         {
-            if( inner.size() > maxLen )
+            // Remove oldest element if list is at max capacity
+            if( inner.size() >= maxLen )
             {
                 Object _old = inner.get( 0 );
                 inner.remove( 0 );
-                firePropertyChanged( _old, inner.get( 0 ) );   // 1 because lists are 1 based
+                firePropertyChanged( _old, inner.isEmpty() ? "" : inner.get( 0 ) );
             }
 
             ndx = toIndex( index );

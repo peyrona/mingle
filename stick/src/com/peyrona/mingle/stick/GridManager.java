@@ -1,26 +1,32 @@
 
 package com.peyrona.mingle.stick;
 
-import com.peyrona.mingle.lang.interfaces.IConfig;
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.ILogger.Level;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
+import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.ExEnComm;
-import com.peyrona.mingle.lang.japi.GridNode;
 import com.peyrona.mingle.lang.japi.UtilColls;
-import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.IOException;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URISyntaxException;
+import com.peyrona.mingle.lang.messages.Message;
+import com.peyrona.mingle.network.NetworkBuilder;
+import com.peyrona.mingle.network.NetworkConfig;
 import java.util.HashSet;
-import java.util.List;
+import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.ScheduledFuture;
+import java.util.function.Supplier;
 
 /**
  * This class sends messages to the ExEns that appear under "grid" -> "members" in the configuration file.<br>
  * <br>
+ * A 'deaf' node will not receive messages from other nodes, but will send messages to other nodes. <br>
+ * A 'mute' node will receive messages from other nodes, but will not send messages to other nodes.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -28,20 +34,66 @@ import java.util.concurrent.ScheduledFuture;
  */
 final class GridManager
 {
-            final boolean         isNode;
-            final boolean         isDeaf;
-    private       Set<Target>     lstTargets = null;   // Not needed to be sync because once populated it is inmutable (not initialized to new ArrayList() to save RAM)
-    private       ScheduledFuture executor   = null;
-    private final IConfig         config;
+    private       boolean     bErrors = false;
+    private final Set<Server> lstServers;      // To receive msgs from other nodes in the grid
+    private final Set<Client> lstClients;      // To send    msgs to   other nodes in the grid
+    private final Supplier<INetServer.IListener> supplier;
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
 
-    GridManager( IConfig config )
+    GridManager( IRuntime rt, Supplier<INetServer.IListener> listenerSupplier )
     {
-        this.config = config;
-        this.isNode = config.getGridNodes() != null;
-        this.isDeaf = isNode && config.isGridDeaf();
+        Set<Server> setTmpSrv = new HashSet<>(  5 );
+        Set<Client> setTmpCli = new HashSet<>( 25 );
+
+        // Process all grid nodes: localhost entries become servers, others become clients
+        for( JsonValue node : NetworkConfig.getGridNodes() )    // Never returns null
+        {
+            if( ! node.isObject() )
+            {
+                bErrors = true;
+                continue;
+            }
+
+            JsonObject jo   = node.asObject();
+            String     host = jo.getString( "host", null );
+
+            if( UtilStr.isEmpty( host ) )
+            {
+                bErrors = true;
+                continue;
+            }
+
+            try
+            {
+                if( isLocalhost( host ) )
+                {
+                    // Localhost entries: create servers (if empty, this grid node is deaf)
+                    if( Server.isValid( node ) )
+                        setTmpSrv.add( new Server( node ) );
+                    else
+                        bErrors = true;
+                }
+                else
+                {
+                    // Remote entries: create clients (if empty, this grid node is mute)
+                    if( Client.isValid( node ) )
+                        setTmpCli.add( new Client( node ) );
+                    else
+                        bErrors = true;
+                }
+            }
+            catch( MingleException me )
+            {
+                bErrors = true;
+                rt.log( ILogger.Level.SEVERE, me );
+            }
+        }
+
+        lstServers = (bErrors || setTmpSrv.isEmpty() ) ? null : setTmpSrv;
+        lstClients = (bErrors || setTmpCli.isEmpty() ) ? null : setTmpCli;
+        supplier   = (lstServers == null)              ? null : listenerSupplier;   // Used to create listeners for the Servers
     }
 
     //------------------------------------------------------------------------//
@@ -50,28 +102,43 @@ final class GridManager
     @Override
     public String toString()
     {
-        StringBuilder sbInfo = new StringBuilder( 512 )
-                                   .append( "Grid information:\n" );
+        String sMuteInfo = isMute()  ? "true  (Only sends to ExEns that initiated a connection)."
+                                     : "false (Sends messages to all defined nodes (ExEns)).";
 
-        if( isNode )
+        String sDeafInfo = (isDeaf() ? "true  (Does not attend"
+                                     : "false (Attends") +
+                                     " to messages sent by other exens).";
+
+        StringBuilder sbInfo = new StringBuilder( 512 ).append( "Grid information:\n" );
+
+        sbInfo.append( "   * Is mute = " ).append( sMuteInfo ).append( '\n' )
+              .append( "   * Is deaf = " ).append( sDeafInfo ).append( '\n' )
+              .append( "   * Protocols to receive messages:" );
+
+        if( UtilColls.isEmpty( lstServers ) )
         {
-            sbInfo.append( "    reconnect = " ).append( config.getGridReconectInterval() ).append( " milliseconds\n" )
-                  .append( "    is deaf   = " ).append( config.isGridDeaf() ).append( '\n' )
-                  .append( "    Target nodes:\n" );
-
-            if( lstTargets == null )
-            {
-                sbInfo.append( "        This ExEn is part of a grid, but has no target nodes (send no messages to others).\n" );
-            }
-            else
-            {
-                for( Target target : lstTargets )
-                    sbInfo.append( "       * " ).append( target ).append( '\n' );
-            }
+            sbInfo.append( " <none>\n" );
         }
         else
         {
-            sbInfo.append( "    This ExEn does not belong to a Grid.\n" );
+            sbInfo.append( '\n' );
+
+            for( Server server : lstServers )
+                sbInfo.append( "         + " ).append( server.toString() ).append( '\n' );
+        }
+
+        sbInfo.append( "   * Nodes to send messages to:" );
+
+        if( UtilColls.isEmpty( lstClients ) )
+        {
+            sbInfo.append( " <none>\n" );
+        }
+        else
+        {
+            sbInfo.append( '\n' );
+
+            for( Client client : lstClients )
+                sbInfo.append( "         + " ).append( client.toString() ).append( '\n' );
         }
 
         return sbInfo.toString();
@@ -80,185 +147,378 @@ final class GridManager
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
 
-    void broadcast( ExEnComm message )
+    boolean isDeaf()
     {
-        if( lstTargets != null )
-        {
-            UtilSys.execute( null,
-                             () ->
-                                {
-                                    String msg = message.toString();             // Saves CPU in the forEach(...) loop
+        return UtilColls.isEmpty( lstServers );
+    }
 
-                                    lstTargets.forEach( t -> t.send( msg ) );    // forEach(...) is thread-safe when applied to a List that is not modified concurrently
-                                } );
-        }
+    boolean isMute()
+    {
+        return UtilColls.isEmpty( lstClients );
+    }
+
+    boolean isValid()
+    {
+        if( bErrors )
+            return false;
+
+        if( lstServers == null )    // Although Gum does not need this value, Stick needs it.
+            return false;
+
+        return ! (isDeaf() && isMute());
+    }
+
+    void broadcast( Throwable exc )
+    {
+        broadcast( ExEnComm.asError( UtilStr.toStringBrief( exc ) ).toString() );
+    }
+
+    void broadcast( Message message )
+    {
+        broadcast( new ExEnComm( message ).toString() );
     }
 
     synchronized void start()
     {
-        assert lstTargets == null;
+        if( UtilColls.isNotEmpty( lstServers ) )
+            lstServers.forEach( srv -> srv.start( supplier.get() ) );
 
-        List<GridNode> lstNodes = config.getGridNodes();    // Can be empty: it denotes a Grid mute Node (receives messages from others ExEns but send no message to other ExEns).
-
-        if( (lstNodes != null) && validate( lstNodes ) )
-        {
-            HashSet<Target> lstTmp = new HashSet<>();
-
-            for( GridNode node : lstNodes )
-            {
-                for( String sConfigAsJSON : node.targets )
-                    lstTmp.add( new Target( sConfigAsJSON, node.client, node.URIs ) );
-            }
-
-            if( lstTmp.isEmpty() && config.isGridDeaf() )
-            {
-                error( "Node is mute (can not send messages to other nodes) and is deaf (can not receive messages from other nodes): this node is useless." );
-            }
-
-            // Every N secs the Set is traversed and for every Target if( netClient == null ), then an INetClient
-            // to its remote ExEn will intended to be created. It can be that the remote ExEn is avilable or not
-            // at the the moment (it could be that is not available now but it could be available later).
-            //
-            // When there is an error in the connection (probably the remote ExEn stopped), the client is closed
-            // and fromURI to null, so next iteration of executor will attempt to create it again.
-
-            if( ! lstTmp.isEmpty() )
-            {
-                lstTargets = lstTmp;
-
-                int nInterval = config.getGridReconectInterval();
-
-                if( nInterval == -1 ) nInterval = 10 * 1000;
-                else                  nInterval = Math.max( 1000, nInterval );     // Not less tha 1 second
-
-                executor = UtilSys.executeWithDelay( null, nInterval, nInterval, () -> lstTargets.forEach( t -> t.connect() ) );
-            }
-        }
+        if( UtilColls.isNotEmpty( lstClients ) )
+            lstClients.forEach( cli -> cli.start() );
     }
 
     synchronized void stop()
     {
-        if( executor != null )
-            executor.cancel( true );   // true = may interrupt if running
+        if( UtilColls.isNotEmpty( lstServers ) )
+        {
+            lstServers.forEach( srv -> srv.stop() );
+            lstServers.clear();
+        }
 
-        if( lstTargets != null )
-            lstTargets.forEach( target -> target.disconnect() );
-
-        lstTargets = null;
-        executor   = null;
+        if( UtilColls.isNotEmpty( lstClients ) )
+        {
+            lstClients.forEach( cli -> cli.stop() );
+            lstClients.clear();
+        }
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private boolean validate( List<GridNode> list )    // Method is not needed to be synchronized because it is invoked only from constructor
+    private void broadcast( String msg )
     {
-        for( GridNode node : list )
-        {
-            if( UtilColls.isEmpty( node.targets ) )
-                return error( "'targets' array is empty" );
+        // The following is always true because if there is no clients and no servers, this node does not belong to a grid:
+        // lstServers != null || lstClients != null
 
-            if( UtilStr.isEmpty( node.client) )
-                return error( "'client' is empty" );
+        UtilSys.execute( null, () ->
+                        {
+                            if( lstServers != null )
+                                lstServers.forEach( srv -> srv.broadcast( msg ) );
 
-            if( UtilColls.isEmpty( node.URIs ) )
-                return error( "'uris' array is empty" );
+                            if( lstClients != null )
+                                lstClients.forEach( cli -> cli.send( msg ) );
+                        } );
 
-            for( String sConfigAsJSON : node.targets )
-            {
-                if( sConfigAsJSON == null )
-                    return error( "Empty target" );
-            }
-        }
-
-        return true;   // _Apparently_ members are properly configured: later they can be created
+        // forEach(...) is thread-safe when applied to a List that is not modified concurrently
     }
 
-    private boolean error( String sCause )
+    /**
+     * Checks if the given host is localhost (including "127.0.0.1" and "::1").
+     */
+    private static boolean isLocalhost( String host )
     {
-        if( lstTargets != null )
-            lstTargets.clear();
+        if( UtilStr.isEmpty( host ) )
+            return false;
 
-        UtilSys.getLogger().log( ILogger.Level.SEVERE, "Grid became useless.\nCause: "+ sCause );
+        // Extract just the host part (without port)
+        String hostOnly = host.contains( ":" ) ? host.substring( 0, host.lastIndexOf( ':' ) ) : host;
 
-        return false;
+        return "localhost".equalsIgnoreCase( hostOnly )
+            || "127.0.0.1".equals( hostOnly )
+            || "::1".equals( hostOnly );
+    }
+
+    private static void log( Level level, Object msg )
+    {
+        String m = msg.toString(); // UtilStr.toString( msg ) );
+
+        if( UtilSys.getLogger() == null )
+            System.err.println( "["+ level +"] "+ m );
+        else
+            UtilSys.getLogger().log( level, msg.toString() );
     }
 
     //------------------------------------------------------------------------//
-    // INNER CLASS
-    //
-    // Having following members definition:
-    //
-    // "members": [
-    //              {
-    //                  "nodes" : [{ "host": "192.168.7.3:55886", "ssl": false, "timeout": 5 },
-    //                             { "host": "192.168.7.2:55885", "ssl": false, "timeout": 5 }],
-    //                  "client": "com.peyrona.mingle.network.socket.SocketClient",
-    //                  "uris"  : ["file://{*home.lib*}network.jar"]
-    //              }
-    //           ]
-    //
-    // We will obtain 2 instances of Target class, one per each item in the "targets" array
+    // Nodes (target nodes to inform)
     //------------------------------------------------------------------------//
-    private final class Target
+
+    private static final class Server
     {
-        private final String     sConnConf;    // Can be a JSON, a simple string or wahtever: depends on what is expecting INetClient:connect(...)
-        private final String     sClientLib;
-        private final String[]   asURI;
-        private       INetClient netClient;
-        private       boolean    isConnecting = false;
-
-        Target( String conf, String client, String[] URIs )
-        {
-            sConnConf  = conf;
-            sClientLib = client;
-            asURI      = URIs;
-            netClient  = null;
-        }
-
-        synchronized void connect()
-        {
-            if( isConnecting )
-                return;            // Avoids reentrance (conneciton timeout can be bigger than the time between two consecutives iterations of ::executor)
-
-            if( (netClient != null) && netClient.isConnected() )
-                return;     // Nothing to do: there is already a connection to this Target
-
-            isConnecting = true;
-
-            try
-            {
-                netClient = UtilReflect.newInstance( INetClient.class, sClientLib, asURI );
-                netClient.connect( sConnConf );
-            }
-            catch( ClassNotFoundException | InstantiationException | NoSuchMethodException | IllegalAccessException |
-                   URISyntaxException | IOException | IllegalArgumentException | InvocationTargetException exc )
-            {
-                netClient = null;     // Just to be sure
-            }
-
-            isConnecting = false;
-        }
-
-        void disconnect()
-        {
-            if( netClient != null )
-            {
-                netClient.disconnect();
-                netClient = null;         // Atomic
-            }
-        }
-
-        void send( String msg )
-        {
-            if( (netClient != null) && (netClient.isConnected()) )
-                netClient.send( msg );
-        }
-
         @Override
         public String toString()
         {
-            return "Connect to: "+ sConnConf +", using: "+ sClientLib;
+            if( server == null )
+                return "SocketServer (FAILED TO CREATE - check config)";
+
+            if( server.isRunning() )
+                return server.toString();
+
+            // Server exists but not started yet - show config
+            String displayPort = "<default>";
+
+            if( config != null )
+            {
+                try
+                {
+                    JsonObject jo = Json.parse( config ).asObject();
+                    int port = jo.getInt( "port", -1 );
+
+                    if( port > 0 )
+                        displayPort = String.valueOf( port );
+                }
+                catch( Exception e )
+                {
+                    // Ignore parse errors, use default
+                }
+            }
+
+            return "SocketServer at: localhost:" + displayPort + ", Timeout=0, Allow=Intranet (not started)";
+        }
+
+        /**
+         * Validates that the JsonValue contains the required fields for a server node.
+         * Expected format: { "host": "localhost", "network": "Plain Socket Server" }
+         *
+         * @param jv The JsonValue to validate.
+         * @return true if the node configuration is valid, false otherwise.
+         */
+        static boolean isValid( JsonValue jv )
+        {
+            if( jv == null || ! jv.isObject() )
+                return false;
+
+            JsonObject jo    = jv.asObject();
+            String     sHost = jo.getString( "host", null );
+            JsonValue  jvNet = jo.get( "network" );
+
+            if( UtilStr.isEmpty( sHost ) || jvNet == null || jvNet.isNull() )
+                return false;
+
+            // Extract the network name and validate it refers to a server
+            String sNetName = jvNet.isString() ? jvNet.asString()
+                                               : jvNet.asObject().getString( "name", null );
+
+            if( ! NetworkConfig.isServerNetwork( sNetName ) )
+            {
+                log( Level.SEVERE, "Grid node with host 'localhost' must reference a server network, not '"+ sNetName +"'" );
+                return false;
+            }
+
+            return true;
+        }
+
+        //------------------------------------------------------------------------//
+
+        final INetServer server;
+        final String     config;
+
+        /**
+         * Creates a Server from a grid node configuration.
+         * Parses the network field and builds the INetServer.
+         *
+         * @param jv The JsonValue containing the node configuration.
+         */
+        Server( JsonValue jv )
+        {
+            JsonObject jo = jv.asObject();
+
+            JsonValue jvNetwork = NetworkConfig.getAsNetwork( jo.get( "network" ) );
+
+            INetServer tmpServer = null;
+            String     tmpConfig = null;
+
+            if( jvNetwork != null && ! jvNetwork.isNull() )
+            {
+                Map<INetServer,String> map = NetworkBuilder.buildAllServers( jvNetwork.toString() );
+
+                if( ! map.isEmpty() )
+                {
+                    Map.Entry<INetServer,String> entry = map.entrySet().iterator().next();
+                    tmpServer = entry.getKey();
+                    tmpConfig = entry.getValue();
+                }
+            }
+
+            this.server = tmpServer;
+            this.config = tmpConfig;
+        }
+
+        void start( INetServer.IListener listener )
+        {
+            if( server != null && config != null )
+            {
+                server.add( listener );
+                server.start( config );
+                log( Level.INFO, toString() +" -> Started");
+            }
+        }
+
+        void stop()
+        {
+            if( server != null )
+                server.stop();
+        }
+
+        void broadcast( String msg )
+        {
+            if( server != null )
+                server.broadcast( msg );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // Clients (target nodes to inform to)
+    //------------------------------------------------------------------------//
+    private static final class Client
+    {
+        @Override
+        public String toString()
+        {
+            return (client != null) ? client.toString() : ("Client to " + host);
+        }
+
+        /**
+         * Validates that the JsonValue contains the required fields for a grid node.
+         * Expected format: { "host": "192.168.1.100:65533", "network": "Plain Socket Client" }
+         *
+         * @param jv The JsonValue to validate.
+         * @return true if the node configuration is valid, false otherwise.
+         */
+        static boolean isValid( JsonValue jv )
+        {
+            if( jv == null || ! jv.isObject() )
+                return false;
+
+            JsonObject jo    = jv.asObject();
+            String     sHost = jo.getString( "host", null );
+            JsonValue  jvNet = jo.get( "network" );
+
+            if( UtilStr.isEmpty( sHost ) || jvNet == null || jvNet.isNull() )
+                return false;
+
+            // Extract the network name and validate it refers to a client
+            String sNetName = jvNet.isString() ? jvNet.asString()
+                                               : jvNet.asObject().getString( "name", null );
+
+            if( ! NetworkConfig.isClientNetwork( sNetName ) )
+            {
+                log( Level.SEVERE, "Grid node with host '"+ sHost +"' must reference a client network, not '"+ sNetName +"'" );
+                return false;
+            }
+
+            return true;
+        }
+
+        //------------------------------------------------------------------------//
+
+        final INetClient client;
+        final String     host;       // e.g.: "192.168.7.9" or "192.168.7.9:55880"
+        final String     config;     // JSON config for connect()
+
+        /**
+         * Creates a Client from a grid node configuration.
+         * Parses the host and network fields, builds the INetClient, and prepares the connection config.
+         *
+         * @param jv The JsonValue containing the node configuration.
+         */
+        Client( JsonValue jv )
+        {
+            JsonObject jo = jv.asObject();
+
+            this.host = jo.getString( "host", null );
+
+            JsonValue jvNetwork = NetworkConfig.getAsNetwork( jo.get( "network" ) );
+
+            INetClient tmpClient = null;
+            String     tmpConfig = null;
+
+            if( jvNetwork != null && ! jvNetwork.isNull() )
+            {
+                Map<INetClient,String> map = NetworkBuilder.buildAllClients( jvNetwork.toString() );
+
+                if( ! map.isEmpty() )
+                {
+                    Map.Entry<INetClient,String> entry = map.entrySet().iterator().next();
+                    tmpClient = entry.getKey();
+
+                    // Merge host (and optionally port) into the init config
+                    String     sInit  = entry.getValue();
+                    JsonObject joInit = UtilStr.isEmpty( sInit )
+                                        ? new JsonObject()
+                                        : Json.parse( sInit ).asObject();
+
+                    // Parse host:port format
+                    String[] parts = this.host.split( ":" );
+                    joInit.set( "host", parts[0] );
+
+                    if( parts.length > 1 )
+                    {
+                        try
+                        {
+                            joInit.set( "port", Integer.parseInt( parts[1] ) );
+                        }
+                        catch( NumberFormatException nfe )
+                        {
+                            // Invalid port format, keep original if present
+                        }
+                    }
+
+                    tmpConfig = joInit.toString();
+                }
+            }
+
+            this.client = tmpClient;
+            this.config = tmpConfig;
+        }
+
+        /**
+         * Sends a message to the remote ExEn node.
+         * If not connected, attempts to connect first.
+         *
+         * @param msg The message to send.
+         */
+        void send( String msg )
+        {
+            if( client == null )
+                return;
+
+            // Try to connect with the other node (it could be that the other was not ready until now or that the connection was lost)
+            if( ! client.isConnected() )
+                start();
+
+            if( client.isConnected() )
+                client.send( msg );
+        }
+
+        /**
+         * Starts the client by connecting to the remote ExEn node.
+         */
+        void start()
+        {
+            if( client != null && config != null )
+            {
+                client.connect( config );
+                log( Level.INFO, toString() +" -> Connected");
+            }
+        }
+
+        /**
+         * Stops the client by disconnecting from the remote ExEn node.
+         */
+        void stop()
+        {
+            if( client != null )
+                client.disconnect();
         }
     }
 }

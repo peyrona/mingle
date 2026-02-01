@@ -19,8 +19,8 @@
     {
       "module"           : "common",
       "log_level"        : "warning",   # Valid:
-      "log_expire"       : 30,          # Log files older than this amount of days will be automatically deleted (x <=0 to not delete)
-      "RPiNumberingModel": "WiringPi"   # Used by RPi Driver (by default "BCM")
+      "log_expire"       : 30           # Log files older than this amount of days will be automatically deleted (x <=0 to not delete)
+      #"RPiNumberingModel": "WiringPi"   # Used by RPi Driver (by default "BCM")
     },
 
     # Excution Environment configuration
@@ -78,8 +78,8 @@
     {
         "module": "grid",
         "nodes" : [
-                    { "host": "localhost"          , "network": { "name": "Plain Socket Client", "port": 44444 } },
-                    { "host": "192.168.1.111:65533", "network": { "name": "Plain Socket Client", "timeout": 90 } }
+                    { "host": "localhost"          , "network": { "name": "Plain Socket Server", "init": { "port": 44444 } } } #,
+                  # { "host": "192.168.1.111:65533", "network": { "name": "Plain Socket Client", "timeout": 90 } }
                   ]
     },
 
@@ -108,7 +108,7 @@
                     #                    "keyFile" : "./private.key",                          # Private Key File
                     #                    "password": "mypass",                                 # Certificate password
                     #                    "allow"   : "any" },                                  # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-                    #   "builder"    : "com.peyrona.mingle.network.socket.SocketServer",       # How to create the server that accept connections
+                    #   "builder"    : "com.peyrona.mingle.network.socket.SocketServer",       # How to create the server that accepts the connections
                     #   "uris"       : ["file://{*home.lib*}network.jar"]
                     # },
                       {

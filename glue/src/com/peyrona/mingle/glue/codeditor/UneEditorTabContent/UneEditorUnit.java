@@ -1,13 +1,14 @@
 
 package com.peyrona.mingle.glue.codeditor.UneEditorTabContent;
 
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.glue.ConsolePanel;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Util;
-import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
-import com.peyrona.mingle.lang.japi.Config;
 import com.peyrona.mingle.lang.japi.UtilANSI;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
@@ -279,6 +280,15 @@ public final class UneEditorUnit extends JSplitPane
 
     public boolean transpile( boolean isForGrid )
     {
+        if( isForGrid && ! UtilSys.getConfig().isModule( "grid" ) )
+        {
+            JTools.alert( "Transpiling for a Grid.\n"+
+                          "But the config file used by Glue does not include Grid configuration,\n" +
+                          "Make sure you will run this Une script using a proper configuration file\n"+
+                          "Configuration file currently used:"+ UtilSys.getConfig().getURI(),
+                          this );
+        }
+
         setDividerLocation( 0.65d );
         stop();
         System.setProperty( "grid", (isForGrid  ? "true" : "false") );
@@ -373,20 +383,38 @@ public final class UneEditorUnit extends JSplitPane
 
     private File createConfigFile( boolean bUseFakedCtrl, ILogger.Level level ) throws IOException
     {
-        File file = UtilIO.newFileWriter()
-                          .setTemporal( "json" )
-                          .replace( UtilSys.getConfig().toStrJSON() );    // Saves current Config as it is
+        JsonArray jaConfig = Json.parse( UtilSys.getConfig().toStrJSON() ).asArray();
 
-        IConfig config = new Config().load( file.toString() )
-                                     .set( "common" , "log_level"    , level )
-                                     .set( "exen"   , "faked_drivers", bUseFakedCtrl )
-                                     .set( "network", "servers"      , getNet() );
+        for( int n = 0; n < jaConfig.size(); n++ )
+        {
+            JsonObject jo = jaConfig.get( n ).asObject();
+            String module = jo.getString( "module", null );
 
-        UtilIO.newFileWriter()
-              .setFile( file )
-              .replace( config.toStrJSON() );
+            if( module == null )
+                continue;
 
-        return file;
+            switch( module )
+            {
+                case "grid":
+                    jaConfig.remove( n-- );
+                    break;
+                case "common":
+                    jo.add( "log_level", level.toString().toLowerCase() );
+                    break;
+                case "exen":
+                    jo.add( "faked_drivers", bUseFakedCtrl );
+                    break;
+                case "network":
+                    JsonValue net = getNet();
+                    if( net != null )
+                        jo.add( "servers", net );
+                    break;
+            }
+        }
+
+        return UtilIO.newFileWriter()
+                     .setTemporal( "json" )
+                     .replace( jaConfig.toString() );
     }
 
     private JsonValue getNet()

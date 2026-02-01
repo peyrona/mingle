@@ -10,9 +10,7 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilType;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
 
 /**
  * To build all types of network classes, existing in visible JARs (class-path).
@@ -26,26 +24,6 @@ import java.util.Set;
  */
 public final class NetworkBuilder
 {
-    /**
-     * Starts all servers defined in the given JSON string.
-     *
-     * @param sJSON the JSON string containing server configurations
-     * @return a set of started servers
-     */
-    public static Set<INetServer> startAllServers( String sJSON )
-    {
-        Set<INetServer> set = new HashSet<>();
-
-        for( Map.Entry<INetServer,String> entry : buildAllServers( sJSON ).entrySet() )
-        {
-            set.add( entry.getKey() );
-
-            entry.getKey().start( entry.getValue() );
-        }
-
-        return set;
-    }
-
     /**
      * Builds a single server from the given JSON string.
      *
@@ -66,26 +44,6 @@ public final class NetworkBuilder
     public static Map<INetServer, String> buildAllServers( String sJSON )
     {
         return build( sJSON, INetServer.class );
-    }
-
-    /**
-     * Connects all clients defined in the given JSON string.
-     *
-     * @param sJSON the JSON string containing client configurations
-     * @return a set of connected clients
-     */
-    public static Set<INetClient> connectAllClients( String sJSON )
-    {
-        Set<INetClient> set = new HashSet<>();
-
-        for( Map.Entry<INetClient,String> entry : buildAllClients( sJSON ).entrySet() )
-        {
-            set.add( entry.getKey() );
-
-            entry.getKey().connect( entry.getValue() );
-        }
-
-        return set;
     }
 
     /**
@@ -129,27 +87,34 @@ public final class NetworkBuilder
      */
     private static <T> Map<T, String> build( String sJSON, Class<T> networkType )
     {
-        Map<T, String> map = new HashMap<>();
+        Map<T,String> map = new HashMap<>();
 
-        JsonValue jv = Json.parse( sJSON );
-        JsonArray ja = jv.isArray() ? jv.asArray() : new JsonArray().add( jv.asObject() );
-
-        for( JsonValue j : ja )
+        if( sJSON != null )
         {
-            try
-            {
-                UtilJson ju = new UtilJson( j.asObject() );
-                Object[] ao = UtilJson.toArray( ju.getArray( "uris" ) );
+            JsonValue jv = Json.parse( sJSON );
 
-                T network = UtilReflect.newInstance( networkType,
-                                                     ju.getString( "builder" ),
-                                                     UtilType.convertArray( ao, String.class ) );
-
-                map.put( network, ju.getAsString( "init", "" ) );
-            }
-            catch( Exception exc )
+            if( ! jv.isNull() )
             {
-                throw new MingleException( exc );
+                JsonArray ja = jv.isArray() ? jv.asArray() : new JsonArray().add( jv.asObject() );
+
+                for( JsonValue j : ja )
+                {
+                    try
+                    {
+                        UtilJson ju = new UtilJson( j.asObject() );
+                        Object[] ao = UtilJson.toArray( ju.getArray( "uris" ) );
+
+                        T network = UtilReflect.newInstance( networkType,
+                                                             ju.getString( "builder" ),
+                                                             UtilType.convertArray( ao, String.class ) );
+
+                        map.put( network, ju.getAsString( "init", "" ) );
+                    }
+                    catch( Exception exc )
+                    {
+                        throw new MingleException( exc );
+                    }
+                }
             }
         }
 

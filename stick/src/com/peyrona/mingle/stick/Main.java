@@ -11,6 +11,7 @@ import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -248,7 +249,7 @@ public final class Main
             sFileName = sFileName + ".model";
 
         // Store in Java application directory
-        return System.getProperty( "user.dir" ) + java.io.File.separator + sFileName;
+        return UtilSys.fHomeDir + java.io.File.separator + sFileName;
     }
 
     /**
@@ -286,22 +287,21 @@ public final class Main
     {
         try
         {
-            String sRemoteGenerated = extractModelTimestamp( UtilIO.getAsText( httpUri ) );
-
-            if( sRemoteGenerated == null )
-                return false;   // Can't compare, don't update
-
-            // Check if local file exists
             File localFile = new java.io.File( localPath );
 
             if( ! localFile.exists() )
-                return true;    // Local doesn't exist, download remote
+                return true;              // Local doesn't exist, download remote
+
+            String sRemoteGenerated = extractModelTimestamp( UtilIO.getAsText( httpUri ) );
+
+            if( sRemoteGenerated == null )
+                return false;             // Can't compare, don't update
 
             String sLocalContent   = UtilIO.getAsText( localPath );
             String sLocalGenerated = extractModelTimestamp( sLocalContent );
 
             if( sLocalGenerated == null )
-                return true;    // Local has no timestamp, prefer remote
+                return true;              // Local has no timestamp, prefer remote
 
             // Compare timestamps
             Instant remoteTime = Instant.parse( sRemoteGenerated );
@@ -311,7 +311,7 @@ public final class Main
         }
         catch( Exception exc )
         {
-            return false;       // Any error, don't update
+            return false;                 // Any error, don't update
         }
     }
 }

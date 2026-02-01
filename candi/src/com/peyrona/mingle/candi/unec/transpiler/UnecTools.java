@@ -172,7 +172,7 @@ public final class UnecTools
 
         map.put("script",
                 "SCRIPT [<name>]\n" +
-                "\t[ONSTART] [ONSTOP]\n"+
+                "\t[[PRE] ONSTART] [[PRE] ONSTOP]\n"+
                 "\tLANGUAGE { une | java | js | python}\n" +
                 "\tFROM { \"<URI>[*|**]\" [; ...] | {<code>} }\n" +
                 "\t[CALL \"<entry_point>\"]");

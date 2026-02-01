@@ -33,9 +33,10 @@ public final class SocketClient
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );   // Store raw config first, validated values will be stored at the end
 
         boolean bOK   = true;
-        String  sURL  = (String) deviceInit.get( "url" );    // This is REQUIRED
+        String  sURL  = (String) get( "url" );    // This is REQUIRED
         String  sHost = UtilComm.getHost( sURL );
         int     nPort = UtilComm.getPort( sURL, UtilComm.MINGLE_DEFAULT_SOCKET_PORT );
 
@@ -59,20 +60,20 @@ public final class SocketClient
 
         setValid( true );
 
-        Boolean bWS = deviceInit.getOrDefault( "websocket", "false" ).equals( "true" );
+        Object oWS = get( "websocket" );
+        Boolean bWS = (oWS != null) && oWS.toString().equals( "true" );
 
+        // Store validated configuration (overwrites raw values with validated ones)
         set( KEY_HOST  , sHost );
         set( KEY_PORT  , nPort );
         set( KEY_USE_WS, bWS   );
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( ! isValid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         String sConnect = "{\"host\":\""+ (String) get( KEY_HOST ) +"\", \"port\":"+ (int) get( KEY_PORT ) +'}';
 
@@ -90,6 +91,8 @@ public final class SocketClient
                                                            psc.connect( sConnect );
             client = psc;
         }
+
+        return isValid();
     }
 
     @Override

@@ -4,6 +4,7 @@ package com.peyrona.mingle.controllers.daikin.emura;
 import com.peyrona.mingle.controllers.ControllerBase;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.RateMonitor;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilType;
@@ -32,7 +33,7 @@ import java.util.Map;
 public final class   Control
              extends ControllerBase
 {
-    private final static String[] as = { "power","mode","fan","wings","t_target","h_target"};
+    private final static String[] as = {"power","mode","fan","wings","t_target","h_target"};
     private final static short POWER     = 0;
     private final static short MODE      = 1;
     private final static short FAN       = 2;
@@ -49,20 +50,29 @@ public final class   Control
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
-        setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
+        setDeviceConfig( deviceConf );
+        setValid( true );
+    }
 
+    @Override
+    public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        // Following check must be after 'super.start( rt )' beacuse 'isDiskWritable(...)' needs 'IRuntime'
         try
         {
             if( ! isFaked() )
-                talker = new Talker( deviceConf.get( "address" ).toString() );    // This is mandatory
-
-            setValid( true );
-            setDeviceConfig( deviceConf );
+                talker = new Talker( get( "address" ).toString() );    // This is mandatory
         }
         catch( IOException ioe )    // MalformedURLException extends IOException
         {
             sendIsInvalid( ioe.getMessage() );
         }
+
+        return isValid();
     }
 
     @Override
@@ -80,14 +90,7 @@ public final class   Control
 
         if( isFaked() )
         {
-            pair faked = new pair().put( as[POWER]   , false )
-                                   .put( as[MODE]    , Const.Mode.Fan.toString() )
-                                   .put( as[FAN]     , Const.Fan.Minimum.toString() )
-                                   .put( as[WINGS]   , Const.Wings.None.toString() )
-                                   .put( as[T_TARGET], 22 )
-                                   .put( as[H_TARGET], 0 );
-
-            sendReaded( faked );
+            sendReaded( getFaked() );
         }
         else
         {
@@ -110,12 +113,7 @@ public final class   Control
 
         if( isFaked() )
         {
-            pair faked = new pair().put( as[POWER]   , false )
-                                   .put( as[MODE]    , Const.Mode.Fan.toString() )
-                                   .put( as[FAN]     , Const.Fan.Minimum.toString() )
-                                   .put( as[WINGS]   , Const.Wings.None.toString() )
-                                   .put( as[T_TARGET], 22 )
-                                   .put( as[H_TARGET], 0 );
+            pair faked = getFaked();
 
             for( Object key : ((pair) oRequest).keys() )
                 faked.put( key, ((pair) oRequest).get( key ) );
@@ -224,62 +222,13 @@ public final class   Control
                     .toString();
     }
 
-    //----------------------------------------------------------------------------//
-    // FOR TESTING PURPOSES
-
-//    private pair fakeState( Object oRequest )
-//    {
-//        if( faked == null )
-//        {
-//            faked = new pair().put( as[POWER]   , false )
-//                              .put( as[MODE]    , Const.Mode.Fan.toString() )
-//                              .put( as[FAN]     , Const.Fan.Minimum.toString() )
-//                              .put( as[WINGS]   , Const.Wings.None.toString() )
-//                              .put( as[T_TARGET], 22 )
-//                              .put( as[H_TARGET], 0 );
-//        }
-//
-//        pair request = (pair) oRequest;
-//
-//        for( Object o : request.keys() )
-//            faked.put( o, request.get(o) );
-//
-//        return faked;
-//    }
-
-
-//    public static void main( String[] as ) throws MalformedURLException, IOException
-//    {
-//        IController.Listener listener = new Listener()
-//                                        {
-//                                            @Override
-//                                            public void onChanged(String deviceName, Object newValue)
-//                                            {
-//                                                System.out.println( newValue );
-//                                            }
-//
-//                                            @Override
-//                                            public void onError(ILogger.Level level, String deviceName, String message)
-//                                            {
-//                                                System.out.println( message );
-//                                            }
-//                                        };
-//
-//        Map<String,Object> map = new HashMap<>();
-//                           map.put( "address", "192.168.7.246" );
-//
-//        Control control = new Control();
-//                control.setDeviceConfig( "A.C.", map, listener );
-//
-//        pair p = new pair( "power", false );
-//
-//        control.write( p );
-//
-////        state.put( "power"   , false )
-////             .put( "mode"    , Const.Mode.Fan.toString() )
-////             .put( "fan"     , Const.Fan.Minimum.toString() )
-////             .put( "wings"   , Const.Wings.None.toString() )
-////             .put( "t_target", 22 )
-////             .put( "h_target", 75 );
-//    }
+    private pair getFaked()
+    {
+        return new pair().put( as[POWER]   , false )
+                         .put( as[MODE]    , Const.Mode.Fan.toString() )
+                         .put( as[FAN]     , Const.Fan.Minimum.toString() )
+                         .put( as[WINGS]   , Const.Wings.None.toString() )
+                         .put( as[T_TARGET], 22 )
+                         .put( as[H_TARGET], 0 );
+    }
 }

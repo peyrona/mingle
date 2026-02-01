@@ -37,5 +37,7 @@ public interface ICmdKeys
     public static final String SCRIPT_CALL      = "call";      // Entry Point
     public static final String SCRIPT_ONSTART   = "onstart";
     public static final String SCRIPT_ONSTOP    = "onstop";
+    public static final String SCRIPT_PRESTART  = "prestart";  // PRE ONSTART phase: executes before entities are created
+    public static final String SCRIPT_PRESTOP   = "prestop";   // PRE ONSTOP phase: executes while entities still work
     public static final String SCRIPT_INLINE    = "inline";    // Une source code FROM clause contents (SCRIPT command) is in betweeb brackets ({...})
 }

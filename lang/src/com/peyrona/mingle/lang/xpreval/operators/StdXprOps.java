@@ -24,17 +24,17 @@ public final class StdXprOps
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE
 
-    public Operator get( String sOp )
+    public static Operator get( String sOp )
     {
         return map.get( sOp );
     }
 
-    public String[] getAll()
+    public static String[] getAll()
     {
         return map.keySet().toArray( String[]::new );
     }
 
-    public Object eval( String sOp, Object... args )
+    public static Object eval( String sOp, Object... args )
     {
         for( int n = 0; n < args.length; n++ )    // Fastest loop
             if( args[n] == null )
@@ -134,11 +134,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )                                                    // e.g.: 10 / 2  or  "10" / 2 (JS-wise)
-                                {
-                                    Float result = getNumL( nArgs ) / getNumR( nArgs );
-
-                                    return (Float.isInfinite( result ) ? Float.NaN : result);
-                                }
+                                    return getNumL( nArgs ) / getNumR( nArgs );
 
                                 throw unsupported( args );
                             }
@@ -507,16 +503,21 @@ public final class StdXprOps
     {
         Object[] newArgs = new Object[args.length];
 
-        for( int n = 0; n < args.length; n++ )
+        try
         {
-            try
+            if( args.length == 1 )   // Faster
             {
-                newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (sse this class doc)
+                newArgs[0] = UtilType.toFloat( args[0] );
             }
-            catch( MingleException me )
+            else
             {
-                return null;
+                for( int n = 0; n < args.length; n++ )
+                    newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (sse this class doc)
             }
+        }
+        catch( MingleException me )
+        {
+            return null;
         }
 
         return newArgs;
@@ -534,16 +535,21 @@ public final class StdXprOps
     {
         Object[] newArgs = new Object[args.length];
 
-        for( int n = 0; n < args.length; n++ )
+        try
         {
-            try
+            if( args.length == 1 )   // Faster
             {
-                newArgs[n] = UtilType.toBoolean( args[n] );
+                newArgs[0] = UtilType.toBoolean( args[0] );
             }
-            catch( MingleException me )
+            else
             {
-                return null;
+                for( int n = 0; n < args.length; n++ )
+                    newArgs[n] = UtilType.toBoolean( args[n] );
             }
+        }
+        catch( MingleException me )
+        {
+            return null;
         }
 
         return newArgs;

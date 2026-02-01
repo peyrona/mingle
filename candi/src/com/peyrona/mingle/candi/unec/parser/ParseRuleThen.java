@@ -341,8 +341,10 @@ public class ParseRuleThen extends ParseBase
         {
             Lexeme lex = lstWhere.get( n );
 
+            // Use exact match (case-insensitive) instead of substring match
+            // to avoid matching "weekday" when searching for "day"
             if( ! lex.isString() &&     // It does not count if what is being searched is inside a string
-                UtilStr.contains( lex.text(), sWhat2Search.toString() ) )
+                lex.text().equalsIgnoreCase( sWhat2Search.toString() ) )
             {
                 bFound = true;
 

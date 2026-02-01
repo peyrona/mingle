@@ -1,0 +1,93 @@
+#==================================================================================================================================
+# This example demonstrates the 5-phase SCRIPT lifecycle:
+#
+#   PRE ONSTART -> ONSTART -> (normal operation) -> PRE ONSTOP -> ONSTOP
+#        |            |              |                   |            |
+#   No entities   Entities       Running            Entities     No entities
+#                  ready                            still up
+#
+# PRE ONSTART:  Executes BEFORE entities (devices, drivers, rules) are created.
+#               Useful for initialization that doesn't depend on entities.
+#
+# ONSTART:      Executes AFTER all entities are created and ready.
+#               Can access all devices, drivers, and rules.
+#
+# PRE ONSTOP:   Executes while entities STILL WORK (before they are stopped).
+#               Useful for saving state or graceful shutdown with entity access.
+#
+# ONSTOP:       Executes AFTER all entities are stopped.
+#               Useful for final cleanup when entities are no longer available.
+#
+# Run this example, wait a few seconds to see the clock ticking, then press Ctrl+C to stop.
+# You will see the execution order of the phases in the console output.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco Jose Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+#-------------------------------------------------------------------
+# Phase 1: PRE ONSTART - Runs before any entities exist
+# The message will appear even before (above) this: Stick started...
+#-------------------------------------------------------------------
+SCRIPT
+    PRE ONSTART
+    LANGUAGE Java
+    FROM {
+            System.out.println( "\n[PHASE 1] PRE ONSTART: Initializing... (no entities exist yet)" );
+            System.out.println( "          This is useful for early setup tasks." );
+         }
+
+#-------------------------------------------------------------------
+# Phase 2: ONSTART - Runs after entities are ready
+#-------------------------------------------------------------------
+SCRIPT
+    ONSTART
+    LANGUAGE Une
+    FROM {
+            console = _NL_ + "[PHASE 2] ONSTART: All entities are ready!" + _NL_ + \
+                      "          The clock device exists and will start ticking." + _NL_
+         }
+
+#-------------------------------------------------------------------
+# Normal operation: A simple clock that ticks every 2 seconds
+#-------------------------------------------------------------------
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 2s
+
+DEVICE console
+    DRIVER OutputDriver
+
+WHEN clock
+THEN console = "[RUNNING] Clock tick: " + clock + " ms"
+
+WHEN clock > 10s
+THEN exit()
+
+#-------------------------------------------------------------------
+# Phase 3: PRE ONSTOP - Runs while entities still work
+#-------------------------------------------------------------------
+SCRIPT
+    PRE ONSTOP
+    LANGUAGE Une
+    FROM {
+            console = _NL_ + "[PHASE 3] PRE ONSTOP: Shutting down gracefully..." + _NL_ + \
+                      "          Entities still work! Last clock value was: " + clock + _NL_
+         }
+
+#-------------------------------------------------------------------
+# Phase 4: ONSTOP - Runs after entities are gone
+#-------------------------------------------------------------------
+SCRIPT
+    ONSTOP
+    LANGUAGE Java
+    FROM {
+            System.out.println( "\n[PHASE 4] ONSTOP: Final cleanup..." );
+            System.out.println( "          All entities are gone. Goodbye!\n" );
+         }
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

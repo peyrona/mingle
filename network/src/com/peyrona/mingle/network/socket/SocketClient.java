@@ -41,7 +41,7 @@ public final class SocketClient
     private volatile Socket          client = null;
     private volatile BufferedReader  input  = null;
     private volatile PrintWriter     output = null;
-    private volatile ScheduledFuture future   = null;
+    private volatile ScheduledFuture future = null;
     private volatile AtomicBoolean   isStopping = new AtomicBoolean( false );
 
     //------------------------------------------------------------------------//

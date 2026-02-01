@@ -263,9 +263,9 @@ function Main {
 
     Write-Log -Level "INFO" -Message "Using Java: $script:JavaCmd"
 
-    $menuJar = Join-Path -Path $script:ScriptDir -ChildPath "lib\menu.jar"
+    $menuJar = Join-Path -Path $script:ScriptDir -ChildPath "lib/menu.jar"
     if (-not (Test-Path -Path $menuJar -PathType Leaf)) {
-        Exit-WithError -Message "The application file 'lib\menu.jar' was not found."
+        Exit-WithError -Message "The application file 'menu.jar' was not found."
     }
 
     if ($null -eq $Arguments -or $Arguments.Count -eq 0) {

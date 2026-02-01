@@ -38,13 +38,11 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.function.Function;
 
 /**
  * This class provides the execution environment where the transpiled Une code is executed.<br>
@@ -66,16 +64,15 @@ import java.util.function.Function;
 public final class Stick
              implements IRuntime
 {
-    private final    IConfig        config;     // Can not be sat as UtilSys.setConfig(...) because each instance of Stick can have its own instance of IConfig
-    private final    IEventBus      eventBus;
-    private final    NetworkManager netwMgr;    // Receives requests (from other ExEns) and send changes to them
-    private final    GridManager    gridMgr;
-    private final    ScriptManager  srptMgr;
-    private final    DriverManager  drvrMgr;
-    private final    DeviceManager  deviMgr;
-    private final    RuleManager    ruleMgr;
-    private volatile boolean        keepRun = true;
-    private volatile boolean        bExited = false;
+    private final    IConfig       config;     // Can not be sat as UtilSys.setConfig(...) because each instance of Stick can have its own instance of IConfig
+    private final    IEventBus     eventBus;
+    private final    GridManager   gridMgr;
+    private final    ScriptManager srptMgr;
+    private final    DriverManager drvrMgr;
+    private final    DeviceManager deviMgr;
+    private final    RuleManager   ruleMgr;
+    private volatile boolean       keepRun = true;
+    private volatile boolean       bExited = false;
 
     //----------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -127,8 +124,7 @@ public final class Stick
         drvrMgr  = new DriverManager( this );
         deviMgr  = new DeviceManager( this );
         ruleMgr  = new RuleManager(   this );
-        netwMgr  = new NetworkManager();
-        gridMgr  = new GridManager( this.config );
+        gridMgr  = initGridManager();
 
         // Loads transpiled code (if any) and adds commands to their managers
 
@@ -150,7 +146,7 @@ public final class Stick
 
                 if( lstCmds.isEmpty() )
                 {
-                    log( ILogger.Level.WARNING, "There are no commands in script: this is valid, but it is strange." );
+                    log( ILogger.Level.WARNING, "There are no commands in script: this is valid, but strange." );
                 }
                 else
                 {
@@ -200,72 +196,22 @@ public final class Stick
         else
             sModelName = sModelName.trim();
 
-        srptMgr.start();    // First one to trigger SCRIPTs ONSTART before anything is started
-        gridMgr.start();    // GridManager instance is needed before creating the Commands because Rule (perhaps also others) use ::isGridNode
-        drvrMgr.start();    // Drivers has to be inited before devices because devices ask for their values to drivers
-        deviMgr.start();    // After starting every device, it requests its value and generates a Device Changes message
+        srptMgr.runPreStartScripts();
+
+        srptMgr.start();   // Prepares scripts; ONSTART are executed (as it is done by posting an msg into the bus, entites will exist when it will be executed)
+        gridMgr_start();   // GridManager instance is needed before creating the Commands because Rule (perhaps also others) use ::isGridNode()
+        drvrMgr.start();   // Drivers has to be inited before devices because devices ask for their values to drivers
+        deviMgr.start();   // After starting every device, it requests its value and generates a Device Changes message
         ruleMgr.start();
 
-        // If this is a Grid Node, devices in other nodes (referenced in this Stick) have to be identified.
-        // Such devices can be only in Rule's WHEN and IF clauses.
-
-        if( gridMgr.isNode )
-        {
-            for( ICommand cmd : all( "rules" ) )
-            {
-                IXprEval eval4When = newXprEval().build( ((IRule) cmd).getWhen(), (r) -> {}, newGroupWiseFn() );
-
-                for( String sName : eval4When.getVars().keySet() )
-                {
-                    if( deviMgr.named( sName ) == null )            // If device manager does not have a device with this name,
-                        deviMgr.createRemoteDevice( sName );        // it is because that device exists in another ExEn.
-                }
-
-                IXprEval eval4If = newXprEval().build( ((IRule) cmd).getIf(), (r) -> {}, newGroupWiseFn() );
-
-                if( eval4If != null )
-                {
-                    for( String sName : eval4If.getVars().keySet() )
-                    {
-                        if( deviMgr.named( sName ) == null )        // If device manager does not have a device with this name,
-                            deviMgr.createRemoteDevice( sName );    // it is because that device exists in another ExEn.
-                    }
-                }
-            }
-        }
-
-        // Starts network servers -------------------------------------------------------
-
-        try
-        {
-            netwMgr.start( new ServerListener(), config );
-
-            // If NetworkManager is not empty (even if transpiled code is empty) we can not exit because
-            // NetworkManager can receive requests to create Scripts, Drivers, Devices and Rules.
-
-            if( netwMgr.isEmpty() )
-            {
-                if( deviMgr.isEmpty() && ruleMgr.isEmpty() && srptMgr.isEmpty() )
-                    failed( null, "Useless ExEn: no Devices, no Rules, no Scripts and no communications" );
-
-                runVoidThread();    // Java neededs at least one non-daemon thread to not exit (NetworkManager provides a Thread when it is not empty)
-            }
-        }
-        catch( MingleException me )
-        {
-            failed( null, "Communications ports are already in use:\n"+ netwMgr.toString() );
-        }
-        catch( Exception exc )
-        {
-            failed( exc, "It looks like there is another ExEn running using same config" );
-        }
-
         //------------------------------------------------------------------------//
+
         boolean bUseDisk  = UtilSys.isFsWritable && config.get( "exen", "write_disk", true  );
         boolean bFakeDrvs = config.get( "exen", "faked_drivers", false );
         boolean bDocker   = UtilSys.isDocker();
         String  sLogName  = UtilSys.getLogger().getName();
         String  sLogLevel = UtilSys.getLogger().getLevel().toString();
+        String  sGridMsg  = System.getProperty( "_GridManager_toString_Message_" );   // This is created in ::initGridManager()
 
         String sInfo = new StringBuilder()
                 .append( '\n' )
@@ -283,14 +229,15 @@ public final class Stick
                 .append( "JRE     = "         ).append( System.getProperty( "java.runtime.name" ) ).append( ". Version: " ).append( System.getProperty( "java.runtime.version" ) ).append( '\n' )
                 .append( "Locale  = "         ).append( Locale.getDefault() ).append( '\n' )
                 .append( "OS      = "         ).append( System.getProperty( "os.name" ) ).append( ". Version: " ).append( System.getProperty( "os.version" ) ).append( ". Architecture: " ).append( System.getProperty( "os.arch" ) ).append( '\n' )
-                .append( "IP(s)   = "         ).append( (new StdXprFns()).invoke( "localIPs", null ).toString() ).append( '\n' )
+                .append( "IP(s)   = "         ).append( StdXprFns.invoke( "localIPs", (Object[]) null ).toString() ).append( '\n' )
                 .append( "Docker  = "         ).append( bDocker ).append( " -> Apparently Stick is " ).append( bDocker ? "" : "not" ).append( " running inside a docker" ).append ( '\n' ).append( '\n' )
-                .append( netwMgr.toString()   ).append( '\n' )
-                .append( gridMgr.toString()   ).append( '\n' )
+                .append( sGridMsg             ).append( '\n' )
                 .append( '[' ).append( LocalDateTime.now().format( DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" ) ) ).append( "] Stick started..." ).append('\n')
                 .toString();
 
         say( sInfo );
+
+        System.clearProperty( "_GridManager_toString_Message_" );   // Not needed any more
 
         //------------------------------------------------------------------------//
         // Prepare and start the Event Bus
@@ -478,16 +425,9 @@ public final class Stick
     }
 
     @Override
-    public Function<String,String[]> newGroupWiseFn()
+    public String[] getGroupMemberNames( String group )
     {
-        // Better to create a new instance each time to avoid thread-saftey issues
-
-        return (gn) ->    // Group Name
-                    {
-                        return Arrays.stream( getMembersOf( gn ) )
-                                     .map( IDevice::name )
-                                     .toArray( String[]::new );
-                    };
+        return deviMgr.getGroupMemberNames( group );
     }
 
     @Override
@@ -517,7 +457,7 @@ public final class Stick
     @Override
     public boolean isGridNode()
     {
-        return gridMgr.isNode;
+        return gridMgr != null;
     }
 
     @Override
@@ -525,25 +465,23 @@ public final class Stick
     {
         ILogger logger = UtilSys.getLogger();
 
-        if( logger == null )
+        if( isLoggable( level ) )
         {
-            System.err.println( msg );
-        }
-        else if( isLoggable( level ) )
-        {
-            String sMsg;
+            String sMsg = ((msg == null) ? "Error has no description" : msg.toString());    // Will be null only by mistake, but has to be checked
 
-            if( msg instanceof Throwable )
-                sMsg = UtilStr.toString( msg );
-            else
-                sMsg = ((msg == null) ? "Error has no description" : msg.toString());    // Will be null only by mistake, but has to be checked
-
-            logger.log( level, sMsg );
-
-            if( ! netwMgr.isEmpty() &&                          // Saves CPU: creating ExEnComm and the JSON.
-                logger.isLoggable( ILogger.Level.WARNING ) )    // Only WARNING and SEVERE are broadcasted (if WARNING is loggable, SEVERE will be too).
+            if( logger == null )
             {
-                netwMgr.broadcast( ExEnComm.asError( sMsg ) );
+                System.err.println( msg );
+            }
+            else
+            {
+                logger.log( level, sMsg );
+
+                if( isGridNode() && level.weight >= ILogger.Level.WARNING.weight )    // Only WARNING and SEVERE are broadcasted (if WARNING is loggable, SEVERE will be too).
+                {
+                    Throwable exc = (msg instanceof Throwable) ? (Throwable) msg : new MingleException( sMsg );
+                    gridMgr.broadcast( exc );
+                }
             }
         }
 
@@ -588,6 +526,9 @@ public final class Stick
 
         return this;
     }
+
+    //------------------------------------------------------------------------//
+    // PACKAGE SCOPE
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
@@ -658,13 +599,20 @@ public final class Stick
         }
         //-------------------------------------------------------------
 
+        // Execute PRE ONSTOP scripts BEFORE stopping EventBus
+        // (scripts can still communicate with devices via the bus)
+        srptMgr.runPreStopScripts();
+
+        eventBus.flush();  // Wait for PRE ONSTOP messages to be delivered
         eventBus.stop();
         ruleMgr.stop();
         drvrMgr.stop();
         deviMgr.stop();
-        gridMgr.stop();
-        netwMgr.stop();
-        srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped
+
+        if( isGridNode() )
+            gridMgr.stop();
+
+        srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped (entities are gone)
 
         say( "<<<<<<< Stick finished >>>>>>>" );
 
@@ -795,6 +743,87 @@ public final class Stick
         }
 
         return 0;
+    }
+
+    private GridManager initGridManager()
+    {
+        GridManager tmp = null;
+
+        if( config.isModule( "grid" ) )
+        {
+            tmp = new GridManager( this, () -> new ServerListener() );
+
+            if( ! tmp.isValid() )
+            {
+                String msg = "Invalid \"grid\" configuration.";
+
+                if( tmp.isMute() && tmp.isDeaf() )
+                    msg = "Node is 'mute' and is 'deaf': therefore as node-grid it is useless.\n" + msg;
+
+                failed( null, msg );   // exit to OS
+            }
+        }
+        else
+        {
+            System.setProperty( "_GridManager_toString_Message_",
+                                "Grid information:\n    This ExEn does not belong to a Grid.\n" );
+        }
+
+        return tmp;
+    }
+
+    private void gridMgr_start()
+    {
+        if( isGridNode() )
+        {
+            // If this is a Grid Node (and it is valid), devices in other nodes (referenced in this Stick) have to be identified.
+            // Such devices can be only in Rule's WHEN and IF clauses.
+
+            for( ICommand cmd : all( "rules" ) )
+            {
+                IXprEval eval4When = newXprEval().build( ((IRule) cmd).getWhen(), (r) -> {}, this::getGroupMemberNames );
+
+                for( String sName : eval4When.getVars().keySet() )
+                {
+                    if( deviMgr.named( sName ) == null )          // If device manager does not have a device with this name,
+                        deviMgr.createRemoteDevice( sName );      // it is because that device exists in another ExEn.
+                }
+
+                if( ((IRule) cmd).getIf() != null )
+                {
+                    IXprEval eval4If = newXprEval().build( ((IRule) cmd).getIf(), (r) -> {}, this::getGroupMemberNames );
+
+                    for( String sName : eval4If.getVars().keySet() )
+                    {
+                        if( deviMgr.named( sName ) == null )      // If device manager does not have a device with this name,
+                            deviMgr.createRemoteDevice( sName );  // it is because that device exists in another ExEn.
+                    }
+                }
+            }
+
+            // After external devices are indentified, the grid can be started
+
+            try
+            {
+                gridMgr.start();
+                System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
+            }
+            catch( MingleException me )
+            {
+                failed( null, "One or more communications ports are already in use" );
+            }
+            catch( Exception exc )
+            {
+                failed( exc, "It looks like there is another ExEn running using same config" );
+            }
+        }
+        else
+        {
+            if( deviMgr.isEmpty() && ruleMgr.isEmpty() && srptMgr.isEmpty() )
+                failed( null, "Useless ExEn: no Devices, no Rules, no Scripts and no communications" );
+
+            runVoidThread();    // Java neededs at least one non-daemon thread to not exit (NetworkManager provides a Thread when it is not empty)
+        }
     }
 
     //----------------------------------------------------------------------------//
@@ -949,25 +978,8 @@ public final class Stick
 
         private void broadcast( Message message )
         {
-            ExEnComm msg = null;
-
-            // Sends the message to all listeners (they are not normally members of the grid)
-
-            if( ! netwMgr.isEmpty() )                  // Saves CPU: avoids to create the ExEnComm and the JSON
-            {
-                msg = new ExEnComm( message );
-                netwMgr.broadcast( msg );              // Internally uses a thread
-            }
-
-            // Sends the message to all members of the grid (they are not simply listerners)
-
-            if( gridMgr.isNode )
-            {
-                if( msg == null )                      // Saves CPU (if netwMgr.isEmpty() is false, 'msg' was built previously)
-                    msg = new ExEnComm( message );
-
-                gridMgr.broadcast( msg );              // Internally uses a thread
-            }
+            if( isGridNode() )
+                gridMgr.broadcast( message );   // Internally uses a thread
         }
 
         private IDriver getDriver4Device( String name )
@@ -989,9 +1001,9 @@ public final class Stick
     }
 
     //----------------------------------------------------------------------------//
-    // INNER CLASS
-    // This is passed to the Communcations Manager to process incoming messages
-    // from other tools (ExEns, Gum, etc).
+    // INNER CLASS (to be used by the Grid Manager).
+    // This is passed to the Grid Manager to process incoming messages from other
+    // tools (ExEns, Gum, etc).
     //---------------------------------------------------------------------------//
 
     /**
@@ -1018,7 +1030,7 @@ public final class Stick
         @Override
         public void onConnected( INetServer origin, INetClient client )
         {
-            if( gridMgr.isDeaf )
+            if( ! isGridNode() || gridMgr.isDeaf() )
                 return;
 
             if( isInfoLoggable )
@@ -1028,7 +1040,7 @@ public final class Stick
         @Override
         public void onDisconnected( INetServer origin, INetClient client )
         {
-            if( gridMgr.isDeaf )
+            if( ! isGridNode() || gridMgr.isDeaf() )
                 return;
 
             if( isInfoLoggable )
@@ -1038,7 +1050,7 @@ public final class Stick
         @Override
         public void onError( INetServer origin, INetClient client, Exception exc )
         {
-            if( gridMgr.isNode && gridMgr.isDeaf )
+            if( ! isGridNode() || gridMgr.isDeaf() )
                 return;
 
             log( ILogger.Level.SEVERE, exc );
@@ -1050,7 +1062,7 @@ public final class Stick
         @Override
         public void onMessage( INetServer origin, INetClient client, String message )
         {
-            if( gridMgr.isDeaf )
+            if( ! isGridNode() || gridMgr.isDeaf() )
                 return;
 
             UtilSys.execute( getClass().getSimpleName() +":onMessage:"+ message,

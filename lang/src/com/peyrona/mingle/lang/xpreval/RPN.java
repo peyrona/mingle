@@ -2,6 +2,7 @@
 package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.interfaces.ICandi;
+import com.peyrona.mingle.lang.interfaces.ITokenable;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
@@ -32,7 +33,7 @@ final class RPN
     RPN( List<XprToken> lstInfix )
     {
         shuntingyard( lstInfix );
-        validate();
+        validate( lstInfix );
     }
 
     //------------------------------------------------------------------------//
@@ -78,15 +79,15 @@ final class RPN
                 case XprToken.STRING :
                 case XprToken.VARIABLE:
                     if( (tNext != null) && tNext.isNotType( XprToken.OPERATOR, XprToken.RESERVED_WORD, XprToken.PARENTH_CLOSED, XprToken.PARAM_SEPARATOR ) )
-                        lstErrors.add( new CodeError( "Missing operator", tNext, true ) );
+                        addError( lstInfix, "Missing operator", tNext, true );
 
                     lstRPN.add( token );    // Constants and variable-names are added directly to the RPN List
 
                     break;
 
                 case XprToken.FUNCTION:
-                    if( isNotLast( token, tNext ) && tNext.isNotType( XprToken.PARENTH_OPEN ) )
-                        lstErrors.add( new CodeError( "Expected \"(\"", token ) );
+                    if( isNotLast( lstInfix, token, tNext ) && tNext.isNotType( XprToken.PARENTH_OPEN ) )
+                        addError( lstInfix, "Expected \"(\"", token, false );
 
                     stack.push( token );
                     lastFunc = token;
@@ -96,34 +97,34 @@ final class RPN
                 case XprToken.PARAM_SEPARATOR:     // ','
                     if( (tNext != null) && tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
                     {
-                        lstErrors.add( new CodeError( "Invalid token"+ tNext.text(), tNext ) );
+                        addError( lstInfix, "Invalid token: " + tNext.text(), tNext, false );
                     }
-                    else if( isNotFirst( token, tPrev ) && isNotLast( token, tNext ) )
+                    else if( isNotFirst( lstInfix, token, tPrev ) && isNotLast( lstInfix, token, tNext ) )
                     {
                         while( (! stack.isEmpty()) && stack.peek().isNotType( XprToken.PARENTH_OPEN ) )
                             lstRPN.add( stack.pop() );
 
                         if( stack.isEmpty() )
                         {
-                            if( lastFunc == null ) lstErrors.add( new CodeError( "Unexpected comma", token ) );
-                            else                   lstErrors.add( new CodeError( "Parse error for function \""+ lastFunc.text() +'"', token ) );
+                            if( lastFunc == null ) addError( lstInfix, "Unexpected comma", token, false );
+                            else                   addError( lstInfix, "Parse error for function \""+ lastFunc.text() +'"', token, false );
                         }
                     }
 
                     break;
 
                 case XprToken.OPERATOR:
-                    if( isNotFirst( token, tPrev ) && isNotLast( token, tNext ) &&
+                    if( isNotFirst( lstInfix, token, tPrev ) && isNotLast( lstInfix, token, tNext ) &&
                         tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
                     {
-                         lstErrors.add( new CodeError( "Missing operand for operator "+ token.text(), tNext ) );
+                         addError( lstInfix, "Missing operand for operator "+ token.text(), tNext, false );
                     }
 
                     Operator op = operators.get( token.text() );
 
                     if( op == null )
                     {
-                        lstErrors.add( new CodeError( "Unknown operator \"" + token.text() +'"', token ) );
+                        addError( lstInfix, "Unknown operator \"" + token.text() +'"', token, false );
                     }
                     else
                     {
@@ -147,23 +148,23 @@ final class RPN
                         {
                             // With truthy/falsy semantics, '!' can be applied to any value type
                             if( tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
-                                lstErrors.add( new CodeError( "Invalid unary operator \"!\" for operand \""+ tNext.text() +'"', tNext ) );
+                                addError( lstInfix, "Invalid unary operator \"!\" for operand \""+ tNext.text() +'"', tNext, false );
                         }
                         else if( tNext.isType( XprToken.FUNCTION ) )                                // '+' and '-' unary operators
                         {
                             if( ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( Number.class ) )
-                                lstErrors.add( new CodeError( "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext ) );
+                                addError( lstInfix, "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext, false );
                         }
                         else
                         {
                             // '+' and '-' unary operators require NUMBER
                             if( tNext.isNotType( XprToken.NUMBER, XprToken.PARENTH_OPEN, XprToken.VARIABLE ) )
-                                lstErrors.add( new CodeError( "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext ) );
+                                addError( lstInfix, "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext, false );
                         }
                     }
                     else
                     {
-                        lstErrors.add( new CodeError( "Operator \""+ token.text() +"\" can not be last token", token ) );
+                        addError( lstInfix, "Operator \""+ token.text() +"\" can not be last token", token, false );
                     }
 
                     stack.push( token );
@@ -171,8 +172,8 @@ final class RPN
                     break;
 
                 case XprToken.PARENTH_OPEN:
-                    if( isNotLast( token, tNext ) && tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR ) )
-                        lstErrors.add( new CodeError( "Invalid token after \"(\"", tNext ) );
+                    if( isNotLast( lstInfix, token, tNext ) && tNext.isType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR ) )
+                        addError( lstInfix, "Invalid token after \"(\"", tNext, false );
 
                     if( (tPrev != null) && tPrev.isType( XprToken.FUNCTION ) )
                         lstRPN.add( token );
@@ -182,14 +183,14 @@ final class RPN
                     break;
 
                 case XprToken.PARENTH_CLOSED:                                                                                                           // Only AFTER and WITHIN can exist because ALL and ANY were expanded
-                    if( isNotFirst( token, tPrev) && (tNext != null) && tNext.isNotType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
-                        lstErrors.add( new CodeError( "Invalid token after \")\"", tNext ) );
+                    if( isNotFirst( lstInfix, token, tPrev) && (tNext != null) && tNext.isNotType( XprToken.OPERATOR, XprToken.PARAM_SEPARATOR, XprToken.PARENTH_CLOSED, XprToken.RESERVED_WORD ) )
+                        addError( lstInfix, "Invalid token after \")\"", tNext, false );
 
                     while( ! stack.isEmpty() && stack.peek().isNotType( XprToken.PARENTH_OPEN ) )
                         lstRPN.add( stack.pop() );
 
                     if( stack.isEmpty() )
-                        lstErrors.add( new CodeError( "Mismatched parentheses", token ) );
+                        addError( lstInfix, "Mismatched parentheses", token, false );
                     else
                         stack.pop();
 
@@ -204,13 +205,13 @@ final class RPN
                 case XprToken.RESERVED_WORD:
                     if( token.isText( XprUtils.sAFTER, XprUtils.sWITHIN ) )                // Only AFTER and WITHIN can exist in the expression because ALL and ANY were substituted (expanded)
                     {
-                        if( isNotFirst( token, tPrev ) && isNotLast( token, tNext ) && tNext.isNotType( XprToken.FUNCTION, XprToken.NUMBER, XprToken.PARENTH_OPEN, XprToken.VARIABLE ) )
+                        if( isNotFirst( lstInfix, token, tPrev ) && isNotLast( lstInfix, token, tNext ) && tNext.isNotType( XprToken.FUNCTION, XprToken.NUMBER, XprToken.PARENTH_OPEN, XprToken.VARIABLE ) )
                         {
-                            lstErrors.add( new CodeError( "Invalid token after "+ token.text(), tNext ) );
+                            addError( lstInfix, "Invalid token after "+ token.text(), tNext, false );
                         }
                         else if( tNext.isType( XprToken.FUNCTION ) && ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( Number.class ) )
                         {
-                            lstErrors.add( new CodeError( "Function does not returns a number"+ tNext.text(), tNext ) );
+                            addError( lstInfix, "Function does not returns a number"+ tNext.text(), tNext, false );
                         }
 
                         while( (! stack.isEmpty())
@@ -224,13 +225,13 @@ final class RPN
                     }
                     else
                     {
-                        lstErrors.add( new CodeError( "Invalid token '"+ token.text() +'\'', token ) );
+                        addError( lstInfix, "Invalid token '"+ token.text() +'\'', token, false );
                     }
 
                     break;
 
                 default:
-                    lstErrors.add( new CodeError( "Unknown token '"+ token.text() +'\'', token ) );
+                    addError( lstInfix, "Unknown token '"+ token.text() +'\'', token, false );
             }
         }
 
@@ -239,7 +240,7 @@ final class RPN
             XprToken token = stack.pop();
 
             if( token.isType( XprToken.PARENTH_OPEN, XprToken.PARENTH_CLOSED ) )
-                lstErrors.add( new CodeError( "Mismatched parentheses", token ) );
+                addError( lstInfix, "Mismatched parentheses", token, false );
             else
                 lstRPN.add( token );
         }
@@ -268,7 +269,7 @@ final class RPN
      * <p>
      * Thanks to Norman Ramsey: http://stackoverflow.com/questions/789847/postfix-notation-validation
      */
-    private void validate()
+    private void validate( List<XprToken> lstInfix )
     {
         if( ! lstErrors.isEmpty() || lstRPN.isEmpty() )
             return;
@@ -291,14 +292,20 @@ final class RPN
                 case XprToken.OPERATOR:
                     // Binary operators: pop 2, push 1 (net: -1)
                     if( stackDepth < 2 )
-                        return;    // Invalid state - silently return to avoid false positives
+                    {
+                        addError( lstInfix, "Missing operand(s) for operator '" + token.text() + "'", token, false );
+                        return;
+                    }
                     stackDepth--;
                     break;
 
                 case XprToken.OPERATOR_UNARY:
                     // Unary operators: pop 1, push 1 (net: 0)
                     if( stackDepth < 1 )
-                        return;    // Invalid state - silently return to avoid false positives
+                    {
+                        addError( lstInfix, "Missing operand for unary operator '" + token.text() + "'", token, false );
+                        return;
+                    }
                     // stackDepth unchanged
                     break;
 
@@ -328,7 +335,7 @@ final class RPN
                     {
                         if( stackDepth < 2 )
                         {
-                            lstErrors.add( new CodeError( "'"+ token.text() +"' requires expression and delay value", token ) );
+                            addError( lstInfix, "'"+ token.text() +"' requires expression and delay value", token, false );
                             return;
                         }
                         stackDepth--;    // Pop 2, push 1
@@ -344,30 +351,37 @@ final class RPN
         // After processing all tokens, stack should have exactly 1 value (the result)
         if( stackDepth == 0 )
         {
-            lstErrors.add( new CodeError( "Expression produces no result", lstRPN.get( 0 ) ) );
+            addError( lstInfix, "Expression produces no result", lstRPN.get( 0 ), false );
         }
         // Note: stackDepth > 1 is not always an error due to complex expression patterns
     }
 
-    private boolean isNotFirst( XprToken tCurrent, XprToken tPrevious )
+    private boolean isNotFirst( List<XprToken> lstInfix, XprToken tCurrent, XprToken tPrevious )
     {
         if( tPrevious == null )
         {
-            lstErrors.add( new CodeError( "Invalid expression start: "+ tCurrent.text(), tCurrent ) );
+            addError( lstInfix, "Invalid expression start: "+ tCurrent.text(), tCurrent, false );
             return false;
         }
 
         return true;
     }
 
-    private boolean isNotLast( XprToken tCurrent, XprToken tNext )
+    private boolean isNotLast( List<XprToken> lstInfix, XprToken tCurrent, XprToken tNext )
     {
         if( tNext == null )
         {
-            lstErrors.add( new CodeError( "Incomplete expression, invalid end: "+ tCurrent.text(), tCurrent ) );
+            addError( lstInfix, "Incomplete expression, invalid end: "+ tCurrent.text(), tCurrent, false );
             return false;
         }
 
         return true;
+    }
+
+    private void addError( List<XprToken> lstInfix, String sError, ITokenable token, boolean bAfter )
+    {
+          String xpr = XprUtils.toString( lstInfix );
+
+          lstErrors.add( new CodeError( sError +"\nin expression: '"+ xpr +'\'', token, bAfter ) );
     }
 }

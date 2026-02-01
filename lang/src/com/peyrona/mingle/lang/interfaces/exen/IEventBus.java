@@ -75,6 +75,16 @@ public interface IEventBus
     IEventBus start();
 
     /**
+     * Blocks until all pending messages are delivered.
+     * <p>
+     * This method is useful for graceful shutdown scenarios where you want to
+     * ensure all queued messages are processed before stopping the bus.
+     *
+     * @return Itself.
+     */
+    IEventBus flush();
+
+    /**
      * House keeping.
      *
      * @return Itself.

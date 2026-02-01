@@ -10,7 +10,6 @@ import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
-import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -67,12 +66,10 @@ final class EvalByAST
     public static final short VISIT_POST_ORDER =  1;
 
     private final    Consumer<Object>    onSolved;                               // It is invoked when the expr is solved passing the result (either TRUE or FALSE)
-    private final    StdXprOps           operators = new StdXprOps();
-    private final    StdXprFns           functions = new StdXprFns();
     private final    List<ICandi.IError> lstErrors = new ArrayList<>();          // Used to add items only, never removed
     private final    Map<String,Object>  mapVars   = Collections.synchronizedMap( new HashMap<>() );  // key == deviceName, value == deviceValue (not nneded to be sync)
     private final    MyExecutor          executor;                               // Used for both AFTER and WITHIN.
-    private final    ASTNode             root;                                   // The fucking root node
+    private final    ASTNode             root;                                   // The root node of the AST
     private final    boolean             isBoolean;
     private final    boolean             hasChangedDeviceFn;
     private final    boolean             hasWithin;                              // hasAfter is not really needed
@@ -194,7 +191,7 @@ final class EvalByAST
     boolean set( String name, Object value )
     {
         if( hasChangedDeviceFn )                        // If true, then the expression has a call to getChangedDevice() as part of it.
-            functions.setTriggeredBy( name, value );    // In this case, even if the expression has no vars, we have to call this func because
+            StdXprFns.setTriggeredBy( name, value );    // In this case, even if the expression has no vars, we have to call this func because
                                                         // Action::trigger(...) calls here to set the device name & value that triggered the rule.
         if( ! mapVars.containsKey( name ) )
             return false;
@@ -233,7 +230,10 @@ final class EvalByAST
 
         if( executor == null )  // Because the expression does not have futures, it can be evaluated now -------------------------------------
         {
-            result = root.eval( operators, functions, mapVars, hasAllVars );
+            if( root == null )
+                throw new MingleException( "Cannot evaluate expression: AST root is null (expression has errors)" );
+
+            result = root.eval( mapVars, hasAllVars );
 
             // Convert to boolean if expression is boolean type and result isn't already Boolean
             if( isBoolean && (result != null) && ! (result instanceof Boolean) )
@@ -260,7 +260,10 @@ final class EvalByAST
             }
             else                     // If the eval is already initialized...
             {
-                result = root.eval( operators, functions, mapVars, hasAllVars );
+                if( root == null )
+                    throw new MingleException( "Cannot evaluate expression: AST root is null (expression has errors)" );
+
+                result = root.eval( mapVars, hasAllVars );
 
                 // Convert to boolean if expression is boolean type and result isn't already Boolean
                 if( isBoolean && (result != null) && ! (result instanceof Boolean) )
@@ -499,15 +502,33 @@ final class EvalByAST
                     while( (! stack.isEmpty()) && stack.peek().token().isNotType( XprToken.PARENTH_OPEN ) )   // There are funcs with 0 args
                         nodeFn.addFnArg( stack.pop() );
 
+                    if( stack.isEmpty() )
+                    {
+                        lstErrors.add( new CodeError( "Missing '(' for function: " + token.text(), token ) );
+                        return null;
+                    }
+
                     stack.pop();           // pops the mark node '('
                     stack.add( nodeFn );
                     break;
 
                 case XprToken.OPERATOR_UNARY:
+                    if( stack.isEmpty() )
+                    {
+                        lstErrors.add( new CodeError( "Missing operand for unary operator: " + token.text(), token ) );
+                        return null;
+                    }
+
                     stack.add( new ASTNode().token( token ).left( stack.pop() ) );
                     break;
 
                 case XprToken.RESERVED_WORD:            // Only AFTER and WITHIN can be part of an expression
+                    if( stack.size() < 2 )
+                    {
+                        lstErrors.add( new CodeError( token.text() + " requires an expression and a delay value", token ) );
+                        return null;
+                    }
+
                     ASTNode nodeDelay = stack.pop();    // Previous token in RPN is the delay amount
                     ASTNode nodeExpr  = stack.pop();    // Previous-previous token must be a boolean expression
 
@@ -547,6 +568,12 @@ final class EvalByAST
                     break;
 
                 default:
+                    if( stack.size() < 2 )
+                    {
+                        lstErrors.add( new CodeError( "Missing operand(s) for operator: " + token.text(), token ) );
+                        return null;
+                    }
+
                     ASTNode right = stack.pop();
                     ASTNode left  = stack.pop();
                     stack.add( new ASTNode().token( token ).left( left ).right( right ) );
@@ -590,16 +617,21 @@ final class EvalByAST
                     {
                         Object value = null;
 
-                        if( child.token().isType( XprToken.OPERATOR )                                          &&
-                            child.left( ).token().isType( XprToken.BOOLEAN, XprToken.NUMBER, XprToken.STRING ) &&
+                        // Check for binary operator with constant operands
+                        if( child.token().isType( XprToken.OPERATOR ) &&
+                            child.left()  != null && child.left().token()  != null &&
+                            child.right() != null && child.right().token() != null &&
+                            child.left().token().isType(  XprToken.BOOLEAN, XprToken.NUMBER, XprToken.STRING ) &&
                             child.right().token().isType( XprToken.BOOLEAN, XprToken.NUMBER, XprToken.STRING ) )
                         {
-                            value = child.eval( operators, functions, mapVars, hasAllVars );
+                            value = child.eval( mapVars, hasAllVars );
                         }
+                        // Check for unary operator with constant operand
                         else if( child.token().isType( XprToken.OPERATOR_UNARY ) &&
+                                 child.left() != null && child.left().token() != null &&
                                  child.left().token().isType( XprToken.BOOLEAN, XprToken.NUMBER, XprToken.STRING ) )
                         {
-                            value = child.eval( operators, functions, mapVars, true );   // mapVars is useless because node is made up of constants, but it is requested by the method
+                            value = child.eval( mapVars, true );   // mapVars is useless because node is made up of constants, but it is requested by the method
                         }
 
                         if( value != null )
@@ -683,7 +715,7 @@ final class EvalByAST
                     ILogger logger = UtilSys.getLogger();
 
                     if(  logger == null )  System.err.println( UtilStr.toString( t ) );
-                    else                   logger.log( ILogger.Level.INFO, msg );
+                    else                   logger.log( ILogger.Level.ERROR, msg );
                 }
             }
             finally
@@ -755,7 +787,7 @@ final class EvalByAST
                         ILogger logger = UtilSys.getLogger();
 
                         if( logger == null )  System.err.println( msg );
-                        else                  logger.log( ILogger.Level.INFO, msg );
+                        else                  logger.log( ILogger.Level.WARNING, msg );
                     }
                 }
             }
@@ -790,7 +822,7 @@ final class EvalByAST
             {
                 Thread.sleep( node.delay() );
 
-                node.expired( operators, functions, mapVars, hasAllVars );
+                node.expired( mapVars, hasAllVars );
                 EvalByAST.this.eval();
             }
             catch( InterruptedException ie )
@@ -802,7 +834,7 @@ final class EvalByAST
                 ILogger logger = UtilSys.getLogger();
 
                 if(  logger == null )  System.err.println( UtilStr.toString( e ) );
-                else                   logger.log( ILogger.Level.INFO, e );
+                else                   logger.log( ILogger.Level.ERROR, e );
             }
         }
     }

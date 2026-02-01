@@ -6,6 +6,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.BufferedReader;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
@@ -26,48 +27,46 @@ import java.util.Map;
  */
 public final class GitHubApiClient
 {
-    // GitHub repository constants
-    private static final String GITHUB_API_BASE = "https://api.github.com";
-    private static final String GITHUB_RAW_BASE = "https://raw.githubusercontent.com";
-    private static final String REPO_OWNER = "peyrona";
-    private static final String REPO_NAME = "mingle";
+    private static final String REPO_OWNER  = "peyrona";
+    private static final String REPO_NAME   = "mingle";
     private static final String REPO_BRANCH = "main";
-    private static final String REPO_PATH = "todeploy";
+    private static final String REPO_PATH   = "todeploy";
 
     // User agent for anonymous access
-    private static final String USER_AGENT = "Mingle-Updater/1.0";
+    private static final String USER_AGENT  = "Mingle-Updater/1.0";
 
     // Rate limiting constants
     private static final long DEFAULT_DELAY_MS = 2000; // 2 seconds between API calls
-    private static final long MAX_BACKOFF_MS = 32000; // Maximum backoff time
-    private static final int MAX_RETRIES = 5; // Maximum retry attempts
+    private static final long MAX_BACKOFF_MS   = 32000; // Maximum backoff time
+    private static final int MAX_RETRIES       = 5; // Maximum retry attempts
 
     // Rate limiting state - made instance-based for better thread safety
-    private volatile long lastApiCallTime = 0;
-    private final Object rateLimitLock = new Object();
+    private volatile long   lastApiCallTime = 0;
+    private final    Object rateLimitLock   = new Object();
 
     // Cache for file metadata with size limits and TTL
     private static final int MAX_CACHE_SIZE = 1000;
     private static final Map<String, CachedMetadata> metadataCache = Collections.synchronizedMap( new LinkedHashMap<String, CachedMetadata>( MAX_CACHE_SIZE, 0.75f, true )
-    {
-        @Override
-        protected boolean removeEldestEntry( Map.Entry<String, CachedMetadata> eldest )
-        {
-            boolean remove = size() > MAX_CACHE_SIZE;
-            if( remove )
-            {
-                cacheEvictions.incrementAndGet();
-            }
-            return remove;
-        }
-    } );
-    private static final long CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+                                                                        {
+                                                                            @Override
+                                                                            protected boolean removeEldestEntry( Map.Entry<String, CachedMetadata> eldest )
+                                                                            {
+                                                                                boolean remove = size() > MAX_CACHE_SIZE;
+                                                                                if( remove )
+                                                                                {
+                                                                                    cacheEvictions.incrementAndGet();
+                                                                                }
+                                                                                return remove;
+                                                                            }
+                                                                        } );
+
+    private static final long CACHE_TTL_MS              = 5 * 60 * 1000; // 5 minutes
     private static final long CACHE_CLEANUP_INTERVAL_MS = 60 * 1000; // Clean up every minute
-    private static volatile long lastCacheCleanup = 0;
+    private static volatile long lastCacheCleanup       = 0;
 
     // Cache statistics for monitoring
-    private static final java.util.concurrent.atomic.AtomicLong cacheHits = new java.util.concurrent.atomic.AtomicLong( 0 );
-    private static final java.util.concurrent.atomic.AtomicLong cacheMisses = new java.util.concurrent.atomic.AtomicLong( 0 );
+    private static final java.util.concurrent.atomic.AtomicLong cacheHits      = new java.util.concurrent.atomic.AtomicLong( 0 );
+    private static final java.util.concurrent.atomic.AtomicLong cacheMisses    = new java.util.concurrent.atomic.AtomicLong( 0 );
     private static final java.util.concurrent.atomic.AtomicLong cacheEvictions = new java.util.concurrent.atomic.AtomicLong( 0 );
 
     //------------------------------------------------------------------------//
@@ -160,18 +159,11 @@ public final class GitHubApiClient
                     try
                     {
                         long resetTimestamp = Long.parseLong( reset );
-                        long currentTime = System.currentTimeMillis() / 1000;
-                        long waitTime = resetTimestamp - currentTime;
+                        long currentTime    = System.currentTimeMillis() / 1000;
+                        long waitTime       = resetTimestamp - currentTime;
 
-                        if( waitTime > 0 )
-                        {
-                            UtilSys.getLogger().log( ILogger.Level.WARNING,
-                                                     String.format( "Rate limit exceeded for: %s. Reset in %d seconds", filePath, waitTime ) );
-                        }
-                        else
-                        {
-                            UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath + " (should reset soon)" );
-                        }
+                        if( waitTime > 0 )   UtilSys.getLogger().log( ILogger.Level.WARNING, String.format( "Rate limit exceeded for: %s. Reset in %d seconds", filePath, waitTime ) );
+                        else                 UtilSys.getLogger().log( ILogger.Level.WARNING, "Rate limit exceeded for: " + filePath + " (should reset soon)" );
                     }
                     catch( NumberFormatException e )
                     {
@@ -201,11 +193,11 @@ public final class GitHubApiClient
         while( retryCount < MAX_RETRIES )
         {
             HttpURLConnection connection = (HttpURLConnection) url.openConnection();
-            connection.setRequestMethod( "GET" );
-            connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
-            connection.setRequestProperty( "User-Agent", USER_AGENT );
-            connection.setConnectTimeout( 10000 );
-            connection.setReadTimeout( 30000 );
+                              connection.setRequestMethod( "GET" );
+                              connection.setRequestProperty( "Accept", "application/vnd.github.v3+json" );
+                              connection.setRequestProperty( "User-Agent", USER_AGENT );
+                              connection.setConnectTimeout( 10000 );
+                              connection.setReadTimeout( 30000 );
 
             int responseCode = connection.getResponseCode();
 
@@ -215,25 +207,27 @@ public final class GitHubApiClient
                 return connection;
             }
 
-            boolean shouldRetry = handleRateLimit( responseCode, connection, filePath );
+            boolean     shouldRetry = handleRateLimit( responseCode, connection, filePath );
+            InputStream errorStream = connection.getErrorStream();
 
-            java.io.InputStream errorStream = connection.getErrorStream();
             if( errorStream != null )
             {
                 try( BufferedReader errorReader = new BufferedReader( new InputStreamReader( errorStream ) ) )
                 {
                     while( errorReader.readLine() != null )
                     {
-                        /* consume */ }
+                        /* consume */
+                    }
                 }
                 catch( Exception e )
                 {
-                    /* ignore */ }
+                    /* ignore */
+                }
             }
 
             connection.disconnect();
 
-            if( !shouldRetry )
+            if( ! shouldRetry )
             {
                 UtilSys.getLogger().log( ILogger.Level.WARNING, "GitHub API request failed with status " + responseCode + " for: " + filePath );
                 return null;

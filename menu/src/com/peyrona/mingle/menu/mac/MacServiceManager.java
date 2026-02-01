@@ -50,6 +50,10 @@ public class MacServiceManager extends AbstractServiceManager
             // Create LaunchAgents directory if it doesn't exist
             Files.createDirectories( Paths.get( LAUNCH_AGENTS_DIR ) );
 
+            // Create log directory if it doesn't exist
+            String logPath = buildLogPath( jarName );
+            Files.createDirectories( Paths.get( logPath ).getParent() );
+
             // Build plist content
             String plistContent = buildPlistContent( jarName, lstOptions, args );
 
@@ -267,10 +271,7 @@ public class MacServiceManager extends AbstractServiceManager
                             .append( "    <array>\n" );
 
         // Build Java command directly instead of calling menu.sh
-        String javaCmd = UtilJVM.javaCmdToString(UtilJVM.buildJavaCmd( jarName, lstOptions, args ) );
-
-        // Split the command into array elements for plist
-        String[] commandParts = javaCmd.split( " " );
+        List<String> commandParts = UtilJVM.buildJavaCmd( jarName, lstOptions, args );
 
         for( String part : commandParts )
         {

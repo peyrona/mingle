@@ -212,19 +212,30 @@ public final class UtilReflect
         assert type           != null;
         assert sFullClassName != null;
 
-        if( asURIs != null )
+        // Try loading class first - JAR may already be on classpath
+        Class clazz;
+
+        try
         {
-            for( String sURI : asURIs )
-                UtilSys.addToClassPath( sURI );
+            clazz = Class.forName( sFullClassName, true, type.getClassLoader() );
+        }
+        catch( ClassNotFoundException cnfe )    // Class not found - need to add JARs dynamically
+        {
+            if( asURIs != null )
+            {
+                for( String sURI : asURIs )
+                    UtilSys.addToClassPath( sURI );
+            }
+
+            clazz = Class.forName( sFullClassName, true, type.getClassLoader() );
         }
 
-        Class       clazz    = Class.forName( sFullClassName );
-        Constructor cntor    = getConstructor( clazz, formalArgs );
-        Object      instance = (realArgs == null) ? cntor.newInstance() : cntor.newInstance( realArgs );
+        Constructor cnstctr  = getConstructor( clazz, formalArgs );
+        Object      instance = (realArgs == null) ? cnstctr.newInstance() : cnstctr.newInstance( realArgs );
 
         if( ! type.isAssignableFrom( instance.getClass() ) )
         {
-            throw new InstantiationException( "Can not cast '"+ sFullClassName +"' to '"+ clazz.getName() +'\'' );
+            throw new InstantiationException( "Can not cast '"+ instance.getClass().getName() +"' to '"+ type.getName() +'\'' );
         }
 
         return type.cast( instance );

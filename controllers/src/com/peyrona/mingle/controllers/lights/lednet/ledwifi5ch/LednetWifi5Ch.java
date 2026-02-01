@@ -5,7 +5,6 @@ import com.peyrona.mingle.controllers.ControllerBase;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
-import java.io.IOException;
 import java.util.Map;
 
 /**
@@ -30,27 +29,43 @@ public final class LednetWifi5Ch
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
+        String sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
+
+// FIXME: quitar este rem
+/**
         try
         {
-            String sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
+//            if( ! isFaked() )
+//                device = new Wifi5ChDevice( sIpAddr, (val) -> sendWriteError( val, new IOException( "Error writing in socket at "+ device.getIP() ) )  );
 
-            if( ! isFaked() )
-                device = new Wifi5ChDevice( sIpAddr, (val) -> sendWriteError( val, new IOException( "Error writting in socket at "+ device.getIP() ) )  );
-
-            setValid( true );
             set( "address", sIpAddr );
+            setValid( true );
         }
-        catch( IOException mue )
+        catch( IOException ioe )
         {
-            sendGenericError( ILogger.Level.SEVERE, mue.getMessage() );
+            sendGenericError( ILogger.Level.SEVERE, ioe.getMessage() );
+            setValid( false );
         }
+*/
+// ELIMINAR LAS SIGUIENTES LINEAS -->
+        setValid( true );
+        set( "address", sIpAddr );
     }
 
     @Override
     public void read()
     {
-             if( isFaked() )  sendReaded( "" );
-        else if( isValid() )  sendReaded( device.read() );
+        if( isInvalid() || (device == null) )
+            return;
+
+        if( isFaked() )
+        {
+            sendReaded( "" );
+            return;
+        }
+
+        if( device != null )
+            sendReaded( device.read() );
     }
 
     @Override

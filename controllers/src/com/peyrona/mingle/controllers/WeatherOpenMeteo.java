@@ -45,7 +45,7 @@ public final class   WeatherOpenMeteo
     private static final String KEY_TIME_ZONE = "timezone";
     private static final String KEY_METRIC    = "metric";
 
-    private ScheduledFuture timer;
+    private ScheduledFuture timer = null;
 
     //------------------------------------------------------------------------//
 
@@ -54,39 +54,65 @@ public final class   WeatherOpenMeteo
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );
 
-        float  latit    = (float)   deviceInit.get( KEY_LATITUDE  );                                             // This is REQUIRED
-        float  longi    = (float)   deviceInit.get( KEY_LONGITUDE );                                             // This is REQUIRED
-        long   interval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL , 60 * UtilUnit.MINUTE )).intValue();   // Number of minutes between 2 consecutives calls to the Weather Web API
-        long   forecast = ((Number) deviceInit.getOrDefault( KEY_FORECAST ,  0 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours
-        long   frame    = ((Number) deviceInit.getOrDefault( KEY_FRAME    ,  1 * UtilUnit.HOUR   )).intValue();   // In millis but need to be converted into hours (valid only when forecast > 0)
-        String timezone = (String)  deviceInit.getOrDefault( KEY_TIME_ZONE, "auto" );
+        // Retrieve and validate required parameters (latitude/longitude)
+        Object oLatit = get( KEY_LATITUDE );
+        Object oLongi = get( KEY_LONGITUDE );
 
-        if( isValid( latit, longi ) )
+        if( oLatit == null || oLongi == null )
         {
-            if( (forecast > 0) && (interval > frame) )    // interval frame are both in millis
-            {
-                sendIsInvalid( "'interval' must be smaller than 'frame'" );
-            }
-            else
-            {
-                short oneWeek = 24 * 7;   // In hours
-
-                interval = (int) interval / UtilUnit.MINUTE;
-                forecast = (int) forecast / UtilUnit.HOUR;
-                frame    = (int) frame    / UtilUnit.HOUR;
-
-                set( KEY_LATITUDE , String.valueOf( latit ) );
-                set( KEY_LONGITUDE, String.valueOf( longi ) );
-                set( KEY_INTERVAL , UtilUnit.setBetween( 15, interval, 60*24*99 ) * UtilUnit.MINUTE );                           // Need to convert into millis
-                set( KEY_FORECAST , UtilUnit.setBetween(  0, forecast, oneWeek -1 ) );                                           // -1 == 1 hour before the limit (because minium frame is 1 hour)
-                set( KEY_FRAME    , UtilUnit.setBetween(  1, frame   , oneWeek - ((Number) get( KEY_FORECAST )).intValue() ) );  // Needed to do "- nForecast", so nFrame does not go beyond 1 week
-                set( KEY_METRIC   , (Boolean) deviceInit.getOrDefault( "metric", true ) );
-                set( KEY_TIME_ZONE, timezone );
-
-                setValid( true );
-            }
+            sendIsInvalid( "latitude and longitude are required" );
+            return;
         }
+
+        float latit = ((Number) oLatit).floatValue();
+        float longi = ((Number) oLongi).floatValue();
+
+        if( ! isValid( latit, longi ) )
+            return;
+
+        // Retrieve optional parameters with defaults (values come in milliseconds from Mingle parser)
+        Object oInterval = get( KEY_INTERVAL );
+        Object oForecast = get( KEY_FORECAST );
+        Object oFrame    = get( KEY_FRAME );
+        Object oTimezone = get( KEY_TIME_ZONE );
+        Object oMetric   = get( KEY_METRIC );
+
+        long   interval = (oInterval != null) ? ((Number) oInterval).longValue() : 60L * UtilUnit.MINUTE;  // Default: 1 hour
+        long   forecast = (oForecast != null) ? ((Number) oForecast).longValue() : 0L;                     // Default: 0 (no forecast)
+        long   frame    = (oFrame    != null) ? ((Number) oFrame   ).longValue() : 1L * UtilUnit.HOUR;     // Default: 1 hour
+        String timezone = (oTimezone != null) ? oTimezone.toString() : "auto";
+        boolean metric  = (oMetric   == null) || Boolean.parseBoolean( oMetric.toString() );               // Default: true
+
+        // Validate interval vs frame relationship (both in millis at this point)
+        if( (forecast > 0) && (interval > frame) )
+        {
+            sendIsInvalid( "'interval' must be smaller than 'frame'" );
+            return;
+        }
+
+        // Convert from milliseconds to minutes for storage
+        int oneWeekMins = 24 * 7 * 60;   // In minutes (10080)
+
+        int intervalMins = (int) (interval / UtilUnit.MINUTE);
+        int forecastMins = (int) (forecast / UtilUnit.MINUTE);
+        int frameMins    = (int) (frame    / UtilUnit.MINUTE);
+
+        // Validate and store configuration (all time values in MINUTES)
+        int validInterval = UtilUnit.setBetween( 15, intervalMins, 60*24*99 );
+        int validForecast = UtilUnit.setBetween(  0, forecastMins, oneWeekMins - 60 );   // -60 mins because min frame is 1h
+        int validFrame    = UtilUnit.setBetween( 60, frameMins, oneWeekMins - validForecast );  // Min 60 mins (1h), max so it doesn't exceed 1 week
+
+        set( KEY_LATITUDE , String.valueOf( latit ) );
+        set( KEY_LONGITUDE, String.valueOf( longi ) );
+        set( KEY_INTERVAL , validInterval );   // Stored in minutes
+        set( KEY_FORECAST , validForecast );   // Stored in minutes
+        set( KEY_FRAME    , validFrame );      // Stored in minutes
+        set( KEY_METRIC   , metric );
+        set( KEY_TIME_ZONE, timezone );
+
+        setValid( true );
     }
 
     @Override
@@ -98,9 +124,9 @@ public final class   WeatherOpenMeteo
         UtilSys.execute( null,
                          () ->
                             {
-                                int nFore  = ((Number) get( KEY_FORECAST )).intValue();
-                                int nFram  = ((Number) get( KEY_FRAME    )).intValue();
-                                int nDays  = nFore - nFram / 24;
+                                int nForeHrs = ((Number) get( KEY_FORECAST )).intValue() / 60;  // Convert minutes to hours
+                                int nFramHrs = ((Number) get( KEY_FRAME    )).intValue() / 60;  // Convert minutes to hours
+                                int nDays    = (nForeHrs - nFramHrs) / 24;
                                     nDays += 2;    // +2 no harm and many things can happen (like invoking the service close to midnight): DO NOT DECREASE THIS VALUE
 
                                 String sURL = "https://api.open-meteo.com/v1/forecast?latitude="+
@@ -146,15 +172,18 @@ public final class   WeatherOpenMeteo
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         if( timer == null )
-            timer = UtilSys.executeWithDelay( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
+        {
+            long intervalMillis = ((Number) get( KEY_INTERVAL )).longValue() * UtilUnit.MINUTE;  // Convert minutes to millis
+            timer = UtilSys.executeWithDelay( getClass().getName(), 5000L, intervalMillis, () -> read() );
+        }
+
+        return isValid();
     }
 
     @Override
@@ -204,7 +233,9 @@ public final class   WeatherOpenMeteo
                .asObject()
                .remove( "time" );   // We do not use this "hourly" array
 
-        if( getLong( KEY_FORECAST ) == 0 )
+        int forecastHrs = ((Number) get( KEY_FORECAST )).intValue() / 60;  // Convert minutes to hours
+
+        if( forecastHrs == 0 )
         {
             int ndx = LocalTime.now().getHour();    // From 0 to 23 (JSON array also goes from 0 to 23)
 
@@ -213,10 +244,11 @@ public final class   WeatherOpenMeteo
         }
         else
         {
-            LocalTime time   = LocalTime.now();
-            int       nHour  = time.getHour() + (time.getMinute() > 35 ? 1 : 0);    // When hour is past 35 minutes we want next hour
-            int       nBegin = nHour  + ((Number) get( KEY_FORECAST )).intValue();  // Begining array index (JSON array is zero based and hour is zero based too)
-            int       nEnd   = nBegin + ((Number) get( KEY_FRAME    )).intValue();  // Ending array index
+            int       frameHrs = ((Number) get( KEY_FRAME )).intValue() / 60;       // Convert minutes to hours
+            LocalTime time     = LocalTime.now();
+            int       nHour    = time.getHour() + (time.getMinute() > 35 ? 1 : 0);  // When hour is past 35 minutes we want next hour
+            int       nBegin   = nHour  + forecastHrs;   // Beginning array index (JSON array is zero based and hour is zero based too)
+            int       nEnd     = nBegin + frameHrs;      // Ending array index
 
             for( String key : jo.names() )
             {
@@ -283,25 +315,61 @@ public final class   WeatherOpenMeteo
             for( int n = 1; n <= keys.size(); n++  )
             {
                 String sKey = keys.get( n ).toString();
+                Object value = dict.get( sKey );
 
-                if( (dict.get( sKey ) instanceof Float) && notMetric )
+                if( value instanceof Float )
                 {
-                    switch( sKey )
+                    Float converted = convertValue( sKey, (Float) value );
+
+                    if( converted != null )
+                        dict.put( sKey, converted );
+                }
+                else if( value instanceof list )
+                {
+                    list lstValues = (list) value;
+                    list lstConverted = new list();
+
+                    for( int i = 1; i <= lstValues.size(); i++ )
                     {
-                        case "temperature"         :
-                        case "temperature_feel"    :
-                        case "temperature_max"     :
-                        case "temperature_min"     :
-                        case "temperature_max_feel":
-                        case "temperature_min_feel": dict.put( sKey, UtilUnit.celsius2fahrenheit( (Float) dict.get( sKey ) ) );
-                                                     break;
-                        case "windspeed"           : dict.put( sKey, UtilUnit.kmhr2mileshr( (Float) dict.get( sKey ) ) );
-                                                     break;
+                        Object item = lstValues.get( i );
+
+                        if( item instanceof Float )
+                        {
+                            Float converted = convertValue( sKey, (Float) item );
+                            lstConverted.add( converted != null ? converted : item );
+                        }
+                        else
+                        {
+                            lstConverted.add( item );
+                        }
                     }
+
+                    dict.put( sKey, lstConverted );
                 }
             }
         }
 
         return dict;
+    }
+
+    private Float convertValue( String sKey, Float value )
+    {
+        switch( sKey )
+        {
+            case "temperature"         :
+            case "temperature_feel"    :
+            case "temperature_max"     :
+            case "temperature_min"     :
+            case "temperature_max_feel":
+            case "temperature_min_feel": return UtilUnit.celsius2fahrenheit( value );
+
+            case "windspeed"           : return UtilUnit.kmhr2mileshr( value );
+
+            case "rain_amount"         :
+            case "showers_amount"      :
+            case "snowfall_amount"     : return UtilUnit.mm2inches( value );
+        }
+
+        return null;
     }
 }

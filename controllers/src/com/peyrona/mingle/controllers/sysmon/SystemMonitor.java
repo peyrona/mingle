@@ -6,8 +6,8 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.File;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 
 /**
@@ -23,8 +23,6 @@ public final class SystemMonitor
     private static final String KEY_METRIC   = "metric";
     private static final String KEY_MEASURE  = "measure";
 
-    private static final File file = new File( "." );
-
     private ScheduledFuture timer;
 
     //------------------------------------------------------------------------//
@@ -37,48 +35,62 @@ public final class SystemMonitor
 
         set( KEY_METRIC, ((String) mapConfig.getOrDefault( KEY_METRIC, "cpu" )).toLowerCase() );
 
-        if( ! "speed,pending,cpu,jvmram,disk".contains( (String) get( KEY_METRIC ) ) )
+        Set<String> validMetrics = Set.of( "speed", "pending", "cpu", "jvmram", "disk" );
+
+        if( ! validMetrics.contains( (String) get( KEY_METRIC ) ) )
         {
-            sendIsInvalid( get( KEY_METRIC ) +" is invalid. Valids: speed, pending, cpu, jvmram, disk" );
+            sendIsInvalid( get( KEY_METRIC ) +" is invalid. Valid: "+ validMetrics.toString() );
             set( KEY_METRIC, null );
         }
 
         set( KEY_MEASURE, ((String) mapConfig.getOrDefault( KEY_MEASURE, "used%" )).toLowerCase() );
 
-        if( ! "used,used%,free,free%".contains( (String) get( KEY_MEASURE ) ) )
+        Set<String> validMeasures = Set.of( "used", "used%", "free", "free%" );
+
+        if( ! validMeasures.contains( (String) get( KEY_MEASURE ) ) )
         {
-            sendIsInvalid( get( KEY_MEASURE ) +" is invalid. Valids: used, used%, free, free%" );
+            sendIsInvalid( get( KEY_MEASURE ) +" is invalid. Valid: "+ validMeasures.toString() );
             set( KEY_MEASURE, null );
         }
 
-        int interval = ((Number) mapConfig.getOrDefault( KEY_INTERVAL, 1000f )).intValue();
-        setBetween( KEY_INTERVAL, 500, interval, Integer.MAX_VALUE );
+        long interval = ((Number) mapConfig.getOrDefault( KEY_INTERVAL, 1000f )).longValue();
+        setBetween( KEY_INTERVAL, 500L, interval, Long.MAX_VALUE );
 
         setValid( get( KEY_METRIC ) != null && get( KEY_MEASURE ) != null );
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
-        super.start( rt );
-
-        if( "disk".equals( get( KEY_METRIC ) ) && ! isDiskWritable( true ) )
+        // Following check must be after 'super.start( rt )' beacuse 'isDiskWritable(...)' needs 'IRuntime'
+        if( "disk".equals( get( KEY_METRIC ) ) && ! isDiskWritable( false ) )
         {
             sendIsInvalid( get( KEY_METRIC ) +" is invalid. Stick is not allowed to use disk." );
-            return;
+        }
+        else
+        {
+            synchronized( this )
+            {
+                if( timer == null )
+                    timer = UtilSys.executeWithDelay( getClass().getName(), 5000L, ((Number) get( KEY_INTERVAL )).longValue(), () -> read() );
+            }
         }
 
-        if( timer == null )
-            timer = UtilSys.executeWithDelay( getClass().getName(), 5000l, getLong( KEY_INTERVAL ), () -> read() );
+        return isValid();
     }
 
     @Override
     public void stop()
     {
-        timer.cancel( true );
+        synchronized( this )
+        {
+            if( timer != null )
+                timer.cancel( true );
+        }
+
         super.stop();
     }
 
@@ -102,8 +114,11 @@ public final class SystemMonitor
             case "cpu%":
                 float fUsed = SystemMetrics.getCpuLoad();
 
-                if( fUsed == Float.NaN )    // NaN returned when the value is not available
+                if( Float.isNaN( fUsed ) )    // NaN returned when the value is not available
+                {
                     sendReadError( new MingleException( "CPU value not available" ) );
+                    break;
+                }
 
                 fUsed *= 100;
 
@@ -117,29 +132,15 @@ public final class SystemMonitor
                 long total = SystemMetrics.getJvmTotalMemory();
                 long used  = total - free;
 
-                switch( ((String) get( KEY_MEASURE )) )
-                {
-                    case "used" : sendReaded( used ); break;
-                    case "free" : sendReaded( free ); break;
-                    case "used%": sendReaded(         ((float) used / total) * 100f);  break;
-                    case "free%": sendReaded( 100f - (((float) used / total) * 100f)); break;
-                }
-
+                send( free, used, total );
                 break;
 
             case "disk":
-                long free_  = file.getFreeSpace();    // Less accurate but much faster than :getUsableSpace()
-                long total_ = file.getTotalSpace();
+                long free_  = UtilSys.fHomeDir.getFreeSpace();    // Less accurate but much faster than :getUsableSpace()
+                long total_ = UtilSys.fHomeDir.getTotalSpace();
                 long used_  = total_ - free_;
 
-                switch( ((String) get( KEY_MEASURE )) )
-                {
-                    case "used" : sendReaded( used_ ); break;
-                    case "free" : sendReaded( free_ ); break;
-                    case "used%": sendReaded(         ((float) used_ / total_) * 100f);  break;
-                    case "free%": sendReaded( 100f - (((float) used_ / total_) * 100f)); break;
-                }
-
+                send( free_, used_, total_ );
                 break;
         }
     }
@@ -148,5 +149,18 @@ public final class SystemMonitor
     public void write( Object newValue )
     {
         sendIsNotWritable();
+    }
+
+    //------------------------------------------------------------------------//
+
+    private void send( long used, long free, long total )
+    {
+        switch( ((String) get( KEY_MEASURE )) )
+        {
+            case "used" : sendReaded( used ); break;
+            case "free" : sendReaded( free ); break;
+            case "used%": sendReaded(         ((float) used / total) * 100f);  break;
+            case "free%": sendReaded( 100f - (((float) used / total) * 100f)); break;
+        }
     }
 }

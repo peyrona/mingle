@@ -36,41 +36,35 @@ public final class MqttClientWrapper
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
-
         setDeviceConfig( deviceConf );
-
-        if( isFaked() )
-        {
-            setValid( true );
-            return;
-        }
-
-        try
-        {
-            client = new MqttClient4Paho();
-            client.add( new MyListener() );    // Must be done before: client.connect(...)
-
-            setValid( true );
-        }
-        catch( Exception exc )
-        {
-            client = null;
-            sendIsInvalid( "Error creating MQTT client.\nCause: "+ UtilStr.toStringBrief( exc ) );
-        }
+        setValid( true );
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         String sURI  = (String) get( "uri"      );   // This is REQUIRED
         String sUID  = (String) get( "name"     );
         String sUser = (String) get( "user"     );
         String sPwd  = (String) get( "password" );
+
+        if( ! isFaked() )   // isFaked() is initialized by super:start(...)
+        {
+            try
+            {
+                client = new MqttClient4Paho();
+                client.add( new MyListener() );    // Must be done before: client.connect(...)
+            }
+            catch( Exception exc )
+            {
+                client = null;
+                sendIsInvalid( "Error creating MQTT client.\nCause: "+ UtilStr.toStringBrief( exc ) );
+                return false;
+            }
+        }
 
         try
         {
@@ -87,6 +81,8 @@ public final class MqttClientWrapper
             client = null;
             sendIsInvalid( "Error creating MQTT client.\nCause: "+ UtilStr.toStringBrief( exc ) );
         }
+
+        return isValid();
     }
 
     @Override

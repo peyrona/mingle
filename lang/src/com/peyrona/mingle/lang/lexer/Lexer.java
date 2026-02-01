@@ -169,7 +169,7 @@ public final class Lexer
                     checkOffset--;
                 }
 
-                while( isNotEoF() && (readChar( true ) != Language.END_OF_LINE) )
+                while( isNotEoF() && (readChar( false ) != Language.END_OF_LINE) )  // false: don't treat '\' as line continuation inside comments
                     skip( 1 );
 
                 // Only skip the newline if it's a comment-only line

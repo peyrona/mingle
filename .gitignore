@@ -47,7 +47,7 @@ count_lines.sh
 generate_javadocs.sh
 release.sh
 
-/todeploy/
+                # Can not ignore /todeploy/ because is used by the Updater
 /0.PhD/
 /balata/
 /build/

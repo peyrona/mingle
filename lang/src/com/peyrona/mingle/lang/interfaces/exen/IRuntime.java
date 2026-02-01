@@ -6,7 +6,6 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
-import java.util.function.Function;
 
 /**
  * This interface represents the ExEn public API.<br>
@@ -19,11 +18,11 @@ import java.util.function.Function;
 public interface IRuntime
 {
     /**
-     * Returns the configuration file in use.
-     * @param <T>
-     * @param module
-     * @param varName
-     * @param defValue
+     * Returns the configuration value in use.
+     * @param <T> The type of value.
+     * @param module Module name in configuration file.
+     * @param varName Key name inside module name.
+     * @param defValue Default value to be returned in case the key is absent.
      * @return The configuration file in use.
      */
     <T> T getFromConfig( String module, String varName, T defValue );
@@ -34,17 +33,6 @@ public interface IRuntime
      * @return the instance of IEventBus that the ExEn uses.
      */
     IEventBus bus();
-
-    /**
-     * Returns a function that receives the name of a group of devices and returns
-     * an Array with all the device's names that belong to the group.<br>
-     * <br>
-     * This function is needed by IXprEval::build(...).
-     *
-     * @return A function that receives the name of a group of devices and returns
-     * an Array with all the device's names that belong to the group.
-     */
-    Function<String,String[]> newGroupWiseFn();
 
     /**
      * Returns a new instance of the IXprEval defined in 'config.json' file.
@@ -160,6 +148,14 @@ public interface IRuntime
      * @return true if passed name is the name of a group instead of the name of a device.
      */
     boolean isNameOfGroup( String name );
+
+    /**
+     * Returns the names of all devices that belong to the specified group.
+     *
+     * @param group The group name.
+     * @return Array of device names in the group.
+     */
+    String[] getGroupMemberNames( String group );
 
     /**
      * Returns a collection with all devices that appear in at least one of passed group(s) or an empty array.

@@ -24,7 +24,7 @@ import java.util.concurrent.TimeUnit;
 /**
  * Opens, closes and send messages to an ExEn using an INetClient.
  * <p>
- This class holds the communication layer: the INetClient instance that communicates with an ExEn.
+ * This class holds the communication layer: the INetClient instance that communicates with an ExEn.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -58,8 +58,11 @@ public final class ExEnClient
 
         netClient = NetworkBuilder.buildClient( joConnDef.toString() );
 
+        // Latch to wait for connection to be established
+        CountDownLatch latch = new CountDownLatch( 1 );
+
         // Needed prior to connect ------------------------
-        netClient.add( new ClientListener() );
+        netClient.add( new ClientListener( latch ) );
 
         for( INetClient.IListener l : lstPendingListeners )
             netClient.add( l );
@@ -71,8 +74,7 @@ public final class ExEnClient
         {
             netClient.connect( joConnDef.get("init").asObject().toString() );
 
-            CountDownLatch latch   = new CountDownLatch( 1 );
-            boolean        started = latch.await( 3, TimeUnit.SECONDS );   // Wait up to 3 seconds for the client to connect to server
+            boolean started = latch.await( 10, TimeUnit.SECONDS );   // Wait up to 10 seconds for the client to connect to server
 
             if( ! started || ! netClient.isConnected() )
                 throw new MingleException( "" );
@@ -226,9 +228,18 @@ public final class ExEnClient
 
     private final class ClientListener implements INetClient.IListener
     {
+        private final CountDownLatch latch;
+
+        ClientListener( CountDownLatch latch )
+        {
+            this.latch = latch;
+        }
+
         @Override
         public void onConnected( INetClient origin )
         {
+            latch.countDown();   // Signal that connection is established
+
             ExEnClient.this.sendList();
 
             UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" connected to "+ sConnName );
@@ -246,6 +257,8 @@ public final class ExEnClient
         @Override
         public void onError( INetClient origin, Exception exc )
         {
+            latch.countDown();   // Signal to unblock the await (even on error)
+
             JTools.hideWaitFrame();     // No harm if it was already closed
 
             if( exc != null)

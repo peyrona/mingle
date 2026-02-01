@@ -97,6 +97,28 @@ public final class UtilUnit
     }
 
     /**
+     * Converts length from millimeters to inches.
+     *
+     * @param mm Value in millimeters to convert.
+     * @return The equivalent length in inches.
+     */
+    public static float mm2inches( float mm )
+    {
+        return (mm / 25.4f);
+    }
+
+    /**
+     * Converts length from inches to millimeters.
+     *
+     * @param inches Value in inches to convert.
+     * @return The equivalent length in millimeters.
+     */
+    public static float inches2mm( float inches )
+    {
+        return (inches * 25.4f);
+    }
+
+    /**
      * Returns true if:<pre>(value >= min) && (value <= max)</pre>
      * @param min Minimum value
      * @param value The value

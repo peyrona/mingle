@@ -9,7 +9,6 @@ import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.net.URI;
@@ -18,7 +17,6 @@ import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
 
 /**
  * Controller for Shelly Plus RGBW PM - a Wi-Fi LED controller.
@@ -66,29 +64,23 @@ public final class ShellyRGBWPM
        extends LightCtrlBase
 {
     // Configuration keys
-    private static final String KEY_ADDRESS  = "address";
-    private static final String KEY_CHANNEL  = "channel";
-    private static final String KEY_INTERVAL = "interval";
-    private static final String KEY_TIMEOUT  = "timeout";
-
+    private static final String KEY_ADDRESS     = "address";
+    private static final String KEY_CHANNEL     = "channel";
     // Default values
-    private static final int DEFAULT_CHANNEL  = 0;
-    private static final int DEFAULT_INTERVAL = 5000;
-    private static final int DEFAULT_TIMEOUT  = 10;
+    private static final int    DEFAULT_CHANNEL = 0;
 
-    private HttpClient       httpClient = null;
-    private ScheduledFuture  timer      = null;
-    private URI              rpcUri     = null;
+    private HttpClient httpClient = null;
+    private URI        rpcUri     = null;
 
     //------------------------------------------------------------------------//
 
     @Override
-    public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
+    public void set( String deviceName, Map<String, Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
         setListener( listener );
 
-        String address = (String) deviceInit.get( KEY_ADDRESS );
+        String address = (String) deviceConf.get( KEY_ADDRESS );
 
         if( UtilStr.isEmpty( address ) )
         {
@@ -109,14 +101,8 @@ public final class ShellyRGBWPM
             // Store configuration
             set( KEY_ADDRESS, address );
 
-            int channel = ((Number) deviceInit.getOrDefault( KEY_CHANNEL, (float) DEFAULT_CHANNEL )).intValue();
+            int channel = ((Number) deviceConf.getOrDefault( KEY_CHANNEL, (float) DEFAULT_CHANNEL )).intValue();
             set( KEY_CHANNEL, Math.max( 0, channel ) );
-
-            int interval = ((Number) deviceInit.getOrDefault( KEY_INTERVAL, (float) DEFAULT_INTERVAL )).intValue();
-            set( KEY_INTERVAL, Math.max( 1000, interval ) );
-
-            int timeout = ((Number) deviceInit.getOrDefault( KEY_TIMEOUT, (float) DEFAULT_TIMEOUT )).intValue();
-            set( KEY_TIMEOUT, Math.max( 1, timeout ) );
 
             setValid( true );
         }
@@ -127,41 +113,26 @@ public final class ShellyRGBWPM
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
-        super.start( rt );
-
-        int timeout = (int) get( KEY_TIMEOUT );
-
-        httpClient = HttpClient.newBuilder()
-                               .connectTimeout( Duration.ofSeconds( timeout ) )
-                               .build();
+        if( ! isFaked() )
+            httpClient = HttpClient.newBuilder()
+                                   .connectTimeout( Duration.ofSeconds( 7 ) )
+                                   .build();
 
 // FIXME: activarlo cuando vaya a probar esta clase
 httpClient = null;
 //-------------------------------------------------
 
-        // Start periodic status polling
-        int interval = (int) get( KEY_INTERVAL );
-
-        timer = UtilSys.executeWithDelay( getClass().getName(),
-                                          1000,      // Initial delay
-                                          interval,
-                                          this::read );
+        return true;
     }
 
     @Override
     public void stop()
     {
-        if( timer != null )
-        {
-            timer.cancel( false );
-            timer = null;
-        }
-
         httpClient = null;
 
         super.stop();
@@ -316,11 +287,9 @@ httpClient = null;
      */
     private void sendRpcRequest( String jsonBody, boolean isWrite )
     {
-        int timeout = (int) get( KEY_TIMEOUT );
-
         HttpRequest request = HttpRequest.newBuilder()
                                          .uri( rpcUri )
-                                         .timeout( Duration.ofSeconds( timeout ) )
+                                         .timeout( Duration.ofSeconds( 7 ) )
                                          .header( "Content-Type", "application/json" )
                                          .POST( HttpRequest.BodyPublishers.ofString( jsonBody ) )
                                          .build();

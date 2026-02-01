@@ -1,3 +1,4 @@
 Manifest-Version: 1.0
+Class-Path: lang.jar updater.jar minimal-json-0.9.5.jar
 X-COMMENT: Main-Class will be added automatically by build
 

@@ -262,6 +262,40 @@ public final class pair
     }
 
     /**
+     * Inverts the boolean value associated with the specified key.
+     * <ul>
+     *   <li>If value is Boolean: true becomes false, false becomes true.</li>
+     *   <li>If value is Number 0: becomes 1.</li>
+     *   <li>If value is Number 1: becomes 0.</li>
+     *   <li>Otherwise: throws MingleException.</li>
+     * </ul>
+     *
+     * @param key The key whose value is to be inverted. Must be a basic Une data type.
+     * @return The pair itself.
+     * @throws MingleException If value for key is not boolean, 0, or 1.
+     */
+    public pair invert( Object key )
+    {
+        Object value = get( key, null );
+
+        if( value == null )
+            throw new MingleException( "Key '"+ key +"' does not exist in pair" );
+
+        if( value instanceof Boolean )
+            return put( key, ! ((Boolean) value) );
+
+        if( value instanceof Number )
+        {
+            Integer n = UtilType.toInteger( value );
+
+                 if( n == 0 )  return put( key, 1f );
+            else if( n == 1 )  return put( key, 0f );
+        }
+
+        throw new MingleException( "Value for key '"+ key +"' is neither boolean nor 0 or 1" );
+    }
+
+    /**
      * Deletes the 'pair' which key is passed 'key'.
      *
      * @param key The key of the pair to be deleted. Any basic Une data.

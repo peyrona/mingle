@@ -88,7 +88,7 @@ public final class Util
         String javaExec    = UtilSys.isWindows() ? "java.exe" : "java";
                javaExec    = fJavaHome + File.separator + "bin" + File.separator + javaExec;
         String javaAgent   = "-javaagent:"+ UtilSys.fHomeDir + File.separator +"lib"+ File.separator +"lang.jar";
-        String javaClass   = "stick.jar"+ File.pathSeparator +"lib" + File.separator +"network.jar";
+        String javaClass   = "lib" + File.separator + "*";
 
         List<String> lstCmd = new ArrayList<>();
                      lstCmd.add( javaExec     );
@@ -145,19 +145,15 @@ public final class Util
             {
                 String line;
 
-                while( !Thread.currentThread().isInterrupted() && (line = brIn1.readLine()) != null )
+                while( ! Thread.currentThread().isInterrupted() && (line = brIn1.readLine()) != null )
                 {
                     // Process characters efficiently without creating temporary arrays
-                    for( int i = 0; i < line.length(); i++ )
-                    {
-                        onOutput.accept( line.charAt( i ) );
-                    }
+                    for( int n = 0; n < line.length(); n++ )
+                        onOutput.accept( line.charAt( n ) );
 
                     // Send all line separator characters to preserve line endings correctly on all platforms
                     for( char separatorChar : separatorChars )
-                    {
                         onOutput.accept( separatorChar );
-                    }
                 }
             }
             catch( IOException ex )
@@ -175,8 +171,8 @@ public final class Util
                 while( ! Thread.currentThread().isInterrupted() && (line = brIn2.readLine()) != null )
                 {
                     // Process characters efficiently without creating temporary arrays
-                    for( int i = 0; i < line.length(); i++ )
-                        onOutput.accept( line.charAt( i ) );
+                    for( int n = 0; n < line.length(); n++ )
+                        onOutput.accept( line.charAt( n ) );
 
                     // Send all line separator characters to preserve line endings correctly on all platforms
                     for( char separatorChar : separatorChars )

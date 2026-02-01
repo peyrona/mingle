@@ -144,7 +144,7 @@ final class XprPreProc
                         }
                         else
                         {
-                            lstErrors.add( new CodeError( "Group name expected, but found: \"" + token.text() + '"', token ) );
+                            lstErrors.add( new CodeError( "Group name expected after \"" + token.text() + "\", but found: \"" + tGroupName.text() + '"', tGroupName ) );
                         }
                     }
                 } // Do not add this token ("ANY" or "ALL") to the resulting list (lstResult): it is not usefull anymore

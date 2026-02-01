@@ -4,6 +4,7 @@ package com.peyrona.mingle.controllers;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
@@ -38,40 +39,8 @@ public final class   DataBase
 
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
-
-        String sJARs = (String) deviceConf.get( "jars" );
-        String sJDBC = (String) deviceConf.get( "jdbc" );
-
         setDeviceConfig( deviceConf );   // Can be done because mapConfig values are not modified
-
-        if( isFaked() )
-        {
-            setValid( true );
-            return;
-        }
-
-        try
-        {
-            String    sURL   = (String) deviceConf.get( "url" );
-            List<URI> lstURL = UtilIO.expandPath( sURL );
-
-            if( lstURL.size() != 1 )
-            {
-                sendIsInvalid( "Invalid URL: "+ sURL );
-            }
-            else
-            {
-                UtilSys.addToClassPath( UtilColls.toArrayOfStr( UtilColls.toArray( sJARs ) ) );
-                Class.forName( sJDBC );
-
-                connect( false );
-                setValid( true );
-            }
-        }
-        catch( IOException | ClassNotFoundException | URISyntaxException | SQLException ex )
-        {
-            sendIsInvalid( ex );
-        }
+        setValid( true );
     }
 
     @Override
@@ -121,6 +90,43 @@ public final class   DataBase
                         } );
     }
 
+    @Override public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        if( ! isFaked() )
+        {
+            try
+            {
+                String    sJARs  = get( "jars" ).toString();
+                String    sJDBC  = get( "jdbc" ).toString();
+                String    sURL   = get( "url"  ).toString();
+                List<URI> lstURL = UtilIO.expandPath( sURL );
+
+                if( lstURL.size() != 1 )
+                {
+                    sendIsInvalid( "Invalid URL: "+ sURL );
+                }
+                else
+                {
+                    UtilSys.addToClassPath( UtilColls.toArrayOfStr( UtilColls.toArray( sJARs ) ) );
+                    Class.forName( sJDBC );
+
+                    connect( false );
+                    setValid( true );
+                }
+            }
+            catch( IOException | ClassNotFoundException | URISyntaxException | SQLException ex )
+            {
+                sendIsInvalid( ex );
+                stop();
+                return false;
+            }
+        }
+
+        return isValid();
+    }
     @Override
     public void stop()
     {

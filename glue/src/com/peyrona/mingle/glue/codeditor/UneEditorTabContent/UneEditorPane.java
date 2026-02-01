@@ -53,6 +53,7 @@ public final class UneEditorPane extends RTextScrollPane
 
     private final RSyntaxTextArea  rsta;
     private final UneIntelliSense  intelliSense;
+    private       boolean          isInitializing = true;
     private       boolean          isChanged = false;
     private       String           sOriginalText;
 
@@ -161,21 +162,6 @@ public final class UneEditorPane extends RTextScrollPane
         getGutter().setFoldBackground( rsta.getBackground() );
 
         //------------------------------------------------------------------------//
-
-         rsta.getDocument()
-             .addDocumentListener( new DocumentListener()
-                                    {
-                                        @Override
-                                        public void removeUpdate(  DocumentEvent de ) { isChanged = true; }
-
-                                        @Override
-                                        public void insertUpdate(  DocumentEvent de ) { isChanged = true; }
-
-                                        @Override
-                                        public void changedUpdate( DocumentEvent de ) { isChanged = true; }
-                                    });
-
-        //------------------------------------------------------------------------//
         // Key bindings
 
         Action actCloneLine = new AbstractAction()
@@ -219,12 +205,34 @@ public final class UneEditorPane extends RTextScrollPane
                                 public void keyPressed( KeyEvent kpe )
                                 {
                                     if( kpe.isControlDown() && kpe.getKeyCode() == KeyEvent.VK_SPACE )
+                                    {
                                         intelliSense.showCompletions();
+                                        kpe.consume();
+                                    }
                                 }
                             } );
         //------------------------------------------------------------------------//
 
         setText( code );
+
+        //------------------------------------------------------------------------//
+        // Document listener registered AFTER setText() to avoid spurious change
+        // notifications during initialization (fixes race condition)
+
+        rsta.getDocument()
+            .addDocumentListener( new DocumentListener()
+                                   {
+                                       @Override
+                                       public void removeUpdate(  DocumentEvent de ) { isChanged = true; }
+
+                                       @Override
+                                       public void insertUpdate(  DocumentEvent de ) { isChanged = true; }
+
+                                       @Override
+                                       public void changedUpdate( DocumentEvent de ) { isChanged = true; }
+                                   });
+
+        isInitializing = false;
     }
 
     //------------------------------------------------------------------------//
@@ -239,7 +247,15 @@ public final class UneEditorPane extends RTextScrollPane
     @Override
     public void grabFocus()
     {
-        SwingUtilities.invokeLater( () -> rsta.grabFocus() );
+        if( isInitializing )
+        {
+            // Retry after EDT cycle completes (waits for initialization)
+            SwingUtilities.invokeLater( () -> grabFocus() );
+        }
+        else
+        {
+            SwingUtilities.invokeLater( () -> rsta.grabFocus() );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -332,13 +348,16 @@ public final class UneEditorPane extends RTextScrollPane
 
         code = UtilStr.isEmpty( code ) ? "" : code;
 
-        rsta.setText( code );        // This places caret at end of file
-        sOriginalText = getText();
-        rsta.setText( sOriginalText );
+        // Normalize text BEFORE setting to avoid double setText() call
+        // (double setText triggers document events twice causing race conditions)
+        String normalizedCode = normalizeText( code );
+
+        rsta.setText( normalizedCode );   // Single setText call
+        sOriginalText = normalizedCode;
 
         isChanged = false;
 
-        if( ! code.isEmpty() )
+        if( ! normalizedCode.isEmpty() )
             setCaretOffset( nPos );
 
         return this;
@@ -376,7 +395,46 @@ public final class UneEditorPane extends RTextScrollPane
 
     public UneEditorPane saved()
     {
-        sOriginalText = getText();
+        String trimmed = getText();
+
+        // Update the editor to show the trimmed text (trailing spaces removed)
+        if( ! trimmed.equals( rsta.getText() ) )
+        {
+            int line = getCaretLine();
+            int col  = getCaretColumn();
+
+            rsta.setText( trimmed );
+
+            // Position caret at the same line, but adjust column if line is now shorter
+            try
+            {
+                int totalLines = rsta.getLineCount();
+
+                // Ensure line is still valid after trimming
+                if( line >= totalLines )
+                    line = totalLines - 1;
+
+                int lineStart = rsta.getLineStartOffset( line );
+                int lineEnd   = rsta.getLineEndOffset( line );
+
+                // Calculate visible line length (excluding newline character if present)
+                int lineLen = lineEnd - lineStart;
+
+                if( line < totalLines - 1 )    // Not the last line, has newline char
+                    lineLen--;
+
+                int newCol = Math.min( col, lineLen );
+
+                setCaretOffset( lineStart + newCol );
+            }
+            catch( BadLocationException e )
+            {
+                // Fallback: go to end of document
+                setCaretOffset( trimmed.length() );
+            }
+        }
+
+        sOriginalText = trimmed;
         isChanged = false;
 
         return this;
@@ -625,7 +683,45 @@ public final class UneEditorPane extends RTextScrollPane
     {
         return rsta.getText()
                 // .replace( "\t", "    " )  // This is not needed because above I did: rsta.setTabsEmulated( true );
-                   .split( "\\R" );          // Java 8 provides an “\R” pattern that matches any Unicode line-break sequence
+                   .split( "\\R" );          // Java 8 provides an "\R" pattern that matches any Unicode line-break sequence
                                              // and covers all the newline characters for different operating systems.
+    }
+
+    /**
+     * Normalizes text by removing empty lines at beginning/end and trimming
+     * trailing spaces from each line. Same logic as getText() but operates
+     * on input string instead of reading from the document.
+     *
+     * @param code The text to normalize
+     * @return The normalized text
+     */
+    private String normalizeText( String code )
+    {
+        if( UtilStr.isEmpty( code ) )
+            return "";
+
+        StringBuilder sb      = new StringBuilder( code.length() );
+        String[]      asLines = code.split( "\\R" );
+
+        if( UtilColls.isEmpty( asLines ) )
+            return "";
+
+        // Removes empty lines at the beginning
+        while( (asLines.length > 0) && asLines[0].isBlank() )
+            asLines = Arrays.copyOfRange( asLines, 1, asLines.length );
+
+        // Removes empty lines at the end
+        while( (asLines.length > 0) && asLines[asLines.length - 1].isBlank() )
+            asLines = Arrays.copyOf( asLines, asLines.length - 1 );
+
+        // Composes the string from the array
+        for( String sLine : asLines )
+        {
+            sb.append( UtilStr.rtrim( sLine ) )
+              .append( UtilStr.sEoL );
+        }
+
+        return UtilStr.removeLast( sb, UtilStr.sEoL.length() )
+                      .toString();
     }
 }

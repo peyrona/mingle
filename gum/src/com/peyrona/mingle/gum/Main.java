@@ -51,7 +51,7 @@ public class Main
 
         try
         {
-            String     host    = config.get( "monitoring", "host", null );
+            String     host    = config.get( "monitoring", "host", "" );
             int        port    = config.get( "monitoring", "port", 8080 );
             int        maxSess = config.get( "monitoring", "max_sessions", 64 );
             String     allow   = config.get( "monitoring", "allow", "intranet" );

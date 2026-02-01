@@ -33,7 +33,7 @@ public final class Language
 
     public static final String[] CMD_WORDS = UtilColls.sort( new String[]
                                                              { "INCLUDE", "USE"   , "AS"  ,
-                                                               "SCRIPT" , "FROM"  , "CALL", "LANGUAGE", "ONSTART", "ONSTOP",
+                                                               "SCRIPT" , "FROM"  , "CALL", "LANGUAGE", "ONSTART", "ONSTOP", "PRE",
                                                                "DRIVER" , "CONFIG", "REQUIRED",
                                                                "DEVICE" , "INIT"  ,
                                                                "RULE"   , "WHEN"  , "THEN", "IF",

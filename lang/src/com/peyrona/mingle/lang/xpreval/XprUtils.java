@@ -21,10 +21,41 @@ final class XprUtils
 
     static String toString( List<XprToken> list )
     {
+        if( list == null || list.isEmpty() )
+            return "";
+
         StringBuilder sb = new StringBuilder( list.size() * 6 );
 
-        for( XprToken token : list )
+        for( int n = 0; n < list.size(); n++ )
         {
+            XprToken token = list.get( n );
+
+            if( token.isType( XprToken.PARENTH_OPEN ) )
+            {
+                if( n > 0 && list.get( n - 1 ).isType( XprToken.FUNCTION ) )
+                {
+                    sb.append( token.text() );
+
+                    continue;
+                }
+            }
+            else if( token.isType( XprToken.PARENTH_CLOSED ) )
+            {
+                if( n > 0 && list.get( n - 1 ).isType( XprToken.PARENTH_OPEN ) )
+                {
+                    sb.append( token.text() );
+                    continue;
+                }
+            }
+            else if( token.text().length() == 1 )
+            {
+                if( (token.text().charAt( 0 ) == Language.SEND_OP) || token.isType( XprToken.PARAM_SEPARATOR ) )
+                {
+                    sb.append( token.text() );
+                    continue;
+                }
+            }
+
             if( token.isType( XprToken.STRING ) )  sb.append( ' ' ).append( Language.toString( token.text() ) );
             else                                   sb.append( ' ' ).append( token.text() );
         }

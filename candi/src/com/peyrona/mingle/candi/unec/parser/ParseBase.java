@@ -331,6 +331,40 @@ public abstract class ParseBase
     }
 
     /**
+     * Checks if two consecutive clause keywords exist in the parsed command.
+     * This is used to detect compound clauses like "PRE ONSTART" or "PRE ONSTOP".
+     * <p>
+     * Since both keywords are clause keywords, when we have "PRE ONSTART", the mapClauses
+     * will have both as separate entries. This method checks if "first" is immediately
+     * followed by "second" in the clause order.
+     *
+     * @param first The first keyword (e.g., "PRE")
+     * @param second The second keyword (e.g., "ONSTART" or "ONSTOP")
+     * @return true if the two keywords appear consecutively as clauses
+     */
+    protected final boolean hasClauseSequence( String first, String second )
+    {
+        // Both clauses must exist
+        if( getClause( first ) == null || getClause( second ) == null )
+            return false;
+
+        // Check if 'first' is immediately followed by 'second' in mapClauses order
+        // (mapClauses is a LinkedHashMap, so order is preserved)
+        boolean foundFirst = false;
+
+        for( Lexeme clause : mapClauses.keySet() )
+        {
+            if( foundFirst )
+                return clause.isText( second );    // True only if next clause is 'second'
+
+            if( clause.isText( first ) )
+                foundFirst = true;
+        }
+
+        return false;
+    }
+
+    /**
      * Check if clause is empty, if this is the case, an error message is added to the internal list.
      *
      * @param clause

@@ -19,6 +19,9 @@ import java.util.List;
  */
 public interface ICandi
 {
+    /**
+     * This interface provides information about a compilation error.
+     */
     public interface IError
     {
         /**

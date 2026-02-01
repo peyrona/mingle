@@ -72,11 +72,12 @@ public final class MCP
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );   // Store raw config first, validated values will be stored at the end
 
         // Validate required parameters
-        String sUri    = (String) deviceInit.get( KEY_URI );
-        String sApiKey = (String) deviceInit.get( KEY_API_KEY );
-        String sModel  = (String) deviceInit.get( KEY_MODEL );
+        String sUri    = (String) get( KEY_URI );
+        String sApiKey = (String) get( KEY_API_KEY );
+        String sModel  = (String) get( KEY_MODEL );
 
         if( UtilStr.isEmpty( sUri ) )
         {
@@ -107,16 +108,21 @@ public final class MCP
             set( KEY_MODEL, sModel );
 
             // Optional parameters with defaults
-            int timeout = ((Number) deviceInit.getOrDefault( KEY_TIMEOUT, (float) DEFAULT_TIMEOUT )).intValue();
+            Object oTimeout = get( KEY_TIMEOUT );
+            int timeout = (oTimeout != null) ? ((Number) oTimeout).intValue() : DEFAULT_TIMEOUT;
+
+            Object oMaxTokens = get( KEY_MAX_TOKENS );
+            int maxTokens = (oMaxTokens != null) ? ((Number) oMaxTokens).intValue() : DEFAULT_MAX_TOKENS;
+
+            Object oTemperature = get( KEY_TEMPERATURE );
+            float temperature = (oTemperature != null) ? ((Number) oTemperature).floatValue() : DEFAULT_TEMPERATURE;
+
+            // Store validated configuration (overwrites raw values with validated ones)
             set( KEY_TIMEOUT, Math.max( 1, timeout ) );
-
-            int maxTokens = ((Number) deviceInit.getOrDefault( KEY_MAX_TOKENS, (float) DEFAULT_MAX_TOKENS )).intValue();
             set( KEY_MAX_TOKENS, Math.max( 1, maxTokens ) );
-
-            float temperature = ((Number) deviceInit.getOrDefault( KEY_TEMPERATURE, DEFAULT_TEMPERATURE )).floatValue();
             set( KEY_TEMPERATURE, Math.max( 0f, Math.min( 2f, temperature ) ) );
 
-            String system = (String) deviceInit.get( KEY_SYSTEM );
+            String system = (String) get( KEY_SYSTEM );
             if( system != null )
                 set( KEY_SYSTEM, system );
 
@@ -129,12 +135,10 @@ public final class MCP
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         // Create HTTP client with configured timeout
         int timeout = (int) get( KEY_TIMEOUT );
@@ -142,6 +146,7 @@ public final class MCP
         httpClient = HttpClient.newBuilder()
                                .connectTimeout( Duration.ofSeconds( timeout ) )
                                .build();
+        return isValid();
     }
 
     @Override

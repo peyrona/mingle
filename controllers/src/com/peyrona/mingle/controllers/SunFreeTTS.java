@@ -91,12 +91,10 @@ public final class   SunFreeTTS
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         if( synthesizer == null )
         {
@@ -116,6 +114,8 @@ public final class   SunFreeTTS
                 sendIsInvalid( exc );
             }
         }
+
+        return isValid();
     }
 
     @Override

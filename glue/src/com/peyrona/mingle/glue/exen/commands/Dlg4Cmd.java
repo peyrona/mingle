@@ -53,7 +53,7 @@ final class Dlg4Cmd extends GDialog
         pnlEditor.setVisible( false );
 
         if( onApplyChanges != null )
-            // FIXME: ---> setActionOnOk( onApplyChanges );
+            // TODO: ---> setActionOnOk( onApplyChanges );
             setActionOnOk( (ae) -> JTools.alert( "Option not yet implemented" ) );
 
         prepareOnControlsChanged( pnlCentral );

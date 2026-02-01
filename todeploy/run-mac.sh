@@ -183,7 +183,7 @@ main()
     log "INFO" "Using Java: $JAVA_CMD"
 
     if [ ! -f "lib/menu.jar" ]; then
-        die "The application file 'lib/menu.jar' was not found."
+        die "The application file 'menu.jar' was not found."
     fi
 
     if [ $# -eq 0 ]; then    # No parameters provided

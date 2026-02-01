@@ -189,7 +189,7 @@ final class Pin implements IPin
         // SDA.0 pin has a physical pull-up resistor -> WiringPi # 30,  BCM # 0
         // SDC.0 pin has a physical pull-up resistor -> WiringPi # 31,  BCM # 1
 
-        Integer[] aPins = (isBCM ? new Integer[] { 0, 1, 2, 3 }
+        Integer[] aPins = (isBCM ? new Integer[] { 0, 1,  2,  3 }
                                  : new Integer[] { 8, 9, 30, 31 });
 
         if( ! UtilColls.contains( aPins, pinNumber ) )

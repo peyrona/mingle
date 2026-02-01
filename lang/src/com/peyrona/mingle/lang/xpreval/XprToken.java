@@ -43,7 +43,10 @@ final class XprToken implements ITokenable
 
     XprToken( Lexeme lex, short type )
     {
-        assert type >= 1 && type <= 11;
+        if( lex == null )
+            throw new MingleException( "Lexeme cannot be null" );
+
+        validateType( type );
 
         this.text   = ((type == FUNCTION || type == VARIABLE) ? lex.text().toLowerCase() : lex.text());    // In fact FUNCTION is not needed because funcs are searched ignoring case, but it is more clear in this way
         this.type   = type;
@@ -53,12 +56,27 @@ final class XprToken implements ITokenable
 
     XprToken( XprToken token, String newText, short newType )
     {
-        assert newType >= 1 && newType <= 11;
+        if( token == null )
+            throw new MingleException( "Token cannot be null" );
+
+        validateType( newType );
 
         this.text     = token.isType( FUNCTION, VARIABLE ) ? newText.toLowerCase() : newText;    // In fact FUNCTION is not needed because funcs are searched ignoring case, but it is more clear in this way
         this.type     = newType;
         this.line     = token.line;
         this.column   = token.column;
+    }
+
+    /**
+     * Validates that the token type is within the valid range.
+     *
+     * @param type The token type to validate.
+     * @throws MingleException If the type is invalid.
+     */
+    private static void validateType( short type )
+    {
+        if( type < 1 || type > 11 )
+            throw new MingleException( "Invalid token type: " + type + ". Must be between 1 and 11." );
     }
 
     //------------------------------------------------------------------------//

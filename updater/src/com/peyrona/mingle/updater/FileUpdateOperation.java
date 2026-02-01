@@ -86,6 +86,8 @@ public class FileUpdateOperation
         {
             if( backupFile != null )    // Restore from backup if download failed
                 backupManager.restoreFromBackup( backupFile, localFile );
+            else if( localFile.exists() )
+                localFile.delete();
 
             return false;
         }
@@ -103,6 +105,8 @@ public class FileUpdateOperation
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Missing remote hash for: " + relativePath );
             if( backupFile != null )
                 backupManager.restoreFromBackup( backupFile, localFile );
+            else if( localFile.exists() )
+                localFile.delete();
             return false;
         }
 
@@ -114,6 +118,8 @@ public class FileUpdateOperation
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to calculate local hash for: " + relativePath );
             if( backupFile != null )
                 backupManager.restoreFromBackup( backupFile, localFile );
+            else if( localFile.exists() )
+                localFile.delete();
             return false;
         }
 
@@ -131,6 +137,8 @@ public class FileUpdateOperation
 
             if( backupFile != null )
                 backupManager.restoreFromBackup( backupFile, localFile );
+            else if( localFile.exists() )
+                localFile.delete();
 
             return false;
         }

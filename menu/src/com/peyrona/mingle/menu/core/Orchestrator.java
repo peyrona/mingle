@@ -3,6 +3,7 @@ package com.peyrona.mingle.menu.core;
 import com.peyrona.mingle.menu.core.IProcessManager.ProcessInfo;
 import com.peyrona.mingle.menu.util.UtilSys;
 import com.peyrona.mingle.menu.util.UtilUI;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -251,10 +252,32 @@ public final class Orchestrator
         if( ! xmx.startsWith( "-Xmx" ) )
             xmx = "-Xmx" + xmx;
 
-        if( ! checkUnit( xms ) )
+        if( ! checkUnit( xmx ) )
             return null;
 
         jvmOptions.add( xmx );
+
+        // Prompt for custom configuration file
+        String configFile = UtilUI.readInput( "Configuration file path (or [Enter] for default 'config.json'): " );
+
+        if( UtilSys.isNotEmpty( configFile ) )
+        {
+            File fConfig = new File( configFile );
+
+            if( ! fConfig.exists() )
+            {
+                System.out.println( "ERROR: Configuration file does not exist: " + configFile );
+                UtilUI.pause();
+                return null;
+            }
+
+            jvmOptions.add( "-Dconfig=" + fConfig.getAbsolutePath() );
+            System.out.println( "\nUsing custom configuration: " + fConfig.getAbsolutePath() );
+        }
+        else
+        {
+            System.out.println( "\nUsing default configuration: config.json" );
+        }
 
         // Ask for additional JVM options
         String additional = UtilUI.readInput( "Enter additional JVM options (comma-separated) or [Enter] for none: " ).trim();

@@ -21,11 +21,13 @@ public final class ScriptBuilder
         UtilJson json  = new UtilJson( jo );
         String[] aFrom = UtilType.convertArray( UtilJson.toArray( json.getArray( ICmdKeys.SCRIPT_FROM ) ), String.class );
 
-        return new Script( json.getString(  ICmdKeys.CMD_NAME        ),
-                           json.getString(  ICmdKeys.SCRIPT_LANGUAGE ),
-                           json.getBoolean( ICmdKeys.SCRIPT_ONSTART  ),
-                           json.getBoolean( ICmdKeys.SCRIPT_ONSTOP   ),
-                           json.getBoolean( ICmdKeys.SCRIPT_INLINE   ),
+        return new Script( json.getString(  ICmdKeys.CMD_NAME         ),
+                           json.getString(  ICmdKeys.SCRIPT_LANGUAGE  ),
+                           json.getBoolean( ICmdKeys.SCRIPT_ONSTART   ),
+                           json.getBoolean( ICmdKeys.SCRIPT_ONSTOP    ),
+                           json.getBoolean( ICmdKeys.SCRIPT_PRESTART  ),
+                           json.getBoolean( ICmdKeys.SCRIPT_PRESTOP   ),
+                           json.getBoolean( ICmdKeys.SCRIPT_INLINE    ),
                            aFrom,
                            json.getString(  ICmdKeys.SCRIPT_CALL ) );
     }
@@ -36,6 +38,8 @@ public final class ScriptBuilder
                                          script.getLanguage(),
                                          script.isOnStart(),
                                          script.isOnStop(),
+                                         script.isPreStart(),
+                                         script.isPreStop(),
                                          script.isInline(),
                                          script.getFrom(),
                                          script.getCall() );

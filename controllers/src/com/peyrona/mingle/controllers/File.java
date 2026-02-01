@@ -45,15 +45,24 @@ public final class File
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );   // Store raw config first, validated values will be stored at the end
 
-        set( KEY_APEND    , (Boolean) deviceInit.getOrDefault( KEY_APEND    , Boolean.TRUE ) );
-        set( KEY_AUTO_FEED, (Boolean) deviceInit.getOrDefault( KEY_AUTO_FEED, Boolean.TRUE ) );
+        // Parse boolean values with proper handling (could be Boolean or String "true"/"false")
+        Object  oAppend   = get( KEY_APEND );
+        Object  oAutoFeed = get( KEY_AUTO_FEED );
+        boolean bAppend   = (oAppend == null)   || Boolean.parseBoolean( oAppend.toString() );
+        boolean bAutoFeed = (oAutoFeed == null) || Boolean.parseBoolean( oAutoFeed.toString() );
 
-        if( deviceInit.get( KEY_CHARSET ) != null )
+        set( KEY_APEND    , bAppend );
+        set( KEY_AUTO_FEED, bAutoFeed );
+
+        Object oCharset = get( KEY_CHARSET );
+
+        if( oCharset != null )
         {
             try
             {
-                set( KEY_CHARSET, Charset.forName( (String) deviceInit.get( KEY_CHARSET ) ) );
+                set( KEY_CHARSET, Charset.forName( oCharset.toString() ) );
             }
             catch( IllegalCharsetNameException | UnsupportedCharsetException exc )
             {
@@ -63,9 +72,8 @@ public final class File
 
         try
         {
-            set( "file", (String) deviceInit.get( "file" ) );
-
-            String    sURI   = (String) deviceInit.get( "file" );    // This is REQUIRED
+            String sURI = (String) get( "file" );    // This is REQUIRED
+            set( "file", sURI );
             List<URI> lstURI = UtilIO.expandPath( sURI );
 
             if( lstURI.size() != 1 )
@@ -87,43 +95,50 @@ public final class File
 
         if( isValid() )
         {
-            set( KEY_INTERVAL, ((Number) deviceInit.getOrDefault( KEY_INTERVAL, -1f )).intValue() );
+            // Parse interval with proper Number handling
+            Object oInterval = get( KEY_INTERVAL );
+            long   nInterval = (oInterval != null) ? ((Number) oInterval).longValue() : -1L;
 
-            if( (int) get( KEY_INTERVAL ) > -1 )
+            if( nInterval > -1L )
             {
-                int n = bLocal ? Math.max(   99, (int) get( KEY_INTERVAL ) )    // Min rate for Local  file
-                               : Math.max( 3000, (int) get( KEY_INTERVAL ) );   // Min rate for Remote file
-
-                setBetween( KEY_INTERVAL, n, (int) get( KEY_INTERVAL ), Integer.MAX_VALUE );
+                nInterval = bLocal ? Math.max(   99L, nInterval )    // Min rate for Local  file
+                                   : Math.max( 3000L, nInterval );   // Min rate for Remote file
             }
+
+            // Store validated interval
+            set( KEY_INTERVAL, nInterval );
         }
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         if( bLocal && ! isDiskWritable( true ) )
-            return;
+            return true;
 
         file = new java.io.File( uri );
 
-        if( (future == null) && ((int) get( KEY_INTERVAL ) > -1) )
-            future = UtilSys.executeWithDelay( getClass().getName(), getLong( KEY_INTERVAL ), getLong( KEY_INTERVAL ), () -> read() );
+        long interval = (long) get( KEY_INTERVAL );
+
+        if( (future == null) && (interval > -1L) )
+            future = UtilSys.executeWithDelay( getClass().getName(), interval, interval, () -> read() );
+
+        return isValid();
     }
 
     @Override
     public void stop()
     {
         if( future != null )
+        {
             future.cancel( true );
+            future = null;
+        }
 
-        file   = null;
-        future = null;
+        file = null;
 
         super.stop();
     }

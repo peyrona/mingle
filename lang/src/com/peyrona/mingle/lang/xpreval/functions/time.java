@@ -4,24 +4,22 @@ package com.peyrona.mingle.lang.xpreval.functions;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilDateTime;
 import com.peyrona.mingle.lang.japi.UtilJson;
-import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.time.DateTimeException;
 import java.time.Duration;
-import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
-import java.util.Calendar;
 import java.util.Objects;
-import java.util.TimeZone;
 
 /**
  * Creates a new instance of this class, which represents a local time.
@@ -77,9 +75,6 @@ public final class time
                     int minute = UtilType.toInteger( args[1] );
                     int second = (args.length > 2) ? UtilType.toInteger( args[2] ) : 0;
 
-                    if( ! UtilReflect.areAll( Number.class, hour, minute, second ) )
-                        throw new MingleException( MingleException.INVALID_ARGUMENTS );
-
                     this.time = LocalTime.of( hour, minute, second );
                 }
             }
@@ -108,8 +103,8 @@ public final class time
     }
 
     /**
-     * Add or substract passed hours to current time.
-     * @param n number of hours to add or substract.
+     * Sets the hour component of this time.
+     * @param n The hour value to set (0-23).
      * @return Itself.
      */
     public time hour( Object n )
@@ -119,8 +114,8 @@ public final class time
     }
 
     /**
-     * Add or substract passed minutes to current time.
-     * @param n number of hours to add or minutes.
+     * Sets the minute component of this time.
+     * @param n The minute value to set (0-59).
      * @return Itself.
      */
     public time minute( Object n )
@@ -130,8 +125,8 @@ public final class time
     }
 
     /**
-     * Add or substract passed seconds to current time.
-     * @param n number of seconds to add or substract.
+     * Sets the second component of this time.
+     * @param n The second value to set (0-59).
      * @return Itself.
      */
     public time second( Object n )
@@ -147,6 +142,42 @@ public final class time
     public int sinceMidnight()
     {
         return time.toSecondOfDay();
+    }
+
+    /**
+     * Adds or subtracts passed hours to current time.
+     * @param n Number of hours to add or subtract.
+     * @return Itself.
+     */
+    public time addHours( Object n )
+    {
+        int val = UtilType.toInteger( n );
+
+        if( val != 0 )
+        {
+            time = (val > 0) ? time.plusHours( val )
+                             : time.minusHours( val * -1 );
+        }
+
+        return this;
+    }
+
+    /**
+     * Adds or subtracts passed minutes to current time.
+     * @param n Number of minutes to add or subtract.
+     * @return Itself.
+     */
+    public time addMinutes( Object n )
+    {
+        int val = UtilType.toInteger( n );
+
+        if( val != 0 )
+        {
+            time = (val > 0) ? time.plusMinutes( val )
+                             : time.minusMinutes( val * -1 );
+        }
+
+        return this;
     }
 
     /**
@@ -179,7 +210,7 @@ public final class time
 
     public time sunRise( Object latitude, Object longitude, Object date, Object zone )
     {
-        return getSunRiseOrSetTime( toCalendar( date, LocalTime.MIDNIGHT, zone ), latitude, longitude, 0 );
+        return getSunRiseTime( toZonedDateTime( date, LocalTime.MIDNIGHT, zone ), latitude, longitude );
     }
 
     /**
@@ -212,7 +243,7 @@ public final class time
 
     public time sunSet( Object latitude, Object longitude, Object date, Object zone )
     {
-        return getSunRiseOrSetTime( toCalendar( date, LocalTime.MIDNIGHT, zone ), latitude, longitude, 1 );
+        return getSunSetTime( toZonedDateTime( date, LocalTime.MIDNIGHT, zone ), latitude, longitude );
     }
 
     /**
@@ -248,9 +279,10 @@ public final class time
 
     public time sunNoon( Object latitude, Object longitude, Object date, Object zone )
     {
-        return toTime( SunriseSunset.getSolarNoon( toCalendar( date, LocalTime.MIDNIGHT, zone ),
-                                                   UtilType.toDouble( latitude  ),
-                                                   UtilType.toDouble( longitude ) ) );
+        LocalTime noon = UtilDateTime.getSolarNoon( toZonedDateTime( date, LocalTime.MIDNIGHT, zone ),
+                                                    UtilType.toDouble( latitude  ),
+                                                    UtilType.toDouble( longitude ) );
+        return toTime( noon );
     }
 
     /**
@@ -285,9 +317,10 @@ public final class time
 
     public time twilightSunRise( Object latitude, Object longitude, Object date, Object zone )
     {
-        return toTime( SunriseSunset.getAstronomicalTwilight( toCalendar( date, LocalTime.MIDNIGHT, zone ),
-                                                              UtilType.toDouble( latitude  ),
-                                                              UtilType.toDouble( longitude ) )[0] );
+        LocalTime dawn = UtilDateTime.getAstronomicalDawn( toZonedDateTime( date, LocalTime.MIDNIGHT, zone ),
+                                                           UtilType.toDouble( latitude  ),
+                                                           UtilType.toDouble( longitude ) );
+        return toTime( dawn );
     }
 
     /**
@@ -322,9 +355,10 @@ public final class time
 
     public time twilightSunSet( Object latitude, Object longitude, Object date, Object zone )
     {
-        return toTime( SunriseSunset.getAstronomicalTwilight( toCalendar( date, LocalTime.MIDNIGHT, zone ),
-                                                              UtilType.toDouble( latitude  ),
-                                                              UtilType.toDouble( longitude ) )[1] );
+        LocalTime dusk = UtilDateTime.getAstronomicalDusk( toZonedDateTime( date, LocalTime.MIDNIGHT, zone ),
+                                                           UtilType.toDouble( latitude  ),
+                                                           UtilType.toDouble( longitude ) );
+        return toTime( dusk );
     }
 
     /**
@@ -357,9 +391,9 @@ public final class time
 
     public boolean isDay( Object latitude, Object longitude, Object date, Object zone )
     {
-        return SunriseSunset.isDay( toCalendar( date, null, zone ),
-                                    UtilType.toDouble( latitude  ),
-                                    UtilType.toDouble( longitude ) );
+        return UtilDateTime.isDay( toZonedDateTime( date, asLocalTime(), zone ),
+                                   UtilType.toDouble( latitude  ),
+                                   UtilType.toDouble( longitude ) );
     }
 
     /**
@@ -392,9 +426,9 @@ public final class time
 
     public boolean isNight( Object latitude, Object longitude, Object date, Object zone )
     {
-        return SunriseSunset.isNight( toCalendar( date, null, zone ),
-                                      UtilType.toDouble( latitude  ),
-                                      UtilType.toDouble( longitude ) );
+        return UtilDateTime.isNight( toZonedDateTime( date, asLocalTime(), zone ),
+                                     UtilType.toDouble( latitude  ),
+                                     UtilType.toDouble( longitude ) );
     }
 
     //------------------------------------------------------------------------//
@@ -489,11 +523,22 @@ public final class time
         UtilJson json  = parse( o );
         String   sTime = json.getString( "data", null );     // At this point it is never null
 
-        int hour = UtilType.toInteger( sTime.substring( 0, 2 ) );
-        int min  = UtilType.toInteger( sTime.substring( 3, 5 ) );
-        int sec  = UtilType.toInteger( sTime.substring( 6 ) );
+        // Validate format before parsing (expected: "HH:mm:ss")
+        if( sTime == null || sTime.length() < 8 )
+            throw new MingleException( "Invalid time format for deserialization. Expected 'HH:mm:ss', got: " + sTime );
 
-        time = LocalTime.of( hour, min, sec );
+        try
+        {
+            int hour = UtilType.toInteger( sTime.substring( 0, 2 ) );
+            int min  = UtilType.toInteger( sTime.substring( 3, 5 ) );
+            int sec  = UtilType.toInteger( sTime.substring( 6, 8 ) );
+
+            time = LocalTime.of( hour, min, sec );
+        }
+        catch( NumberFormatException | DateTimeException e )
+        {
+            throw new MingleException( "Invalid time format for deserialization: " + sTime, e );
+        }
 
         return this;
     }
@@ -548,34 +593,69 @@ public final class time
             throw new MingleException( "Invalid time: \""+ s +'\"' );
         }
 
-        hour = UtilUnit.setBetween( 0, hour, 23 );
-        min  = UtilUnit.setBetween( 0, min , 59 );
-        sec  = UtilUnit.setBetween( 0, sec , 59 );
+        // Removed silent clamping. LocalTime.of will throw DateTimeException if values are invalid.
+        // This ensures the time value is trustable and matches user input.
 
         return LocalTime.of( hour, min, sec, 0 );
     }
 
     /**
+     * Gets sunrise time for the given datetime and location.
      *
-     * @param calendar
-     * @param nWhich 0 for sunrise and 1 for sunset.
-     * @return
+     * @param dateTime The datetime to use.
+     * @param latitude The latitude of the location in degrees.
+     * @param longitude The longitude of the location in degrees.
+     * @return The sunrise time, or null if not applicable (polar regions).
      */
-    private time getSunRiseOrSetTime( Calendar calendar, Object latitude, Object longitude, int nWhich )
+    private time getSunRiseTime( ZonedDateTime dateTime, Object latitude, Object longitude )
     {
-        return toTime( SunriseSunset.getSunriseSunset( calendar,
-                                                       UtilType.toDouble( latitude  ),
-                                                       UtilType.toDouble( longitude ) )[nWhich] );
+        LocalTime sunrise = UtilDateTime.getSunrise( dateTime,
+                                                     UtilType.toDouble( latitude  ),
+                                                     UtilType.toDouble( longitude ) );
+        return toTime( sunrise );
     }
 
-    private time toTime( Calendar calendar )
+    /**
+     * Gets sunset time for the given datetime and location.
+     *
+     * @param dateTime The datetime to use.
+     * @param latitude The latitude of the location in degrees.
+     * @param longitude The longitude of the location in degrees.
+     * @return The sunset time, or null if not applicable (polar regions).
+     */
+    private time getSunSetTime( ZonedDateTime dateTime, Object latitude, Object longitude )
     {
-        return new time( calendar.get( Calendar.HOUR_OF_DAY ),
-                         calendar.get( Calendar.MINUTE      ),
-                         calendar.get( Calendar.SECOND      ) );
+        LocalTime sunset = UtilDateTime.getSunset( dateTime,
+                                                   UtilType.toDouble( latitude  ),
+                                                   UtilType.toDouble( longitude ) );
+        return toTime( sunset );
     }
 
-    private Calendar toCalendar( Object arg, Object time, Object zone )
+    /**
+     * Converts a LocalTime to a time instance.
+     *
+     * @param localTime The local time to convert.
+     * @return A new time instance, or null if input is null.
+     */
+    private time toTime( LocalTime localTime )
+    {
+        if( localTime == null )
+            return null;
+
+        return new time( localTime.getHour(),
+                         localTime.getMinute(),
+                         localTime.getSecond() );
+    }
+
+    /**
+     * Converts the given arguments to a ZonedDateTime.
+     *
+     * @param arg  A date object, date string, or null for today.
+     * @param time The time to use, or null to use this instance's time.
+     * @param zone The timezone, or null for system default.
+     * @return A ZonedDateTime combining the date, time, and zone.
+     */
+    private ZonedDateTime toZonedDateTime( Object arg, Object time, Object zone )
     {
         final date date;
 
@@ -588,22 +668,35 @@ public final class time
         if( time == null )
             time = asLocalTime();
 
-        if( ! (zone instanceof ZoneId ) )
+        ZoneId zoneId;
+
+        if( zone instanceof ZoneId )
         {
-                if( zone == null )            zone = ZoneId.systemDefault();
-           else if( zone instanceof String )  try{ zone = ZoneId.of( (String) zone ); } catch( DateTimeException exc ) { zone = null; }
-           else                               zone = null;
+            zoneId = (ZoneId) zone;
+        }
+        else if( zone == null )
+        {
+            zoneId = ZoneId.systemDefault();
+        }
+        else if( zone instanceof String )
+        {
+            try
+            {
+                zoneId = ZoneId.of( (String) zone );
+            }
+            catch( DateTimeException exc )
+            {
+                throw new MingleException( "Invalid time-zone: "+ zone );
+            }
+        }
+        else
+        {
+            throw new MingleException( "Invalid time-zone: "+ zone );
         }
 
-        if( zone == null )
-            throw new MingleException( "Invalid time-zone: "+ zone );
+        LocalDateTime local = LocalDateTime.of( date.asLocalDate(), (LocalTime) time );
 
-        LocalDateTime local    = LocalDateTime.of( ((date) date).asLocalDate(), (LocalTime) time );
-        Instant       instant  = local.atZone( (ZoneId) zone ).toInstant();
-        Calendar      calendar = Calendar.getInstance( TimeZone.getTimeZone( (ZoneId) zone ) );
-                      calendar.setTimeInMillis( instant.toEpochMilli() );
-
-        return calendar;
+        return local.atZone( zoneId );
     }
 
     private Pair<date,ZoneId> getDateAndZone( Object dateOrZone )
@@ -617,7 +710,7 @@ public final class time
             {
                 d = (date) dateOrZone;
             }
-            else if( dateOrZone instanceof String )   // dateOrZone caoyld be either a date ("2020-05-01") or a zone ("Europe/Madrid")
+            else if( dateOrZone instanceof String )   // dateOrZone could be either a date ("2020-05-01") or a zone ("Europe/Madrid")
             {
                 String s = (String) dateOrZone;
 

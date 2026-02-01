@@ -129,22 +129,27 @@ public final class CommandSerializer
      * @param language
      * @param onStart
      * @param onStop
+     * @param preStart True when script executes in PRE ONSTART phase (before entities are created)
+     * @param preStop True when script executes in PRE ONSTOP phase (while entities still work)
      * @param inline True when Une source code FROM clause contents (SCRIPT command) is in between brackets ({...})
      * @param from
      * @param callName
      * @return
      */
-    public static String Script( String name, String language, boolean onStart, boolean onStop, boolean inline, String[] from, String callName )
+    public static String Script( String name, String language, boolean onStart, boolean onStop,
+                                 boolean preStart, boolean preStop, boolean inline, String[] from, String callName )
     {
         return Json.object()
-                   .add( ICmdKeys.CMD_CMD        , ICmdKeys.CMD_SCRIPT )
-                   .add( ICmdKeys.CMD_NAME       , name )
-                   .add( ICmdKeys.SCRIPT_LANGUAGE, language )
-                   .add( ICmdKeys.SCRIPT_ONSTART , onStart )
-                   .add( ICmdKeys.SCRIPT_ONSTOP  , onStop )
-                   .add( ICmdKeys.SCRIPT_INLINE  , inline )
-                   .add( ICmdKeys.SCRIPT_FROM    , UtilJson.toJSON( from ) )
-                   .add( ICmdKeys.SCRIPT_CALL    , callName )
+                   .add( ICmdKeys.CMD_CMD         , ICmdKeys.CMD_SCRIPT )
+                   .add( ICmdKeys.CMD_NAME        , name )
+                   .add( ICmdKeys.SCRIPT_LANGUAGE , language )
+                   .add( ICmdKeys.SCRIPT_ONSTART  , onStart )
+                   .add( ICmdKeys.SCRIPT_ONSTOP   , onStop )
+                   .add( ICmdKeys.SCRIPT_PRESTART , preStart )
+                   .add( ICmdKeys.SCRIPT_PRESTOP  , preStop )
+                   .add( ICmdKeys.SCRIPT_INLINE   , inline )
+                   .add( ICmdKeys.SCRIPT_FROM     , UtilJson.toJSON( from ) )
+                   .add( ICmdKeys.SCRIPT_CALL     , callName )
                    .toString();
     }
 

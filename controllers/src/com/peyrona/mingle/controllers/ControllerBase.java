@@ -30,12 +30,12 @@ import java.util.Map;
 public abstract class      ControllerBase
                 implements IController
 {
-    private boolean              isFaked   = false;
-    private IRuntime             runtime   = null;
-    private String               devName   = null;    // device name
-    private boolean              bValid    = false;
-    private IController.Listener listener  = null;
-    private Map<String,Object>   mapConfig = null;
+    private static Boolean              isFaked   = null;    // 'faked_drivers' flag is global, not per Controller
+    private        IRuntime             runtime   = null;
+    private        String               devName   = null;    // device name
+    private        boolean              bValid    = false;
+    private        IController.Listener listener  = null;
+    private        Map<String,Object>   mapConfig = null;
 
     //------------------------------------------------------------------------//
     // PROTECTED CONSTRUCTOR
@@ -45,6 +45,7 @@ public abstract class      ControllerBase
     }
 
     //------------------------------------------------------------------------//
+    // INTERFACE IMPLEMENTATION
 
     @Override
     public boolean isValid()
@@ -59,25 +60,21 @@ public abstract class      ControllerBase
     }
 
     @Override
-    public Map<String,Object> getDeviceConfig()
+    public boolean start( IRuntime rt )
     {
-        return mapConfig;
-    }
-
-    @Override
-    public synchronized void start( IRuntime rt )
-    {
-        if( isInvalid() )
-            return;
-
-        assert runtime == null;
+        if( isInvalid() || runtime != null )
+            return false;
 
         if( rt == null )
             throw new MingleException( MingleException.INVALID_ARGUMENTS );
 
-        isFaked = rt.getFromConfig( "exen", "faked_drivers", false );
+        synchronized( this )
+        {
+            isFaked = rt.getFromConfig( "exen", "faked_drivers", false );
+            runtime = rt;
+        }
 
-        runtime = rt;
+        return true;
     }
 
     @Override
@@ -106,17 +103,13 @@ public abstract class      ControllerBase
 
     protected ControllerBase setDeviceName( String name )
     {
-        this.devName = name;
+        devName = name;
         return this;
     }
 
     protected ControllerBase setDeviceConfig( Map<String,Object> map )
     {
-        if( mapConfig == null )
-            mapConfig = new HashMap<>();
-
-        mapConfig.putAll( map );
-
+        getDevConf().putAll( map );
         return this;
     }
 
@@ -174,32 +167,19 @@ public abstract class      ControllerBase
 
     protected Object get( String name )
     {
-        return mapConfig.get( name );
+        return getDevConf().get( name );
     }
 
     protected Object get( String name, Object def )
     {
-        Object val = mapConfig.get( name );
+        Object val = getDevConf().get( name );
 
         return (val == null ? def : val);
     }
 
-    protected Long getLong( String name )
-    {
-        Object value = get( name );
-
-             if( value instanceof Integer )  return ((Integer) value).longValue();
-        else if( value instanceof Long    )  return (Long) value;
-
-        throw new MingleException( MingleException.INVALID_ARGUMENTS );
-    }
-
     protected ControllerBase set( String name, Object value )
     {
-        if( mapConfig == null )
-            mapConfig = new HashMap<>();
-
-        mapConfig.put( name, value );
+        getDevConf().put( name, value );
 
         return this;
     }
@@ -215,6 +195,21 @@ public abstract class      ControllerBase
 
         return this;
     }
+
+    protected ControllerBase setBetween( String name, long min, long value, long max )
+    {
+        long newVal = UtilUnit.setBetween( min, value, max );
+
+        if( value != newVal )
+            sendIsInvalid( name +" was out of range. Changed from "+ value +" to "+ newVal );
+
+        set( name, newVal );
+
+        return this;
+    }
+
+    //------------------------------------------------------------------------//
+    // SEND MESSAGES TO LISTENERS
 
     protected ControllerBase sendReaded( Object newValue )
     {
@@ -305,6 +300,20 @@ public abstract class      ControllerBase
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
+
+    private Map<String,Object> getDevConf()
+    {
+        if( mapConfig == null )
+        {
+            synchronized( this )
+            {
+                mapConfig = new HashMap<>();
+            }
+        }
+
+        return mapConfig;
+    }
 
     private void sendError( ILogger.Level level, String msg, Exception exc )
     {

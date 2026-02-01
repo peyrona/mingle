@@ -55,7 +55,7 @@ public final class UtilSys
     private static       ILogger                  logger       = null;
     private static       IConfig                  config       = null;
     private static final long                     nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
-    private static final Set<URI>                 lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because messsages are only added
+    private static final Set<URI>                 lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because JARs are only added
     private static final Map<Object,Object>       mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
     private static final ScheduledExecutorService pool         = (ScheduledExecutorService) Executors.newScheduledThreadPool( 32 );   // Note: a lot needed: Dispatchers, AFTERs, WITHINs, Controllers...
 

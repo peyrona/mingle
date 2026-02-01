@@ -26,6 +26,20 @@ public interface IScript extends ICommand
     boolean isOnStop();
 
     /**
+     * Returns true if this script executes in the PRE ONSTART phase (before entities are created).
+     *
+     * @return true if this script executes in the PRE ONSTART phase.
+     */
+    boolean isPreStart();
+
+    /**
+     * Returns true if this script executes in the PRE ONSTOP phase (while entities still work).
+     *
+     * @return true if this script executes in the PRE ONSTOP phase.
+     */
+    boolean isPreStop();
+
+    /**
      * Returns the programming language used by this SCRIPT.
      *
      * @return The programming language used.

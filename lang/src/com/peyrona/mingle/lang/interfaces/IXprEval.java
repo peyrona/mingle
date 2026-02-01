@@ -131,10 +131,19 @@ public interface IXprEval
     boolean isBoolean();
 
     /**
-     * Returns true if this expression has futures (AFTER and/or WITHIN) and they are on progress.
+     * Returns true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
      *
-     * @return true if this expression has futures (AFTER and/or WITHIN) and they are on progress.
+     * @return true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
      */
+    boolean isFuturing();
+
+    /**
+     * Returns true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
+     *
+     * @return true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
+     * @deprecated Use {@link #isFuturing()} instead. This method name has a typo.
+     */
+    @Deprecated
     boolean isFutureing();
 
     /**
@@ -146,6 +155,7 @@ public interface IXprEval
 
     /**
      * Closes the expression evaluator and releases any resources it holds.
+     * @return Itself.
      */
     IXprEval close();
 
@@ -182,11 +192,11 @@ public interface IXprEval
     String[] getFunctions();
 
     /**
-     * Returns all classes and classes' methods managed by this Expressions Evaluator.<br>
+     * Returns all classes and classes' methods' signatures managed by this Expressions Evaluator.<br>
      * <br>
      * Note: returned map 'key' is the extended data name and the 'value' is the list of the associated method's names.
      *
-     * @return All classes and classes' methods managed by this Expressions Evaluator.
+     * @return All classes and classes' methods' signatures managed by this Expressions Evaluator.
      */
     Map<String,List<String>> getExtendedTypes();
 

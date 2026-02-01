@@ -708,35 +708,40 @@ final class Menu
                             "K -       : Execution Environment (resident/background mode)\n" +
                             "A - Tape  : Une language transpiler\n" +
                             "\n" +
-                            "MANAGEMENT OPTIONS:\n" +
-                            "------------------\n" +
-                            "L - List/Kill : View and terminate running Mingle processes\n" +
-                            "V - View Logs : View console output from Glue, Gum, Stick, Tape\n" +
-                            "E - Services  : Manage Mingle tools as system services\n" +
-                            "O - Info      : Display system and Java information\n" +
-                            "\n" +
-                            "OTHER OPTIONS:\n" +
-                            "--------------\n" +
-                            "H - Help      : Show this help screen\n" +
-                            "X - Exit      : Exit the menu (with process cleanup option)\n" +
-                            "\n" +
-                            "PLATFORM SUPPORT:\n" +
-                            "----------------\n" +
-                            "Fully tested on Linux. Basic support for macOS and Windows.\n" +
-                            "Service management requires systemd (Linux), launchd (macOS), or Windows Services.\n" +
-                            "\n" +
-                            "USAGE EXAMPLES:\n" +
-                            "---------------\n" +
-                            "menu g              # Launch Glue IDE\n" +
-                            "menu u              # Start Gum dashboard server\n" +
-                            "menu s file.model   # Run Stick in default mode\n" +
-                            "menu i              # Run Stick with remote debugging enabled\n" +
-                            "menu a file.une     # Compile Une file with Tape\n" +
-                            "\n" +
-                            "LOG VIEWER (V option):\n" +
-                            "---------------------\n" +
-                            "Shows output logs from running tools stored in 'log/' folder.\n" +
-                            "Options: Last 50/200/500 lines, entire file, or follow mode (live)." );
+                             "MANAGEMENT OPTIONS:\n" +
+                             "------------------\n" +
+                             "L - List/Kill : View and terminate running Mingle processes\n" +
+                             "V - View Logs : View console output from Glue, Gum, Stick, Tape\n" +
+                             "E - Services  : Manage Mingle tools as system services\n" +
+                             "O - Info      : Display system and Java information\n" +
+                             "\n" +
+                             "OTHER OPTIONS:\n" +
+                             "--------------\n" +
+                             "H - Help      : Show this help screen\n" +
+                             "X - Exit      : Exit the menu (with process cleanup option)\n" +
+                             "\n" +
+                             "CONFIGURATION:\n" +
+                             "--------------\n" +
+                             "Configuration can be specified using -Dconfig=<path> parameter\n" +
+                             "when creating services with option 'E' (Services).\n" +
+                             "\n" +
+                             "PLATFORM SUPPORT:\n" +
+                             "----------------\n" +
+                             "Fully tested on Linux. Basic support for macOS and Windows.\n" +
+                             "Service management requires systemd (Linux), launchd (macOS), or Windows Services.\n" +
+                             "\n" +
+                             "USAGE EXAMPLES:\n" +
+                             "---------------\n" +
+                             "menu g              # Launch Glue IDE\n" +
+                             "menu u              # Start Gum dashboard server\n" +
+                             "menu s file.model   # Run Stick in default mode\n" +
+                             "menu i              # Run Stick with remote debugging enabled\n" +
+                             "menu a file.une     # Compile Une file with Tape\n" +
+                             "\n" +
+                             "LOG VIEWER (V option):\n" +
+                             "---------------------\n" +
+                             "Shows output logs from running tools stored in 'log/' folder.\n" +
+                             "Options: Last 50/200/500 lines, entire file, or follow mode (live)." );
 
         UtilUI.pause();
     }
@@ -796,36 +801,36 @@ final class Menu
     private void showMainMenu()
     {
         UtilUI.clearScreen();
-        System.out.println( "===============================================" );
+        System.out.println( "================================================" );
         System.out.println( "            ::: Mingle Menu :::" );
-        System.out.println( "===============================================" );
+        System.out.println( "================================================" );
 
         if( orchestrator.isProcessManagerAvailable() )
         {
-            System.out.println( " G - Glue.......Mission Control (IDE)" );
-            System.out.println( " U - Gum........Dashboards and file-server" );
-            System.out.println( " S - Stick......ExEn (default)" );
-            System.out.println( " T - Stick..........Low memory mode" );
-            System.out.println( " I - Stick..........Debug mode (JPDA port 8800)" );
-            System.out.println( " C - Stick..........Profiling mode (VisualVM)" );
-            System.out.println( " K - Stick..........Resident mode (nohup)" );
-            System.out.println( " A - Tape ......Transpiler" );
-            System.out.println( " L - List/Kill..Manage JVM processes" );
-            System.out.println( " V - View Logs..Output from running tools" );
+            System.out.println( " G - Glue........Mission Control (IDE)" );
+            System.out.println( " U - Gum.........Dashboards and file-server" );
+            System.out.println( " S - Stick.......ExEn (default)" );
+            System.out.println( " T - Stick...........Low memory mode" );
+            System.out.println( " I - Stick...........Debug mode (JPDA port 8800)" );
+            System.out.println( " C - Stick...........Profiling mode (VisualVM)" );
+            System.out.println( " K - Stick...........Resident mode (nohup)" );
+            System.out.println( " A - Tape .......Transpiler" );
+            System.out.println( " L - List/Kill...Manage JVM processes" );
+            System.out.println( " V - View Logs...Output from running tools" );
         }
         else
         {
-            System.out.println( " Service to launch tools not avaibale in "+ UtilSys.sOS );
+            System.out.println( " Service to launch tools not available in "+ UtilSys.sOS );
             System.out.println( " Some Menu options are not available," );
-            System.out.println( "-----------------------------------------------" );
+            System.out.println( "------------------------------------------------" );
         }
 
         System.out.println( " O - Info.......System information" );
         System.out.println( " E - Services...Service Manager" );
-        System.out.println( "-----------------------------------------------" );
+        System.out.println( "------------------------------------------------" );
         System.out.println( " H - Help" );
         System.out.println( " X - Exit" );
-        System.out.println( "===============================================" );
+        System.out.println( "================================================" );
     }
 
     private boolean showServiceMenu( boolean gumSelected, boolean stickSelected )

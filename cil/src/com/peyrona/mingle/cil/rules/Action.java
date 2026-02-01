@@ -195,7 +195,7 @@ final class Action implements IRule.IAction
 
     private IXprEval newXprEval( String sXpr, IRuntime runtime )
     {
-        IXprEval xe = runtime.newXprEval().build( sXpr, (o) -> {}, runtime.newGroupWiseFn() );
+        IXprEval xe = runtime.newXprEval().build( sXpr, (o) -> {}, runtime::getGroupMemberNames );
 
         if( ! xe.getErrors().isEmpty() )
             throw new MingleException( "Invalid expression: "+ sXpr );

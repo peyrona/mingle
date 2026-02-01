@@ -49,8 +49,9 @@ public final class   Excel
     private int          nWrites    = 0;     // Counter for pending writes
     private long         nLastFlush = 0;     // Timestamp of the last flush operation
 
-    private static final int    nFLUSH_TIMEOUT     = 180 * 1000;       // Time limit (in milliseconds) for flushing
-    private static final String KEY_WRITE_INTERVAL = "writeinterval";  // Configured number of writes before flushing
+    private static final String sKEY_FILE_NAME      = "file";           // The file to be read
+    private static final int    nFLUSH_TIMEOUT      = 180 * 1000;       // Time limit (in milliseconds) for flushing
+    private static final String sKEY_WRITE_INTERVAL = "writeinterval";  // Configured number of writes before flushing
 
     //------------------------------------------------------------------------//
 
@@ -59,10 +60,10 @@ public final class   Excel
     {
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
+        setDeviceConfig( deviceConf );   // Store raw config first, validated values will be stored at the end
 
-        String    sFileName  = (String) deviceConf.get( "file" );        // Mandatory
-        String    sSheetName = (String) deviceConf.get( "sheetname" );   // Optional
-        List<URI> lstURL     = new ArrayList<>();
+        String    sFileName = (String) get( sKEY_FILE_NAME );    // Mandatory
+        List<URI> lstURL    = new ArrayList<>();
 
         try
         {
@@ -79,37 +80,16 @@ public final class   Excel
             return;
         }
 
-        if( isFaked() )
-        {
-            setValid( true );
-            return;
-        }
-
-        synchronized( this )
-        {
-            file  = UtilIO.addExtension( new File( lstURL.get(0) ), ".xlsx" );
-            book  = new XSSFWorkbook();
-            sheet = book.createSheet();
-        }
-
-        if( sSheetName != null )
-            book.setSheetName( book.getSheetIndex( sheet ), sSheetName );
-
-        String sHeads = (String) deviceConf.get( "heads" );   // Optional
-
-        if( sHeads != null )
-            writeHead( book, sheet, UtilColls.toMap( sHeads ) );
+        set( sKEY_FILE_NAME, lstURL.get(0) );
 
         // Read flush interval from configuration
-        Integer nWriteInterval = (Integer) deviceConf.get( KEY_WRITE_INTERVAL );
+        Object oWriteInterval = get( sKEY_WRITE_INTERVAL );
+        int    nWriteInterval = (oWriteInterval != null) ? ((Number) oWriteInterval).intValue() : 5;
 
-        if( nWriteInterval == null )
-            nWriteInterval = 5;
-
-        set( KEY_WRITE_INTERVAL, UtilUnit.setBetween( 1, nWriteInterval, Integer.MAX_VALUE ) );
+        // Store validated configuration (overwrites raw values with validated ones)
+        set( sKEY_WRITE_INTERVAL, UtilUnit.setBetween( 1, nWriteInterval, Integer.MAX_VALUE ) );
 
         setValid( true );
-        setDeviceConfig( deviceConf );     // Can be done because mapConfig values are not modified
     }
 
     @Override
@@ -133,7 +113,7 @@ public final class   Excel
                                     Map<String,String> map = UtilColls.toMap( deviceValue.toString() );
                                     writeRow( book, sheet, map );
 
-                                    int  interval = (int) get( KEY_WRITE_INTERVAL );
+                                    int  interval = (int) get( sKEY_WRITE_INTERVAL );
                                     long elapsed  = System.currentTimeMillis() - nLastFlush;
 
                                     // Flush if write counter reaches the interval
@@ -150,17 +130,40 @@ public final class   Excel
     }
 
     @Override
-    public void start( IRuntime rt )
+    public boolean start( IRuntime rt )
     {
-        if( isInvalid() )
-            return;
-
-        super.start( rt );
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
 
         if( ! isDiskWritable( true ) )
+        {
             stop();
+            return false;
+        }
+
+        if( ! isFaked() )   // isFaked() is initialized by super:start(...)
+        {
+            synchronized( this )
+            {
+                file  = UtilIO.addExtension( new File( get( sKEY_FILE_NAME ).toString() ), ".xlsx" );
+                book  = new XSSFWorkbook();
+                sheet = book.createSheet();
+            }
+
+            String sSheetName = (String) get( "sheetname" );   // Optional
+
+            if( sSheetName != null )
+                book.setSheetName( book.getSheetIndex( sheet ), sSheetName );
+
+            String sHeads = (String) get( "heads" );   // Optional
+
+            if( sHeads != null )
+                writeHead( book, sheet, UtilColls.toMap( sHeads ) );
+        }
 
         nLastFlush = System.currentTimeMillis();
+
+        return isValid();
     }
 
     @Override

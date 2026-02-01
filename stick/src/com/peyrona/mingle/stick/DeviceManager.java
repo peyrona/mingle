@@ -218,6 +218,24 @@ final class   DeviceManager
         return toReturn;
     }
 
+    /**
+    4  * Efficiently returns the names of all devices in a specific group.
+    5  */
+    public String[] getGroupMemberNames( String group )
+    {
+        if( UtilStr.isEmpty( group ) )
+            return new String[0];
+
+        List<IDevice> devices = groupsMap.get( group.trim() );
+
+        if( devices == null || devices.isEmpty() )
+            return new String[0];
+   
+        return devices.stream()
+                      .map( IDevice::name )
+                      .toArray( String[]::new );
+    }
+
     //------------------------------------------------------------------------//
     // INNER CLASS
     // Used to store Devices that are in other ExEns when this ExEn is a Grid Node
