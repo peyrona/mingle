@@ -111,15 +111,14 @@ public class Kronos
 
         if( millis > -1l )
         {
-            future = UtilSys.execute( getClass().getName(),
-                                      millis,
-                                      () ->
+            future = UtilSys.executor( false )
+                            .delay( millis )
+                            .execute( () ->
                                       {
                                           last = System.currentTimeMillis();
                                           read();
                                           next();
-                                      }
-                                    );
+                                      } );
         }
     }
 }

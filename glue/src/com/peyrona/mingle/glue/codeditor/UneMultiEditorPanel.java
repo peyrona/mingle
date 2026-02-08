@@ -27,8 +27,6 @@ import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.WindowAdapter;
-import java.awt.event.WindowEvent;
 import java.io.File;
 import java.io.IOException;
 import java.net.URL;
@@ -143,9 +141,9 @@ public final class UneMultiEditorPanel extends JPanel
 
         //------------------------------------------------------------------------------------------------------------------
 
-        UtilSys.execute( null,
-                         250,
-                         () -> // Dirty, but works (I tried many other things but none worked)
+        UtilSys.executor( true )
+               .delay( 250 )
+               .execute( () -> // Dirty, but works (I tried many other things but none worked)
                                 {
                                     JFrame parent = JTools.getParent( this, JFrame.class );
 
@@ -401,7 +399,10 @@ public final class UneMultiEditorPanel extends JPanel
         }
         else
         {
-            futureSave.set( UtilSys.executeWithDelay( null, 5 * UtilUnit.MINUTE, 5 * UtilUnit.MINUTE, () -> onSave( null ) ) );
+            futureSave.set( UtilSys.executor( false )
+                                   .delay( 5 * UtilUnit.MINUTE )
+                                   .rate( 5 * UtilUnit.MINUTE )
+                                   .execute( () -> onSave( null ) ) );
         }
     }
 

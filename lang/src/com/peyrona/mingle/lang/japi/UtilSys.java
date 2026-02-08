@@ -28,6 +28,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Consumer;
 
 /**
  * Utility class providing system-level operations and services for the Mingle framework.
@@ -49,15 +50,14 @@ import java.util.concurrent.TimeUnit;
  */
 public final class UtilSys
 {
-    public  static final boolean                  isDevEnv     = getDevEnvDir().exists();   // true when the app is running in my Development Environment (NetBeans).
-    public  static final File                     fHomeDir     = getHomeDir();
-    public  static final boolean                  isFsWritable = isFileSystemWritable();    // Has to be after getHomeDir()
-    private static       ILogger                  logger       = null;
-    private static       IConfig                  config       = null;
-    private static final long                     nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
-    private static final Set<URI>                 lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because JARs are only added
-    private static final Map<Object,Object>       mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
-    private static final ScheduledExecutorService pool         = (ScheduledExecutorService) Executors.newScheduledThreadPool( 32 );   // Note: a lot needed: Dispatchers, AFTERs, WITHINs, Controllers...
+    public  static final boolean            isDevEnv     = getDevEnvDir().exists();   // true when the app is running in my Development Environment (NetBeans).
+    public  static final File               fHomeDir     = getHomeDir();
+    public  static final boolean            isFsWritable = isFileSystemWritable();    // Has to be after getHomeDir()
+    private static       ILogger            logger       = null;
+    private static       IConfig            config       = null;
+    private static final long               nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
+    private static final Set<URI>           lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because JARs are only added
+    private static final Map<Object,Object> mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
 
     //------------------------------------------------------------------------//
 
@@ -258,110 +258,14 @@ public final class UtilSys
     // THERAD POOL
 
     /**
-     * Executes passed Runnable using an internal ThreadPoolExecutor.
-     * @param name
-     * @param r What to execute.
-     * @return An ScheduledFuture
-     */
-    public static ScheduledFuture execute( String name, Runnable r )
-    {
-        return execute( name, 0, r );
-    }
-
-    /**
-     * Executes passed Runnable after specified delay (in millis) using an internal ThreadPoolExecutor.
+     * Creates an Executor instance for task scheduling.
      *
-     * @param name
-     * @param delay Delay in millis to execute the task.
-     * @param r What to execute.
-     * @return An ScheduledFuture
+     * @param fromPool if true, uses the shared thread pool; if false, creates a new single-thread executor
+     * @return a new Executor instance
      */
-    public static ScheduledFuture execute( String name, long delay, Runnable r )
+    public static Executor executor( boolean fromPool )
     {
-        // Can not afford to have an exception inside r because the Scheduler stops.
-        // Although we wrap r with a generic try catch, the r should have its own try catch.
-
-        String s = getThreadName( name );
-
-        Runnable run = () ->
-                        {
-                            try
-                            {
-                                Thread.currentThread().setName( s );
-                                r.run();
-                            }
-                            catch( Exception exc )
-                            {
-                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
-                            }
-                        };
-
-        return pool.schedule( run, delay, TimeUnit.MILLISECONDS );
-    }
-
-    /**
-     * Periodically executes passed Runnable after specified initial delay every rate millis using an internal ThreadPoolExecutor.
-     *
-     * @param name
-     * @param delay Initial delay in milliseconds to execute the task.
-     * @param rate Rate in milliseconds to execute the task.
-     * @param r What to execute.
-     * @return
-     */
-    public static ScheduledFuture executeAtRate( String name, long delay, long rate, Runnable r )
-    {
-        // Can not afford to have an execption inside r because the Scheduler stops.
-        // Although we wrap r with a generic try catch, the r should have its own try catch.
-
-        String s = getThreadName( name );
-
-        Runnable run = () ->
-                        {
-                            try
-                            {
-                                Thread.currentThread().setName( s );
-                                r.run();
-                            }
-                            catch( Exception exc )
-                            {
-                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
-                            }
-                        };
-
-        return pool.scheduleAtFixedRate( run, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
-    }
-
-    /**
-     * Periodically executes passed Runnable after specified initial delay: when task ends its execution,
-     * an amount of delay millis is waited until the next execution of the task starts.
-     *
-     * @param name
-     * @param delay Interval between an iteration ends and the next iteration starts.
-     * @param rate
-     * @param r What to execute.
-     * @return
-     */
-    public static ScheduledFuture executeWithDelay( String name, long delay, long rate, Runnable r )
-    {
-        // Can not afford to have an execption inside r because the Scheduler stops.
-        // Although we wrap r with a generic try catch, the r should have its own try catch.
-
-        String s = getThreadName( name );
-
-        Runnable run = () ->
-                        {
-                            try
-                            {
-                                Thread.currentThread().setName( s );
-                                r.run();
-                            }
-                            catch( Exception exc )
-                            {
-                                UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
-                            }
-                        };
-
-        return pool.scheduleWithFixedDelay( run, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
+        return new Executor( fromPool );
     }
 
     //------------------------------------------------------------------------//
@@ -709,21 +613,6 @@ public final class UtilSys
         // Avoids creating instances of this class.
     }
 
-    private static String getThreadName( String name )
-    {
-        if( UtilStr.isMeaningless( name ) )
-        {
-            String invoker = UtilReflect.getCallerMethodName( 4 );   // UtilReflect.getCallerMethodName(...) can return null
-
-            if( invoker == null )
-                invoker = UUID.randomUUID().toString();
-
-            name = UtilSys.class.getSimpleName() +":pool:"+ invoker;
-        }
-
-        return name;
-    }
-
     /**
      * Returns the development environment directory.
      *
@@ -771,6 +660,224 @@ public final class UtilSys
             System.err.println( msg );
 
             return false;   // Conservative: assume read-only on error
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+
+    /**
+     * A flexible execution framework supporting synchronous, asynchronous, delayed, and recurring execution.
+     * <p>
+     * This class provides a builder-based API for executing Runnables and shell commands with various scheduling options:
+     * <ul>
+     *   <li>One-time synchronous execution via {@link #executeAndWait(String...)}</li>
+     *   <li>One-time asynchronous execution via {@link #execute(Runnable)} or {@link #execute(String...)}</li>
+     *   <li>Delayed execution via {@link #delay(long)}</li>
+     *   <li>Recurring execution via {@link #rate(long)}</li>
+     *   <li>Custom error handling via {@link #error(Runnable)}</li>
+     *   <li>Output capture for async operations via {@link #output(OutputCallback)}</li>
+     * </ul>
+     * <p>
+     * <b>Usage Examples:</b>
+     * <pre>{@code
+     * // Simple Runnable execution
+     * UtilSys.executor()
+     *        .name("TaskName")
+     *        .execute(() -> doWork());
+     *
+     * // Delayed execution
+     * UtilSys.executor()
+     *        .name("DelayedTask")
+     *        .delay(5000)
+     *        .execute(() -> doWork());
+     *
+     * // Periodic at fixed rate
+     * UtilSys.executor()
+     *        .name("PeriodicTask")
+     *        .delay(1000)
+     *        .rate(10000)
+     *        .fixedRate(true)
+     *        .error(() -> handleError())
+     *        .execute(() -> pollSensor());
+     *
+     * // Shell command (async)
+     * UtilSys.executor()
+     *        .name("ShellTask")
+     *        .output(line -> log(line))
+     *        .execute("ls", "-la");
+     *
+     * // Shell command (sync)
+     * ProcessResult result = UtilSys.executor()
+     *        .executeAndWait("git", "status");
+     * }</pre>
+     */
+    public static final class Executor
+    {
+        private static final ScheduledExecutorService pool = Executors.newScheduledThreadPool( 32 );   // Note: a lot needed: Dispatchers, AFTERs, WITHINs, Controllers...
+
+        private final boolean usePool;
+        private String   name      = null;
+        private long     delay     = 0;
+        private long     rate      = 0;
+        private boolean  fixedRate = false;
+        private Consumer<Exception> error = null;
+
+        //------------------------------------------------------------------------//
+
+        private Executor( boolean fromPool )
+        {
+            this.usePool = fromPool;
+        }
+
+        //------------------------------------------------------------------------//
+        // BUILDER METHODS
+
+        /**
+         * Sets a name for this execution.
+         * <p>
+         * The name is used for thread naming and logging purposes.
+         * If not set, a UUID-based name will be generated.
+         *
+         * @param name the name for this execution
+         * @return this builder
+         */
+        public Executor name( String name )
+        {
+            this.name = name;
+            return this;
+        }
+
+        /**
+         * Sets the initial delay before execution starts.
+         * <p>
+         * Only applicable for {@code execute()} methods.
+         * The executor waits for this delay before the first execution.
+         *
+         * @param delay delay in milliseconds (0 for immediate execution)
+         * @return this builder
+         */
+        public Executor delay( long delay )
+        {
+            this.delay = delay;
+            return this;
+        }
+
+        /**
+         * Sets the recurrence rate for periodic execution.
+         * <p>
+         * If rate is 0 (default), the command executes once.
+         * If rate &gt; 0, the command executes repeatedly.
+         * Use {@link #fixedRate(boolean)} to control the scheduling semantics.
+         *
+         * @param rate rate in milliseconds (0 for one-time execution)
+         * @return this builder
+         */
+        public Executor rate( long rate )
+        {
+            this.rate = rate;
+            return this;
+        }
+
+        /**
+         * Sets a custom error handler for this execution.
+         * <p>
+         * The error handler is called if an exception occurs during execution.
+         * Errors are also logged via the Mingle logger regardless of this setting.
+         *
+         * @param error the error handler Runnable
+         * @return this builder
+         */
+        public Executor error( Consumer<Exception> error )
+        {
+            this.error = error;
+            return this;
+        }
+
+        /**
+         * Sets whether recurring execution uses fixed rate or fixed delay.
+         * <p>
+         * If {@code true}, uses {@code scheduleAtFixedRate()} - tasks run at
+         * regular intervals regardless of execution time.
+         * If {@code false} (default), uses {@code scheduleWithFixedDelay()} -
+         * tasks run with a delay between completions.
+         *
+         * @param isFixedRate true for fixed rate, false for fixed delay
+         * @return this builder
+         */
+        public Executor fixedRate( boolean isFixedRate )
+        {
+            this.fixedRate = isFixedRate;
+            return this;
+        }
+
+        //------------------------------------------------------------------------//
+        // EXECUTION METHODS
+
+        /**
+         * Executes a Runnable task.
+         * <p>
+         * If {@link #rate(long)} was set to a value &gt; 0, the task will be executed periodically.
+         * Otherwise, it will be executed once (after optional {@link #delay(long)}).
+         *
+         * @param r the Runnable to execute
+         * @return a ScheduledFuture representing the pending execution
+         */
+        public ScheduledFuture<?> execute( Runnable r )
+        {
+            if( UtilStr.isMeaningless( name ) )
+            {
+                Class<?> callerClass = UtilReflect.getCallerClass( 4 );
+                String   methodName  = UtilReflect.getCallerMethodName( 4 );
+
+                if( callerClass != null && methodName != null )
+                    name = UtilSys.class.getSimpleName() + "[pool]" + callerClass.getSimpleName() +':'+ methodName;
+                else
+                    name = UUID.randomUUID().toString();
+            }
+
+            final Consumer<Exception> onError = this.error;
+
+            Runnable wrapped = () ->
+            {
+                try
+                {
+                    Thread.currentThread().setName( name );
+                    r.run();
+                }
+                catch( Exception exc )
+                {
+                    if( onError == null )
+                    {
+                        UtilSys.getLogger().log( ILogger.Level.SEVERE, exc );
+                    }
+                    else
+                    {
+                        try
+                        {
+                            onError.accept( exc );
+                        }
+                        catch( Exception e )
+                        {
+                            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error in error handler" );
+                        }
+                    }
+                }
+            };
+
+            ScheduledExecutorService executor = usePool ? pool
+                                                        : Executors.newSingleThreadScheduledExecutor();
+
+            if( rate > 0 )
+            {
+                if( fixedRate )  return executor.scheduleAtFixedRate(    wrapped, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
+                else             return executor.scheduleWithFixedDelay( wrapped, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
+            }
+            else
+            {
+                return executor.schedule( wrapped, delay, TimeUnit.MILLISECONDS );
+            }
         }
     }
 

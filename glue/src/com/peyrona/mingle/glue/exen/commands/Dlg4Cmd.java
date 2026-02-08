@@ -190,9 +190,9 @@ final class Dlg4Cmd extends GDialog
         {
             btn.addActionListener((ActionEvent e) ->
             {
-                UtilSys.execute( null,
-                                 99,    // Using a Timer sucks, but is the simplest way to ensure that all previous Actions had been executed
-                                 () -> SwingUtilities.invokeLater( () -> updateTxtCommand( pnlCentral ) ) );
+                UtilSys.executor( true )
+                       .delay( 99 )    // Using a Timer sucks, but is the simplest way to ensure that all previous Actions had been executed
+                       .execute( () -> SwingUtilities.invokeLater( () -> updateTxtCommand( pnlCentral ) ) );
             } );
         }
     }

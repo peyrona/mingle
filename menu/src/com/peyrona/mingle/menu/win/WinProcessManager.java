@@ -1,7 +1,8 @@
 package com.peyrona.mingle.menu.win;
 
 import com.peyrona.mingle.menu.core.AbstractProcessManager;
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilSys;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -20,8 +21,8 @@ public class WinProcessManager extends AbstractProcessManager
     {
         try
         {
-            return UtilSys.executeAndWait( "tasklist", "/?" ).succeeded() &&
-                   UtilSys.executeAndWait( "taskkill", "/?" ).succeeded();
+            return new Execute.Builder( "tasklist", "/?" ).build().executeAndWait().succeeded() &&
+                   new Execute.Builder( "taskkill", "/?" ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -37,8 +38,8 @@ public class WinProcessManager extends AbstractProcessManager
         List<ProcessInfo> lstProcs = new ArrayList<>();
 
         // Single WMIC call to get ALL Java processes with PID and command line
-        ProcessResult result = UtilSys.executeAndWait( "wmic", "process", "where", "name='java.exe'",
-                                                       "get", "processid,commandline", "/format:csv" );
+        ProcessResult result = new Execute.Builder( "wmic", "process", "where", "name='java.exe'",
+                                                       "get", "processid,commandline", "/format:csv" ).build().executeAndWait();
 
         if( ! result.succeeded() )
             throw new IOException( WMIC_ERROR_PREFIX + " error accessing internal processes lsit" );

@@ -210,7 +210,8 @@ final class GridManager
         // The following is always true because if there is no clients and no servers, this node does not belong to a grid:
         // lstServers != null || lstClients != null
 
-        UtilSys.execute( null, () ->
+        UtilSys.executor( true )
+               .execute( () ->
                         {
                             if( lstServers != null )
                                 lstServers.forEach( srv -> srv.broadcast( msg ) );

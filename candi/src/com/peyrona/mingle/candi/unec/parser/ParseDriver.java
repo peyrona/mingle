@@ -2,6 +2,7 @@
 package com.peyrona.mingle.candi.unec.parser;
 
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
+import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.CommandSerializer;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
@@ -25,6 +26,7 @@ public final class ParseDriver extends ParseBase
 {
     public  final        String                script;          // Script name (that holds the driver)
     private final        Set<DriverConfigItem> config;          // { <name1>:<dataType1>, ... , <nameN>:<dataTypeN> }
+    private final        Set<String>           lstExtended;     // Extended types, one of: date, time, list, pair
     private final static String                sKEY = "DRIVER";
 
     //------------------------------------------------------------------------//
@@ -38,13 +40,14 @@ public final class ParseDriver extends ParseBase
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
 
-    public ParseDriver( List<Lexeme> lstToken )
+    public ParseDriver( List<Lexeme> lstToken, IXprEval xprEval )
     {
         super( lstToken, "driver", "script", "config" );
 
-        name   = findID( sKEY );
-        script = getScript( getClauseContents( "script" ) );
-        config = getConfig( getClauseContents( "config" ) );
+        name        = findID( sKEY );
+        lstExtended = xprEval.getExtendedTypes().keySet();
+        script      = getScript( getClauseContents( "script" ) );
+        config      = getConfig( getClauseContents( "config" ) );
     }
 
     //------------------------------------------------------------------------//
@@ -111,7 +114,6 @@ public final class ParseDriver extends ParseBase
         for( List<Lexeme> lstCfg : lstCfgAll )
         {
             String  id     = null;     // A name (it is before AS)
-            String  type;              // e.g. "boolean" or "any"
             boolean bRequi = false;    // REQUIRED clause
 
             if( (lstCfg.size() < 3) || (lstCfg.size() > 4) )
@@ -130,11 +132,15 @@ public final class ParseDriver extends ParseBase
                     addError( "\"AS\" clause expected but found: \""+ lstCfg.get(1).text() +'"', lstCfg.get(1) );
                 }
 
-                type = lstCfg.get(2).text().toLowerCase();
-                type = (UtilColls.toList( "any","number","boolean","string" ).contains( type ) ? type : null);    // NEXT: right now I only admit basic data types. In future all types whould be admited (I'm too fucking tired to do it now)
+                Lexeme lex = lstCfg.get(2);
+                String txt = lex.text().toLowerCase();  // e.g. "boolean" or "any"
 
-                if( type == null )
-                    addError( "Not a valid data type.", lstCfg.get(2) );
+                if( ! lstExtended.contains( txt ) &&
+                    ! UtilStr.contains( "any,boolean,number,string", txt ) )   // At least these basic types must exist in all Une implementations
+                {
+                    txt = null;
+                    addError( "Not a valid data type.", lex );
+                }
 
                 if( lstCfg.size() == 4 )
                 {
@@ -147,8 +153,8 @@ public final class ParseDriver extends ParseBase
                     }
                 }
 
-                if( (id != null) && (type != null) )
-                    lst2Ret.add( new DriverConfigItem( id, type, bRequi ) );
+                if( (id != null) && (txt != null) )
+                    lst2Ret.add( new DriverConfigItem( id, txt, bRequi ) );
             }
         }
 
@@ -179,20 +185,30 @@ public final class ParseDriver extends ParseBase
             this.name     = name.toLowerCase();
             this.type     = type.toLowerCase();
             this.required = required;
-
-            if( ! "boolean,number,string,any".contains( this.type ) )
-                throw new IllegalStateException();
         }
 
-        public boolean isSameType( Lexeme value )
+        public boolean isSameType( Lexeme lexValue )
         {
             switch( type )
             {
                 case "any"    : return true;
-                case "boolean": return value.isBoolean();
-                case "number" : return value.isNumber();
-                case "string" : return value.isString();
-                default       : return false;
+                case "boolean": return lexValue.isBoolean();
+                case "number" : return lexValue.isNumber();
+                case "string" : return lexValue.isString();
+                default       : return false;                 // TODO: allow to use extended data types: it is not easy at all
+//                    // For extended types (date, time, list, pair)
+//                    try         // Try to parse the lexeme text as JSON and check if result type matches
+//                    {
+//                        Object obj = UtilJson.toUneType( lexValue.text() );
+//                        return ! obj.toString().isEmpty() &&
+//                               type.equalsIgnoreCase( obj.getClass().getSimpleName() );
+//                    }
+//                    catch( Exception e )
+//                    {
+//                        // JSON parsing failed - lexeme text is not valid JSON format
+//                        // This can happen if the Lexeme type wasn't properly set to TYPE_EXTENDED
+//                        return false;
+//                    }
             }
         }
 

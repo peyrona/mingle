@@ -4,8 +4,8 @@ package com.peyrona.mingle.lang.xpreval.functions;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilJson;
-import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilType;
+import java.time.DateTimeException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -15,6 +15,7 @@ import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
 /**
+ * Creates a new instance of this class, which represents a local date.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -28,15 +29,26 @@ public final class date
 
     //------------------------------------------------------------------------//
 
+    /**
+     * Checks if the given string is a valid ISO date (YYYY-MM-DD).
+     *
+     * @param sDate The string to check.
+     * @return {@code true} if the string represents a valid date, {@code false} otherwise.
+     */
     public static boolean isValid( String sDate )
     {
         if( sDate == null )
             return false;
 
-        sDate = sDate.trim();
-
-        return sDate.length() == 10 &&
-               areDigits( sDate.substring( 0, 4 ) + sDate.substring( 5, 7 ) + sDate.substring( 8, 10 ) );
+        try
+        {
+            LocalDate.parse( sDate.trim() );
+            return true;
+        }
+        catch( DateTimeParseException e )
+        {
+            return false;
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -45,13 +57,14 @@ public final class date
      * Class constructor.<br>
      * A date can be created in the following ways:
      * <ul>
-     *     <li>String: date( "2022-06-19" )</li>
-     *     <li>Numbers: date( 2022,06,19 )</li>
-     *     <li>Empty: date() --> today's date</li>
+     *     <li>String: <code>date( "2022-06-19" )</code></li>
+     *     <li>JSON from <code>serialize().toString()</code>: <code>date( "{\"class\":\"...\", \"data\":\"2022-06-19\"}" )</code></li>
+     *     <li>Numbers: <code>date( 2022, 6, 19 )</code></li>
+     *     <li>Empty: <code>date()</code> returns today's date</li>
      * </ul>
      * Any other combination of values will produce an error.
      *
-     * @param args One or more objects.
+     * @param args Optional arguments to initialize the date.
      */
     public date( Object... args )
     {
@@ -63,11 +76,25 @@ public final class date
         {
             try
             {
-                if( (args.length == 1) && (args[0] instanceof String) )       // e.g.: "2022-06-19"
+                if( (args.length == 1) && (args[0] instanceof String) )
                 {
-                    this.date = LocalDate.parse( args[0].toString().trim() );
+                    String s = args[0].toString().trim();
+
+                    // Try JSON deserialization first (from serialize().toString())
+                    if( s.charAt( 0 ) == '{' )
+                    {
+                        try
+                        {
+                            deserialize( s );
+                            return;
+                        }
+                        catch( Exception e ) { /* Not valid JSON from serialize(), try date string */ }
+                    }
+
+                    // Parse as ISO date string, e.g.: "2022-06-19"
+                    this.date = LocalDate.parse( s );
                 }
-                else                                                          // e.g.: 2022,06,19
+                else   // e.g.: 2022,06,19
                 {
                     if( args.length != 3 )
                         throw new MingleException( MingleException.INVALID_ARGUMENTS );
@@ -76,15 +103,12 @@ public final class date
                     int month = UtilType.toInteger( args[1] );
                     int day   = UtilType.toInteger( args[2] );
 
-                    if( ! UtilReflect.areAll( Number.class, year, month, day ) )
-                        throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
-
                     this.date = LocalDate.of( year, month, day );
                 }
             }
-            catch( DateTimeParseException | MingleException exc )
+            catch( DateTimeException | MingleException exc )
             {
-                throw new MingleException( "Invalid date value" );
+                throw new MingleException( "Invalid date" );
             }
         }
     }
@@ -122,51 +146,82 @@ public final class date
     }
 
     /**
+     * <p>
      * Changes current date day of month.
-     * @param n New day.
+     *
+     * @param n New day value (1-31).
+     *
      * @return Itself.
+     *
      */
     public date day( Object n )
     {
-        date = LocalDate.of( date.getYear(),
-                             date.getMonthValue(),
-                             UtilType.toInteger( n ) );
+        try
+        {
+            date = date.withDayOfMonth( UtilType.toInteger( n ) );
+        }
+        catch( DateTimeException exc )
+        {
+            throw new MingleException( "Invalid day" );
+        }
 
         return this;
     }
 
     /**
+
      * Changes current date month.
-     * @param n New month.
+
+     * @param n New month value (1-12).
+
      * @return Itself.
+
      */
     public date month( Object n )
     {
-        date = LocalDate.of( date.getYear(),
-                             UtilType.toInteger( n ),
-                             date.getDayOfMonth() );
+        try
+        {
+            date = date.withMonth( UtilType.toInteger( n ) );
+        }
+        catch( DateTimeException exc )
+        {
+            throw new MingleException( "Invalid month" );
+        }
 
         return this;
     }
 
     /**
+
      * Changes current date year.
-     * @param n New year.
+
+     * @param n New year value.
+
      * @return Itself.
+
      */
     public date year( Object n )
     {
-        date = LocalDate.of( UtilType.toInteger( n ),
-                             date.getMonthValue(),
-                             date.getDayOfMonth() );
+        try
+        {
+            date = date.withYear( UtilType.toInteger( n ) );
+        }
+        catch( DateTimeException exc )
+        {
+            throw new MingleException( "Invalid year" );
+        }
 
         return this;
     }
 
     /**
+
      * Checks if the year is a leap year, according to the ISO proleptic calendar system rules.
+
      *
-     * @return true if the year contained in this date is leap.
+
+     * @return {@code true} if the year contained in this date is leap, {@code false} otherwise.
+
      */
     public boolean isLeap()
     {
@@ -174,10 +229,15 @@ public final class date
     }
 
     /**
+
      * Returns the numeric value for the day of the week.<br>
+
      * The int value follows the ISO-8601 standard, from 1 (Monday) to 7 (Sunday).
+
      *
+
      * @return The numeric value for the day of the week.
+
      */
     public int weekday()    // Named after Excel
     {
@@ -185,31 +245,35 @@ public final class date
     }
 
     /**
-     * Add or substract days to current date.
+
+     * Add or subtract days to current date.
+
      *
-     * @param days Days to add or substract.
+
+     * @param days Number of days to add or subtract.
+
      * @return Itself.
+
      */
     @Override
     public date move( Object days )
     {
-        int n = UtilType.toInteger( days );
-
-        if( n != 0 )
-        {
-            date = (n > 0) ? date.plusDays( n )
-                           : date.minusDays( n * -1 );
-        }
-
+        date = date.plusDays( UtilType.toLong( days ) );
         return this;
     }
 
     /**
+
      * Returns the amount of days between this date and passed date.
+
      *
+
      * @param d The other date to calculate the difference in days.
+
      * @return The amount of days between this date and passed date.
+
      */
+
     @Override
     public int duration( date d )
     {
@@ -220,17 +284,29 @@ public final class date
     // OVERRIDEN
 
     /**
+
      * Compares this date to another date.
+
      * <p>
+
      * Returns:
+
      * <ul>
-     *    <li> 1 : when this date is bigger (ahead in time) than passed date.</li>
-     *    <li> 0 : when this date is the same as the one passed date.</li>
-     *    <li>-1 : when this date is lower (before in time) than passed date.</li>
+
+     *    <li> 1 : when this date is ahead in time of passed date.</li>
+
+     *    <li> 0 : when this date is the same as the one passed.</li>
+
+     *    <li>-1 : when this date is before in time of passed date.</li>
+
      * </ul>
+
      * @param o Date to compare (argument must be of type date).
+
      * @return 1, 0 or -1
+
      */
+
     @Override
     public int compareTo( Object o )
     {
@@ -241,8 +317,13 @@ public final class date
     }
 
     /**
+
+     * Returns the date in ISO format: "YYYY-MM-DD" (e.g., "2022-06-19").
+
      *
-     * @return
+
+     * @return The date as an ISO date string.
+
      */
     @Override
     public String toString()
@@ -250,23 +331,15 @@ public final class date
         return date.format( DateTimeFormatter.ISO_DATE );
     }
 
-    /**
-     *
-     * @return
-     */
     @Override
     public int hashCode()
     {
         int hash = 7;
             hash = 29 * hash + Objects.hashCode( this.date );
+
         return hash;
     }
 
-    /**
-     *
-     * @param obj
-     * @return
-     */
     @Override
     public boolean equals(Object obj)
     {
@@ -299,39 +372,25 @@ public final class date
         UtilJson json  = parse( o );
         String   sDate = json.getString( "data", null );     // At this point it is never null
 
-        if( ! isValid( sDate ) )
-            throw new MingleException( "Invalid date: "+ sDate );
-
-        int year  = UtilType.toInteger( sDate.substring( 0, 4 ) );
-        int month = UtilType.toInteger( sDate.substring( 5, 7 ) );
-        int day   = UtilType.toInteger( sDate.substring( 8 ) );
-
-        date = LocalDate.of( year, month, day );
+        try
+        {
+            date = LocalDate.parse( sDate );
+        }
+        catch( DateTimeParseException exc )
+        {
+            throw new MingleException( "Invalid date: " + sDate );
+        }
 
         return this;
     }
 
     public LocalDate asLocalDate()
     {
-        return LocalDate.of( date.getYear(),
-                             date.getMonth(),
-                             date.getDayOfMonth() );    // Defensive copy
+        return date;
     }
 
     public LocalDateTime asLocalDateTime( LocalTime time )
     {
         return LocalDateTime.of( date, time );
-    }
-
-    //------------------------------------------------------------------------//
-    // PRIVATE SCOPE
-
-    private static boolean areDigits( String s )
-    {
-        for( int n = 0; n < s.length(); n++ )
-            if( s.charAt( n ) < '0' || s.charAt( n ) > '9' )
-                return false;
-
-        return true;
     }
 }

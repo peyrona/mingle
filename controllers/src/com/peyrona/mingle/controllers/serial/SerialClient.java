@@ -416,15 +416,16 @@ public final class SerialClient extends ControllerBase
         }
         else
         {
-            UtilSys.execute( null, () ->
+            UtilSys.executor( true )
+                   .execute( () ->
                             {
                                 try
                                 {
                                     client.readOnce();
                                 }
-                                catch( IOException ex )
+                                catch( Exception exc )
                                 {
-                                    sendReadError( ex );
+                                    sendReadError( exc );
                                 }
                             } );
         }
@@ -445,7 +446,8 @@ public final class SerialClient extends ControllerBase
         if( client == null )
             return;
 
-        UtilSys.execute( null, () ->
+        UtilSys.executor( true )
+               .execute( () ->
                         {
                             try
                             {

@@ -43,8 +43,8 @@ public class Device
 {
     private final Map<String,Object> deviceInit;
     private final String[]           groups;
-    private final DeviceValue          value;
-    private final Map<String,Object> driverInit;
+    private final DeviceValue        value;
+    private final Map<String,Object> driverConf;
     private final String             driverName;
     private final long               downtime;
 
@@ -59,11 +59,11 @@ public class Device
      *
      * @param deviceName Device's unique name.
      * @param driverName
-     * @param driverInit Driver's configuration for this device.
+     * @param driverConf Driver's configuration for this device.
      * @param deviceInit Device's configuration.
      */
     Device( String deviceName, Map<String,Object> deviceInit,
-            String driverName, Map<String,Object> driverInit )
+            String driverName, Map<String,Object> driverConf )
     {
         super( deviceName );     // A DEVICE can be created from an SCRIPT and can be done on-the-fly
 
@@ -74,7 +74,7 @@ public class Device
 
         Float delta = 0f;
 
-        if( (deviceInit != null) && deviceInit.containsKey( "delta" ) )   // Do not move this if to DeviceValue class
+        if( (deviceInit != null) && deviceInit.containsKey( "delta" ) )   // Do not move this
         {
             delta = ((Number) deviceInit.get( "delta" )).floatValue();
             delta = Math.abs( delta );
@@ -82,7 +82,7 @@ public class Device
 
         this.value      = new DeviceValue( delta );
         this.driverName = driverName;
-        this.driverInit = UtilColls.isEmpty( driverInit ) ? null : Collections.unmodifiableMap( driverInit );    // Acts as a defensive copy
+        this.driverConf = UtilColls.isEmpty( driverConf ) ? null : Collections.unmodifiableMap( driverConf );    // Acts as a defensive copy
         this.deviceInit = UtilColls.isEmpty( deviceInit ) ? null : Collections.unmodifiableMap( deviceInit );    // Acts as a defensive copy
 
         // 'downtime' is the maximum amount of time that a device can be without updating its value prior to consider it could be malfunctioning
@@ -177,7 +177,7 @@ public class Device
     @Override
     public Map<String,Object> getDriverInit()
     {
-        return driverInit;     // No problmen if map is null
+        return driverConf;     // No problmen if map is null
     }
 
     @Override

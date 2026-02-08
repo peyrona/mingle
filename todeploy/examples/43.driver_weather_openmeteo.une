@@ -26,16 +26,16 @@ DEVICE console
 
 
 WHEN weather
-THEN console SET "WEATHER FORECAST AT LATITUDE = {*_LATITUDE*} and LONGITUDE = {*_LONGITUDE*}"
-     console SET "Temperature   : "+ weather:get("temperature"     )         +"ºC"
-     console SET "Feels like    : "+ weather:get("temperature_feel")         +"ºC"
-     console SET "Clouds        : "+ weather:get("clouds"          )         +"%"
-     console SET "Humidity      : "+ weather:get("humidity"        ):floor() +"%"
-     console SET "Precipitation : "+ weather:get("precipitation"   ):floor() +"%"
-     console SET "Pressure      : "+ weather:get("pressure"        ):floor() +" hPa"
-     console SET "Wind speed    : "+ weather:get("windspeed"       ):floor() +" km/h"
-     console SET "Wind direction: "+ weather:get("wind_direction"  ):floor() +" degrees"
-     console SET "Raw data      : "+ weather + newLine()
-     exit()
+THEN console SET "WEATHER FORECAST AT LATITUDE = {*_LATITUDE*} and LONGITUDE = {*_LONGITUDE*}" + \
+                 "Temperature   : "+ weather:get("temperature"     )         +"ºC"             + \
+                 "Feels like    : "+ weather:get("temperature_feel")         +"ºC"             + \
+                 "Clouds        : "+ weather:get("clouds"          )         +"%"              + \
+                 "Humidity      : "+ weather:get("humidity"        ):floor() +"%"              + \
+                 "Precipitation : "+ weather:get("precipitation"   ):floor() +"%"              + \
+                 "Pressure      : "+ weather:get("pressure"        ):floor() +" hPa"           + \
+                 "Wind speed    : "+ weather:get("windspeed"       ):floor() +" km/h"          + \
+                 "Wind direction: "+ weather:get("wind_direction"  ):floor() +" degrees"       + \
+                 "Raw data      : "+ weather
+             exit()
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

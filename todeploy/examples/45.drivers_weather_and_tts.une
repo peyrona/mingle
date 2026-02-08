@@ -15,7 +15,7 @@ THEN weather_info SET weather    # store the weather updates (hourly) into a Cel
 
 WHEN (clock OR weather_info) \                     # We send info to TTS every time the clock or the weather info are updated.
      AND weather_info:type() IS "pair"             # But only if weather_info was already updated (depends on WebService response).
-THEN TTS SET "Weather now is "+ weather_codes:get( weather_info:get( "code" ) ) + ".  " + \
+THEN TTS SET "Weather now is "+ weather_codes:get( weather_info:get( "code" ):int() ) + ".  " + \
              "Current temperature is "+ weather_info:get( "temperature" ) + " Celsius degrees.  "+ \
              "Currently the precipitation probability is "+ weather_info:get( "precipitation" ):format( "##" ) +" percent"
 
@@ -56,7 +56,7 @@ DEVICE weather_codes
 DEVICE weather_info
     DRIVER CellSetDriver
         CONFIG
-            value SET ""
+            value SET " "
 
 DEVICE weather
     DRIVER OpenMeteoDriver

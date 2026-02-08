@@ -106,9 +106,10 @@ public final class HttpClient extends ControllerBase
     private static final int MIN_INTERVAL_SECS    = 1;
 
     // Shared HTTP client (thread-safe, reusable)
-    private static final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
-            .followRedirects( java.net.http.HttpClient.Redirect.NORMAL )
-            .build();
+    private static final java.net.http.HttpClient httpClient =
+                         java.net.http.HttpClient.newBuilder()
+                                                 .followRedirects( java.net.http.HttpClient.Redirect.NORMAL )
+                                                 .build();
 
     // Instance state
     private final Object lock = new Object();
@@ -228,13 +229,13 @@ public final class HttpClient extends ControllerBase
             if( intervalMs >= 1000 )
             {
                 // Schedule periodic polling
-                pollingTimer = UtilSys.executeWithDelay( getClass().getName() + "-" + getDeviceName(),
-                                                         intervalMs,        // Initial delay
-                                                         intervalMs,        // Period
-                                                         () -> read() );
+                pollingTimer = UtilSys.executor( false )
+                                      .name( getClass().getName() + "-" + getDeviceName() )
+                                      .delay( intervalMs )     // Initial delay
+                                      .rate( intervalMs )      // Period
+                                      .execute( () -> read() );
 
-                sendGenericError( ILogger.Level.INFO,
-                    "HTTP polling started: " + get( KEY_URI ) + " every " + (intervalMs / 1000) + "s" );
+                sendGenericError( ILogger.Level.INFO, "HTTP polling started: " + get( KEY_URI ) + " every " + (intervalMs / 1000) + "s" );
             }
             else
             {
@@ -312,7 +313,8 @@ public final class HttpClient extends ControllerBase
             return;
         }
 
-        UtilSys.execute( null, () -> executeWrite( (pair) newValue ) );
+        UtilSys.executor( true )
+               .execute( () -> executeWrite( (pair) newValue ) );
     }
 
     //------------------------------------------------------------------------//

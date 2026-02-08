@@ -296,7 +296,7 @@ public final class TransUnit
                 }
             }
         }
-        
+
         ParseUse.clean();    // To free RAM
 
         // In this second phase all other commands (except INCLUDE and USE) are processed
@@ -307,7 +307,7 @@ public final class TransUnit
             String    key = lstCmdLexemes.get(0).text();    // cmd keyword
 
                  if( ParseScript.is(  key ) )  cmd = new ParseScript( lstCmdLexemes );
-            else if( ParseDriver.is(  key ) )  cmd = new ParseDriver( lstCmdLexemes );
+            else if( ParseDriver.is(  key ) )  cmd = new ParseDriver( lstCmdLexemes, xprEval );
             else if( ParseDevice.is(  key ) )  cmd = new ParseDevice( doUnits( lstCmdLexemes ), xprEval );    // Only DEVICE and RULE can have
             else if( ParseRule.is(    key ) )  cmd = new ParseRule(   doUnits( lstCmdLexemes ), xprEval );    // temperature and time units
             else if( ParseInclude.is( key ) )  cmd = null;                                                    // Processed at constructor

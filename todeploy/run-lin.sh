@@ -52,6 +52,12 @@ init_environment()
     if isRoot; then
         chmod -R 777 log      # Proper directory permissions: rwxr-xr-x
     fi
+
+    # Ensure DISPLAY is set for GUI applications (needed when launched from .desktop files)
+    if [ -z "${DISPLAY:-}" ]; then
+        export DISPLAY=":0"
+        log "WARN" "DISPLAY was not set. Defaulting to :0"
+    fi
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -204,7 +210,8 @@ main()
     fi
 
     # All arguments passed to this script will be forwarded to the application.
-    "$JAVA_CMD" -jar lib/menu.jar "$@"
+    # Use setsid to create a new session, so GUI apps survive terminal closure
+    setsid "$JAVA_CMD" -jar lib/menu.jar "$@"
 }
 
 main "$@"

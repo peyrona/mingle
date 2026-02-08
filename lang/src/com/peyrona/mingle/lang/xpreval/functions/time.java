@@ -8,16 +8,13 @@ import com.peyrona.mingle.lang.japi.UtilDateTime;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
-import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.time.DateTimeException;
-import java.time.Duration;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
-import java.time.format.DateTimeParseException;
 import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 
@@ -41,6 +38,7 @@ public final class time
      * A time can be created in the following ways:
      * <ul>
      *     <li>A string with following format: "hh[:mm[:ss]]"</li>
+     *     <li>JSON from serialize().toString(): time( "{\"class\":\"...\", \"data\":\"12:30:42\"}" )</li>
      *     <li>A number representing elapsed milliseconds since midnight</li>
      *     <li>2 or 3 numbers: hours (0 to 23), minutes (0 to 59) and optionally seconds (0 to 59, if absent 0 is used)</li>
      * </ul>
@@ -52,15 +50,29 @@ public final class time
     {
         if( UtilColls.isEmpty( args ) )
         {
-            this.time = LocalTime.now();
+            this.time = LocalTime.now().withNano( 0 );
         }
         else
         {
             try
             {
-                if( (args.length == 1) && (args[0] instanceof String) )          // e.g: "15:30:42"
+                if( (args.length == 1) && (args[0] instanceof String) )
                 {
-                    this.time = toTime( args[0].toString().trim() );
+                    String s = args[0].toString().trim();
+
+                    // Try JSON deserialization first (from serialize().toString())
+                    if( s.charAt( 0 ) == '{' )
+                    {
+                        try
+                        {
+                            deserialize( s );
+                            return;
+                        }
+                        catch( Exception e ) { /* Not valid JSON from serialize(), try time string */ }
+                    }
+
+                    // Parse as time string, e.g: "15:30:42"
+                    this.time = toTime( s );
                 }
                 else if( (args.length == 1) && (args[0] instanceof Number) )     // Seconds since midnight (can not use millis because time precission is seconds)
                 {
@@ -78,7 +90,7 @@ public final class time
                     this.time = LocalTime.of( hour, minute, second );
                 }
             }
-            catch( DateTimeParseException | MingleException exc )
+            catch( DateTimeException | MingleException exc )
             {
                 throw new MingleException( "Invalid time" );
             }
@@ -151,14 +163,7 @@ public final class time
      */
     public time addHours( Object n )
     {
-        int val = UtilType.toInteger( n );
-
-        if( val != 0 )
-        {
-            time = (val > 0) ? time.plusHours( val )
-                             : time.minusHours( val * -1 );
-        }
-
+        time = time.plusHours( UtilType.toLong( n ) );
         return this;
     }
 
@@ -169,14 +174,7 @@ public final class time
      */
     public time addMinutes( Object n )
     {
-        int val = UtilType.toInteger( n );
-
-        if( val != 0 )
-        {
-            time = (val > 0) ? time.plusMinutes( val )
-                             : time.minusMinutes( val * -1 );
-        }
-
+        time = time.plusMinutes( UtilType.toLong( n ) );
         return this;
     }
 
@@ -217,7 +215,7 @@ public final class time
      * Returns the sunset for the given location, for today and for the default time-zone,
      *
      * @param latitude the latitude of the location in degrees.
-     * @param longitude
+     * @param longitude the longitude of the location in degrees.
      * @return The sunset at specified geoposition.
      */
     public time sunSet( Object latitude, Object longitude )
@@ -226,7 +224,7 @@ public final class time
     }
 
     /**
-     * Returns the sunset
+     * Returns the sunset.
      *
      * @param latitude the latitude of the location in degrees.
      * @param longitude the longitude of the location in degrees.
@@ -247,9 +245,9 @@ public final class time
     }
 
     /**
-     * Returns he moment when the Sun crosses the local meridian and reaches its highest
+     * Returns the moment when the Sun crosses the local meridian and reaches its highest
      * position in the sky, for the given location, for today and for the default time-zone,
-     * except at the poles (AKA  solar noon or high noon).
+     * except at the poles (AKA solar noon or high noon).
      *
      * @param latitude the latitude of the location in degrees.
      * @param longitude the longitude of the location in degrees (West is negative).
@@ -261,8 +259,8 @@ public final class time
     }
 
     /**
-     * Returns he moment when the Sun crosses the local meridian and reaches its highest position in the sky,
-     * except at the poles (AKA  solar noon or high noon).
+     * Returns the moment when the Sun crosses the local meridian and reaches its highest position in the sky,
+     * except at the poles (AKA solar noon or high noon).
      *
      * @param latitude the latitude of the location in degrees.
      * @param longitude the longitude of the location in degrees (West is negative).
@@ -291,7 +289,7 @@ public final class time
 	 *
 	 * @param latitude  the latitude of the location in degrees.
 	 * @param longitude the longitude of the location in degrees (West is negative).
-     * @return The astronomical twilight time for the given date and given location for today.
+     * @return The astronomical twilight time for specified geoposition for today.
      */
     public time twilightSunRise( Object latitude, Object longitude )
     {
@@ -306,7 +304,7 @@ public final class time
 	 * @param longitude the longitude of the location in degrees (West is negative).
      * @param dateOrZone Either a valid date (as an instance of class date or as an string) or a time zone as an String.
      *                   If a date is passed, the zone will be the default one; and if a time-zone is passed, the date will be today.
-     * @return The astronomical twilight time for the given date and given location.
+     * @return The astronomical twilight time for the given date and location.
      */
     public time twilightSunRise( Object latitude, Object longitude, Object dateOrZone )
     {
@@ -329,7 +327,7 @@ public final class time
      *
 	 * @param latitude  the latitude of the location in degrees.
 	 * @param longitude the longitude of the location in degrees (West is negative).
-     * @return The astronomical twilight time for the given date and given location for today.
+     * @return The astronomical twilight time for specified geoposition for today.
      */
     public time twilightSunSet( Object latitude, Object longitude )
     {
@@ -344,7 +342,7 @@ public final class time
 	 * @param longitude The longitude of the location in degrees (West is negative).
      * @param dateOrZone Either a valid date (as an instance of class date or as an string) or a time zone as an String.
      *                   If a date is passed, the zone will be the default one; and if a time-zone is passed, the date will be today.
-     * @return The astronomical twilight time for the given date and given location.
+     * @return The astronomical twilight time for specified geoposition and date.
      */
     public time twilightSunSet( Object latitude, Object longitude, Object dateOrZone )
     {
@@ -435,21 +433,14 @@ public final class time
     // OVERRIDEN
 
     /**
-     * Shifts current time passed number of seconds.
-     * @param seconds Jow many seconds to add or substract to current time.
+     * Shifts current time by adding or subtracting the specified number of seconds.
+     * @param seconds Number of seconds to add or subtract.
      * @return Itself.
      */
     @Override
     public time move( Object seconds )
     {
-        int n = UtilType.toInteger( seconds );
-
-        if( n != 0 )
-        {
-            time = (n > 0) ? time.plusSeconds( n )
-                           : time.minusSeconds( n * -1 );
-        }
-
+        time = time.plusSeconds( UtilType.toLong( seconds ) );
         return this;
     }
 
@@ -467,16 +458,17 @@ public final class time
     @Override
     public int compareTo( Object o )
     {
-        if( ! (o instanceof time) )
-            throw new MingleException( "Expecting 'time', but '"+ o.getClass().getSimpleName() +"' found." );
+        if( o instanceof time )
+            return time.compareTo( ((time)o).time );
 
-        Duration duration = Duration.between( time, ((time)o).time );
-        long     seconds  = duration.getSeconds();
-
-        return (seconds == 0) ? 0
-                              : (seconds > 0) ? -1 : 1;
+        throw new MingleException( "Expecting 'time', but '"+ o.getClass().getSimpleName() +"' found." );
     }
 
+    /**
+     * Returns the time in "HH:mm:ss" format (e.g., "12:30:42").
+     *
+     * @return The time as a formatted string.
+     */
     @Override
     public String toString()
     {
@@ -564,14 +556,11 @@ public final class time
     // PRIVATE
 
     /**
-     * Receives a string representing a date in ANSI format (yyyy-mm-dd) and
-     * returns the date represented.
-     * <p>
-     * The string may have different separator characters, these will be ignored.
-     * So for example, valid strings are: 2015/03/27, 2015-03-27, 2015.03.27.
+     * Receives a string representing a time in "HH:mm:ss" format and
+     * returns the LocalTime represented.
      *
-     * @param sDateANSI
-     * @return
+     * @param s Time string to parse.
+     * @return The parsed LocalTime.
      */
     private LocalTime toTime( String s )
     {

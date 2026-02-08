@@ -274,7 +274,9 @@ function Main {
     }
 
     # All arguments passed to this script will be forwarded to the application.
-    & $script:JavaCmd -jar $menuJar @Arguments
+    # Use Start-Process to launch independently, so GUI apps survive console closure
+    $javaArgs = @("-jar", $menuJar) + $Arguments
+    Start-Process -FilePath $script:JavaCmd -ArgumentList $javaArgs
 }
 
 # Entry point

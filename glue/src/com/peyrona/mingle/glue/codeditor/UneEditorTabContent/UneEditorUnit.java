@@ -76,9 +76,9 @@ public final class UneEditorUnit extends JSplitPane
             {
                 if( is1stTime && (ce.getComponent() == UneEditorUnit.this) )
                 {
-                    UtilSys.execute( null,
-                                     250,   // Needed
-                                     () -> SwingUtilities.invokeLater( () -> UneEditorUnit.this.setDividerLocation( 1d ) ) );
+                    UtilSys.executor( true )
+                           .delay( 250 )   // Needed
+                           .execute( () -> SwingUtilities.invokeLater( () -> UneEditorUnit.this.setDividerLocation( 1d ) ) );
 
                     is1stTime = false;
                 }

@@ -95,7 +95,7 @@ public final class UneEditorPane extends RTextScrollPane
         SyntaxScheme scheme = rsta.getSyntaxScheme();
 
         // Comments (gray)
-        scheme.getStyle( Token.COMMENT_EOL ).foreground = new Color( 100, 100, 100 );
+        scheme.getStyle( Token.COMMENT_EOL ).foreground = new Color( 120, 120, 120 );
 
         // Functions and methods (yellow-ish)
         scheme.getStyle( Token.FUNCTION ).foreground = new Color( 220, 220, 170 );

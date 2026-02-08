@@ -27,6 +27,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
 import java.awt.image.BufferedImage;
+import java.awt.image.ImageObserver;
 import java.io.File;
 import java.io.IOException;
 import java.lang.reflect.InvocationTargetException;
@@ -1248,6 +1249,7 @@ public final class JTools
      * Opens a system-styled file chooser dialog starting in specified folder.
      * Supports single or multiple file selection based on bMulti parameter.
      * Multiple selection is only available when FileType.Une is included in types.
+     * On Linux, uses a pure Swing dialog instead of OS native dialog.
      * </p>
      *
      * @param invoker parent component for dialog; if null, uses focused window
@@ -1260,7 +1262,7 @@ public final class JTools
     {
         String sTitle = "Select one "+ (bMulti ? "or more files" : "file") +" to load";
 
-        JFileChooser jfc = new JFileChooser();        // Opens system L&F dialog (because this app uses the system L&F)
+        JFileChooser jfc = new JFileChooser();
                      jfc.setDialogTitle( sTitle );
                      jfc.setDialogType( JFileChooser.OPEN_DIALOG );
                      jfc.setCurrentDirectory( ((fFolder == null) ? UtilSys.fHomeDir : fFolder) );
@@ -1294,6 +1296,7 @@ public final class JTools
      * If file parameter is null, displays a file chooser dialog for user to select
      * save location. Automatically adds appropriate file extension based on FileType.
      * If file is provided, saves directly to that location.
+     * On Linux, uses a pure Swing dialog instead of OS native dialog.
      * </p>
      *
      * @param type determines file extension and dialog title

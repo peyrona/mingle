@@ -105,8 +105,8 @@ public final class   Excel
         if( isFaked() || isInvalid() || (deviceValue == null) || (book == null) || (sheet == null) )
             return;
 
-        UtilSys.execute( null,
-                         () ->
+        UtilSys.executor( true )
+               .execute( () ->
                             {
                                 synchronized( Excel.this )     // Ensure thread-safe access to workbook and counters
                                 {

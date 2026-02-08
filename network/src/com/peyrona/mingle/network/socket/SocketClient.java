@@ -152,7 +152,9 @@ public final class SocketClient
             client = socket;
             input  = new BufferedReader( new InputStreamReader( client.getInputStream(), StandardCharsets.UTF_8 ) );
             output = new PrintWriter( client.getOutputStream(), true );
-            future = UtilSys.execute( "network:socketclient-reader", new ThreadReader() );
+            future = UtilSys.executor( false )
+                            .name( "network:socketclient-reader" )
+                            .execute( new ThreadReader() );
 
             forEachListener( l -> ((INetClient.IListener) l).onConnected( SocketClient.this ) );
             return true;

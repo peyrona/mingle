@@ -257,9 +257,16 @@ public final class Stick
             nDownTime = (nDownTime < 1000 ? 1000 : nDownTime);
 
             if( deviMgr.named( sDownDevice ) != null )
-                UtilSys.executeWithDelay( null, nDownTime, nDownTime, () -> checkDowntimedDevices( sDownDevice ) );
+            {
+                UtilSys.executor( true )
+                       .delay( nDownTime )
+                       .rate( nDownTime )
+                       .execute( () -> checkDowntimedDevices( sDownDevice ) );
+            }
             else
+            {
                 log( ILogger.Level.WARNING, '"'+ sDownDevice +"\" device does not exist; downtimed task not initiated" );
+            }
         }
 
         return this;
@@ -1065,8 +1072,9 @@ public final class Stick
             if( ! isGridNode() || gridMgr.isDeaf() )
                 return;
 
-            UtilSys.execute( getClass().getSimpleName() +":onMessage:"+ message,
-                             () -> processMsg( origin, client, message ) );
+            UtilSys.executor( true )
+                   .name( getClass().getSimpleName() +":onMessage:"+ message )
+                   .execute( () -> processMsg( origin, client, message ) );
         }
 
         private void processMsg( INetServer origin, INetClient client, String message )

@@ -138,15 +138,6 @@ public interface IXprEval
     boolean isFuturing();
 
     /**
-     * Returns true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
-     *
-     * @return true if this expression has futures (AFTER and/or WITHIN) and they are in progress.
-     * @deprecated Use {@link #isFuturing()} instead. This method name has a typo.
-     */
-    @Deprecated
-    boolean isFutureing();
-
-    /**
      * Cancels an expression that is being evaluated.
      *
      * @return Itself.

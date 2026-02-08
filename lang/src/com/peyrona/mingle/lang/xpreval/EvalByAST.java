@@ -10,6 +10,12 @@ import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
+import com.peyrona.mingle.lang.xpreval.functions.date;
+import com.peyrona.mingle.lang.xpreval.functions.list;
+import com.peyrona.mingle.lang.xpreval.functions.pair;
+import com.peyrona.mingle.lang.xpreval.functions.time;
+import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
+import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -74,7 +80,6 @@ final class EvalByAST
     private final    boolean             hasChangedDeviceFn;
     private final    boolean             hasWithin;                              // hasAfter is not really needed
     private volatile boolean             hasAllVars;
-    private final    String              sToString;
     private final    int                 nHashCode;
 
     //------------------------------------------------------------------------//
@@ -151,14 +156,14 @@ final class EvalByAST
             }
         }
 
+        String sToString = (root == null) ? "" : toString( root );
+
         executor           = exec;
         isBoolean          = _isBool_();
         hasAllVars         = mapVars.isEmpty();    // Some expressions does not have variables
         hasWithin          = bWithin;
         hasChangedDeviceFn = bHasChgDevFn;
-
-        sToString = (root == null) ? "" : toString( root );
-        nHashCode = 37 * 3 + sToString.hashCode();
+        nHashCode          = 37 * 3 + sToString.hashCode();
 
 //System.out.println( "Original: " + XprUtils.toString( lstInfix ) );
 //System.out.println( "AST:\n" + toString() );
@@ -311,13 +316,13 @@ final class EvalByAST
 
         final EvalByAST other = (EvalByAST) obj;
 
-        return sToString.equals( other.sToString );
+        return toString().equals( other.toString() );
     }
 
     @Override
     public String toString()
     {
-        return sToString;
+        return toString( root );
     }
 
     //------------------------------------------------------------------------//
@@ -373,7 +378,8 @@ final class EvalByAST
         if( root == null )
             return false;
 
-        XprToken token = (root.isAfter() || root.isWithin()) ? root.left().token() : root.token();
+        XprToken token    = (root.isAfter() || root.isWithin()) ? root.left().token() : root.token();
+        boolean  isMethod = false;
 
         if( token.isType( XprToken.BOOLEAN ) )
             return true;
@@ -382,6 +388,7 @@ final class EvalByAST
         {
             if( token.isText( Language.SEND_OP ) )
             {
+                isMethod = true;
                 ASTNode node = root.right();     // This is a function and will be analized below (in this method)
 
                 if( node != null )
@@ -399,7 +406,7 @@ final class EvalByAST
 
         if( token.isType( XprToken.FUNCTION ) )
         {
-            Class c = StdXprFns.getReturnType( token.text(), -1 );
+            Class c = StdXprFns.getReturnType( token.text(), -1, isMethod );
 
             return (c == Boolean.class);
         }
@@ -430,6 +437,20 @@ final class EvalByAST
 
     private boolean validate( ASTNode node, long currentMaxDelay )
     {
+        return validate( node, currentMaxDelay, false, false );
+    }
+
+    /**
+     * Recursively validates the AST tree.
+     *
+     * @param node            Current node being validated.
+     * @param currentMaxDelay Maximum delay from ancestor AFTER/WITHIN nodes (for nesting check).
+     * @param insideAfter     True if an ancestor node is an AFTER.
+     * @param insideWithin    True if an ancestor node is a WITHIN.
+     * @return True if the subtree is valid.
+     */
+    private boolean validate( ASTNode node, long currentMaxDelay, boolean insideAfter, boolean insideWithin )
+    {
         if( node == null )
             return true;
 
@@ -446,11 +467,357 @@ final class EvalByAST
             currentMaxDelay = delay;
         }
 
+        // #10: Detect WITHIN nested inside AFTER (semantically confusing)
+        if( node.isAfter() && insideWithin )
+            lstErrors.add( new CodeError( "AFTER nested inside WITHIN: the AFTER delay may exceed the enclosing WITHIN window", node.token() ) );
+
+        if( node.isWithin() && insideAfter )
+            lstErrors.add( new CodeError( "WITHIN nested inside AFTER: the enclosing AFTER may expire before the WITHIN window completes", node.token() ) );
+
+        // #6: AFTER/WITHIN sub-expression without variables is pointless
+        if( node.isAfter() || node.isWithin() )
+        {
+            if( ! hasVariables( node.left() ) )
+                lstErrors.add( new CodeError( node.token().text().toUpperCase() +" sub-expression has no variables: the delay is pointless", node.token() ) );
+        }
+
+        // #2: Type compatibility for numeric-only operators with constant operands
+        // #3: Division by zero on constants (mod, floor, ceiling)
+        bValid &= validateOperatorTypes( node );
+
+        // #4: Method receiver type checking (':' operator)
+        bValid &= validateMethodReceiver( node );
+
+        boolean nowInsideAfter  = insideAfter  || node.isAfter();
+        boolean nowInsideWithin = insideWithin || node.isWithin();
+
         // Use bitwise AND to avoid short-circuiting so all nodes are visited/validated
-        bValid &= validate( node.left(),  currentMaxDelay );
-        bValid &= validate( node.right(), currentMaxDelay );
+        bValid &= validate( node.left(),  currentMaxDelay, nowInsideAfter, nowInsideWithin );
+        bValid &= validate( node.right(), currentMaxDelay, nowInsideAfter, nowInsideWithin );
 
         return bValid;
+    }
+
+    /**
+     * Checks if the subtree rooted at the given node contains any VARIABLE token.
+     * Traverses left, right, and function arguments recursively.
+     */
+    private static boolean hasVariables( ASTNode node )
+    {
+        if( node == null )
+            return false;
+
+        if( node.token() != null && node.token().isType( XprToken.VARIABLE ) )
+            return true;
+
+        if( node.getFnArgs() != null )
+        {
+            for( ASTNode arg : node.getFnArgs() )
+            {
+                if( hasVariables( arg ) )
+                    return true;
+            }
+        }
+
+        return hasVariables( node.left() ) || hasVariables( node.right() );
+    }
+
+    // Operators that strictly require numeric operands (no string concat, no truthy/falsy)
+    private static final String[] NUMERIC_ONLY_OPS = { "*", "/", "%", "^", "&", "|", "><", ">>", "<<" };
+
+    /**
+     * Validates type compatibility between constant operands and operators.
+     * <p>
+     * Only checks numeric-only operators (*, /, %, ^, bitwise) against constant literal
+     * operands that are clearly incompatible: BOOLEAN literals or STRING literals that
+     * are not valid numbers.
+     * <p>
+     * This avoids false positives because:
+     * <ul>
+     *   <li>Variables have unknown types at parse time — skipped</li>
+     *   <li>Functions have return types that are hard to infer in all cases — skipped</li>
+     *   <li>String literals like "10" that are valid numbers are allowed (JS-like coercion)</li>
+     *   <li>Flexible operators (+, -, ==, &&, etc.) are not checked</li>
+     * </ul>
+     *
+     * @param node The AST node to check.
+     * @return True if valid (or not applicable), false if a type error was found.
+     */
+    private boolean validateOperatorTypes( ASTNode node )
+    {
+        if( node == null || node.token() == null )
+            return true;
+
+        XprToken token = node.token();
+
+        // Check binary numeric-only operators
+        if( token.isType( XprToken.OPERATOR ) && isNumericOnlyOp( token.text() ) )
+        {
+            if( node.left()  != null ) { if( ! checkNumericOperand( node.left().token(),  token ) ) return false; }
+            if( node.right() != null ) { if( ! checkNumericOperand( node.right().token(), token ) ) return false; }
+        }
+
+        // Check unary numeric operators: '~' (bitwise NOT) and unary minus
+        if( token.isType( XprToken.OPERATOR_UNARY ) && (token.isText( '~' ) || token.isText( StdXprOps.sUNARY_MINUS )) )
+        {
+            if( node.left() != null )
+            {
+                if( ! checkNumericOperand( node.left().token(), token ) )
+                    return false;
+            }
+        }
+
+        // #3: Functions that throw at runtime when a constant argument is zero
+        if( token.isType( XprToken.FUNCTION ) )
+        {
+            List<ASTNode> fnArgs = node.getFnArgs();
+
+            if( fnArgs != null && fnArgs.size() == 2 )
+            {
+                // fnArgs are stored in reverse order (see ASTNode.toArrayAndPrepare):
+                // first in list = last argument (the second parameter in the function call)
+                ASTNode secondArg = fnArgs.get( 0 );
+
+                if( token.isText( "mod" ) && isConstantZero( secondArg ) )
+                {
+                    lstErrors.add( new CodeError( "mod() divisor is 0 (produces NaN)", secondArg.token() ) );
+                    return false;
+                }
+
+                if( token.isText( "floor", "ceiling" ) && isConstantZero( secondArg ) )
+                {
+                    lstErrors.add( new CodeError( token.text() + "() significance cannot be 0", secondArg.token() ) );
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Checks if a node is a constant numeric zero (literal 0, 0.0, etc.).
+     */
+    private static boolean isConstantZero( ASTNode node )
+    {
+        if( node == null || node.token() == null )
+            return false;
+
+        XprToken tok = node.token();
+
+        if( tok.isType( XprToken.NUMBER ) )
+            return UtilType.toFloat( tok.text() ) == 0f;
+
+        if( tok.isType( XprToken.STRING ) && Language.isNumber( tok.text() ) )
+            return UtilType.toFloat( tok.text() ) == 0f;
+
+        return false;
+    }
+
+    private static boolean isNumericOnlyOp( String op )
+    {
+        for( String s : NUMERIC_ONLY_OPS )
+            if( s.equals( op ) )
+                return true;
+
+        return false;
+    }
+
+    /**
+     * Checks if a constant operand is compatible with a numeric-only operator.
+     *
+     * @param operand  The operand token to check.
+     * @param operator The operator token (for error message).
+     * @return True if compatible or not a constant (cannot determine), false if definitely incompatible.
+     */
+    private boolean checkNumericOperand( XprToken operand, XprToken operator )
+    {
+        if( operand == null )
+            return true;
+
+        if( operand.isType( XprToken.BOOLEAN ) )
+        {
+            lstErrors.add( new CodeError( "Operator \"" + operator.text() + "\" requires numeric operands, but found boolean: " + operand.text(), operand ) );
+            return false;
+        }
+
+        if( operand.isType( XprToken.STRING ) && ! Language.isNumber( operand.text() ) )
+        {
+            lstErrors.add( new CodeError( "Operator \"" + operator.text() + "\" requires numeric operands, but found string: \"" + operand.text() + "\"", operand ) );
+            return false;
+        }
+
+        return true;    // NUMBER, VARIABLE, FUNCTION, or numeric string — all fine
+    }
+
+    /**
+     * Validates that a method called via the ':' operator exists on the receiver type.
+     * <p>
+     * When the receiver type can be statically determined (extended type constructor or basic literal),
+     * the method is checked against the receiver's class:
+     * <ul>
+     *   <li>Extended types (date, time, list, pair): method must exist on that specific class</li>
+     *   <li>Basic type literals (NUMBER, STRING, BOOLEAN): method must exist on StdXprFns (with receiver as first arg)</li>
+     * </ul>
+     * When the receiver type is unknown (VARIABLE, complex expression), validation is skipped.
+     *
+     * @param node The AST node to check.
+     * @return True if valid (or cannot determine), false if the method definitely does not exist on the receiver type.
+     */
+    private boolean validateMethodReceiver( ASTNode node )
+    {
+        if( node == null || node.token() == null )
+            return true;
+
+        XprToken token = node.token();
+
+        // Only check ':' operator nodes
+        if( ! token.isType( XprToken.OPERATOR ) || ! token.isText( Language.SEND_OP ) )
+            return true;
+
+        ASTNode leftNode  = node.left();
+        ASTNode rightNode = node.right();
+
+        if( leftNode == null || rightNode == null || rightNode.token() == null )
+            return true;
+
+        if( ! rightNode.token().isType( XprToken.FUNCTION ) )
+            return true;
+
+        String methodName = rightNode.token().text();
+        int    nArgs      = (rightNode.getFnArgs() == null) ? 0 : rightNode.getFnArgs().size();
+
+        // Try to infer the receiver type from the left node
+        Class<?> receiverType = inferReceiverType( leftNode );
+
+        if( receiverType == null )
+            return true;    // Cannot determine — skip
+
+        if( StdXprFns.isExtendedType( receiverType ) )
+        {
+            // Method must exist on the specific extended type class
+            if( ! hasMethodOnClass( receiverType, methodName, nArgs ) )
+            {
+                lstErrors.add( new CodeError( "Method \"" + methodName + "\" does not exist on type \"" + receiverType.getSimpleName() + "\"", rightNode.token() ) );
+                return false;
+            }
+        }
+        else
+        {
+            // Basic type (Number, String, Boolean): method is called on StdXprFns with the receiver as first arg
+            if( StdXprFns.getFunction( methodName, nArgs + 1 ) == null )
+            {
+                lstErrors.add( new CodeError( "Function \"" + methodName + "\" cannot be called as a method with " + nArgs + " argument" + (nArgs != 1 ? "s" : ""), rightNode.token() ) );
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Infers the type produced by a node, if it can be determined statically.
+     *
+     * @return The Class of the value this node produces, or null if unknown.
+     */
+    private static Class<?> inferReceiverType( ASTNode node )
+    {
+        if( node == null || node.token() == null )
+            return null;
+
+        XprToken token = node.token();
+
+        // Literals
+        if( token.isType( XprToken.NUMBER  ) ) return Float.class;
+        if( token.isType( XprToken.STRING  ) ) return String.class;
+        if( token.isType( XprToken.BOOLEAN ) ) return Boolean.class;
+
+        // Extended type constructors
+        if( token.isType( XprToken.FUNCTION ) )
+        {
+            String fn = token.text().toLowerCase();
+
+            if( "date".equals( fn ) ) return date.class;
+            if( "time".equals( fn ) ) return time.class;
+            if( "list".equals( fn ) ) return list.class;
+            if( "pair".equals( fn ) ) return pair.class;
+
+            // For other functions, try to infer from return type
+            int nArgs = (node.getFnArgs() == null) ? 0 : node.getFnArgs().size();
+            return StdXprFns.getReturnType( token.text(), nArgs );
+        }
+
+        // Chained ':' — infer from the right-side method's return type
+        if( token.isType( XprToken.OPERATOR ) && token.isText( Language.SEND_OP ) && node.right() != null )
+        {
+            XprToken methodToken = node.right().token();
+
+            if( methodToken != null && methodToken.isType( XprToken.FUNCTION ) )
+            {
+                Class<?> leftType = inferReceiverType( node.left() );
+
+                if( leftType != null )
+                {
+                    int nArgs   = (node.right().getFnArgs() == null) ? 0 : node.right().getFnArgs().size();
+                    boolean isOnExtended = StdXprFns.isExtendedType( leftType );
+
+                    if( isOnExtended )
+                        return getMethodReturnType( leftType, methodToken.text(), nArgs );
+                    else
+                        return StdXprFns.getReturnType( methodToken.text(), nArgs + 1, false );
+                }
+            }
+        }
+
+        return null;    // VARIABLE or complex expression — cannot determine
+    }
+
+    /**
+     * Returns the return type of a method on a specific extended type class.
+     * Unlike StdXprFns.getReturnType(isMethod=true), this searches only the given class,
+     * avoiding ambiguity when multiple extended types have methods with the same name (e.g., del).
+     */
+    private static Class<?> getMethodReturnType( Class<?> clazz, String methodName, int nArgs )
+    {
+        for( Method method : clazz.getMethods() )
+        {
+            if( method.getDeclaringClass().equals( Object.class ) || method.isBridge() )
+                continue;
+
+            if( method.getName().equalsIgnoreCase( methodName ) &&
+                (method.isVarArgs() || method.getParameterCount() == nArgs) )
+            {
+                Class<?> c = method.getReturnType();
+
+                     if( c == boolean.class ) return Boolean.class;
+                else if( c == int.class     ) return Integer.class;
+                else if( c == float.class   ) return Float.class;
+
+                return c;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Checks if a public method with the given name and parameter count exists on a specific class.
+     */
+    private static boolean hasMethodOnClass( Class<?> clazz, String methodName, int nArgs )
+    {
+        for( Method method : clazz.getMethods() )
+        {
+            if( method.getDeclaringClass().equals( Object.class ) )
+                continue;
+
+            if( method.getName().equalsIgnoreCase( methodName ) )
+            {
+                if( method.isVarArgs() || method.getParameterCount() == nArgs )
+                    return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -466,6 +833,8 @@ final class EvalByAST
      */
     private ASTNode infix2AST( List<XprToken> lstInfix )
     {
+        // RPN handles structural validations, and AST.java handles semantic validation.
+        // The two-phase approach matches Mingle's "clarity over speed" principle and performance cost is negligible.
         RPN rpn = new RPN( lstInfix );
 
         lstErrors.addAll( rpn.getErrors() );
@@ -547,10 +916,6 @@ final class EvalByAST
                     {
                         lstErrors.add( new CodeError( "AFTER and WITHIN work with booleans, not with: "+ nodeExpr.token().text(), nodeExpr.token() ) );
                     }
-// TODO:
-// WHEN clock >= 0
-// THEN console = "Tested simple AFTER and WITHIN"
-// IF (cell_1 == 3 AFTER 5s) && (cell_2 == 0 WITHIN 2s)  -->  así sí funciona, pero si le quito los paréntesis al IF, no funciona. Da este error -->
                     if( nodeDelay.token().isNotType( XprToken.NUMBER ) )
                     {
                         lstErrors.add( new CodeError( "Number not found after modifier \""+ token.text() +'"', nodeDelay.token() ) );
@@ -602,14 +967,6 @@ final class EvalByAST
     {
         if( ! lstErrors.isEmpty() )
             return;
-
-// NEXT:
-    // Morgan's Laws: used to simplify boolean expressions.
-    // !(A && B) --> !A || !B
-    // !(A || B) --> !A && !B
-
-// NEXT: resolver los nodos con operador unario '-' cuando se aplica a un número (constante: -40 * 12). (Ojo, no es fácil)
-// NEXT: resolver los nodos "lo_que_sea == false" (cuidado pq pueden ser cosas como: "IIF( time():hour() > 12, get( var_1 ), get( var_2 ) ) == false")
 
         visitor( node,
                  VISIT_PRE_ORDER,     // Order is important

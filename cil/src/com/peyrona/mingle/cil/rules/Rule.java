@@ -63,7 +63,7 @@ public final class      Rule
 
         Consumer<Object[]> consumer = (change) ->
             {
-                IXprEval xpr = ((_if_ != null && _if_.isFutureing()) ? _if_ : when);
+                IXprEval xpr = ((_if_ != null && _if_.isFuturing()) ? _if_ : when);
 
                 xpr.eval( (String) change[0],    // Device name
                                    change[1] );  // Device value
@@ -275,7 +275,7 @@ public final class      Rule
     {
         if( getRuntime().isLoggable( ILogger.Level.RULE ) )
         {
-            IXprEval eval = ((_if_ != null && _if_.isFutureing()) ? _if_ : when);    // IF always contains a var, but WHEN could contain no var
+            IXprEval eval = ((_if_ != null && _if_.isFuturing()) ? _if_ : when);    // IF always contains a var, but WHEN could contain no var
             String   expr = eval.toString();
 
             for( Map.Entry<String,Object> entry : eval.getVars().entrySet() )

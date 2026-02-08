@@ -121,8 +121,8 @@ public final class   WeatherOpenMeteo
         if( isInvalid() || isFaked() )
             return;
 
-        UtilSys.execute( null,
-                         () ->
+        UtilSys.executor( true )
+               .execute( () ->
                             {
                                 int nForeHrs = ((Number) get( KEY_FORECAST )).intValue() / 60;  // Convert minutes to hours
                                 int nFramHrs = ((Number) get( KEY_FRAME    )).intValue() / 60;  // Convert minutes to hours
@@ -179,8 +179,12 @@ public final class   WeatherOpenMeteo
 
         if( timer == null )
         {
-            long intervalMillis = ((Number) get( KEY_INTERVAL )).longValue() * UtilUnit.MINUTE;  // Convert minutes to millis
-            timer = UtilSys.executeWithDelay( getClass().getName(), 5000L, intervalMillis, () -> read() );
+            long interval = ((Number) get( KEY_INTERVAL )).longValue() * UtilUnit.MINUTE;  // Convert minutes to millis
+
+            timer = UtilSys.executor( false )
+                           .delay( 5000 )
+                           .rate(  interval )
+                           .execute( () -> read() );
         }
 
         return isValid();

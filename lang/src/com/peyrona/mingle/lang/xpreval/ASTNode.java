@@ -4,8 +4,8 @@ package com.peyrona.mingle.lang.xpreval;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.japi.UtilColls;
-import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
+import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
@@ -155,6 +155,11 @@ final class ASTNode
     long delay()
     {
         return (future == null || right == null) ? -1 : UtilType.toLong( right.token.value() );    // Better to return -1 than provoking an exc
+    }
+
+    List<ASTNode> getFnArgs()
+    {
+        return lstFnArgs;
     }
 
     ASTNode addFnArg( ASTNode node )
@@ -422,22 +427,42 @@ final class ASTNode
         if( token.type() != XprToken.FUNCTION )
             return true;    // Only validate FUNCTION nodes; XprTokenizer already validated other token types
 
-        String fnName = token.text();
+        String fnName  = token.text();
+        int    nArgs   = (lstFnArgs == null) ? 0 : lstFnArgs.size();
+
+        // When called as a method via ':' (e.g., "22.3:round()"), the receiver from the left
+        // side of ':' is prepended as the first argument at runtime, so effective arity is +1.
+        boolean isMethodCall = (parent != null) &&
+                               (parent.token != null) &&
+                               parent.token.isText( Language.SEND_OP ) &&
+                               (parent.right == this);
+
+        int nArgsForFunction = isMethodCall ? nArgs + 1 : nArgs;
 
         // Extended types (date, time, list, pair) are constructors with varargs - always valid
         if( StdXprFns.isExtendedType( fnName ) )
             return true;
 
-        // Check if the function/method exists at all (ignore argument count for now)
-        // This avoids false positives with varargs functions and complex method resolution
-        if( StdXprFns.getFunction( fnName, -1 ) != null )
+        // Check if the function exists with the exact argument count
+        if( StdXprFns.getFunction( fnName, nArgsForFunction ) != null )
             return true;
 
-        if( StdXprFns.getMethod( fnName, -1 ) != null )
+        // Check if it exists as a method (on date, time, list, pair) with the exact argument count.
+        // Methods on extended types do NOT receive the receiver as a parameter (it is the 'this' object),
+        // so use the original nArgs count.
+        if( StdXprFns.getMethod( fnName, nArgs ) != null )
             return true;
 
-        // Function/method not found at all - this is a definite error
-        // Note: We intentionally don't add errors here because the function might be:
+        // The function/method name exists but not with this argument count: arity mismatch
+        if( StdXprFns.getFunction( fnName, -1 ) != null || StdXprFns.getMethod( fnName, -1 ) != null )
+        {
+            int displayArgs = isMethodCall ? nArgsForFunction : nArgs;
+            lstErrors.add( new CodeError( "Function \"" + fnName + "\" does not accept " + displayArgs + " argument" + (displayArgs != 1 ? "s" : ""), token ) );
+            return false;
+        }
+
+        // Function/method not found at all.
+        // We intentionally don't add errors here because the function might be:
         // 1. A method that will be resolved at runtime based on the receiver type
         // 2. A dynamically registered function
         // Runtime validation will catch actual undefined functions
@@ -495,19 +520,6 @@ final class ASTNode
             args[startIndex + (size-n)] = lstFnArgs.get( n ).eval( vars, hasAllVars );    // Items in lstFnArgs are in reverse order
 
         return args;
-    }
-
-    private String getFnArgs()    // Aux func for ::toString()
-    {
-        if( UtilColls.isEmpty( lstFnArgs ) )
-            return "";
-
-        StringBuilder sb = new StringBuilder( 64 ).append( '(' );
-
-        for( ASTNode nod : lstFnArgs )
-            EvalByAST.visitor( nod, EvalByAST.VISIT_IN_ORDER, node -> sb.append( node.toText() ).append( ',' ) );
-
-        return UtilStr.removeLast( sb, 1 ).append( ')' ).toString();
     }
 
     //------------------------------------------------------------------------//

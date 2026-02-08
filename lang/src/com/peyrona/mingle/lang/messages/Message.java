@@ -52,7 +52,7 @@ public abstract class Message
             Class<?> clazz  = Class.forName( sClass );
             String   name   = json.getString( sNAME , null );    // Never is null
             String   value  = json.getString( sVALUE, null );    // Can be null
-            Object   oValue = value == null ? null : UtilType.toUne( Json.parse( value ) );
+            Object   oValue = value == null ? null : UtilJson.toUneType( Json.parse( value ) );
 
             return (oValue == null) ? UtilReflect.newInstance( clazz, name )
                                     : UtilReflect.newInstance( clazz, name, oValue );

@@ -31,7 +31,7 @@ public final class LednetWifi5Ch
 
         String sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
 
-// FIXME: quitar este rem
+// TODO: quitar este rem
 /**
         try
         {

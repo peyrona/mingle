@@ -3,6 +3,7 @@ package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilReflect;
+import com.peyrona.mingle.lang.japi.UtilType;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.AbstractMap;
@@ -22,6 +23,19 @@ public abstract class ExtraTypeCollection<T>
     private volatile PropertyChangeSupport support;
 
     //------------------------------------------------------------------------//
+
+    /**
+     * Returns a JSON string representation that represents this instance.
+     *
+     * @return A JSON string representation.
+     */
+    @Override
+    public String toString()
+    {
+        return UtilType.toJson( this ).toString();
+    }
+
+    //------------------------------------------------------------------------//
     // PUBLIC ABSTRACT
 
     /**
@@ -31,8 +45,6 @@ public abstract class ExtraTypeCollection<T>
      */
     @Override
     public abstract T clone();
-
-    public abstract T fromJSON( Object o );
 
     public abstract T intersect( Object o );
 
@@ -127,7 +139,6 @@ public abstract class ExtraTypeCollection<T>
 
     /**
      *
-     * @param propName
      * @param oldValue
      * @param newValue null when the property was deleted.
      * @return Itself.

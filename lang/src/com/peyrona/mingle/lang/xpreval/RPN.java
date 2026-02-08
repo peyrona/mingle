@@ -129,8 +129,8 @@ final class RPN
                     else
                     {
                         while( (! stack.isEmpty())
-                                && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY )
-                                && (op.isLeftAssoc && (op.precedence <= operators.get( stack.peek().text() ).precedence))
+                                && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY, XprToken.RESERVED_WORD )
+                                && (op.isLeftAssoc && (op.precedence <= getPrecedence( stack.peek(), operators )))
                                 && (! stack.peek().isType( XprToken.PARENTH_OPEN )) )
                         {
                             lstRPN.add( stack.pop() );
@@ -152,7 +152,12 @@ final class RPN
                         }
                         else if( tNext.isType( XprToken.FUNCTION ) )                                // '+' and '-' unary operators
                         {
-                            if( ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( Number.class ) )
+                            Class<?> retType = StdXprFns.getReturnType( tNext.text(), -1 );
+
+                            if( retType == null )
+                                retType = StdXprFns.getReturnType( tNext.text(), -1, true );
+
+                            if( retType != null && ! Number.class.isAssignableFrom( retType ) )
                                 addError( lstInfix, "Invalid unary operator \""+ token.text() +"\" for operand \""+ tNext.text() +'"', tNext, false );
                         }
                         else
@@ -209,13 +214,20 @@ final class RPN
                         {
                             addError( lstInfix, "Invalid token after "+ token.text(), tNext, false );
                         }
-                        else if( tNext.isType( XprToken.FUNCTION ) && ! StdXprFns.getReturnType( tNext.text(), -1 ).isAssignableFrom( Number.class ) )
+                        else if( tNext.isType( XprToken.FUNCTION ) )
                         {
-                            addError( lstInfix, "Function does not returns a number"+ tNext.text(), tNext, false );
+                            Class<?> retType = StdXprFns.getReturnType( tNext.text(), -1 );
+
+                            if( retType == null )
+                                retType = StdXprFns.getReturnType( tNext.text(), -1, true );
+
+                            if( retType != null && ! Number.class.isAssignableFrom( retType ) )
+                                addError( lstInfix, "Function does not return a number: "+ tNext.text(), tNext, false );
                         }
 
                         while( (! stack.isEmpty())
-                               && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY )
+                               && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY, XprToken.RESERVED_WORD )
+                               && (Operator.PRECEDENCE_TEMPORAL <= getPrecedence( stack.peek(), operators ))
                                && (! stack.peek().isType( XprToken.PARENTH_OPEN )) )
                         {
                             lstRPN.add( stack.pop() );
@@ -376,6 +388,20 @@ final class RPN
         }
 
         return true;
+    }
+
+    /**
+     * Returns the precedence of the given token. For RESERVED_WORDs (AFTER, WITHIN),
+     * returns PRECEDENCE_TEMPORAL. For regular operators, looks up their precedence.
+     */
+    private static int getPrecedence( XprToken token, StdXprOps operators )
+    {
+        if( token.isType( XprToken.RESERVED_WORD ) )
+            return Operator.PRECEDENCE_TEMPORAL;
+
+        Operator op = operators.get( token.text() );
+
+        return (op != null) ? op.precedence : 0;
     }
 
     private void addError( List<XprToken> lstInfix, String sError, ITokenable token, boolean bAfter )

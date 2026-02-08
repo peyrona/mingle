@@ -4,6 +4,7 @@ package com.peyrona.mingle.lang.xpreval.functions;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonValue;
+import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -22,6 +23,7 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
+ * A list which items can be added, deleted, filter and accessed in many ways.<br>
  * In Une, lists are 1 based instead of 0 based.
  *
  * @author Francisco José Morero Peyrona
@@ -38,16 +40,61 @@ public final class list
 
     /**
      * Class constructor.<br>
-     * <br>
-     * Note: string items that can be converted to numbers or booleans, will be converted.
      *
-     * @param items
+     * A 'list' can be created in the following ways:
+     * <ul>
+     *     <li>To create an empty list: list()</li>
+     *     <li>Using an arbitrary number of values: list( "A string", 2022, true )</li>
+     *     <li>Using split() -- list():split("A string,2022,true"). Note: default separator is comma.</li>
+     *     <li>Using split() and separator -- list():split("A string|2022|true", "|")</li>
+     *     <li>Using only one string that represents a valid JSON array: can contain any other JSON value.
+     *         This string can be returned from <code>::toString()</code> or from <code>::serialize():toString()</code></li>
+     * </ul>
+     *
+     * @param items To populate the list.
      */
     public list( Object... items )
     {
-        if( UtilColls.isNotEmpty( items ) )    // can be null
-            for( Object item : items )
-                add( item );
+        if( UtilColls.isEmpty( items ) )
+            return;
+
+        // Single string argument: try JSON parsing
+
+        if( items.length == 1 && (items[0] instanceof String) )
+        {
+            String s = items[0].toString().trim();
+
+            if( s.charAt( 0 ) == '{' || s.charAt( 0 ) == '[' )
+            {
+                try
+                {
+                    JsonValue jv = Json.parse( s );
+
+                    if( jv.isObject() )
+                    {
+                        // From serialize().toString() format: { "class": "...", "data": [...] }
+                        deserialize( jv );
+                        return;
+                    }
+                    else if( jv.isArray() )
+                    {
+                        // Plain JSON array
+                        list l = (list) UtilJson.toUneType( jv );
+                        inner.addAll( l.inner );
+                        return;
+                    }
+                }
+                catch( ParseException pe )
+                {
+                    // Not valid JSON, will be added as a string item below
+                }
+            }
+        }
+
+        // Add all items to the inner list
+
+        for( Object item : items )
+            add( item );
     }
 
     //------------------------------------------------------------------------//
@@ -65,17 +112,19 @@ public final class list
     /**
      * Set maximum list size.
      *
-     * @param maxSize
+     * @param maxSize Maximum number of items allowed.
      * @return Itself.
      */
-    public list size( int maxSize )
+    public list size( Object maxSize )
     {
-        if( maxSize <= 0 )
+        int max = UtilType.toInteger( maxSize );
+
+        if( max <= 0 )
             throw new MingleException( "Invalid max size" );
 
         synchronized( inner )
         {
-            maxLen = maxSize;
+            maxLen = max;
 
             while( inner.size() > maxLen )
                 inner.remove( 0 );
@@ -97,10 +146,10 @@ public final class list
     /**
      * Set maximum list size.
      *
-     * @param maxSize
+     * @param maxSize Maximum number of items allowed.
      * @return Itself.
      */
-    public list len( int maxSize )
+    public list len( Object maxSize )
     {
         return size( maxSize );
     }
@@ -125,9 +174,13 @@ public final class list
      */
     public list empty()
     {
-        Object[] values = inner.toArray();
+        Object[] values;
 
-        inner.clear();
+        synchronized( inner )
+        {
+            values = inner.toArray();
+            inner.clear();
+        }
 
         for( Object value : values )
             firePropertyChanged( value, "" );
@@ -136,16 +189,7 @@ public final class list
     }
 
     /**
-     * Returns the index of the first occurrence of the specified element in this list,
-     * or 0 if this list does not contain the element.
-     *
-     * @param item What to check.
-     * @return The index of the first occurrence of the specified element in this list,
-     *         or 0 if this list does not contain the element.
-     * @see #has(java.lang.Object)
-     */
-    /**
-     * Returns the index of the first occurrence of the specified element in this list,
+     * Returns the index of the first occurrence of the specified element in this list (1-based),
      * or 0 if this list does not contain the element.
      * <p>
      * This method performs type-aware comparison:
@@ -251,7 +295,7 @@ public final class list
     }
 
     /**
-     * Inverts the value at the specified index.<br>
+     * Negates (invert) the value at the specified index.<br>
      * <br>
      * Negative index counts back from the end of the list, so -1 is the last item of
      * the list, -2 is the last before the last item and so on.
@@ -266,7 +310,7 @@ public final class list
      * @return The list itself.
      * @throws MingleException If value at index is not boolean, 0, or 1.
      */
-    public list invert( Object index )
+    public list negate( Object index )
     {
         Object value = get( index );
 
@@ -375,7 +419,7 @@ public final class list
                 firePropertyChanged( _old, inner.isEmpty() ? "" : inner.get( 0 ) );
             }
 
-            ndx = toIndex( index );
+            ndx = toIndex( index, true );
 
             if( ndx < inner.size() )
                 old = inner.get( ndx );
@@ -398,9 +442,9 @@ public final class list
     {
         checkOfClass( lst, list.class );
 
-        List l = ((list) lst).inner;
+        List l = ((list) lst).asList();
 
-        synchronized( l )
+        synchronized( inner )
         {
             for( Object item : l )
                 add( item );
@@ -422,13 +466,15 @@ public final class list
     {
         checkOfClass( lst, list.class );
 
-        List l   = ((list) lst).inner;
-        int  ndx = UtilType.toInteger( index );     // Do not do ::toIndex() because this method invokes ::add(... ) which makes it
+        List l = ((list) lst).asList();
+        int  ndx;
 
-        synchronized( l )
+        synchronized( inner )
         {
+            ndx = toIndex( index, true );
+
             for( int n = 0; n < l.size(); n++ )
-                add( l.get( n ), ndx + n );
+                add( l.get( n ), ndx + n + 1 );    // +1 because add(item, index) is 1-based Une index
         }
 
         return this;
@@ -453,18 +499,24 @@ public final class list
         if( (value instanceof Number) ||
            ((value instanceof String) && Language.isNumber( value.toString() )) )
         {
-            int ndx = UtilType.toInteger( value );
-            int n   = toIndex( ndx );
+            int n = toIndex( value );
+            Object old;
 
-            inner.remove( n );
+            synchronized( inner )
+            {
+                old = inner.remove( n );
+            }
 
-            firePropertyChanged( value, "" );
+            firePropertyChanged( old, "" );
 
             return this;
         }
 
-        if( ! inner.remove( value ) )
-            throw new MingleException( value +" does not exist in list" );
+        synchronized( inner )
+        {
+            if( ! inner.remove( value ) )
+                throw new MingleException( value +" does not exist in list" );
+        }
 
         firePropertyChanged( value, "" );
 
@@ -494,6 +546,7 @@ public final class list
         //    3. The list class performs a deep clone manually - The current implementation creates a new instance and copies each element using cloneValue(), which is appropriate for this use case.
 
         list cloned = new list();
+             cloned.maxLen = this.maxLen;
 
         synchronized( inner )
         {
@@ -719,7 +772,8 @@ public final class list
     {
         checkOfClass( oList, list.class );
 
-        list lst = (list) oList;
+        list other = (list) oList;
+        List otherData = other.asList();
 
         synchronized( inner )
         {
@@ -733,15 +787,12 @@ public final class list
                 {
                     boolean bFound = false;
 
-                    synchronized( lst.inner )
+                    for( Object o : otherData )
                     {
-                        for( Object o : lst.inner )
+                        if( (o instanceof String) && (o.toString().equalsIgnoreCase( item.toString() ) ) )
                         {
-                            if( (o instanceof String) && (o.toString().equalsIgnoreCase( item.toString() ) ) )
-                            {
-                                bFound = true;
-                                break;
-                            }
+                            bFound = true;
+                            break;
                         }
                     }
 
@@ -751,7 +802,7 @@ public final class list
                         firePropertyChanged( item, "" );
                     }
                 }
-                else if( ! lst.inner.contains( item ) )
+                else if( ! otherData.contains( item ) )
                 {
                     itera.remove();
                     firePropertyChanged( item, "" );
@@ -771,9 +822,7 @@ public final class list
     @Override
     public list union( Object oList )
     {
-        addAll( (list) oList );
-
-        return this;
+        return addAll( oList );
     }
 
     /**
@@ -796,15 +845,16 @@ public final class list
 
         checkOfClass( o, list.class );
 
-        List other = ((list) o).inner;
-
-        if( inner.size() < other.size() ) return -1;
-        if( inner.size() > other.size() ) return  1;
-
-        // Both lists have same length
+        list other     = (list) o;
+        List otherData = other.asList();
 
         synchronized( inner )
         {
+            if( inner.size() < otherData.size() ) return -1;
+            if( inner.size() > otherData.size() ) return  1;
+
+            // Both lists have same length
+
             for( int n = 0; n < inner.size(); n++ )
             {
                 Object o1 = inner.get( n );
@@ -813,7 +863,7 @@ public final class list
                 {
                     boolean has = false;
 
-                    for( Object o2 : other )     // Search if same string (ignoring case) is in the received list
+                    for( Object o2 : otherData )     // Search if same string (ignoring case) is in the received list
                     {
                         if( o2 instanceof String && ((String) o2).equalsIgnoreCase( (String) o1 ) )
                         {
@@ -825,7 +875,7 @@ public final class list
                     if( ! has )
                         return -1;
                 }
-                else if( ! other.contains( o1 ) )
+                else if( ! otherData.contains( o1 ) )
                 {
                     return -1;
                 }
@@ -836,21 +886,9 @@ public final class list
     }
 
     @Override
-    public list fromJSON( Object o )
+    public String toString()
     {
-        checkOfClass( o, String.class );
-
-        Object l = UtilJson.toUneType( o.toString() );
-
-        checkOfClass( l, list.class );
-
-        return (list) l;
-    }
-
-    @Override
-    public String toString()    // This method is invoked (among other places) from UtilType:uneToJson(...)
-    {
-        return inner.toString();
+        return UtilColls.toString( inner );
     }
 
     @Override
@@ -900,22 +938,20 @@ public final class list
     {
         Object item = last();
 
-        del( 1 );
+        del( -1 );
 
         return item;
     }
 
     /**
-     * Pushes an item onto the top (as first element) of this stack.
+     * Pushes an item onto the top of this stack.
      *
      * @param item Item to be pushed.
      * @return Itself.
      */
     public list push( Object item )
     {
-        add( 1, item );
-
-        return this;
+        return add( item );
     }
 
     //------------------------------------------------------------------------//
@@ -932,7 +968,9 @@ public final class list
                 ja.add( UtilType.toJson( item ) );
         }
 
-        return build( ja );
+        return Json.object()
+                   .add( "class", getClass().getCanonicalName() )
+                   .add( "data" , ja );
     }
 
     @Override
@@ -941,13 +979,10 @@ public final class list
         UtilJson  json = parse( o );
         JsonArray ja   = json.getArray( "data", null );     // At this point it is never null
 
-        inner.clear();
+        empty();
 
-        synchronized( inner )
-        {
-            for( JsonValue jv : ja.values() )
-                inner.add( UtilType.toUne( jv ) );
-        }
+        for( JsonValue jv : ja.values() )
+            add( UtilJson.toUneType( jv ) );
 
         return this;
     }
@@ -970,25 +1005,37 @@ public final class list
         synchronized( inner )
         {
             for( Object item : inner )
-                if( clazz.isAssignableFrom( item.getClass() ) )
+                if( item != null && clazz.isAssignableFrom( item.getClass() ) )
                     l.add( (T) item );
         }
 
         return l;
+
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE
-
     private int toIndex( Object index )
+
+    {
+
+        return toIndex( index, false );
+
+    }
+
+    private int toIndex( Object index, boolean allowAppend )
     {
         int n = UtilType.toInteger( index );
 
-        if( n < 0 )  n = inner.size() + n;    // + beacuse is a negative number
+        int size = inner.size();
+
+        if( n < 0 )  n = size + n;    // + beacuse is a negative number
         else         n--;
 
-        if( n < 0 || n >= inner.size() )
-            throw new MingleException( index +": index out of bounds" );
+        int limit = allowAppend ? size : size - 1;
+
+        if( n < 0 || n > limit )
+            throw new MingleException( index + ": index out of bounds" );
 
         return n;
     }

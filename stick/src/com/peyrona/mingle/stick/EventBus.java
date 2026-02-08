@@ -81,7 +81,10 @@ public class EventBus implements IEventBus
         if( delay <= 0 )
             post( message );
         else
-            UtilSys.execute( getClass().getName(), delay, () -> EventBus.this.post( message ) );
+            UtilSys.executor( true )
+                   .name( getClass().getName() )
+                   .delay( delay )
+                   .execute( () -> EventBus.this.post( message ) );
 
         return this;
     }
@@ -92,7 +95,12 @@ public class EventBus implements IEventBus
         if( (delay <= 0) || (interval <= 0) )
             throw new IllegalArgumentException( "Delay and Interval must be greater than 0" );
 
-        return new MyCancellable( UtilSys.executeAtRate( getClass().getName(), delay, interval, () -> EventBus.this.post( message ) ) );
+        return new MyCancellable( UtilSys.executor( true )
+                                          .name( getClass().getName() )
+                                          .delay( delay )
+                                          .rate( interval )
+                                          .fixedRate( true )
+                                          .execute( () -> EventBus.this.post( message ) ) );
     }
 
     @Override

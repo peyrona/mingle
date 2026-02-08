@@ -56,10 +56,24 @@ public final class UtilJVM
                      command.add( "-cp" );
                      command.add( getClasspath() );
                      command.addAll( lstOptions );
+
+        addSplashScreenOption( command, jarName );
+
                      command.add( "com.peyrona.mingle." + jarName.replace( ".jar", "" ) + ".Main" );
                      command.addAll( lstArgs );
 
         return command;
+    }
+
+    private static void addSplashScreenOption( List<String> command, String jarName )
+    {
+        if( "glue.jar".equals( jarName ) )
+        {
+            File jarFile = new File( UtilSys.getWorkingDir(), "docs/mingle-logo-256x256.png" );
+
+            if( jarFile.exists() )
+                command.add( "-splash:" + jarFile.getAbsolutePath() );
+        }
     }
 
     //------------------------------------------------------------------------//

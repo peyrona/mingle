@@ -87,19 +87,17 @@ final class Action implements IRule.IAction
     @Override
     public void trigger()
     {
-        assert runtime != null;
-
-        if( isTargetScriptOrRule() )              // It is of type: THEN MyScript | MyRule
+        if( isTargetScriptOrRule() )          // It is of type: THEN MyScript | MyRule
         {
-            runtime.bus().post(new MsgExecute( target, false ), delay );
+            runtime.bus().post( new MsgExecute( target, false ), delay );
         }
-        else                                      // It is of type: THEN device = new_value
+        else                                  // It is of type: THEN device = new_value
         {
-            Object val = getValue();              // This method evaluate ::xprEval if needed
+            Object val = getValue();          // This method evaluate ::xprEval if needed
 
-            if( val != null )                     // Device's value is null until the device receives its first value
+            if( val != null )                 // Device's value is null until the device receives its first value
             {
-                if( ! isTargetAnExpression() )    // As said, if it was an expr, it was evaluated by ::getValue()
+                if( ! isTargetJustAnXpr() )   // As said, if it was an expr, it was evaluated by ::getValue()
                 {
                     if( runtime.isNameOfGroup( target ) )
                     {
@@ -163,25 +161,25 @@ final class Action implements IRule.IAction
     {
         this.runtime = runtime;
 
-        if( value == null )                                     // When 'value' is null, 'target' can be an Expression or a Rule's or a Script's name
+        if( value == null )                                // When 'value' is null, 'target' can be an Expression or a Rule's or a Script's name
         {
             ICommand cmd  = runtime.get( target );
 
-            if( (! (cmd instanceof IRule)) &&                   // When 'value' is null, and 'target' is not a Rule, neither a Script, it must be an Expression
+            if( (! (cmd instanceof IRule)) &&              // When 'value' is null, and 'target' is not a Rule, neither a Script, it must be an Expression
                 (! (cmd instanceof IScript)) )
             {
                 xprEval = newXprEval( target, runtime );
             }
 
-            return;                                             // 'value' is a Rule or Script name (nothing else to do)
+            return;                                        // 'value' is a Rule or Script name (nothing else to do)
         }
 
-        if( ! (value instanceof String) )                       // 'value' (things after '=') is not and expression. Has to be a constant or another Device
+        if( ! (value instanceof String) )                  // 'value' (things after '=') is not and expression. Has to be a constant or another Device
             return;
 
         String sValue = (String) value;
 
-        if( runtime.get( sValue ) instanceof IDevice )          // 'value' is another Device; e.g.: THEN MyDevice1 = MyDevice2
+        if( runtime.get( sValue ) instanceof IDevice )     // 'value' is another Device; e.g.: THEN MyDevice1 = MyDevice2
             return;
 
         // 'value' has to be a constant; e.g.: THEN MyDevice = true  (or 48, or list(1,2,3))
@@ -195,10 +193,13 @@ final class Action implements IRule.IAction
 
     private IXprEval newXprEval( String sXpr, IRuntime runtime )
     {
+        if( UtilStr.isEmpty( sXpr ) )
+            throw new MingleException( "Invalid: the expression is empty." );
+
         IXprEval xe = runtime.newXprEval().build( sXpr, (o) -> {}, runtime::getGroupMemberNames );
 
         if( ! xe.getErrors().isEmpty() )
-            throw new MingleException( "Invalid expression: "+ sXpr );
+            throw new MingleException( "Invalid expression: "+ sXpr +"\nErrors:\n"+ xe.getErrors() );
 
         return xe;
     }
@@ -208,8 +209,8 @@ final class Action implements IRule.IAction
         return (value == null) && (xprEval == null);
     }
 
-    private boolean isTargetAnExpression()    // Only and expression v.g.: THEN put("myvar", "myval") --> true
-    {                                         // This is an expr plus an assingment: THEN myDevice = put("myvar", "myval")  --> false
+    private boolean isTargetJustAnXpr()    // Target is just an expression; v.g.: THEN put("myvar", "myval") --> true
+    {                                      // This is an expr plus an assingment: THEN myDevice = put("myvar", "myval")  --> false
         return (value == null) && (xprEval != null);
     }
 

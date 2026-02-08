@@ -226,7 +226,7 @@ public class ExEnComm
         if( sDevice == null )
             return newMsgPropNotFound( MsgAbstractOne.sNAME );
 
-        Object oValue = UtilType.toUne( joPayload.get( MsgAbstractTwo.sVALUE ) );
+        Object oValue = UtilJson.toUneType( joPayload.get( MsgAbstractTwo.sVALUE ) );
 
         if( oValue == null )
             return newMsgPropNotFound( MsgAbstractTwo.sVALUE );

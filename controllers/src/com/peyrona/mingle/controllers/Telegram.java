@@ -54,8 +54,8 @@ public final class   Telegram
         if( isFaked() )  // || isInvalid() --> Is not needed because this controller is always valid
             return;
 
-        UtilSys.execute( null,
-                         () ->  {
+        UtilSys.executor( true )
+               .execute( () ->  {
                                     String msg = deviceValue.toString();
 
                                     try

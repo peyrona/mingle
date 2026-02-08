@@ -328,59 +328,61 @@ public class CommBridge extends WebSocketAdapter
         }
 
         // Execute connection in background thread using UtilSys ThreadPool
-        UtilSys.execute( "CommBridge-Connect-" + exenAddress.hashCode(), () ->
-        {
-            INetClient client = null;
+        UtilSys.executor( true )
+               .name( "CommBridge-Connect-" + exenAddress.hashCode() )
+               .execute( () ->
+                        {
+                            INetClient client = null;
 
-            try
-            {
-                // 1. Prepare and connect the client (Heavy operation in background thread)
-                client = getNetClient( exenAddress );
-                client.add( new ExEnListener() );
-                client.connect( exenAddress.toString() );  // This may block
+                            try
+                            {
+                                // 1. Prepare and connect the client (Heavy operation in background thread)
+                                client = getNetClient( exenAddress );
+                                client.add( new ExEnListener() );
+                                client.connect( exenAddress.toString() );  // This may block
 
-                // 2. Add to maps safely using dedicated lock
-                synchronized( getLock( session ) )
-                {
-                    if( ! session.isOpen() )
-                    {
-                        try { client.disconnect(); } catch( Exception ignored ) {}
-                        return;
-                    }
+                                // 2. Add to maps safely using dedicated lock
+                                synchronized( getLock( session ) )
+                                {
+                                    if( ! session.isOpen() )
+                                    {
+                                        try { client.disconnect(); } catch( Exception ignored ) {}
+                                        return;
+                                    }
 
-                    Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
+                                    Pair<INetClient, JsonObject> clientPair = new Pair<>( client, exenAddress );
 
-                    sessionToClients.computeIfAbsent( session, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
-                    clientToSession.put( client, new Pair<>( session, exenAddress ) );
-                }
+                                    sessionToClients.computeIfAbsent( session, k -> new CopyOnWriteArrayList<>() ).add( clientPair );
+                                    clientToSession.put( client, new Pair<>( session, exenAddress ) );
+                                }
 
-                if( logger.isLoggable( ILogger.Level.INFO ) )
-                    logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
+                                if( logger.isLoggable( ILogger.Level.INFO ) )
+                                    logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
 
-                // 3. Send the initial message if provided
-                if( initialPayload != null && client.isConnected() )
-                {
-                    client.send( initialPayload );
-                }
-            }
-            catch( Exception me )
-            {
-                logError( "Failed to create/connect ExEn client for " + exenAddress, me );
+                                // 3. Send the initial message if provided
+                                if( initialPayload != null && client.isConnected() )
+                                {
+                                    client.send( initialPayload );
+                                }
+                            }
+                            catch( Exception me )
+                            {
+                                logError( "Failed to create/connect ExEn client for " + exenAddress, me );
 
-                // Clean up the partially created client if it exists
-                if( client != null )
-                {
-                    try { client.disconnect(); }
-                    catch( Exception ignored ) {}
-                }
+                                // Clean up the partially created client if it exists
+                                if( client != null )
+                                {
+                                    try { client.disconnect(); }
+                                    catch( Exception ignored ) {}
+                                }
 
-                sendErrorToClient( session, exenAddress, "Cannot connect to ExEn: " + exenAddress );
-            }
-            finally
-            {
-                pendingConnections.remove( pendingKey );
-            }
-        });
+                                sendErrorToClient( session, exenAddress, "Cannot connect to ExEn: " + exenAddress );
+                            }
+                            finally
+                            {
+                                pendingConnections.remove( pendingKey );
+                            }
+                        } );
     }
 
     /**

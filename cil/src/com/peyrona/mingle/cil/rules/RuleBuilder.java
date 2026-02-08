@@ -3,12 +3,13 @@ package com.peyrona.mingle.cil.rules;
 
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.lang.japi.CommandSerializer;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.interfaces.commands.ICmdKeys;
 import com.peyrona.mingle.lang.interfaces.commands.IRule;
 import com.peyrona.mingle.lang.interfaces.commands.IRule.IAction;
+import com.peyrona.mingle.lang.japi.CommandSerializer;
+import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilType;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -31,9 +32,19 @@ public final class RuleBuilder
         {
             JsonObject j = jaAct.get( n ).asObject();
 
+            // Note: even if in Une the NULL value does not exist (and that is why UtilJson.toUneType(...) 
+            // returns "" instead of null), here we need to know if the value is null because a null value 
+            // is what Action.java uses to identify that the target is a "pure expression" (e.g. THEN put("a", 1)) 
+            // and not an assignment (e.g. THEN myDevice = 1).
+            // If we don't do this check, UtilJson.toUneType(...) returns "" and Action.java will try to 
+            // evaluate that "" as an expression, failing with "the expression is empty" error.
+
+            JsonValue jVal  = j.get( ICmdKeys.RULE_THEN_VALUE );
+            Object    value = jVal.isNull() ? null : UtilJson.toUneType( jVal );
+
             aoAct[n] = new Action( j.get( ICmdKeys.RULE_THEN_AFTER  ).asLong(),
                                    j.get( ICmdKeys.RULE_THEN_TARGET ).asString(),
-                                   UtilType.toUne( j.get(ICmdKeys.RULE_THEN_VALUE ) ) );
+                                   value );
         }
 
         String sName = (jo.get( ICmdKeys.CMD_NAME ).isNull() ? null : jo.get( ICmdKeys.CMD_NAME ).asString());

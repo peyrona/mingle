@@ -62,6 +62,11 @@ public abstract class Operator<T>
     static final short PRECEDENCE_EQUALITY = 7;
 
     /**
+     * Temporal modifiers precedence: AFTER, WITHIN
+     */
+    public static final short PRECEDENCE_TEMPORAL = 5;
+
+    /**
      * And operator precedence: &&
      */
     static final short PRECEDENCE_AND = 4;

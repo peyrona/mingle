@@ -253,10 +253,15 @@ public final class StdXprFns
      */
     public static boolean isExtendedType( Object o )    // This method is better here than in NAXE or any other place
     {
-        return (o instanceof date) ||
-               (o instanceof time) ||
-               (o instanceof list) ||
-               (o instanceof pair);
+        if( o == null )
+            return false;
+
+        // Fast path: use calss '==' (works if same classloader)
+        if( isExtendedType( o.getClass() ) )
+            return true;
+
+        // Fallback: check class name (works across classloaders when types are loaded from different JARs)
+        return isExtendedType( o.getClass().getSimpleName() );
     }
 
     /**
@@ -268,6 +273,9 @@ public final class StdXprFns
      */
     public static boolean isExtendedType( Class<?> clazz )
     {
+        if( clazz == null )
+            return false;
+
         return (clazz == date.class) ||
                (clazz == time.class) ||
                (clazz == list.class) ||
@@ -304,10 +312,21 @@ public final class StdXprFns
      */
     public static Class<?> getReturnType( String sFn, int nArgs )    // -1 --> Ignore number of arguments
     {
-        Method method = getFunction( sFn, nArgs );    // A function always returns the same type of argument despiting the number of args it receives
+        return getReturnType( sFn, nArgs, false );
+    }
 
-        if( method == null )                          // If it is not a method of this class, lets find out if it is a method of an extended type
-            method = getMethod( sFn, nArgs );
+    /**
+     * Returns the return type of the specified function or method.
+     *
+     * @param sFn      The function or method name.
+     * @param nArgs    The number of arguments the function/method receives, or -1 to ignore the number of arguments.
+     * @param isMethod True if searching for a method of an extended type, false if searching for a global function.
+     * @return The {@link Class} representing the return type, or {@code null} if not found.
+     */
+    public static Class<?> getReturnType( String sFn, int nArgs, boolean isMethod )
+    {
+        Method method = isMethod ? getMethod( sFn, nArgs )
+                                 : getFunction( sFn, nArgs );
 
         if( method != null )
         {
@@ -338,6 +357,7 @@ public final class StdXprFns
         // be a method of the classes: time, date, list, pair.
 
         Class[] ac = new Class[] { time.class, date.class, list.class, pair.class };
+        Method fallback = null;
 
         for( Class c : ac )
         {
@@ -347,15 +367,21 @@ public final class StdXprFns
                     method.getName().equalsIgnoreCase( sFn ) )                 // it is overwritten by my classes (date, time, etc) it will be included.
                 {
                     if( nArgs < 0 )
+                    {
+                        if( method.getParameterCount() == 0 )
+                            return method;
+                        if( fallback == null )
+                            fallback = method;
+                    }
+                    else if( method.isVarArgs() || (method.getParameterCount() == nArgs) )
+                    {
                         return method;
-
-                    if( method.isVarArgs() || (method.getParameterCount() == nArgs) )
-                        return method;
+                    }
                 }
             }
         }
 
-        return null;
+        return fallback;
     }
 
     /**

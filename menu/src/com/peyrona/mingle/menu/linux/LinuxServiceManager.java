@@ -1,7 +1,8 @@
 package com.peyrona.mingle.menu.linux;
 
 import com.peyrona.mingle.menu.core.AbstractServiceManager;
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilJVM;
 import com.peyrona.mingle.menu.util.UtilSys;
 import java.io.IOException;
@@ -28,7 +29,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try    // Ensure we have systemctl
         {
-            return UtilSys.executeAndWait( "systemctl", "--version" ).succeeded();
+            return new Execute.Builder( "systemctl", "--version" ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -57,8 +58,8 @@ public class LinuxServiceManager extends AbstractServiceManager
             Files.write( servicePath, serviceContent.getBytes( StandardCharsets.UTF_8 ) );
 
             // Reload systemd daemon and enable service
-            UtilSys.executeAndWait( "systemctl", "daemon-reload" );
-            UtilSys.executeAndWait( "systemctl", "enable", getServiceName( service ) );
+            new Execute.Builder( "systemctl", "daemon-reload" ).build().executeAndWait();
+            new Execute.Builder( "systemctl", "enable", getServiceName( service ) ).build().executeAndWait();
 
             return true;
         }
@@ -74,7 +75,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "systemctl", "start", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "systemctl", "start", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -87,7 +88,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "systemctl", "stop", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "systemctl", "stop", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -100,7 +101,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "systemctl", "restart", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "systemctl", "restart", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -113,8 +114,8 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "systemctl", "status", getServiceName( service ), "--no-pager" )
-                          .output;
+            return new Execute.Builder( "systemctl", "status", getServiceName( service ), "--no-pager" )
+                          .build().executeAndWait().output;
         }
         catch( IOException | InterruptedException e )
         {
@@ -127,7 +128,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "systemctl", "is-active", "--quiet", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "systemctl", "is-active", "--quiet", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -143,8 +144,8 @@ public class LinuxServiceManager extends AbstractServiceManager
             String serviceName = getServiceName( service );
 
             // Stop and disable the service first
-            UtilSys.executeAndWait( "systemctl", "stop", serviceName );
-            UtilSys.executeAndWait( "systemctl", "disable", serviceName );
+            new Execute.Builder( "systemctl", "stop", serviceName ).build().executeAndWait();
+            new Execute.Builder( "systemctl", "disable", serviceName ).build().executeAndWait();
 
             // Delete the service file
             Path servicePath = Paths.get( getServiceFilePath( service ) );
@@ -154,7 +155,7 @@ public class LinuxServiceManager extends AbstractServiceManager
             }
 
             // Reload systemd daemon
-            UtilSys.executeAndWait( "systemctl", "daemon-reload" );
+            new Execute.Builder( "systemctl", "daemon-reload" ).build().executeAndWait();
 
             return true;
         }
@@ -206,7 +207,7 @@ public class LinuxServiceManager extends AbstractServiceManager
         String serviceName = getServiceName( service );
 
         // Use journalctl to show service logs
-        ProcessResult result = UtilSys.executeAndWait( "journalctl", "-u", serviceName, "--no-pager", "-n", "50" );
+        ProcessResult result = new Execute.Builder( "journalctl", "-u", serviceName, "--no-pager", "-n", "50" ).build().executeAndWait();
 
         if( result.succeeded() )
         {

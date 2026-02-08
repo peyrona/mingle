@@ -1,6 +1,7 @@
 package com.peyrona.mingle.menu.mac;
 
 import com.peyrona.mingle.menu.core.AbstractServiceManager;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilJVM;
 import com.peyrona.mingle.menu.util.UtilSys;
 import java.io.File;
@@ -26,7 +27,7 @@ public class MacServiceManager extends AbstractServiceManager
     {
         try    // Check if launchctl is available (always available on macOS)
         {
-            return UtilSys.executeAndWait( "launchctl", "version" ).succeeded();
+            return new Execute.Builder( "launchctl", "version" ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -61,7 +62,7 @@ public class MacServiceManager extends AbstractServiceManager
             Files.write( Paths.get( plistFile ), plistContent.getBytes( StandardCharsets.UTF_8 ) );
 
             // Load the service
-            UtilSys.executeAndWait( "launchctl", "load", plistFile );
+            new Execute.Builder( "launchctl", "load", plistFile ).build().executeAndWait();
 
             return true;
         }
@@ -76,7 +77,7 @@ public class MacServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "launchctl", "start", getBundleId( service ) ).succeeded();
+            return new Execute.Builder( "launchctl", "start", getBundleId( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -89,7 +90,7 @@ public class MacServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "launchctl", "stop", getBundleId( service ) ).succeeded();
+            return new Execute.Builder( "launchctl", "stop", getBundleId( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -109,8 +110,8 @@ public class MacServiceManager extends AbstractServiceManager
     {
         try
         {
-            String output = UtilSys.executeAndWait( "launchctl", "list", getBundleId( service ) )
-                                    .output;
+            String output = new Execute.Builder( "launchctl", "list", getBundleId( service ) )
+                                  .build().executeAndWait().output;
 
             if( output.trim().isEmpty() )
                 return "Service not found: " + getBundleId( service );
@@ -128,8 +129,8 @@ public class MacServiceManager extends AbstractServiceManager
     {
         try
         {
-            String output = UtilSys.executeAndWait( "launchctl", "list", getBundleId( service ) )
-                                    .output;
+            String output = new Execute.Builder( "launchctl", "list", getBundleId( service ) )
+                                  .build().executeAndWait().output;
 
             // In launchctl list output, first column is PID (0 means not running)
             String result = output.trim();
@@ -155,8 +156,8 @@ public class MacServiceManager extends AbstractServiceManager
             String plistFile = getPlistFilePath( service );
 
             // Stop and unload the service first
-            UtilSys.executeAndWait( "launchctl", "stop", bundleId );
-            UtilSys.executeAndWait( "launchctl", "unload", plistFile );
+            new Execute.Builder( "launchctl", "stop", bundleId ).build().executeAndWait();
+            new Execute.Builder( "launchctl", "unload", plistFile ).build().executeAndWait();
 
             // Delete the plist file
             Path plistPath = Paths.get( plistFile );

@@ -19,7 +19,6 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ContainerEvent;
 import java.awt.event.ContainerListener;
 import java.awt.event.KeyEvent;
-import java.awt.event.WindowEvent;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -280,9 +279,9 @@ final class ToolbarPanel extends javax.swing.JPanel
 
                 Util.catchOutput( procExEn, (str) -> ((ConsolePanel) wndExEn.getContent()).append( str ) );
 
-                UtilSys.execute( null,
-                                 1500,
-                                 () ->     // Stick needs some time to be ready
+                UtilSys.executor( true )
+                       .delay( 1500 )
+                       .execute( () ->     // Stick needs some time to be ready
                                     {
                                         SwingUtilities.invokeLater(() ->
                                             {
@@ -305,13 +304,20 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onOpenUneEditor()
     {
-        frmEditor = new GFrame()
-                          .title( "Editor for the Mingle Standard Platform (MSP)" )
-                          .icon( "editor-256x256.png" )
-                          .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
-                          .onClose( (frm) -> JTools.getChild( frm, UneMultiEditorPanel.class ).closeAll( frm ) )
-                          .setVisible()
-                          .sizeAsPercent( -1, 90 );    // -1 keeps width, but works only after :pack()
+        if( frmEditor != null && ! frmEditor.isClosed() )
+        {
+            frmEditor.toFront();
+        }
+        else
+        {
+            frmEditor = new GFrame()
+                              .title( "Editor for the Mingle Standard Platform (MSP)" )
+                              .icon( "editor-256x256.png" )
+                              .put( new UneMultiEditorPanel(), BorderLayout.CENTER )
+                              .onClose( (frm) -> JTools.getChild( frm, UneMultiEditorPanel.class ).closeAll( frm ) )
+                              .setVisible()
+                              .sizeAsPercent( -1, 90 );    // -1 keeps width, but works only after :pack()
+        }
     }
 
     private void onRunStopGum()
@@ -366,9 +372,9 @@ final class ToolbarPanel extends javax.swing.JPanel
                 } );
 
             // Awful but useful
-            UtilSys.execute( null,
-                             2000,
-                             () ->
+            UtilSys.executor( true )
+                   .delay( 2000 )
+                   .execute( () ->
                                 {
                                     if( isDesktopBrowseSupported() )
                                     {

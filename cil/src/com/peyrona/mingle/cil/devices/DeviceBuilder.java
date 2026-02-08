@@ -3,10 +3,10 @@ package com.peyrona.mingle.cil.devices;
 
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.lang.japi.CommandSerializer;
 import com.peyrona.mingle.lang.interfaces.commands.ICmdKeys;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
-import com.peyrona.mingle.lang.japi.UtilType;
+import com.peyrona.mingle.lang.japi.CommandSerializer;
+import com.peyrona.mingle.lang.japi.UtilJson;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -54,7 +54,7 @@ public final class DeviceBuilder
         if( ! jv.isNull() )           // Driver Init (config)
         {
             jv.asObject()
-              .forEach( member -> map.put( member.getName(), UtilType.toUne( member.getValue() ) ) );
+              .forEach( member -> map.put( member.getName(), UtilJson.toUneType( member.getValue() ) ) );
         }
     }
 }

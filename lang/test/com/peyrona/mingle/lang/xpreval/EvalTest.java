@@ -15,6 +15,7 @@ import java.util.Map;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 import static org.junit.jupiter.api.Assertions.*;
 import org.junit.jupiter.api.DisplayName;
@@ -32,6 +33,8 @@ import org.junit.runner.RunWith;
 @RunWith( JUnitPlatform.class )
 public class EvalTest
 {
+    private static final AtomicInteger itera = new AtomicInteger( 0 );
+
     //------------------------------------------------------------------------//
     // ARITHMETIC TESTS
     //------------------------------------------------------------------------//
@@ -859,6 +862,34 @@ public class EvalTest
         {
             test( "time():deserialize( time(\"13:55\"):serialize() ) == time(\"13:55\")", true );
         }
+
+        @Test
+        @DisplayName("Should deserialize time from JSON string")
+        void testTimeJSONDeserialization()
+        {
+            test( "time(\"{\\\"class\\\":\\\"com.peyrona.mingle.lang.xpreval.functions.time\\\", \\\"data\\\":\\\"12:30:42\\\"}\") == time(\"12:30:42\")", true );
+        }
+
+        @Test
+        @DisplayName("Should create time from seconds since midnight")
+        void testTimeFromSeconds()
+        {
+            test( "time(38410) == time(\"10:40:10\")", true );
+        }
+
+        @Test
+        @DisplayName("Should create time from hours and minutes")
+        void testTimeFromHoursMinutes()
+        {
+            test( "time(12, 30) == time(\"12:30:00\")", true );
+        }
+
+        @Test
+        @DisplayName("Should create time from hours, minutes, and seconds")
+        void testTimeFromHoursMinutesSeconds()
+        {
+            test( "time(12, 30, 42) == time(\"12:30:42\")", true );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -950,6 +981,21 @@ public class EvalTest
         {
             test( "date():deserialize( date(\"2023-10-23\"):serialize() ) == date(\"2023-10-23\")", true );
         }
+
+        @Test
+        @DisplayName("Should deserialize date from JSON string")
+        void testDateJSONDeserialization()
+        {
+            test( "date(\"{\\\"class\\\":\\\"com.peyrona.mingle.lang.xpreval.functions.date\\\", \\\"data\\\":\\\"2023-10-23\\\"}\") == date(\"2023-10-23\")", true );
+        }
+
+        @Test
+        @DisplayName("Should create date from year, month, and current day")
+        void testDateFromYearMonth()
+        {
+            int currentDay = LocalDate.now().getDayOfMonth();
+            test( "date(2023, 10, " + currentDay + "):day() == " + currentDay, true );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -968,6 +1014,8 @@ public class EvalTest
             test( "list(true,4.2):get(1)", true );
             test( "list(true,4.2):get(2) == 4.2", true );
             test( "list(\"hello\",4.2):get(2)", 4.2f );
+            test( "list(\"[ 27, true ]\"):len() == 2", true );
+
         }
 
         @Test
@@ -1060,15 +1108,56 @@ public class EvalTest
         }
 
         @Test
-        @DisplayName("Should invert boolean values in list")
-        void testListInvert()
+        @DisplayName("Should invert (negate) boolean values in list")
+        void testListNegate()
         {
-            test( "list(true, false, true):invert(1):get(1)", false );
-            test( "list(true, false, true):invert(2):get(2)", true );
-            test( "list(0, 1, 0):invert(1):get(1)", 1f );
-            test( "list(0, 1, 0):invert(2):get(2)", 0f );
-            test( "list(true, false, true):invert(-1):get(-1)", false );
-            test( "list(true):invert(1):invert(1):get(1)", true );
+            test( "list(true, false, true):negate(1):get(1)", false );
+            test( "list(true, false, true):negate(2):get(2)", true );
+            test( "list(0, 1, 0):negate(1):get(1)", 1f );
+            test( "list(0, 1, 0):negate(2):get(2)", 0f );
+            test( "list(true, false, true):negate(-1):get(-1)", false );
+            test( "list(true):negate(1):negate(1):get(1)", true );
+        }
+
+        @Test
+        @DisplayName("Should deserialize list from JSON array string")
+        void testListJSONArrayDeserialization()
+        {
+            test( "list(\"[1,2,3]\") == list(1,2,3)", true );
+        }
+
+        @Test
+        @DisplayName("Should deserialize list from JSON object string")
+        void testListJSONObjectDeserialization()
+        {
+            test( "list(\"{\\\"class\\\":\\\"com.peyrona.mingle.lang.xpreval.functions.list\\\", \\\"data\\\":[1,2,3]}\") == list(1,2,3)", true );
+        }
+
+        @Test
+        @DisplayName("Should behave correctly as a Stack (LIFO at the end)")
+        void testListStack()
+        {
+            test( "list():push(1):push(2):pop() == 2", true );
+            test( "list():push(1):push(2):peek() == 2", true );
+            test( "list():push(1):push(2):pop() == 2", true );
+        }
+
+        @Test
+        @DisplayName("Should preserve capacity constraint on clone")
+        void testListCapacity()
+        {
+            test( "list(1,2,3,4,5):size(2):clone():size() == 2", true );
+            test( "list(1,2,3,4,5):size(2):clone():add(6):get(1) == 5", true );
+        }
+
+        @Test
+        @DisplayName("Should allow indexed appending and negative indices in addAll")
+        void testListIndexedAdd()
+        {
+            // Appending using size + 1
+            test( "list(1,2):add(3, 3) == list(1,2,3)", true );
+            // Negative index in addAll
+            test( "list(1,2,5,6):addAll(list(3,4), -3) == list(1,2,3,4,5,6)", true );
         }
     }
 
@@ -1081,11 +1170,21 @@ public class EvalTest
     class PairClassTests
     {
         @Test
+        @DisplayName("Should create pair instances")
+        void testPairCreation()
+        {
+            test( "pair() == pair()", true );
+            test( "pair(\"name\", \"francisco\") == pair():split(\"name=francisco\")", true );
+            test( "pair(\"power\", true):get(\"power\")", true );
+        }
+
+        @Test
         @DisplayName("Should get value by key")
         void testPairGet()
         {
             test( "pair():get(\"clima\")", "" );
             test( "pair(\"power\", true, \"red\", 220, \"blue\", 30, \"green\", 94):get(\"power\")", true );
+            test( "pair(\"{ \\\"age\\\": 27, \\\"name\\\": \\\"Frank\\\" }\"):len() == 2", true );
         }
 
         @Test
@@ -1221,21 +1320,59 @@ public class EvalTest
         }
 
         @Test
-        @DisplayName("Should invert boolean values in pair")
-        void testPairInvert()
+        @DisplayName("Should invert (negate) boolean values in pair")
+        void testPairNegate()
         {
             // Invert boolean true -> false
-            test( "pair(\"flag\", true):invert(\"flag\"):get(\"flag\")", false );
+            test( "pair(\"flag\", true):negate(\"flag\"):get(\"flag\")", false );
             // Invert boolean false -> true
-            test( "pair(\"flag\", false):invert(\"flag\"):get(\"flag\")", true );
+            test( "pair(\"flag\", false):negate(\"flag\"):get(\"flag\")", true );
             // Invert number 0 -> 1
-            test( "pair(\"bit\", 0):invert(\"bit\"):get(\"bit\")", 1f );
+            test( "pair(\"bit\", 0):negate(\"bit\"):get(\"bit\")", 1f );
             // Invert number 1 -> 0
-            test( "pair(\"bit\", 1):invert(\"bit\"):get(\"bit\")", 0f );
+            test( "pair(\"bit\", 1):negate(\"bit\"):get(\"bit\")", 0f );
             // Chain multiple inverts
-            test( "pair(\"flag\", true):invert(\"flag\"):invert(\"flag\"):get(\"flag\")", true );
+            test( "pair(\"flag\", true):negate(\"flag\"):negate(\"flag\"):get(\"flag\")", true );
             // Invert with case-insensitive key
-            test( "pair(\"Flag\", true):invert(\"FLAG\"):get(\"flag\")", false );
+            test( "pair(\"Flag\", true):negate(\"FLAG\"):get(\"flag\")", false );
+        }
+
+        @Test
+        @DisplayName("Should deserialize pair from plain JSON object string")
+        void testPairPlainJSONDeserialization()
+        {
+            test( "pair(\"{\\\"name\\\":\\\"John\\\", \\\"age\\\":27}\") == pair(\"name\", \"John\", \"age\", 27)", true );
+        }
+
+        @Test
+        @DisplayName("Should handle chained put calls returning the pair instance")
+        void testPairChainedPut()
+        {
+            // Verify that chained put calls return the pair object, not a boolean
+            // This tests both the pair.put implementation and StdXprFns.getReturnType fix
+            test( "pair():put(\"on\", true):put(\"red\", 100):size() == 2", true );
+            test( "pair():put(\"a\", 1):put(\"b\", 2):get(\"a\") == 1", true );
+        }
+
+        @Test
+        @DisplayName("Should handle case-insensitivity and O(1) normalization")
+        void testPairCaseInsensitivity()
+        {
+            test( "pair(\"KEY\", \"value\"):get(\"key\") == \"value\"", true );
+            test( "pair(\"key\", \"value\"):get(\"KEY\") == \"value\"", true );
+            test( "pair(\"Key\", 1):put(\"kEY\", 2):size() == 1", true );
+            test( "pair(\"Key\", 1):put(\"kEY\", 2):get(\"key\") == 2", true );
+            test( "pair(\"A\", 1):hasKey(\"a\")", true );
+        }
+
+        @Test
+        @DisplayName("Should handle numeric key canonicalization")
+        void testPairNumericCanonicalization()
+        {
+            test( "pair(1, \"a\"):get(1.0) == \"a\"", true );
+            test( "pair(1.0, \"a\"):get(1) == \"a\"", true );
+            test( "pair():put(1, \"x\"):put(\"1\", \"y\"):size() == 1", true );
+            test( "pair():put(1, \"x\"):put(\"1\", \"y\"):get(1)", "y" );
         }
     }
 
@@ -2079,16 +2216,16 @@ public class EvalTest
         {
             IXprEval xpr = new NAXE().build( "var == 7 AFTER 1000", (value) -> {}, null );
 
-            assertFalse( xpr.isFutureing(), "Should not be futureing before eval" );
+            assertFalse( xpr.isFuturing(), "Should not be futureing before eval" );
 
             xpr.eval( "var", 7.0f );
             sleep( 100 );
 
-            assertTrue( xpr.isFutureing(), "Should be futureing after eval starts" );
+            assertTrue( xpr.isFuturing(), "Should be futureing after eval starts" );
 
             sleep( 1200 );
 
-            assertFalse( xpr.isFutureing(), "Should not be futureing after timeout" );
+            assertFalse( xpr.isFuturing(), "Should not be futureing after timeout" );
         }
 
         @Test
@@ -2247,6 +2384,8 @@ public class EvalTest
      */
     private void test( String xpr, Object expected, Pair<String,Object>... vars )
     {
+        itera.incrementAndGet();
+
         Map<String,Object> mapVars = new HashMap<>();
 
         if( (vars != null) && (vars.length > 0) )
@@ -2318,7 +2457,7 @@ public class EvalTest
         EvalTest test = new EvalTest();
         int passed = 0;
         int failed = 0;
-        int total = 0;
+        int total  = 0;
 
         // Arithmetic tests
         System.out.println( "--- Arithmetic Tests ---" );
@@ -2424,6 +2563,11 @@ public class EvalTest
         total++; if( runTest( "Day/Night status", () -> test.new TimeClassTests().testDayNight() ) ) passed++; else failed++;
         total++; if( runTest( "Sunrise/Sunset", () -> test.new TimeClassTests().testSunriseSunset() ) ) passed++; else failed++;
         total++; if( runTest( "Time serialization", () -> test.new TimeClassTests().testTimeSerialization() ) ) passed++; else failed++;
+        total++; if( runTest( "Time JSON deserialization", () -> test.new TimeClassTests().testTimeJSONDeserialization() ) ) passed++; else failed++;
+        total++; if( runTest( "Time from seconds", () -> test.new TimeClassTests().testTimeFromSeconds() ) ) passed++; else failed++;
+        total++; if( runTest( "Time from hours/minutes", () -> test.new TimeClassTests().testTimeFromHoursMinutes() ) ) passed++; else failed++;
+        total++; if( runTest( "Time from hours/minutes/seconds", () -> test.new TimeClassTests().testTimeFromHoursMinutesSeconds() ) ) passed++; else failed++;
+        total++; if( runTest( "Time add relative", () -> test.new TimeClassTests().testTimeAddRelative() ) ) passed++; else failed++;
         System.out.println();
 
         // Date class tests
@@ -2438,6 +2582,8 @@ public class EvalTest
         total++; if( runTest( "Date to string", () -> test.new DateClassTests().testDateToString() ) ) passed++; else failed++;
         total++; if( runTest( "Complex date expressions", () -> test.new DateClassTests().testComplexDateExpressions() ) ) passed++; else failed++;
         total++; if( runTest( "Date serialization", () -> test.new DateClassTests().testDateSerialization() ) ) passed++; else failed++;
+        total++; if( runTest( "Date JSON deserialization", () -> test.new DateClassTests().testDateJSONDeserialization() ) ) passed++; else failed++;
+        total++; if( runTest( "Date from year/month", () -> test.new DateClassTests().testDateFromYearMonth() ) ) passed++; else failed++;
         System.out.println();
 
         // List class tests
@@ -2453,11 +2599,17 @@ public class EvalTest
         total++; if( runTest( "List map/reduce", () -> test.new ListClassTests().testListMapReduce() ) ) passed++; else failed++;
         total++; if( runTest( "List rotate", () -> test.new ListClassTests().testListRotate() ) ) passed++; else failed++;
         total++; if( runTest( "List clone", () -> test.new ListClassTests().testListClone() ) ) passed++; else failed++;
-        total++; if( runTest( "List invert", () -> test.new ListClassTests().testListInvert() ) ) passed++; else failed++;
+        total++; if( runTest( "List negate", () -> test.new ListClassTests().testListNegate() ) ) passed++; else failed++;
+        total++; if( runTest( "List JSON array deserialization", () -> test.new ListClassTests().testListJSONArrayDeserialization() ) ) passed++; else failed++;
+        total++; if( runTest( "List JSON object deserialization", () -> test.new ListClassTests().testListJSONObjectDeserialization() ) ) passed++; else failed++;
+        total++; if( runTest( "List stack", () -> test.new ListClassTests().testListStack() ) ) passed++; else failed++;
+        total++; if( runTest( "List capacity", () -> test.new ListClassTests().testListCapacity() ) ) passed++; else failed++;
+        total++; if( runTest( "List indexed add", () -> test.new ListClassTests().testListIndexedAdd() ) ) passed++; else failed++;
         System.out.println();
 
         // Pair class tests
         System.out.println( "--- Pair Class Tests ---" );
+        total++; if( runTest( "Pair creation", () -> test.new PairClassTests().testPairCreation() ) ) passed++; else failed++;
         total++; if( runTest( "Pair get", () -> test.new PairClassTests().testPairGet() ) ) passed++; else failed++;
         total++; if( runTest( "Pair put", () -> test.new PairClassTests().testPairPut() ) ) passed++; else failed++;
         total++; if( runTest( "Pair split", () -> test.new PairClassTests().testPairSplit() ) ) passed++; else failed++;
@@ -2476,7 +2628,10 @@ public class EvalTest
         total++; if( runTest( "Pair union", () -> test.new PairClassTests().testUnion() ) ) passed++; else failed++;
         total++; if( runTest( "Pair serialization", () -> test.new PairClassTests().testPairSerialization() ) ) passed++; else failed++;
         total++; if( runTest( "Pair toString", () -> test.new PairClassTests().testToString() ) ) passed++; else failed++;
-        total++; if( runTest( "Pair invert", () -> test.new PairClassTests().testPairInvert() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair negate", () -> test.new PairClassTests().testPairNegate() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair chained put", () -> test.new PairClassTests().testPairChainedPut() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair case insensitivity", () -> test.new PairClassTests().testPairCaseInsensitivity() ) ) passed++; else failed++;
+        total++; if( runTest( "Pair numeric canonicalization", () -> test.new PairClassTests().testPairNumericCanonicalization() ) ) passed++; else failed++;
         System.out.println();
 
         // Temporal operator tests
@@ -2529,11 +2684,13 @@ public class EvalTest
 
         // Summary
         System.out.println( "==================================================" );
-        System.out.println( "                   TEST SUMMARY                    " );
+        System.out.println( "                   TEST SUMMARY                   " );
         System.out.println( "==================================================" );
-        System.out.println( "Total Tests:  " + total );
-        System.out.println( "Passed:       " + passed + " (" + (total > 0 ? passed * 100 / total : 0) + "%)" );
-        System.out.println( "Failed:       " + failed + " (" + (total > 0 ? failed * 100 / total : 0) + "%)" );
+        System.out.println( "Total categories:  14" );
+        System.out.println( "Total groups:     " + total );
+        System.out.println( "Total unit tests: " + itera.intValue() );
+        System.out.println( "Passed groups:    " + passed + " (" + (total > 0 ? passed * 100 / total : 0) + "%)" );
+        System.out.println( "Failed groups:      " + failed + " (" + (total > 0 ? failed * 100 / total : 0) + "%)" );
         System.out.println( "==================================================" );
 
         if( failed == 0 )

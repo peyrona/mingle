@@ -60,7 +60,11 @@ final class Wifi5ChDevice
     Wifi5ChDevice( String ip, Consumer<Exception> onErr ) throws IOException
     {
         socket  = new Wifi5ChSocket( ip );
-        future  = UtilSys.executeWithDelay( getClass().getName(), 0l, 25l, () -> _send_() );   // 25 millis == 50 fps
+        future  = UtilSys.executor( false )
+                            .delay( 500 )
+                            .rate(  25 )
+                            .execute( () -> _send_() );   // 25 millis == 50 fps
+
         onError = onErr;
     }
 

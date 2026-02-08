@@ -176,17 +176,6 @@ public final class NAXE implements IXprEval
         return evaluator.isFutureing();
     }
 
-    /**
-     * @deprecated Use {@link #isFuturing()} instead. This method name has a typo.
-     * @return true if the expression is currently evaluating futures.
-     */
-    @Deprecated
-    @Override
-    public boolean isFutureing()
-    {
-        return isFuturing();
-    }
-
     @Override
     public IXprEval cancel()
     {
@@ -238,7 +227,7 @@ public final class NAXE implements IXprEval
     @Override
     public String about()
     {
-        return "NAXE: MSP Expressions Evaluator v.1.4 (the default evaluator for the MSP)";
+        return "NAXE: MSP Expressions Evaluator v.1.2 (the default evaluator for the MSP)";
     }
 
     @Override

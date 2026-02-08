@@ -8,13 +8,13 @@ import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.ListenerWise;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.util.ArrayList;
 import java.util.Set;
 import java.util.concurrent.ArrayBlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -39,8 +39,11 @@ public abstract
     private volatile boolean         wasStopped  = false;
     private final    Set<INetClient> lstClients  = ConcurrentHashMap.newKeySet();
     private final    Broadcaster     broadcaster = new Broadcaster();
-    private final    ScheduledFuture maintenance = Executors.newSingleThreadScheduledExecutor().scheduleWithFixedDelay( () -> cleanupClients( false ),
-                                                                                                                         10,10, TimeUnit.SECONDS );
+    private final    ScheduledFuture maintenance = UtilSys.executor( false )
+                                                          .delay( 10 * UtilUnit.SECOND )
+                                                          .rate(  10 * UtilUnit.SECOND )
+                                                          .execute( () -> cleanupClients( false ) );
+    
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
 

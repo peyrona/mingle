@@ -42,15 +42,22 @@ public final class Lexer
             return "";
 
         final StringBuilder sb = new StringBuilder( lstTokens.size() * 8 );
+        boolean prevWasSendOp = false;
 
         for( Lexeme lex : lstTokens )
         {
             if( lex.isBoolean() || lex.isExtendedDataType() || lex.isName() || lex.isNumber() )
-                sb.append( ' ' ).append( lex.text );
-
+            {
+                if( ! prevWasSendOp )                      // Do not add space after send operator (:)
+                    sb.append( ' ' );
+                sb.append( lex.text );
+            }
             else if( lex.isCommandWord() )
-                sb.append( ' ' ).append( lex.text.toUpperCase() );
-
+            {
+                if( ! prevWasSendOp )
+                    sb.append( ' ' );
+                sb.append( lex.text.toUpperCase() );
+            }
             else if( lex.isInline() )
                 sb.append( "\n{\n" ).append( lex.text ).append( "\n}\n" );
 
@@ -58,8 +65,11 @@ public final class Lexer
                 sb.append( lex.text() ).append( ' ' );
 
             else if( lex.isString() )
-                sb.append( ' ' ).append( Language.toString( lex.text ) ).append( ' ' );
-
+            {
+                if( ! prevWasSendOp )
+                    sb.append( ' ' );
+                sb.append( Language.toString( lex.text ) ).append( ' ' );
+            }
             else if( Language.isSendOp( lex.text ) )       // Check first if it is specifically the send op
                 sb.append( lex.text );
 
@@ -68,6 +78,8 @@ public final class Lexer
 
             else
                 sb.append( lex.text );
+
+            prevWasSendOp = Language.isSendOp( lex.text );
         }
 
         return UtilStr.removeDoubleSpaces( sb.toString() ).trim();
@@ -290,7 +302,7 @@ public final class Lexer
         if( bUseLineContinue  &&
             (c == Language.LINE_CONTINUES) )    // Readed char was LINE_CONTINUES, so we need next char
         {
-            while( isNotEoF() && (code.charAt( ++offset ) != Language.END_OF_LINE) );    // Ignores everything after LINE.CONTINUES until the end of the line (v.g. "Start of string \   # My comment)
+            while( ++offset < code.length() && code.charAt( offset ) != Language.END_OF_LINE );  // Ignores everything after LINE.CONTINUES until the end of the line (v.g. "Start of string \   # My comment)
 
             if( isNotEoF() )
             {
@@ -376,18 +388,34 @@ public final class Lexer
         StringBuilder sbValue  = new StringBuilder( 1024 );
         char          c1stChar = readChar( true );
         boolean       bCanNest = (c1stChar != ch);    // When both are the same (e.g. '"', it is impossible to nest)
+        boolean       isString = (ch == Language.QUOTE);  // Strings need escape sequence handling
         int           nNested  = 1;                   // Nesting level
 
         skip( 1 );                                    // Skips current char, e.g.: '"' or '{'
 
         while( isNotEoF() )
         {
-            char c = readChar( ch != Language.NATIVE_END );   // When reading native languages (not Une), Language.LINE_CONTINUES can not be taken in consideration
+            char c = readChar( false );   // Don't use line continuation inside delimited content (strings or native code blocks)
 
             if( c == Language.END_OF_LINE ) // NEXT: allow '\n' and other escapes inside strings --> && (! isValidEscape( ch )) )
             {
                 line++;
                 column = 0;
+            }
+
+            // Handle escape sequences in strings: \X becomes the escaped character
+            if( isString && (c == '\\') )
+            {
+                skip( 1 );
+
+                if( isNotEoF() )
+                {
+                    char escaped = readChar( false );
+                    sbValue.append( unescape( escaped ) );
+                    skip( 1 );
+                }
+
+                continue;
             }
 
             if( bCanNest )
@@ -407,6 +435,23 @@ public final class Lexer
         }
 
         return null;    // Unclosed char pair
+    }
+
+    /**
+     * Converts an escape sequence character to its actual value.
+     * E.g.: 'n' -> '\n', '"' -> '"', '\\' -> '\'
+     */
+    private char unescape( char c )
+    {
+        switch( c )
+        {
+            case 'n' : return '\n';
+            case 'r' : return '\r';
+            case 't' : return '\t';
+            case '\\': return '\\';
+            case '"' : return '"';
+            default  : return c;      // Unknown escape, return as-is
+        }
     }
 
     private void addLexeme( Lexeme lex, char ch, short type )

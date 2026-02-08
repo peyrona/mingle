@@ -19,8 +19,7 @@
     {
       "module"           : "common",
       "log_level"        : "warning",   # Valid:
-      "log_expire"       : 30           # Log files older than this amount of days will be automatically deleted (x <=0 to not delete)
-      #"RPiNumberingModel": "WiringPi"   # Used by RPi Driver (by default "BCM")
+      "log_expire"       : 30           # Log files older than this amount of days will be automatically deleted (x <=0 to not delete
     },
 
     # Excution Environment configuration

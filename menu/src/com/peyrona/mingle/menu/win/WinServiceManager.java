@@ -1,7 +1,8 @@
 package com.peyrona.mingle.menu.win;
 
 import com.peyrona.mingle.menu.core.AbstractServiceManager;
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilJVM;
 import com.peyrona.mingle.menu.util.UtilSys;
 import java.io.IOException;
@@ -21,7 +22,7 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try    // Check if sc.exe is available (Windows service control utility)
         {
-            return UtilSys.executeAndWait( "sc", "query" ).succeeded();
+            return new Execute.Builder( "sc", "query" ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -34,7 +35,7 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "sc", "query", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "sc", "query", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -82,7 +83,7 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "sc", "start", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "sc", "start", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -95,7 +96,7 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "sc", "stop", getServiceName( service ) ).succeeded();
+            return new Execute.Builder( "sc", "stop", getServiceName( service ) ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -115,8 +116,8 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try
         {
-            return UtilSys.executeAndWait( "sc", "query", getServiceName( service ) )
-                           .output;
+            return new Execute.Builder( "sc", "query", getServiceName( service ) )
+                           .build().executeAndWait().output;
         }
         catch( IOException | InterruptedException e )
         {
@@ -129,8 +130,8 @@ public class WinServiceManager extends AbstractServiceManager
     {
         try
         {
-            String output  = UtilSys.executeAndWait( "sc", "query", getServiceName( service ) )
-                                     .output;
+            String output  = new Execute.Builder( "sc", "query", getServiceName( service ) )
+                                     .build().executeAndWait().output;
 
             return output.toUpperCase().contains( "RUNNING" );
         }
@@ -148,10 +149,10 @@ public class WinServiceManager extends AbstractServiceManager
             String serviceName = getServiceName( service );
 
             // Stop the service first
-            UtilSys.executeAndWait( "sc", "stop", serviceName );
+            new Execute.Builder( "sc", "stop", serviceName ).build().executeAndWait();
 
             // Delete the service
-            return UtilSys.executeAndWait( "sc", "delete", serviceName ).succeeded();
+            return new Execute.Builder( "sc", "delete", serviceName ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -168,7 +169,7 @@ public class WinServiceManager extends AbstractServiceManager
             String serviceName = getServiceName( service );
 
             // Use sc.exe to query the service configuration
-            ProcessResult result = UtilSys.executeAndWait( "sc", "qc", serviceName );
+            ProcessResult result = new Execute.Builder( "sc", "qc", serviceName ).build().executeAndWait();
 
             if( ! result.succeeded() )
             {
@@ -200,7 +201,7 @@ public class WinServiceManager extends AbstractServiceManager
 
         // Use PowerShell to get recent Windows Event Log entries
         String command = "Get-WinEvent -LogName Application -Source \"" + serviceName + "\" -MaxEvents 50 | Format-Table TimeCreated, LevelDisplayName, Message -Wrap";
-        ProcessResult result = UtilSys.executeAndWait( "powershell", "-Command", command );
+        ProcessResult result = new Execute.Builder( "powershell", "-Command", command ).build().executeAndWait();
 
         if( result.succeeded() && !result.output.trim().isEmpty() )
         {

@@ -1,7 +1,8 @@
 package com.peyrona.mingle.menu.linux;
 
 import com.peyrona.mingle.menu.core.AbstractProcessManager;
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilSys;
 import com.peyrona.mingle.menu.util.UtilUI;
 import java.io.IOException;
@@ -20,8 +21,8 @@ public class LinuxProcessManager extends AbstractProcessManager
     {
         try
         {
-            return UtilSys.executeAndWait( "pgrep", "--version" ).succeeded() &&
-                   UtilSys.executeAndWait( "ps", "--version" ).succeeded();
+            return new Execute.Builder( "pgrep", "--version" ).build().executeAndWait().succeeded() &&
+                   new Execute.Builder( "ps", "--version" ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -36,8 +37,8 @@ public class LinuxProcessManager extends AbstractProcessManager
         Map<Long, String> mapJavaProcs = new HashMap<>();
 
         // Single system call to get ALL relevant process info
-        ProcessResult psResult = UtilSys.executeAndWait( "ps", "-eo", "pid,cmd",
-                                                         "--sort", "pid" );     // Ensure consistent ordering
+        ProcessResult psResult = new Execute.Builder( "ps", "-eo", "pid,cmd",
+                                                         "--sort", "pid" ).build().executeAndWait();     // Ensure consistent ordering
 
         if( ! psResult.succeeded() )
         {
@@ -113,7 +114,7 @@ public class LinuxProcessManager extends AbstractProcessManager
     {
         try
         {
-            ProcessResult result = UtilSys.executeAndWait( "cat", "/proc/" + pid + "/cmdline" );
+            ProcessResult result = new Execute.Builder( "cat", "/proc/" + pid + "/cmdline" ).build().executeAndWait();
 
             if( result.succeeded() )
             {

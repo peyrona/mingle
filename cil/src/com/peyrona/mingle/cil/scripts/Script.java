@@ -175,8 +175,9 @@ public final class      Script
         if( ! canExecute() )
             return;
 
-        UtilSys.execute( getClass().getSimpleName() +':'+ name(),
-                            () ->
+        UtilSys.executor( true )
+               .name( getClass().getSimpleName() +':'+ name() )
+               .execute( () ->
                             {
                                 try
                                 {

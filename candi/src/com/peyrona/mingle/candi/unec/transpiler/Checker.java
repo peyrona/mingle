@@ -137,7 +137,7 @@ final class Checker
         ParseDriver driver = (ParseDriver) findByName( device.drvName, tus );
 
         // If DRIVER clause does not exists, the ParseDevice triggers an error,
-        // If driver name is misspelled, it was detected and reported when cheking names.
+        // If driver name is misspelled, it was detected and reported when checking names.
 
         if( driver != null )
         {
@@ -165,7 +165,7 @@ final class Checker
                 }
             }
 
-            // Lets check that all items (required and not required) in DEVICE DRIVER CONFIG exist in DRIVER CONFIG and they have the proper data type
+            // Lets check all declared items (required and not required) in DEVICE DRIVER CONFIG and to check that they have the proper data type
 
             for( Map.Entry<String,Lexeme> entry : device.getDriverInit().entrySet() )
             {
@@ -277,7 +277,7 @@ final class Checker
 
             if( action.isOf( Action.Type.Expression ) )
             {
-                assert UtilStr.isEmpty( action.getValueToSet() );    // Checked only to validate my code
+                assert UtilStr.isEmpty( action.getValueToSet() );    // Checked only to validate Checker code
 
                 if( action.isOf( Action.Type.Expression ) )
                     checkXpr4Action( rule, tuRuleOwner, tus, b4Grid, action.getTargetName() );    // When Action.Type.Expression, the xpr is in TargetName

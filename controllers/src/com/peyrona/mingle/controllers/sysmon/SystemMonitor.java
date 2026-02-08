@@ -75,7 +75,13 @@ public final class SystemMonitor
             synchronized( this )
             {
                 if( timer == null )
-                    timer = UtilSys.executeWithDelay( getClass().getName(), 5000L, ((Number) get( KEY_INTERVAL )).longValue(), () -> read() );
+                {
+                    timer = UtilSys.executor( false )
+                                   .name( getClass().getName() )
+                                   .delay( 5000L )
+                                   .rate( ((Number) get( KEY_INTERVAL )).longValue() )
+                                   .execute( () -> read() );
+                }
             }
         }
 

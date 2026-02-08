@@ -1,7 +1,8 @@
 package com.peyrona.mingle.menu.mac;
 
 import com.peyrona.mingle.menu.core.AbstractProcessManager;
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute.ProcessResult;
+import com.peyrona.mingle.menu.util.Execute;
 import com.peyrona.mingle.menu.util.UtilSys;
 import java.io.BufferedReader;
 import java.io.IOException;
@@ -23,8 +24,8 @@ public class MacProcessManager extends AbstractProcessManager
     {
         try
         {
-            return UtilSys.executeAndWait( "ps", "-version" ).succeeded() &&
-                   UtilSys.executeAndWait( "kill", "-l"     ).succeeded();
+            return new Execute.Builder( "ps", "-version" ).build().executeAndWait().succeeded() &&
+                   new Execute.Builder( "kill", "-l"     ).build().executeAndWait().succeeded();
         }
         catch( IOException | InterruptedException e )
         {
@@ -39,7 +40,7 @@ public class MacProcessManager extends AbstractProcessManager
         Pattern           javaJarPattern = Pattern.compile( "(?i)java.*\\.jar" ); // Case-insensitive precompiled pattern
 
         // Single system call to get ALL processes with PID and command
-        ProcessResult psResult = UtilSys.executeAndWait( "ps", "-eo", "pid,command" );
+        ProcessResult psResult = new Execute.Builder( "ps", "-eo", "pid,command" ).build().executeAndWait();
 
         if( ! psResult.succeeded() )
         {

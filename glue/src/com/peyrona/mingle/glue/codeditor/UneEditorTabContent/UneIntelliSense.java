@@ -111,7 +111,8 @@ public final class UneIntelliSense extends JPopupMenu
 
     static
     {
-        UtilSys.execute( null, () ->
+        UtilSys.executor( true )
+               .execute( () ->
                         {
                             try
                             {
@@ -124,7 +125,8 @@ public final class UneIntelliSense extends JPopupMenu
                             }
                         } );
 
-        UtilSys.execute( null, () ->
+        UtilSys.executor( true )
+               .execute( () ->
                         {
                             try
                             {
@@ -137,7 +139,8 @@ public final class UneIntelliSense extends JPopupMenu
                             }
                         } );
 
-        UtilSys.execute( null, () ->
+        UtilSys.executor( true )
+               .execute( () ->
                         {
                             try
                             {

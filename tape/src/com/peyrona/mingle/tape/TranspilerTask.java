@@ -48,10 +48,10 @@ public final class TranspilerTask
             nErrors   += tu.errorCount();
         }
 
-        console.print( ">>>>>>>>>>>>>>>>>\nTranspiler output:" );
+        console.print(   ">>>>>>>>>>>>>>>>>\nTranspiler output:" );
         if( nErrors > 0 )  console.println( " none" );
         else               console.println( "\n    "+ fOut.getAbsolutePath() );
-        console.println( "<<<<<<<<<<<<<<<\n" );
+        console.println( "<<<<<<<<<<<<<<<<<\n" );
 
         float n = chrono.getElapsed() / 1000f;
 

@@ -2,32 +2,62 @@
 package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilJson;
 
 /**
- * Extra types:
+ * Extra types.<br>
+ * At least but not only: date, time, list, pair.<br>
+ * In general all returned by IXPrEval::getExtendedTypes().<br>
+ * They must:
  * <ul>
- *    <li>Must implement UneSerializable</li>
- *    <li>Can have only one constructor and it must have following signature: clazz( Object...args )</li>
- </ul>
+ *    <li>Implement: serialize() and deserialize(), pack()</li>
+ *    <li>Have a constructor with this signature: clazz( Object...args )</li>
+ * </ul>
  *
- * @param <T>
+ * @param <T> date, time, list, pair, ...
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public abstract class ExtraType<T> implements Comparable<Object>
 {
+    //------------------------------------------------------------------------//
+    // ABSTRACT
+
     public abstract Object serialize();
     public abstract T      deserialize( Object str );
 
     //------------------------------------------------------------------------//
+    // PUBLIC
 
-    UtilJson parse( Object o )
+    /**
+     * Returns the serialized JSON representation of this instance: date, time, list, pair.<br>
+     * The returned value can be passed to the constructor <code>date(...), time(...), list(...), pair(...)</code> to unpack it.
+     *
+     * @return The JSON string from serialize().
+     */
+    public String pack()
+    {
+        return serialize().toString();
+    }
+
+    /**
+     * Return the name of the class of this instance in lower case: date, time, list, pair.
+     *
+     * @return The name of the class of this instance in lower case.
+     */
+    public String type()
+    {
+        return getClass().getSimpleName().toLowerCase();
+    }
+
+    //------------------------------------------------------------------------//
+    // PROTECTED
+
+    protected UtilJson parse( Object o )
     {
         if( o instanceof JsonValue )
             return new UtilJson( (JsonValue) o );
@@ -42,29 +72,10 @@ public abstract class ExtraType<T> implements Comparable<Object>
         }
     }
 
-    JsonObject build( String data )
+    protected JsonObject build( String data )
     {
         return Json.object()
-                   .add( "class", getClass().getSimpleName() )    // Better to use getSimpleName() in case I move later date, time, list or pair to a different package
+                   .add( "class", getClass().getCanonicalName() )
                    .add( "data" , data );
-    }
-
-    JsonObject build( JsonArray ja )
-    {
-        return Json.object()
-                   .add( "class", getClass().getSimpleName() )
-                   .add( "data" , ja );
-    }
-
-    JsonObject build( JsonObject jo )
-    {
-        return Json.object()
-                   .add( "class", getClass().getSimpleName() )
-                   .add( "data" , jo );
-    }
-
-    public String type()
-    {
-        return getClass().getSimpleName();
     }
 }

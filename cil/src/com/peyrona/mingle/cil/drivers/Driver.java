@@ -92,6 +92,7 @@ public final class      Driver
     }
 
     //------------------------------------------------------------------------//
+    // PUBLIC SCOPE
 
     @Override
     public void start( IRuntime rt )
@@ -219,6 +220,7 @@ public final class      Driver
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
 
     private IController setController( IDevice device )
     {

@@ -73,12 +73,15 @@ public final class   RPiGpioPin
 
         if( isValid() && isFaked() )    // isFaked() is initialized by super:start(...)
         {
-            timer = UtilSys.executeWithDelay( getClass().getName(),
-                                              5000l, 3000l,    // After 5 secs (initial delay), every 3 secs
-                                              () -> {
-                                                        if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
-                                                            sendReaded( pin.read() );                               // a new random value
-                                                    } );
+            timer = UtilSys.executor( false )
+                           .name( getClass().getName() )
+                           .delay( 5000l )    // After 5 secs (initial delay)
+                           .rate( 3000l )     // every 3 secs
+                           .execute( () ->
+                                    {
+                                        if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
+                                            sendReaded( pin.read() );                               // a new random value
+                                    } );
         }
 
         return isValid();

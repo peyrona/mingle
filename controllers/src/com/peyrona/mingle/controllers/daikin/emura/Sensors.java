@@ -76,10 +76,10 @@ public final class   Sensors
             }
         }
 
-        timer = UtilSys.executeWithDelay( null,
-                                          5000L,                      // Initial delay
-                                          ((Number) get( KEY_INTERVAL )).longValue(),
-                                          () -> read() );
+        timer = UtilSys.executor( false )
+                       .delay( 5000L )                      // Initial delay
+                       .rate( ((Number) get( KEY_INTERVAL )).longValue() )
+                       .execute( () -> read() );
 
         return isValid();
     }
@@ -106,8 +106,8 @@ public final class   Sensors
 
         if( isFaked() )
         {
-            sendReaded( new pair().put( "t_inside" , StdXprFns.invoke( "rand", new Integer[] { 5,44} ))
-                                  .put( "t_outside", StdXprFns.invoke( "rand", new Integer[] {-9,44} )) );
+            sendReaded( new pair().put( "t_inside" , StdXprFns.invoke( "rand",  5, 44 ))
+                                  .put( "t_outside", StdXprFns.invoke( "rand", -9, 44 )) );
         }
         else
         {

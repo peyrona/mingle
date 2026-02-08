@@ -50,14 +50,27 @@ public final class UtilJson
     /**
      * Converts JSON string to Une data type.
      * <p>
-     * Converts JSON values to equivalent Une types (Pair, List, primitives).
+     * Converts JSON values to their equivalent Une types (Pair, List, primitives).
      *
-     * @param s JSON string to convert
-     * @return Une-compatible object (Pair for objects, List for arrays, or primitives)
+     * @param s JSON string to convert.
+     * @return Une-compatible object (Pair for objects, List for arrays, or primitives).
      */
     public static Object toUneType( String s )
     {
-        return convertJsonValue( Json.parse(s) );
+        return convertJsonValue( Json.parse( s ) );
+    }
+
+    /**
+     * Converts a JSON value to Une data type.
+     * <p>
+     * Converts JSON values to their equivalent Une types (Pair, List, primitives).
+     *
+     * @param jv JSON value to convert.
+     * @return Une-compatible object (Pair for objects, List for arrays, or primitives).
+     */
+    public static Object toUneType( JsonValue jv )
+    {
+        return convertJsonValue( jv );
     }
 
     /**
@@ -66,7 +79,7 @@ public final class UtilJson
      * @param jv JsonValue to convert (should be array type)
      * @return Object array with converted elements
      */
-    public static Object[] toArray(JsonValue jv)
+    public static Object[] toArray( JsonValue jv )
     {
         Object[]  array = null;
         JsonArray ja    = jv.isArray() ? (JsonArray) jv : jv.asArray();

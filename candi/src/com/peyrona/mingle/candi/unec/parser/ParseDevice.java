@@ -25,7 +25,7 @@ import java.util.Map;
 public final class ParseDevice extends ParseBase
 {
     public  final String             drvName;
-    private final Map<String,Lexeme> drvInit;
+    private final Map<String,Lexeme> drvConf;
     private final Map<String,Lexeme> dvcInit;
     private final IXprEval           xprEval;
 
@@ -47,9 +47,9 @@ public final class ParseDevice extends ParseBase
 
         name = findID( "DEVICE" );
 
-        drvName = getDriverName( getClauseContents( "DRIVER" ) );
-        drvInit = getDriverInit( getClauseContents( "CONFIG" ) );
         dvcInit = getDeviceInit( getClauseContents( "INIT"   ) );
+        drvName = getDriverName( getClauseContents( "DRIVER" ) );
+        drvConf = getDriverConf( getClauseContents( "CONFIG" ) );
      }
 
     //------------------------------------------------------------------------//
@@ -57,7 +57,7 @@ public final class ParseDevice extends ParseBase
 
     public Map<String,Lexeme> getDriverInit()
     {
-        return Collections.unmodifiableMap( drvInit );
+        return Collections.unmodifiableMap( drvConf );
     }
 
     public Map<String,Lexeme> getDeviceInit()
@@ -111,7 +111,7 @@ public final class ParseDevice extends ParseBase
         return (id == null) ? null : id.text();
     }
 
-    private Map<String,Lexeme> getDriverInit( List<Lexeme> tokens )
+    private Map<String,Lexeme> getDriverConf( List<Lexeme> tokens )
     {
         return getOptions( true, tokens );
     }

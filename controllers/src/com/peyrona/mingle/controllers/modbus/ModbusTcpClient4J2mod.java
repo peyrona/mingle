@@ -128,28 +128,29 @@ public final class ModbusTcpClient4J2mod implements IModbusClient
         // Initial delay allows slow devices to become ready
         long initialDelay = Math.max( 2000, nTimeout );
 
-        this.future = UtilSys.executeAtRate(
-            getClass().getName() + "-" + sHost + ":" + nPort + "/" + nAddress,
-            initialDelay,
-            nInterval,
-            () ->
-            {
-                if( isClosing )
-                    return;
+        this.future = UtilSys.executor( false )
+                             .name( getClass().getName() + "-" + sHost + ":" + nPort + "/" + nAddress )
+                             .delay( initialDelay )
+                             .rate( nInterval )
+                             .fixedRate( true )
+                             .execute( () ->
+                                        {
+                                            if( isClosing )
+                                                return;
 
-                try
-                {
-                    Object value = read();
+                                            try
+                                            {
+                                                Object value = read();
 
-                    if( listener != null && !isClosing )
-                        listener.onMessage( value );
-                }
-                catch( Exception ex )
-                {
-                    if( listener != null && !isClosing )
-                        listener.onError( ex );
-                }
-            } );
+                                                if( listener != null && !isClosing )
+                                                    listener.onMessage( value );
+                                            }
+                                            catch( Exception ex )
+                                            {
+                                                if( listener != null && !isClosing )
+                                                    listener.onError( ex );
+                                            }
+                                        } );
     }
 
     @Override

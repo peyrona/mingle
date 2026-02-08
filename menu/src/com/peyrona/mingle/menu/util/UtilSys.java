@@ -1,7 +1,6 @@
 
 package com.peyrona.mingle.menu.util;
 
-import com.peyrona.mingle.menu.core.Orchestrator.ProcessResult;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -63,33 +62,11 @@ public class UtilSys
         return null;
     }
     //------------------------------------------------------------------------//
-    // METHODS RELATED WITH EXECUTING
-
-    public static Process execute( String... command ) throws IOException
-    {
-        ProcessBuilder pb = new ProcessBuilder( command );
-                       pb.redirectErrorStream( true );
-
-        return pb.start();
-    }
-
-    public static ProcessResult executeAndWait( String... command ) throws IOException, InterruptedException
-    {
-        Process process = execute( command );
-
-        // IMPORTANT: We must consume the stream to prevent deadlocks if the buffer fills up
-        // throwing away output if not needed, or logging it in debug mode
-        StringBuilder output = new StringBuilder();
-
-        try( BufferedReader br = new BufferedReader( new InputStreamReader( process.getInputStream(), StandardCharsets.UTF_8 ) ) )
-        {
-            output.append( br.lines().collect( Collectors.joining( "\n" ) ) );
-        }
-
-        process.waitFor();
-
-        return new ProcessResult( command, process, output.toString() );
-    }
+    // EXECUTION
+    // Use Execute class for shell command execution with flexible scheduling options:
+    //   ProcessResult result = new Execute.Builder("command", "args").build().executeAndWait();
+    //   Process process = new Execute.Builder("command", "args").build().execute();
+    //   ScheduledFuture future = new Execute.Builder("command", "args").rate(1000).build().schedule();
 
     //------------------------------------------------------------------------//
     // PRIVATE

@@ -17,7 +17,14 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A simple dictionary: key/value pairs; where key must be a basic Une data type: String, Number or Boolean.
+ * A simple dictionary: key/value pairs; where key must be a String or Number
+ * (internally always stored as a lowercase String).
+ * <p>
+ * This collection is case-insensitive for String keys and achieves O(1) lookup
+ * performance by normalizing all keys to lowercase. Numeric keys are canonicalized
+ * such that '1' and '1.0' refer to the same entry.
+ * <p>
+ * Values can be any valid Une type.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -30,10 +37,10 @@ public final class pair
 
     //------------------------------------------------------------------------//
 
-    // NOTE: As Une is case insentivive, when adding and updating entries, it is need to check that they do not exist yet ignoring case.
+    // NOTE: As Une is case insentivive, entries are stored in lowercase to ensure O(1) performance.
 
     /**
-     * A Pair set is technically named a “dictionary”. It can be considered as a special type of list: in a
+     * A Pair set is technically named a "dictionary". It can be considered as a special type of list: in a
      * dictionary every item of the list is a pair of values (instead of one single value).<br>
      * Dictionaries look like this:<br>
      * <pre>
@@ -42,26 +49,63 @@ public final class pair
      *
      * To create a new 'pair', a set of even parameters is needed: first one is used as key, second as this key's value,
      * third is a new key and fourth this key's value and so on...<br>
-     * Although not mandatory, it is recommended that all keys will be strings. Values can be any Une valid value.
+     * Although not mandatory, it is recommended that all keys will be strings. Values can be any Une valid value.<br>
+     * Another way is to pass a well-formed JSON object as a string.<br>
      * <br>
      * A 'pair' can be created in the following ways:
      * <ul>
-     *     <li>pair( "name", "John Doe", "age", 27, "married", true ) --> Creates the previously mentioned pairs build.</li>
      *     <li>pair() --> Creates an empty pairs build</li>
+     *     <li>pair( "name", "John Doe", "age", 27, "married", true ) --> Creates the previously mentioned pairs build.</li>
+     *     <li>pair( "{ \"age\": 27, \"name\": \"Frank\" }" ) --> Plain JSON object</li>
+     *     <li>pair( string ) --> Using only one string that represents a valid JSON object: can contain any other JSON value.
+     *         This string can be returned from <code>::toString()</code> or from <code>::serialize():toString()</code>) </li>
      * </ul>
      *
      * @param items
      */
     public pair( Object... items )
     {
-        if( UtilColls.isNotEmpty( items ) )
-        {
-            if( items.length % 2 != 0 )
-                throw new MingleException( "Not equal number of keys and values" );
+        if( items == null || items.length == 0 )
+            return;
 
-            for( int n = 0; n < items.length - 1; n += 2 )
-                put( items[n], items[n+1] );
+        // Single string argument: try JSON parsing
+
+        if( items.length == 1 && (items[0] instanceof String) )
+        {
+            String s = ((String) items[0]).trim();
+
+            if( s.charAt( 0 ) == '{' )
+            {
+                try
+                {
+                    JsonObject jo = Json.parse( s ).asObject();
+
+                    // Try serialize() format first (has "class" and "data" keys)
+                    if( jo.get( "class" ) != null && jo.get( "data" ) != null )
+                    {
+                        deserialize( jo );
+                        return;
+                    }
+
+                    // Plain JSON object - convert to pair
+                    pair p = (pair) UtilJson.toUneType( jo );
+                    putAll( p );
+                    return;
+                }
+                catch( Exception exc )
+                {
+                    throw new MingleException( exc );
+                }
+            }
         }
+
+        // Key-value pairs
+
+        if( items.length % 2 != 0 )
+            throw new MingleException( "Not equal number of keys and values" );
+
+        for( int n = 0; n < items.length - 1; n += 2 )
+            put( items[n], items[n+1] );
     }
 
     //------------------------------------------------------------------------//
@@ -106,15 +150,16 @@ public final class pair
      */
     public pair empty()
     {
-        Set<Map.Entry> entries = getEntrySet();
-
-        inner.clear();
+        Object[] values;
 
         synchronized( inner )
         {
-            for( Map.Entry entry : entries )
-                firePropertyChanged( entry.getValue(), "" );
+            values = inner.values().toArray();
+            inner.clear();
         }
+
+        for( Object val : values )
+            firePropertyChanged( val, "" );
 
         return this;
     }
@@ -122,7 +167,7 @@ public final class pair
     /**
      * Returns the 'value' associated with passed 'key' or "" if key was not found.
      *
-     * @param key Must be a basic Une data type: String, Number or Boolean.
+     * @param key Must be a String or Number (Numbers are converted to Strings internally).
      * @return The value associated with passed 'key' or "" if key was not found.
      */
     public Object get( Object key )
@@ -131,64 +176,29 @@ public final class pair
     }
 
     /**
-     * Returns the 'value' associated with passed 'key' or def value key does not exist.
+     * Returns the 'value' associated with passed 'key' or def value if the 'key' does not exist.
      *
-     * @param key Must be a basic Une data type: String, Number or Boolean.
+     * @param key Must be a String or Number (Numbers are converted to Strings internally).
      * @param def The value to be returned in case the dictionary does not have the key.
-     * @return The value associated with passed 'key'.
+     * @return The value associated with passed 'key' or the default value.
      */
     public Object get( Object key, Object def )
     {
-        checkIsBasicUneType( key );
-
-        Object value = inner.get( key );
-
-        if( value != null )
-            return value;
-
-        if( key instanceof String )
-        {
-            Map.Entry entry = getEntryFor( (String) key );
-
-            if( entry != null )
-                return entry.getValue();
-        }
-        else if( key instanceof Integer )
-        {
-            value = inner.get( ((Integer) key).floatValue() );
-
-            if( value != null )
-                return value;
-        }
-
-        return def;
+        return inner.getOrDefault( keyAsString( key ), def );
     }
 
     /**
      * Adds a new pair to the current build of pairs or replaces current value for
      * a new one if key currently existed.
      *
-     * @param key Pair key. Must be a basic Une data type: String, Number or Boolean.
+     * @param key Pair key. Must be a String or Number (internally stored as lowercase String).
      * @param value Pair value. Any valid Une data.
      * @return Itself.
      */
     public pair put( Object key, Object value )
     {
-        checkIsBasicUneType( key );
-
-        Object old;
-
-        if( key instanceof String )
-        {
-            Map.Entry entry = getEntryFor( (String) key );
-
-            old = (entry != null) ? entry.setValue( value )
-                                  : inner.put( key, value );
-        }
-        else
-        {
-            old = inner.put( key, value );     // If existed, the value is updated, otherwise a new entry is created
-        }
+        String sKey = keyAsString( key );
+        Object old  = inner.put( sKey, value );
 
         firePropertyChanged( old, value );
 
@@ -245,7 +255,14 @@ public final class pair
      */
     public boolean hasKey( Object key )
     {
-        return inner.containsKey( key );
+        try
+        {
+            return inner.containsKey( keyAsString( key ) );
+        }
+        catch( Exception exc )
+        {
+            return false;
+        }
     }
 
     /**
@@ -262,7 +279,7 @@ public final class pair
     }
 
     /**
-     * Inverts the boolean value associated with the specified key.
+     * Negates (invert) the boolean value associated with the specified key.
      * <ul>
      *   <li>If value is Boolean: true becomes false, false becomes true.</li>
      *   <li>If value is Number 0: becomes 1.</li>
@@ -270,11 +287,11 @@ public final class pair
      *   <li>Otherwise: throws MingleException.</li>
      * </ul>
      *
-     * @param key The key whose value is to be inverted. Must be a basic Une data type.
+     * @param key The key whose value is to be inverted. Must be a String or Number.
      * @return The pair itself.
      * @throws MingleException If value for key is not boolean, 0, or 1.
      */
-    public pair invert( Object key )
+    public pair negate( Object key )
     {
         Object value = get( key, null );
 
@@ -298,32 +315,12 @@ public final class pair
     /**
      * Deletes the 'pair' which key is passed 'key'.
      *
-     * @param key The key of the pair to be deleted. Any basic Une data.
+     * @param key The key of the pair to be deleted. Must be a String or Number.
      * @return The pairs build itself.
      */
     public pair del( Object key )
     {
-        checkIsBasicUneType( key );
-
-        Object old;
-
-        synchronized( inner )
-        {
-            old = inner.remove( key );
-
-            if( (old == null) && (key instanceof String) )
-            {
-                Map.Entry entry = getEntryFor( (String) key );   // As getEntryFor(...) performs a no sensitive search,
-
-                if( entry != null )
-                {
-                    key = entry.getKey();                        // the Entry returned has the key as it appears inside the Map (with its proper case)
-
-                    old = inner.remove( key );
-                }
-            }
-         // else --> the dictionary does not contains the key --> nothing to do
-        }
+        Object old = inner.remove( keyAsString( key ) );
 
         if( old != null )
             firePropertyChanged( old, "" );
@@ -347,7 +344,7 @@ public final class pair
             {
                 Object val = inner.get( key );
 
-                cloned.put( cloneValue( key ), cloneValue( val ) );
+                cloned.put( key, cloneValue( val ) );
             }
         }
 
@@ -538,26 +535,9 @@ public final class pair
     }
 
     @Override
-    public pair fromJSON( Object o )
-    {
-        checkOfClass( o, String.class );
-
-        Object p = UtilJson.toUneType( o.toString() );
-
-        checkOfClass( p, pair.class );
-
-        return (pair) p;
-    }
-
-    /**
-     * Returns a JSON formatted String.
-     *
-     * @return A JSON formatted String.
-     */
-    @Override
     public String toString()
     {
-        return UtilColls.toString( inner, ',', '=' );
+        return UtilColls.toString( inner );
     }
 
     @Override
@@ -599,22 +579,21 @@ public final class pair
                 jo.add( entry.getKey().toString(), UtilType.toJson( entry.getValue() ) );
         }
 
-        return build( jo );
+        return Json.object()
+                   .add( "class", getClass().getCanonicalName() )
+                   .add( "data" , jo );
     }
 
     @Override
     public pair deserialize( Object o )
     {
         UtilJson   json = parse( o );
-        JsonObject jo   = json.getObject( "data", null );     // At this point it is never null
+        JsonObject jo   = json.getObject( "data", null );
 
-        inner.clear();
+        empty();
 
-        synchronized( inner )
-        {
-            for( String key : jo.names() )
-                inner.put( UtilType.toUneBasics( key ), UtilType.toUne( jo.get( key ) ) );
-        }
+        for( String key : jo.names() )
+            put( key, UtilJson.toUneType( jo.get( key ) ) );
 
         return this;
     }
@@ -627,28 +606,25 @@ public final class pair
 
     //------------------------------------------------------------------------//
 
-    private void checkIsBasicUneType( Object key )
+    private String keyAsString( Object key )
     {
-        if( ! StdXprFns.isBasicType( key ) )
-            throw new IllegalArgumentException( (key == null ? "null" : key.getClass().getSimpleName()) +" is not a basic Une data type" );
+        if( key instanceof String )
+        {
+            return ((String) key).toLowerCase();
+        }
+        else if( key instanceof Number )
+        {
+            float f = ((Number) key).floatValue();
+
+            return (f == (long) f) ? String.valueOf( (long) f )
+                                   : String.valueOf( f );
+        }
+
+        throw new MingleException( (key == null ? "null" : key.getClass().getSimpleName()) +" is not a valid key type (must be String or Number)" );
     }
 
     private Set<Map.Entry> getEntrySet()
     {
         return inner.entrySet();
-    }
-
-    private Map.Entry getEntryFor( String key )
-    {
-        synchronized( inner )
-        {
-            for( Map.Entry entry : getEntrySet() )
-            {
-                if( (entry.getKey() instanceof String) && entry.getKey().toString().equalsIgnoreCase( key ) )
-                    return entry;
-            }
-        }
-
-        return null;
     }
 }

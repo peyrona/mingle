@@ -124,7 +124,12 @@ public final class File
         long interval = (long) get( KEY_INTERVAL );
 
         if( (future == null) && (interval > -1L) )
-            future = UtilSys.executeWithDelay( getClass().getName(), interval, interval, () -> read() );
+        {
+            future = UtilSys.executor( false )
+                            .delay( interval )
+                            .rate(  interval )
+                            .execute( () -> read() );
+        }
 
         return isValid();
     }

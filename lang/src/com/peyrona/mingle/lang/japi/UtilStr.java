@@ -75,21 +75,18 @@ public class UtilStr
     }
 
     /**
-     * Comprueba que todas las cadenas pasadas como parámetro son vacías.
-     * (es decir, con que haya una sóla cadena de las pasadas que sea NO vacía,
-     *  este método devuelve false).
+     * Check that all strings passed as parameters are empty: that is, if even one of
+     * passed strings is NOT empty, this method returns false.
      *
-     * @param strings
-     * @return true si todas las cadenas pasadas son vacías.
+     * @param strings Strings to check.
+     * @return true if all passed strings are empty.
      */
     public static boolean areEmpty( final String... strings )
     {
         for( final String s : strings )
         {
             if( (s != null) && (s.trim().length() > 0) )
-            {
                 return false;
-            }
         }
 
         return true;
@@ -108,9 +105,7 @@ public class UtilStr
         for( final String s : strings )
         {
             if( (s == null) || (s.trim().length() == 0) )
-            {
                 return false;
-            }
         }
 
         return true;
@@ -130,9 +125,7 @@ public class UtilStr
             for( final char ch : s.toCharArray() )
             {
                 if( Character.isLetterOrDigit( ch ) )
-                {
                     return false;
-                }
             }
         }
 
