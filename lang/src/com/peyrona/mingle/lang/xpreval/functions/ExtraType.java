@@ -6,6 +6,7 @@ import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilJson;
+import com.peyrona.mingle.lang.japi.UtilType;
 
 /**
  * Extra types.<br>
@@ -27,31 +28,20 @@ public abstract class ExtraType<T> implements Comparable<Object>
     //------------------------------------------------------------------------//
     // ABSTRACT
 
-    public abstract Object serialize();
-    public abstract T      deserialize( Object str );
+    public abstract JsonObject serialize();
+    public abstract T          deserialize( JsonObject str );
 
     //------------------------------------------------------------------------//
     // PUBLIC
 
     /**
-     * Returns the serialized JSON representation of this instance: date, time, list, pair.<br>
-     * The returned value can be passed to the constructor <code>date(...), time(...), list(...), pair(...)</code> to unpack it.
+     * Returns a JSON string representation of this instance.
      *
-     * @return The JSON string from serialize().
+     * @return A JSON string representation.
      */
-    public String pack()
+    public String toJSON()
     {
-        return serialize().toString();
-    }
-
-    /**
-     * Return the name of the class of this instance in lower case: date, time, list, pair.
-     *
-     * @return The name of the class of this instance in lower case.
-     */
-    public String type()
-    {
-        return getClass().getSimpleName().toLowerCase();
+        return UtilType.toJson( this ).toString();
     }
 
     //------------------------------------------------------------------------//

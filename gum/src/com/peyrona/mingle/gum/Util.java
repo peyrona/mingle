@@ -103,6 +103,25 @@ final class Util
         return fDir.getCanonicalFile();
     }
 
+    static String sanitizeFileName( String name ) throws IOException
+    {
+        if( name == null || name.isEmpty() )
+            throw new IOException( "Board name cannot be empty" );
+
+        // Replace invalid characters with underscore
+        String sanitized = name.replaceAll( "[<>:\"/\\\\|?*\\s]", "_" );
+
+        // Handle Windows reserved names
+        if( sanitized.matches( "^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\.|$)" ) )
+            sanitized = "_" + sanitized;
+
+        // Remove trailing dots (Windows requirement)
+        sanitized = sanitized.replaceAll( "\\.+$", "" );
+
+        // Limit length
+        return sanitized.substring( 0, Math.min( 255, sanitized.length() ) );
+    }
+
     //------------------------------------------------------------------------//
 
     private Util()

@@ -298,14 +298,15 @@ public final class ParseRule extends ParseBase
             }
             else
             {
+                Lexeme loc = lstAs.get( 0 );                // Source lexeme for location info
                 List<Lexeme> lst = new ArrayList<>();    // What to insert at begining of WHEN clause "put(<USE>,<AS>)&&"
 
-                lst.add( 0, Lexeme.build( "put" ) );
-                lst.add( 1, Lexeme.build( '('   ) );
-                lst.add( 2, Lexeme.build( ""    ).updateAsStr( sFullName ) );
-                lst.add( 3, Lexeme.build( ','   ) );
-                lst.add( 4, Lexeme.build( ')'   ) );
-                lst.add( 5, Lexeme.build( "&&"  ) );
+                lst.add( 0, Lexeme.build( "put", loc ) );
+                lst.add( 1, Lexeme.build( '(',   loc ) );
+                lst.add( 2, Lexeme.build( "",    loc ).updateAsStr( sFullName ) );
+                lst.add( 3, Lexeme.build( ',',   loc ) );
+                lst.add( 4, Lexeme.build( ')',   loc ) );
+                lst.add( 5, Lexeme.build( "&&",  loc ) );
                 lst.addAll( 4, lstAs );
 
                 when.addAll( 0, lst );
@@ -343,9 +344,9 @@ public final class ParseRule extends ParseBase
             {
                 lex.updateAsStr( name.text() +'-'+ lex.text() );   // RULE name + USE name
 
-                clause.add( n  , Lexeme.build( '(' ) );
-                clause.add( n  , Lexeme.build( "get" ) );
-                clause.add( n+3, Lexeme.build( ')' ) );
+                clause.add( n  , Lexeme.build( '(',   lex ) );
+                clause.add( n  , Lexeme.build( "get", lex ) );
+                clause.add( n+3, Lexeme.build( ')',   lex ) );
 
                 n += 3;
                 bUsed = true;

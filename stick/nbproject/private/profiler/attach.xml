@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE properties SYSTEM "http://java.sun.com/dtd/properties.dtd">
+<properties>
+<entry key="profiler.attach.dynamic.processName">com.peyrona.mingle.stick.Main</entry>
+<entry key="profiler.attach.dynamic.jdk16">true</entry>
+<entry key="profiler.attach.remote">false</entry>
+<entry key="profiler.attach.server.type">Java application</entry>
+<entry key="profiler.attach.host"></entry>
+<entry key="profiler.attach.direct">false</entry>
+<entry key="profiler.attach.dynamic.pid">144167</entry>
+<entry key="profiler.attach.target.type">Java application</entry>
+</properties>

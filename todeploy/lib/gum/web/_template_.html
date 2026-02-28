@@ -28,26 +28,22 @@
         <div id="div-dlg_properties">
         </div>
 
-        <script src="/gum/js/p_polyfill.js"       ></script>    <!-- ¡ Do not change the order ! -->
-        <script src="/gum/js/p_base.js"           ></script>
-        <script src="/gum/js/p_app.js"            ></script>
-        <script src="/gum/js/p_ws-wrap.js"        ></script>
-        <script src="/gum/js/p_tableditor.js"     ></script>
-        <script src="/gum/js/gum_ws_boards.js"    ></script>    <!-- From here down, all were created just for Gum -->
-        <script src="/gum/js/gum_tools.js"        ></script>
-        <script src="/gum/js/free.js"             ></script>
-        <script src="/gum/js/grid.js"             ></script>
-        <script src="/gum/js/gum.js"              ></script>
-        <script src="/gum/js/gadgets/help2edit.js"></script>
-        <script src="/gum/js/gadgets/gadget.js"   ></script>
-        <script src="/gum/js/gadgets/button.js"   ></script>
-        <script src="/gum/js/gadgets/chart.js"    ></script>
-        <script src="/gum/js/gadgets/check.js"    ></script>
-        <script src="/gum/js/gadgets/gauge.js"    ></script>
-        <script src="/gum/js/gadgets/pie.js"      ></script>
-        <script src="/gum/js/gadgets/ssd.js"      ></script>
-        <script src="/gum/js/gadgets/text.js"     ></script>
+        <!-- Container for gadget HTML templates (loaded at startup, <template> elements are inert) -->
+        <div id="div-gadget-templates" style="display:none;">
+        </div>
 
+        <!-- NOTE: Gadget scripts are loaded dynamically by gum.js from gadgets/gadgets.json -->
+        <!-- Do NOT add static <script> tags for gadgets here - they will cause duplicate loading -->
+        <script src="/gum/js/p_polyfill.js"   ></script>    <!-- ¡ Do not change the order ! -->
+        <script src="/gum/js/p_base.js"       ></script>
+        <script src="/gum/js/p_app.js"        ></script>
+        <script src="/gum/js/p_ws-wrap.js"    ></script>
+        <script src="/gum/js/p_tableditor.js" ></script>
+        <script src="/gum/js/gum_ws_boards.js"></script>    <!-- From here down, all were created just for Gum -->
+        <script src="/gum/js/gum_tools.js"    ></script>
+        <script src="/gum/js/free.js"         ></script>
+        <script src="/gum/js/grid.js"         ></script>
+        <script src="/gum/js/gum.js"          ></script>
         <script>
             $(document).ready( () => gum.run( getConfig() ) );    // Do not move this block
 

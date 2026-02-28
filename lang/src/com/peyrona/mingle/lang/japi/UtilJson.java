@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.eclipsesource.json.Json;
@@ -9,6 +21,7 @@ import com.eclipsesource.json.JsonValue;
 import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
 import static com.peyrona.mingle.lang.japi.UtilStr.isEmpty;
+import com.peyrona.mingle.lang.xpreval.functions.ExtraType;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 
@@ -512,6 +525,7 @@ public final class UtilJson
 
         StringBuilder output    = new StringBuilder();
         boolean       inComment = false;
+        boolean       inString  = false;  // NEW: Track if inside a string
 
         for( int n = 0; n < input.length(); n++ )
         {
@@ -527,8 +541,20 @@ public final class UtilJson
             }
             else
             {
-                if( c == '#' ) inComment = true;
-                else           output.append( c );
+                // Toggle string state on unescaped quotes
+                if( c == '"' && (n == 0 || input.charAt( n - 1 ) != '\\') )
+                {
+                    inString = !inString;
+                    output.append( c );
+                }
+                else if( c == '#' && !inString )    // Only start comment if NOT inside string
+                {
+                    inComment = true;
+                }
+                else
+                {
+                    output.append( c );
+                }
             }
         }
 
@@ -549,8 +575,24 @@ public final class UtilJson
         else                       return "";              // Handle JSON null (in Une null does not exists)
     }
 
-    private static pair convertJsonObject( JsonObject jo )
+    private static Object convertJsonObject( JsonObject jo )
     {
+        // Check for serialized ExtraType envelope: {"class":"...","data":...}
+        JsonValue classVal = jo.get( "class" );
+        JsonValue dataVal  = jo.get( "data" );
+
+        if( classVal != null && classVal.isString() && dataVal != null )
+        {
+            ExtraType<?> instance = UtilSys.getConfig().newXprEval().newExtendedType( classVal.asString() );
+
+            if( instance != null )
+            {
+                instance.deserialize( jo );
+                return instance;
+            }
+        }
+
+        // Fallback: treat as a plain pair
         pair p = new pair();
 
         for( JsonObject.Member member : jo )

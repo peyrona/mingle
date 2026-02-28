@@ -71,9 +71,9 @@ public final class ParseDevice extends ParseBase
         Map<String,Object> mapDriverInit = new HashMap<>();
         Map<String,Object> mapDeviceInit = new HashMap<>();
 
-        getDriverInit().forEach((k,v) -> mapDriverInit.put(k, delQuotes( UtilType.toUne( v ) ) ) );
+        getDriverInit().forEach((k,v) -> mapDriverInit.put(k, UtilType.toUne( v ) ) );
 
-        getDeviceInit().forEach((k,v) -> mapDeviceInit.put(k, delQuotes( UtilType.toUne( v ) ) ) );
+        getDeviceInit().forEach((k,v) -> mapDeviceInit.put(k, UtilType.toUne( v ) ) );
 
         return CommandSerializer.Device( name.text().toLowerCase(),
                                          drvName.toLowerCase(),
@@ -83,19 +83,6 @@ public final class ParseDevice extends ParseBase
 
     //------------------------------------------------------------------------//
     // PRIVATE INTERFACE
-
-    private Object delQuotes( Object oBasicData )
-    {
-        if( oBasicData instanceof String )
-        {
-            String s = oBasicData.toString();
-
-            if( s.charAt( 0 ) == Language.QUOTE && UtilStr.isLastChar( s, Language.QUOTE ) )
-                return s.substring( 1, s.length() -1 );
-        }
-
-        return oBasicData;
-    }
 
     private String getDriverName( List<Lexeme> tokens )
     {

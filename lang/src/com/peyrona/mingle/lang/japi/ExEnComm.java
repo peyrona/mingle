@@ -6,19 +6,18 @@ import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonObject.Member;
 import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.messages.Message;
-import com.peyrona.mingle.lang.messages.MsgAbstractOne;
-import com.peyrona.mingle.lang.messages.MsgAbstractTwo;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
 import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
 import com.peyrona.mingle.lang.messages.MsgDeviceReaded;
 import com.peyrona.mingle.lang.messages.MsgExecute;
 import com.peyrona.mingle.lang.messages.MsgReadDevice;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * ExEn can receive the requests (commands) defined in this class.<br>
@@ -60,12 +59,22 @@ public class ExEnComm
 
     //------------------------------------------------------------------------//
 
-    public final    Request       request;
-    public final    JsonValue     payload;   // Can be null
-    public volatile ICmdEncDecLib pclBuilder = null;
+    public           final Request            request;
+    public           final JsonValue          payload;                        // Can be null
+    private static   final Map<Class,Request> mapRequest = new HashMap<>();   // Just to reduce CPU
+    private volatile       ICmdEncDecLib      pclBuilder = null;
 
     //------------------------------------------------------------------------//
     // STATIC INTERFACE
+
+    static
+    {
+        mapRequest.put( MsgDeviceChanged.class , Request.Changed );
+        mapRequest.put( MsgChangeActuator.class, Request.Change  );
+        mapRequest.put( MsgExecute.class       , Request.Execute );
+        mapRequest.put( MsgReadDevice.class    , Request.Read    );
+        mapRequest.put( MsgDeviceReaded.class  , Request.Readed  );
+    }
 
     /**
      * Parses a JSON string and creates an {@code ExEnComm} instance.
@@ -80,7 +89,8 @@ public class ExEnComm
                             .iterator()
                             .next();
 
-        return new ExEnComm( Request.valueOf( member.getName() ), (member.getValue().isNull() ? Json.NULL : member.getValue()) );
+        return new ExEnComm( Request.valueOf( member.getName() ),
+                             (member.getValue().isNull() ? Json.NULL : member.getValue()) );
     }
 
     /**
@@ -140,23 +150,17 @@ public class ExEnComm
     /**
      * Class constructor.
      *
-     * @param msg
+     * @param msg The message to wrap as an ExEn communication.
      */
     public ExEnComm( Message msg )
     {
-             if( msg instanceof MsgDeviceChanged  ) request = ExEnComm.Request.Changed;  // Most frecuent
-        else if( msg instanceof MsgChangeActuator ) request = ExEnComm.Request.Change;
-        else if( msg instanceof MsgExecute        ) request = ExEnComm.Request.Execute;
-        else if( msg instanceof MsgReadDevice     ) request = ExEnComm.Request.Read;     // This two are
-        else if( msg instanceof MsgDeviceReaded   ) request = ExEnComm.Request.Readed;   // less frequent
-        else throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
-
-        this.payload = msg.toJSON();
+        request = mapRequest.get( msg.getClass() );
+        payload = msg.toJSON();
     }
 
     /**
      * Class constructor.
-     * 
+     *
      * @param exc
      */
     public ExEnComm( Exception exc  )
@@ -180,58 +184,85 @@ public class ExEnComm
     }
 
     /**
-     * Returns the timestamp (when) from the payload.
+     * Returns the timestamp from the payload.
+     * <p>
+     * Returns {@code 0} for List/Listed requests.
+     * Falls back to {@code System.currentTimeMillis()} if the payload
+     * does not contain a timestamp.
      *
-     * @return The timestamp in milliseconds, or 0 for {@code Request.List} and {@code Request.Listed},
-     *         or current time if not specified in payload.
+     * @return The timestamp in milliseconds.
      */
     public long getWhen()
     {
         if( request == Request.List || request == Request.Listed )
             return 0;
 
-        long nWhen = new UtilJson( payload ).getLong( Message.sWHEN, -1l );
+        if( payload == null || payload.isNull() )
+            return System.currentTimeMillis();
 
-        return ((nWhen == -1) ? System.currentTimeMillis() : nWhen);
+        long nWhen = new UtilJson( payload ).getLong( Message.sWHEN, -1L );
+
+        return (nWhen == -1) ? System.currentTimeMillis() : nWhen;
     }
 
     /**
-     * Returns the device name from the payload.
+     * Returns the device name from the payload, or {@code null} if the
+     * payload does not contain one (e.g. List, Listed, Error requests).
      *
-     * @return The device name, or "List have no device" for {@code Request.List} and {@code Request.Listed}.
+     * @return The device name, or {@code null}.
      */
     public String getDeviceName()
     {
-        if( request == Request.List || request == Request.Listed )
-            return "List have no device";
+        if( payload == null || payload.isNull() ||
+            request == Request.List || request == Request.Listed )
+            return null;
 
         return new UtilJson( payload ).getString( Message.sNAME, null );
     }
 
     /**
+     * Returns the device value from the payload, or {@code null} if the
+     * payload does not contain one.
+     * <p>
+     * The returned value is converted to its Une type via
+     * {@link UtilJson#toUneType(JsonValue)}.
+     *
+     * @return The device value as a Une-compatible object, or {@code null}.
+     */
+    public Object getValue()
+    {
+        if( payload == null || payload.isNull() )
+            return null;
+
+        JsonValue jv = payload.asObject().get( Message.sVALUE );
+
+        return (jv == null || jv.isNull()) ? null : UtilJson.toUneType( jv );
+    }
+
+    /**
      * Extracts device name and value from the payload for change-related requests.
      *
-     * @return A {@code Pair<String, Object>} where key is device name and value is the new value,
-     *         or an error pair if payload is invalid.
+     * @return A {@code Pair<String, Object>} with device name and value,
+     *         or {@code null} if the payload is missing or malformed.
      */
     public Pair<String,Object> getChange()
     {
-        if( payload == null )
-            return new Pair( "No device", "No payload" );
+        if( payload == null || payload.isNull() )
+            return null;
 
         JsonObject joPayload = payload.asObject();
 
-        String sDevice = joPayload.getString( MsgAbstractOne.sNAME, null );
+        String sDevice = joPayload.getString( Message.sNAME, null );
 
         if( sDevice == null )
-            return newMsgPropNotFound( MsgAbstractOne.sNAME );
+            return null;
 
-        Object oValue = UtilJson.toUneType( joPayload.get( MsgAbstractTwo.sVALUE ) );
+        Object oValue = UtilJson.toUneType( joPayload.get( Message.sVALUE ) );
 
         if( oValue == null )
-            return newMsgPropNotFound( MsgAbstractTwo.sVALUE );
+            return null;
 
-        return new Pair( sDevice, oValue );
+        return new Pair<>( sDevice, oValue );
     }
 
     /**
@@ -259,17 +290,6 @@ public class ExEnComm
     }
 
     /**
-     * Converts this {@code ExEnComm} to a JSON value.
-     *
-     * @return A {@code JsonValue} representation in format { "request_name": {pay_load} }.
-     */
-    public JsonValue toJSON()
-    {
-        return Json.object()
-                   .add( request.name(), ((payload == null) ? Json.NULL : payload) );
-    }
-
-    /**
      * Returns the JSON string representation of this communication.
      *
      * @return JSON string in format { "request_name": {pay_load} }.
@@ -277,10 +297,13 @@ public class ExEnComm
     @Override
     public String toString()
     {
-        return toJSON().toString();
+        return Json.object()
+                   .add( request.name(), ((payload == null) ? Json.NULL : payload) )
+                   .toString();
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
 
     private ExEnComm( Request verb, JsonValue payload )
     {
@@ -306,8 +329,4 @@ public class ExEnComm
         return builder;
     }
 
-    private Pair newMsgPropNotFound( String property )    // To save RAM
-    {
-        return new Pair( "_error_", "Property \""+ property +"\" not found in: "+ payload.asObject() +", or its value is null" );
-    }
 }

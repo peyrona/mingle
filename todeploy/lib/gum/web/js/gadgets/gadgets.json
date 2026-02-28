@@ -1,0 +1,17 @@
+{
+    "description": "Manifest of available Gum gadgets. Add new gadgets here to load them automatically.",
+    "base": [
+        "help2edit.js",
+        "gadget.js"
+    ],
+    "gadgets": [
+        "button.js",
+        "chart.js",
+        "check.js",
+        "gauge.js",
+        "pie.js",
+        "ssd.js",
+        "text.js",
+        "scheduler.js"
+    ]
+}

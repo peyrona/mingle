@@ -19,9 +19,10 @@ import java.util.concurrent.TimeUnit;
 /**
  * Mingle controller for serial port (RS-232/RS-485) communication.
  * <p>
- * This controller provides access to serial ports using the nrjavaserial library,
- * enabling communication with devices connected via serial interfaces such as
- * RS-232, RS-485, USB-to-Serial adapters, and similar hardware.
+ * This controller provides access to serial ports using a pure-Java Linux
+ * implementation ({@code stty} + file I/O), enabling communication with devices
+ * connected via serial interfaces such as RS-232, RS-485, USB-to-Serial adapters,
+ * and similar hardware. No native dependencies required.
  *
  * <h3>Configuration Parameters:</h3>
  * <table border="1">
@@ -94,7 +95,7 @@ import java.util.concurrent.TimeUnit;
  * are encoded using the configured encoding (default UTF-8).
  *
  * @author Francisco José Morero Peyrona
- * @see <a href="https://github.com/NeuronRobotics/nrjavaserial">nrjavaserial library</a>
+ * @see LinuxSerialPortImpl
  * @see <a href="https://github.com/peyrona/mingle">Mingle project</a>
  */
 public final class SerialClient extends ControllerBase
@@ -116,6 +117,8 @@ public final class SerialClient extends ControllerBase
     // Default encoding (Mingle-specific, not serial-port specific)
     private static final String DEFAULT_ENCODING = "UTF-8";
 
+    private volatile Charset encoding;
+
     // Serial client instance (volatile for thread-safe access)
     private volatile ISerialClient client = null;
 
@@ -129,6 +132,9 @@ public final class SerialClient extends ControllerBase
     @Override
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
+        if( ! UtilSys.isUnix() )
+            sendIsInvalid( "This implementation works only with Unix like OOSS (Linux. Unix, etc)" );
+
         setDeviceName( deviceName );
         setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
         setDeviceConfig( deviceConf );
@@ -224,7 +230,7 @@ public final class SerialClient extends ControllerBase
 
         try
         {
-            Charset.forName( sEncoding );
+            encoding = Charset.forName( sEncoding );
         }
         catch( Exception ex )
         {
@@ -253,8 +259,8 @@ public final class SerialClient extends ControllerBase
         // Parse terminator (optional, with default)
         Object oTerminator = get( KEY_TERMINATOR );
         String sTerminator = (oTerminator != null)
-                           ? ISerialClient.Config.expandTerminator( oTerminator.toString() )
-                           : ISerialClient.Config.DEFAULT_TERMINATOR;
+                             ? ISerialClient.Config.expandTerminator( oTerminator.toString() )
+                             : ISerialClient.Config.DEFAULT_TERMINATOR;
 
         // Validate interval (optional, with default)
         int nInterval;
@@ -320,7 +326,11 @@ public final class SerialClient extends ControllerBase
             Set<String>   availablePorts = ISerialClient.getAvailablePorts();
 
             if( ! availablePorts.contains( sPort ) )
+            {
                 sendGenericError( ILogger.Level.WARNING, "Port '" + sPort + "' not currently available. Available ports: " + availablePorts );
+                setValid( false );
+                return false;
+            }
         }
 
         int nInterval = (int) get( KEY_INTERVAL );
@@ -358,7 +368,7 @@ public final class SerialClient extends ControllerBase
 
         try
         {   // Create and open the serial client
-            client = new SerialPort4NRJavaSerial( config, new SerialListener() );
+            client = new LinuxSerialPortImpl( config, new SerialListener() );
             client.open();
         }
         catch( Exception ex )
@@ -416,18 +426,14 @@ public final class SerialClient extends ControllerBase
         }
         else
         {
-            UtilSys.executor( true )
-                   .execute( () ->
-                            {
-                                try
-                                {
-                                    client.readOnce();
-                                }
-                                catch( Exception exc )
-                                {
-                                    sendReadError( exc );
-                                }
-                            } );
+            try
+            {
+                client.readOnce();
+            }
+            catch( Exception exc )
+            {
+                sendReadError( exc );
+            }
         }
     }
 
@@ -451,9 +457,8 @@ public final class SerialClient extends ControllerBase
                         {
                             try
                             {
-                                String sValue    = (newValue == null) ? "" : newValue.toString();
-                                String sEncoding = (String) get( KEY_ENCODING );
-                                byte[] bytes     = sValue.getBytes( Charset.forName( sEncoding ) );
+                                String sValue = (newValue == null) ? "" : newValue.toString();
+                                byte[] bytes  = sValue.getBytes( encoding );
 
                                 client.write( bytes );
                                 sendChanged( newValue );
@@ -494,7 +499,12 @@ public final class SerialClient extends ControllerBase
         @Override
         public void onMessage( String message )
         {
-            sendChanged( message );
+            int nInterval = (int) get( KEY_INTERVAL );
+
+            if( nInterval > 0 )
+                sendReaded( message );     // INTERVAL mode: response to a periodic read
+            else
+                sendChanged( message );    // AUTO mode: async data arrival
         }
 
         @Override

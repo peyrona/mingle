@@ -194,10 +194,11 @@ public final class Orchestrator
 
         info.append( "SYSTEM\n------\n" );
         info.append( "OS: " ).append( UtilSys.sOS )
-            .append( " (" ).append( System.getProperty( "os.version" ) ).append( ")\n" );
-        info.append( "Architecture: " ).append( System.getProperty( "os.arch" ) ).append( "\n" );
-        info.append( "User: " ).append( System.getProperty( "user.name" ) ).append( "\n" );
-        info.append( "Home: " ).append( System.getProperty( "user.home" ) ).append( "\n\n" );
+            .append( " (" ).append(             System.getProperty( "os.version" ) ).append( ")\n" );
+        info.append( "Architecture: " ).append( System.getProperty( "os.arch"    ) ).append( "\n" );
+        info.append( "User: " ).append(         System.getProperty( "user.name"  ) ).append( "\n" );
+        info.append( "Home: " ).append(         System.getProperty( "user.home"  ) ).append( "\n" );
+        info.append( "Curremt dir: " ).append(  System.getProperty( "user.dir"   ) ).append( "\n\n" );
 
         if( serviceManager != null )
         {
@@ -236,9 +237,9 @@ public final class Orchestrator
             xms = "16m";
 
         if( ! xms.startsWith( "-Xms" ) )
-            xms = "-Xms" + xms;
+            xms = checkUnit( "-Xms" + xms );
 
-        if( ! checkUnit( xms ) )
+        if( xms == null )
             return null;
 
         jvmOptions.add( xms );
@@ -250,9 +251,9 @@ public final class Orchestrator
             xmx = "64m";
 
         if( ! xmx.startsWith( "-Xmx" ) )
-            xmx = "-Xmx" + xmx;
+            xmx = checkUnit( "-Xmx" + xmx );
 
-        if( ! checkUnit( xmx ) )
+        if( xmx == null )
             return null;
 
         jvmOptions.add( xmx );
@@ -338,19 +339,21 @@ public final class Orchestrator
      * @param ram Input like "512m", "1g" (will never be empty).
      * @return true if valid.
      */
-    public static boolean checkUnit( String ram )
+    public static String checkUnit( String ram )
     {
-        ram = ram.trim().toLowerCase();
+        ram = ram.trim();
 
-        char unit = ram.charAt( ram.length() - 1 );
+        char unit = Character.toLowerCase( ram.charAt( ram.length() - 1 ) );
 
-        if( "kmgt".indexOf( unit ) > -1 )
-            return true;
+        if( "mg".indexOf( unit ) > -1 )
+            return ram.substring( 0, ram.length() - 1 ) + unit;  // Normalize unit to lowercase, preserve prefix case
 
-        if( Character.isDigit( unit ) )  System.out.println( "JVM memory unit not provided." );
-        else                             System.out.println( "Invalid JVM memory unit '"+ unit +'\'' );
+        if( Character.isDigit( unit ) )    // Unit not provided, assumes mega
+            return ram + 'm';
 
-        return false;
+        System.out.println( "Invalid JVM memory unit '"+ unit +"'. Only 'm' and 'g' are accepted." );
+
+        return null;
     }
 
     //------------------------------------------------------------------------//

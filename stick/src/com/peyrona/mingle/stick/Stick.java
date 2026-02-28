@@ -25,6 +25,7 @@ import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.messages.Message;
 import com.peyrona.mingle.lang.messages.MsgChangeActuator;
 import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
@@ -213,6 +214,11 @@ public final class Stick
         String  sLogLevel = UtilSys.getLogger().getLevel().toString();
         String  sGridMsg  = System.getProperty( "_GridManager_toString_Message_" );   // This is created in ::initGridManager()
 
+        Runtime runtime   = Runtime.getRuntime();
+        long    nMaxRAM   = runtime.maxMemory()   / UtilUnit.MEGA_BYTE;
+        long    nTotRAM   = runtime.totalMemory() / UtilUnit.MEGA_BYTE;
+        long    nUsedRAM  = (runtime.totalMemory() - runtime.freeMemory()) / UtilUnit.MEGA_BYTE;
+
         String sInfo = new StringBuilder()
                 .append( '\n' )
                 .append( "Model   = "         ).append( sModelName ).append( '\n' )
@@ -227,6 +233,7 @@ public final class Stick
                 .append( "Java    = version " ).append( System.getProperty( "java.version" ) ).append( " (" ).append( System.getProperty( "java.vendor" ) ).append( ")\n" )
                 .append( "JVM     = "         ).append( System.getProperty( "java.vm.name" ) ).append( " v." ).append( System.getProperty( "java.vm.version" ) ).append( '\n' )
                 .append( "JRE     = "         ).append( System.getProperty( "java.runtime.name" ) ).append( ". Version: " ).append( System.getProperty( "java.runtime.version" ) ).append( '\n' )
+                .append( "JVM RAM = "         ).append( nUsedRAM ).append( " Mb used of " ).append( nTotRAM ).append( " Mb (Max to alloc: " ).append( nMaxRAM ).append( " Mb)\n" )
                 .append( "Locale  = "         ).append( Locale.getDefault() ).append( '\n' )
                 .append( "OS      = "         ).append( System.getProperty( "os.name" ) ).append( ". Version: " ).append( System.getProperty( "os.version" ) ).append( ". Architecture: " ).append( System.getProperty( "os.arch" ) ).append( '\n' )
                 .append( "IP(s)   = "         ).append( StdXprFns.invoke( "localIPs", (Object[]) null ).toString() ).append( '\n' )
@@ -249,7 +256,7 @@ public final class Stick
         //------------------------------------------------------------------------//
         // Collect devices downtimed (those that apparently do not work any more)
 
-        long   nDownTime   = config.get( "exen", "downtimed_interval"     , 0 ) * 1000;
+        long   nDownTime   = config.get( "exen", "downtimed_interval"     , 0  ) * 1000;
         String sDownDevice = config.get( "exen", "downtimed_report_device", "" );
 
         if( (nDownTime > 0) && UtilStr.isNotEmpty( sDownDevice ) )
@@ -936,13 +943,12 @@ public final class Stick
             // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
-            if( driver != null )                     // There could be a problem loading the driver
+            if( driver != null )     // There could be a problem loading the driver
                 driver.write( msg.name, msg.value );
             else
                 log( ILogger.Level.SEVERE, "Driver for device '"+ msg.name +"' was not found" );
 
-            if( msg.isOwn )
-                broadcast( message );    // Perhaps an actuator with same name is in another grid node
+            broadcast( message );    // Perhaps an actuator with same name is in another grid node
         }
 
         private void handleExecute( Message message )
@@ -954,16 +960,11 @@ public final class Stick
             // If message::isOwn is false the rule/script exists because it was checked by ::ServerListener.
 
             if( rule != null )
-            {
                 rule.trigger( (boolean) msg.value );
-            }
             else    // Must be an script
-            {
                 srptMgr.named( msg.name ).execute();
-            }
 
-            if( msg.isOwn )
-                broadcast( message );    // Perhaps a rule or script with same name is in another grid node
+            broadcast( message );    // Perhaps a rule or script with same name is in another grid node
         }
 
         private void handleReadDevice( Message message )
@@ -974,18 +975,17 @@ public final class Stick
             // If message::isOwn is true  the device exists because the msg was generated in this ExEn.
             // If message::isOwn is false the device exists because it was checked by ::ServerListener.
 
-            if( driver != null )          // There could be a problem loading the driver
+            if( driver != null )     // There could be a problem loading the driver
                 driver.read( msg.name );
             else
                 log( ILogger.Level.SEVERE, "Driver for device '"+ msg.name +"' was not found" );
 
-            if( msg.isOwn )
-                broadcast( message );   // Perhaps a rule or script with same name is in another grid node
+            broadcast( message );    // Perhaps a rule or script with same name is in another grid node
         }
 
         private void broadcast( Message message )
         {
-            if( isGridNode() )
+            if( message.isOwn && isGridNode() )
                 gridMgr.broadcast( message );   // Internally uses a thread
         }
 
@@ -1034,12 +1034,11 @@ public final class Stick
     {
         private final boolean isInfoLoggable = isLoggable( ILogger.Level.INFO );
 
+        //------------------------------------------------------------------------//
+
         @Override
         public void onConnected( INetServer origin, INetClient client )
         {
-            if( ! isGridNode() || gridMgr.isDeaf() )
-                return;
-
             if( isInfoLoggable )
                 log( ILogger.Level.INFO, "Server Connected client: "+ origin );
         }
@@ -1047,9 +1046,6 @@ public final class Stick
         @Override
         public void onDisconnected( INetServer origin, INetClient client )
         {
-            if( ! isGridNode() || gridMgr.isDeaf() )
-                return;
-
             if( isInfoLoggable )
                 log( ILogger.Level.INFO, "Server Disconnected client: "+ origin );
         }
@@ -1057,9 +1053,6 @@ public final class Stick
         @Override
         public void onError( INetServer origin, INetClient client, Exception exc )
         {
-            if( ! isGridNode() || gridMgr.isDeaf() )
-                return;
-
             log( ILogger.Level.SEVERE, exc );
 
             if( client != null )
@@ -1069,13 +1062,12 @@ public final class Stick
         @Override
         public void onMessage( INetServer origin, INetClient client, String message )
         {
-            if( ! isGridNode() || gridMgr.isDeaf() )
-                return;
-
             UtilSys.executor( true )
                    .name( getClass().getSimpleName() +":onMessage:"+ message )
                    .execute( () -> processMsg( origin, client, message ) );
         }
+
+        //------------------------------------------------------------------------//
 
         private void processMsg( INetServer origin, INetClient client, String message )
         {
@@ -1159,9 +1151,9 @@ public final class Stick
             ExEnComm.Request    request = comm.request;
             Pair<String,Object> pair    = comm.getChange();
 
-            if( "_error_".equals( pair.getKey() ) )
+            if( pair == null )
             {
-                origin.send( ExEnComm.asError( pair.getValue().toString() ).toString() );
+                origin.send( ExEnComm.asError( "Invalid payload for request: "+ request ).toString() );
                 return;
             }
 

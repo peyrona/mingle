@@ -108,21 +108,6 @@ var gt =
     },
 
     //----------------------------------------------------------------------------------//
-    // FILES NAME NORMALIZATION
-    //----------------------------------------------------------------------------------//
-
-    normalizeFileName : function( name )
-    {
-        return name.replace( /[<>:"\/\\|?*]/g, '_' );
-    },
-
-    normalizeHtmlName : function( name )
-    {
-        return this.normalizeFileName( name ) +
-               (name.toLowerCase().endsWith('.html') ? '' : '.html');
-    },
-
-    //----------------------------------------------------------------------------------//
     // UPLOAD FILES AND IMAGES AND VIEW UPLOADED IMAGES
     //----------------------------------------------------------------------------------//
 
@@ -264,6 +249,89 @@ var gt =
 
         gt.getImages( (as) => gt.__selectImageDialog__( as, fnOnSelect, fnOnDelete ) );
     },
+
+    //----------------------------------------------------------------------------------//
+    // CONTEXT MENU (shared by free.js and grid.js)
+    //----------------------------------------------------------------------------------//
+
+    /**
+     * Shows a custom context menu at the given position with the specified items.
+     * Any previously open context menu is dismissed first.
+     *
+     * @param {Number} nPageX      Horizontal position (page coordinates).
+     * @param {Number} nPageY      Vertical position (page coordinates).
+     * @param {Array}  aItems      Array of { label: String, icon: String, action: Function }.
+     */
+    showContextMenu : function( nPageX, nPageY, aItems )
+    {
+        this.hideContextMenu();
+
+        let $menu = $('<div class="gum-context-menu"></div>');
+
+        for( const item of aItems )
+        {
+            let $item = $('<div class="gum-context-menu-item"></div>');
+
+            if( item.icon )
+                $item.append( '<i class="ti ti-'+ item.icon +'" style="margin-right:8px;"></i>' );
+
+            $item.append( item.label );
+            $item.on( 'click', function( e )
+                                {
+                                    e.stopPropagation();
+                                    gt.hideContextMenu();
+                                    item.action();
+                                } );
+
+            $menu.append( $item );
+        }
+
+        $('body').append( $menu );
+
+        // Adjust position so the menu stays within the viewport
+        let nMenuW = $menu.outerWidth();
+        let nMenuH = $menu.outerHeight();
+        let nWinW  = $(window).width();
+        let nWinH  = $(window).height();
+        let nLeft  = (nPageX + nMenuW > nWinW)  ? (nPageX - nMenuW) : nPageX;
+        let nTop   = (nPageY + nMenuH > nWinH)  ? (nPageY - nMenuH) : nPageY;
+
+        $menu.css( { left: Math.max( 0, nLeft ) + 'px',
+                     top : Math.max( 0, nTop  ) + 'px' } );
+
+        // Dismiss on click-outside, Escape, or scroll
+        setTimeout( () =>
+        {
+            $(document).on( 'mousedown.gumCtxMenu', function( e )
+            {
+                if( ! $(e.target).closest('.gum-context-menu').length )
+                    gt.hideContextMenu();
+            } );
+
+            $(document).on( 'keydown.gumCtxMenu', function( e )
+            {
+                if( e.keyCode === 27 )    // Escape
+                    gt.hideContextMenu();
+            } );
+
+            $(window).on( 'scroll.gumCtxMenu', function()
+            {
+                gt.hideContextMenu();
+            } );
+        }, 0 );
+    },
+
+    /**
+     * Hides any open context menu and removes its event listeners.
+     */
+    hideContextMenu : function()
+    {
+        $('.gum-context-menu').remove();
+        $(document).off( '.gumCtxMenu' );
+        $(window).off(   '.gumCtxMenu' );
+    },
+
+    //----------------------------------------------------------------------------------//
 
     __selectImageDialog__ : function( asImgesName, fnOnSelect, fnOnDelete )
     {
@@ -677,13 +745,10 @@ class Background
                                          this.getColorTo() +')';
         }
 
-        if( p_base.isNotEmpty( sBack ) )
-        {
-            $(node).css( 'background', sBack );
+        $(node).css( 'background', sBack || 'none' );
 
-            if( p_base.isNotEmpty( this.getImageURL() ) )
-                $(node).css( 'background-size', this.getImageMode() );    // mode: 'auto', 'cover' or 'contain'
-        }
+        if( p_base.isNotEmpty( this.getImageURL() ) )
+            $(node).css( 'background-size', this.getImageMode() );    // mode: 'auto', 'cover' or 'contain'
     }
 }
 
@@ -880,7 +945,7 @@ class GadgetStyle
      */
     setBackground( imgURL = null, imgMode = null, clrFrom = null, clrTo = null, clrDegrees = null )
     {
-        if( imgURL !== null && imgMode !== null && clrFrom !== null && clrTo !== null && clrDegrees !== null )
+        if( arguments.length > 0 )
             this._setPair_( 'background', new Background()
                                                 .setImageURL(     imgURL )
                                                 .setImageMode(    imgMode )
@@ -889,7 +954,17 @@ class GadgetStyle
                                                 .setColorDegrees( clrDegrees )
                                                 .encode() );
 
-        this.getBackground().applyTo( this.gadget.getContainer() );
+        let oBg = this.getBackground();
+
+        oBg.applyTo( this.gadget.getContainer() );
+
+        if( gum.isUsingGridLayout() )
+        {
+            let $card = this.gadget.getContainer().closest('.grid-stack-item-content');
+
+            if( $card.length )
+                oBg.applyTo( $card );
+        }
 
         return this;
     }

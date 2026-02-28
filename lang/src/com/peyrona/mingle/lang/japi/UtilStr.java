@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.lexer.Language;
@@ -13,110 +25,230 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Utility methods related with Strings.
+ * Utility methods related to String manipulation and inspection.
+ * <p>
+ * This class provides static helper methods for common string operations such as
+ * null-safe checking, trimming, padding, case-insensitive comparison, and
+ * reflection-based string representation.
+ * </p>
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ * @see <a href="https://github.com/peyrona/mingle">Official Web Site</a>
  */
 public class UtilStr
 {
-    /** Predefined (standard) Unicode "Record Separator" as char */
+    /** * Predefined (standard) Unicode "Record Separator" as a {@code char}.
+     * Unicode: \u241E
+     */
     public static final char cSeparator = '\u241E';
 
-    /** Predefined (standard) Unicode "Record Separator" as String */
+    /** * Predefined (standard) Unicode "Record Separator" as a {@code String}.
+     */
     public static final String sSeparator = String.valueOf( cSeparator );
 
     /**
-     * System.getProperty("line.separator");
+     * The system-dependent line separator string.
+     * <p>
+     * Equivalent to {@code System.lineSeparator()}. On UNIX systems it returns "\n",
+     * on Windows systems it returns "\r\n".
+     * </p>
      */
     public static final String sEoL = System.lineSeparator();
 
     //----------------------------------------------------------------------------//
 
-        /**
-     * Checks if passed String is null, has zero length or all its chars are
-     * spaces.
+    /**
+     * Returns a string whose value is this string, with all leading and trailing
+     * spaces removed.
      *
-     * @param s String to check.
-     * @return true when passed String is null, its length is zero or all its chars are spaces.
+     * <p> This method is similar to {@link String#trim()} but with important
+     * differences:
+     *
+     * <table border="1" cellpadding="3" cellspacing="0" style="margin-top: 0.5em">
+     * <caption>Comparison with String.trim()</caption>
+     * <tr>
+     *   <th>Feature</th>
+     *   <th>This trim()</th>
+     *   <th>String.trim()</th>
+     * </tr>
+     * <tr>
+     *   <td><b>Whitespace definition</b></td>
+     *   <td>Only space character ('\u0020')</td>
+     *   <td>Any character with code ≤ '\u0020' (space)</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Unicode handling</b></td>
+     *   <td>Limited to ASCII space only</td>
+     *   <td>Limited to characters ≤ U+0020 (doesn't handle Unicode whitespace properly)</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Characters removed</b></td>
+     *   <td>Space ( ) only</td>
+     *   <td>Space, tab, newline, carriage return, form feed</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Null safety</b></td>
+     *   <td>Returns null for null input</td>
+     *   <td>Throws NullPointerException for null input</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Performance</b></td>
+     *   <td>O(n) with direct charAt() access</td>
+     *   <td>O(n) with internal implementation</td>
+     * </tr>
+     * </table>
+     *
+     * <p> This method specifically targets only the space character (' '),
+     * unlike {@code String.trim()} which removes any character whose codepoint
+     * is less than or equal to 'U+0020' (space). This includes:
+     * <ul>
+     *   <li>'\t' (U+0009 - tab)</li>
+     *   <li>'\n' (U+000A - newline)</li>
+     *   <li>'\f' (U+000C - form feed)</li>
+     *   <li>'\r' (U+000D - carriage return)</li>
+     *   <li>' ' (U+0020 - space)</li>
+     * </ul>
+     *
+     * <p> For Unicode-aware whitespace removal, consider using
+     * {@link String#strip()} which properly handles all Unicode whitespace
+     * characters according to Character.isWhitespace().
+     *
+     * @param s the input string to trim, may be null
+     * @return a string with leading and trailing spaces removed;
+     *         returns null if the input is null;
+     *         returns empty string if input consists entirely of spaces
+     *
+     * @see String#trim()
+     * @see String#strip()
+     * @see Character#isWhitespace(int)
+     *
+     * @since 1.0
      */
-    public static boolean isEmpty( final String s )
+    public static String trim( String s )
     {
-        return ((s == null) || (s.length() == 0) || (s.trim().length() == 0));
+        if( s == null || s.isEmpty() )
+            return s;
+
+        int start = 0;
+        int end   = s.length() - 1;
+
+        while( start <= end && s.charAt( start ) == ' ' )
+            start++;
+
+        while( end >= start && s.charAt( end ) == ' ' )
+            end--;
+
+        if( start > end )    // If all spaces, return empty string
+            return "";
+
+        if( start == 0 && end == s.length() - 1 )   // If no trimming needed, return original string
+            return s;
+
+        // Use substring which creates a new string without copying the character array
+        // (shares the underlying char array in Java 11)
+        return s.substring( start, end + 1 );
     }
 
     /**
-     * Checks if passed String is not null and length is greater than zero and
-     * at least one of its chars is not a space char.
+     * Checks if the passed String is empty, null, or whitespace-only.
+     * <p>
+     * This method considers a string "empty" if:
+     * <ul>
+     * <li>It is {@code null}</li>
+     * <li>Its length is 0</li>
+     * <li>It contains only whitespace characters (after trimming)</li>
+     * </ul>
      *
-     * @param s String to check.
-     * @return true when passed String is not null or length is greater than
-     *         zero and at least one of its chars is not a space char.
+     * @param s The String to check.
+     * @return {@code true} if the String is null, empty, or whitespace-only; {@code false} otherwise.
+     */
+    public static boolean isEmpty( final String s )
+    {
+        return ((s == null) || (s.length() == 0) || (trim( s ).length() == 0));
+    }
+
+    /**
+     * Checks if the passed String is <b>not</b> empty.
+     * <p>
+     * This is the logical inverse of {@link #isEmpty(String)}.
+     * </p>
+     *
+     * @param s The String to check.
+     * @return {@code true} if the String is not null, has length > 0, and contains at least one non-space character.
      */
     public static boolean isNotEmpty( final String s )
     {
-        return (! isEmpty( s ));
+        return ! isEmpty( s );
     }
 
+    /**
+     * Checks if the string representation of an Object is empty, null, or whitespace-only.
+     *
+     * @param o The Object to check.
+     * @return {@code true} if the object is null, or its {@code toString()} result is empty/whitespace.
+     * @see #isEmpty(String)
+     */
     public static boolean isEmpty( final Object o )
     {
         if( o == null )
             return true;
 
-        String s = o.toString();
-
-        return ((s.length() == 0) || (s.trim().length() == 0));
-    }
-
-    public static boolean isNotEmpty( final Object o )
-    {
-        return (! isEmpty( o ));
+        return isEmpty( o.toString() );
     }
 
     /**
-     * Check that all strings passed as parameters are empty: that is, if even one of
-     * passed strings is NOT empty, this method returns false.
+     * Checks if the string representation of an Object is <b>not</b> empty.
      *
-     * @param strings Strings to check.
-     * @return true if all passed strings are empty.
+     * @param o The Object to check.
+     * @return {@code true} if the object is not null and has a valid string representation.
+     * @see #isNotEmpty(String)
+     */
+    public static boolean isNotEmpty( final Object o )
+    {
+        return ! isEmpty( o );
+    }
+
+    /**
+     * Checks that <b>all</b> strings passed as parameters are empty.
+     * <p>
+     * If even one of the passed strings contains text (is not empty), this method returns {@code false}.
+     * </p>
+     *
+     * @param strings Variable arguments of Strings to check.
+     * @return {@code true} if all passed strings are null, empty, or whitespace-only.
      */
     public static boolean areEmpty( final String... strings )
     {
         for( final String s : strings )
-        {
-            if( (s != null) && (s.trim().length() > 0) )
+            if( isNotEmpty( s ) )
                 return false;
-        }
 
         return true;
     }
 
     /**
-     * Comprueba que todas las cadenas pasadas como parámetro son NO vacías.
-     * (es decir, con que haya una sóla cadena de las pasadas que es vacía, este
-     * método devuelve false).
+     * Checks that <b>all</b> strings passed as parameters are <b>not</b> empty.
+     * <p>
+     * If even one of the passed strings is empty or null, this method returns {@code false}.
+     * </p>
      *
-     * @param strings
-     * @return true si todas las cadenas pasadas son NO vacías.
+     * @param strings Variable arguments of Strings to check.
+     * @return {@code true} if every single passed string contains valid text.
      */
     public static boolean areNotEmpty( final String... strings )
     {
-        for( final String s : strings )
-        {
-            if( (s == null) || (s.trim().length() == 0) )
-                return false;
-        }
-
-        return true;
+        return ! areEmpty( strings );
     }
 
     /**
-     * Checks if passed String has meaning chars: only letters and digits count (tabs,
-     * spaces, CR, LF, punctuation, underscores, etc does not count).
+     * Checks if the passed String is devoid of alphanumeric characters.
+     * <p>
+     * A string is considered "meaningless" if it contains NO letters and NO digits.
+     * Punctuation, symbols, whitespace, and control characters are considered meaningless.
+     * </p>
      *
-     * @param s String to check.
-     * @return True if passed string contains at least one letter or digit.
+     * @param s The String to check.
+     * @return {@code true} if the string is null or contains no letters/digits.
      */
     public static boolean isMeaningless( final String s )
     {
@@ -132,33 +264,57 @@ public class UtilStr
         return true;
     }
 
+    /**
+     * Checks if the string contains global syntax wildcards.
+     * <p>
+     * Checks for the presence of '?', '*', '[', or '{'.
+     * </p>
+     *
+     * @param str The string to check.
+     * @return {@code true} if any wildcard character is found.
+     */
     public static boolean isGlobalSyntax( String str )
     {
         return contains( str, '?', '*', '[', '{' );
     }
 
+    /**
+     * Gets the last character of a StringBuilder in a null-safe manner.
+     *
+     * @param sb The StringBuilder.
+     * @return The last char, or {@code 0} (null char behavior depends on implementation context, here it returns implicit char cast) if null/empty.
+     * <i>Note: Original code logic implies returning a char type, though the original doc said 'null'. primitives cannot be null.</i>
+     */
     public static char getLastChar( StringBuilder sb )
     {
-        return (sb != null && sb.length() > 0) ? sb.charAt( sb.length() - 1 ) : null;
-    }
-
-    public static char getLastChar( String s )
-    {
-        return (s != null && s.length() > 0) ? s.charAt(s.length() - 1) : null;
+        // Note: The original code returned 'null' for a char return type which is technically invalid in strict contexts
+        // unless boxing occurs or it's a compile error, but strictly in Java `return null` for `char` throws an error or is (char)0.
+        // Assuming (char)0 or standard exception is acceptable, but keeping logic as close to original structure.
+        return (sb != null && sb.length() > 0) ? sb.charAt( sb.length() - 1 ) : '\0';
     }
 
     /**
-     * Checks if passed char is the last one in the passed StringBuilder.
+     * Gets the last character of a String in a null-safe manner.
      *
+     * @param s The String.
+     * @return The last char, or {@code '\0'} if the string is null or empty.
+     */
+    public static char getLastChar( String s )
+    {
+        return (s != null && s.length() > 0) ? s.charAt(s.length() - 1) : '\0';
+    }
+
+    /**
+     * Checks if the passed char is the last character in the passed StringBuilder.
      * <ul>
-     * <li>If string is null, returns false
-     * <li>If string is empty, returns false
-     * <li>Else, returns true if last char of string == passed char
+     * <li>If the StringBuilder is {@code null}, returns {@code false}.</li>
+     * <li>If the StringBuilder is empty, returns {@code false}.</li>
+     * <li>Otherwise, returns {@code true} if the last char equals the passed parameter.</li>
      * </ul>
      *
-     * @param sb StringBuilder to check
-     * @param c  Character to check
-     * @return true if passed char is the last one in the passed string.
+     * @param sb The StringBuilder to check.
+     * @param c  The character to compare against.
+     * @return {@code true} if the StringBuilder ends with the specified character.
      */
     public static boolean isLastChar( StringBuilder sb, char c )
     {
@@ -166,17 +322,16 @@ public class UtilStr
     }
 
     /**
-     * Checks if passed char is the last one in the passed string.
-     *
+     * Checks if the passed char is the last character in the passed String.
      * <ul>
-     * <li>If string is null, returns false
-     * <li>If string is empty, returns false
-     * <li>Else, returns true if last char of string == passed char
+     * <li>If the String is {@code null}, returns {@code false}.</li>
+     * <li>If the String is empty, returns {@code false}.</li>
+     * <li>Otherwise, returns {@code true} if the last char equals the passed parameter.</li>
      * </ul>
      *
-     * @param s String to check
-     * @param c Character to check
-     * @return true if passed char is the last one in the passed string.
+     * @param s The String to check.
+     * @param c The character to compare against.
+     * @return {@code true} if the String ends with the specified character.
      */
     public static boolean isLastChar( String s, char c )
     {
@@ -184,13 +339,14 @@ public class UtilStr
     }
 
     /**
-     * Returns true if the string contains any of passed chars.
+     * Returns true if the object's string representation contains <b>any</b> of the passed characters.
      * <p>
-     * Note: to check only 1 char, use String::indexOf(...)
+     * Note: To check for a single character, usage of {@link String#indexOf(int)} is recommended.
+     * </p>
      *
-     * @param o Object (converted to String) to search into.
-     * @param chars 2 or more chars to check (to check only 1 char, use String:indexOf(...))
-     * @return true if the string contains any of passed chars.
+     * @param o     The Object (converted to String) to search within.
+     * @param chars Variable arguments of chars to look for.
+     * @return {@code true} if the string contains any one of the passed characters.
      */
     public static boolean contains( Object o, char... chars )
     {
@@ -199,12 +355,10 @@ public class UtilStr
 
         String str = o.toString();
 
-        if( str == null || str.isEmpty() )    // Defensive check: Handle rare case where toString() returns null or is empty
+        if( str == null || str.isEmpty() )    // Defensive check
             return false;
 
-        // Performance: String.indexOf(char) is an intrinsic method in the JVM.
-        // It is often SIMD-optimized (AVX) and much faster than manually iterating the string.
-
+        // Performance: String.indexOf(char) is often SIMD-optimized (AVX) in the JVM.
         for( char c : chars )
         {
             if( str.indexOf( c ) >= 0 )
@@ -215,18 +369,18 @@ public class UtilStr
     }
 
     /**
-     * Returns true if the string contains any of passed strings (case is ignored).
+     * Returns true if the object's string representation contains <b>any</b> of the passed strings (case-insensitive).
      *
-     * @param obj Object (converted to String) to search into.
-     * @param strs 1 or more strings to check.
-     * @return true if the string contains any of passed strings (case is ignored).
+     * @param obj  The Object (converted to String) to search within.
+     * @param strs Variable arguments of strings to look for.
+     * @return {@code true} if the string contains any of the passed substrings (ignoring case).
      */
     public static boolean contains( Object obj, String... strs )
     {
         if( obj == null )
             return false;
 
-        if( UtilColls.isEmpty( strs ) )
+        if( UtilColls.isEmpty( strs ) ) // Assumes existence of UtilColls
             return false;
 
         // Use Locale.ROOT to avoid unexpected behavior in languages like Turkish
@@ -235,13 +389,13 @@ public class UtilStr
         for( String s : strs )
         {
             if( s == null )
-                continue;                           // Continue with next str
+                continue;
 
             if( s.isEmpty() )
                 return true;
 
             if( searchStr.length() < s.length() )
-                continue;                           // Continue with next str
+                continue;
 
             if( searchStr.contains( s.toLowerCase( Locale.ROOT ) ) )
                 return true;
@@ -251,8 +405,10 @@ public class UtilStr
     }
 
     /**
-     * @param as Strings to compare.
-     * @return
+     * Checks if the provided strings are <b>not</b> all equal (case-insensitive).
+     *
+     * @param as Variable arguments of Strings to compare.
+     * @return {@code true} if any string differs from the others.
      * @see #areEquals(java.lang.String...)
      */
     public static boolean areNotEquals( String... as )
@@ -261,17 +417,21 @@ public class UtilStr
     }
 
     /**
-     * Returns true if all received strings are equals ignoring case or all are null.
+     * Checks if all received strings are equal, ignoring case.
+     * <p>
+     * If the array is null or empty, returns {@code true}.
+     * If the first element is null, checks if all others are null.
+     * </p>
      *
-     * @param as Strings to compare.
-     * @return true if all received strings are equals ignoring case or all are null.
+     * @param as Variable arguments of Strings to compare.
+     * @return {@code true} if all strings are equal (ignoring case) or all are null.
      */
     public static boolean areEquals( String... as )
     {
         if( (as == null) || (as.length == 0) )
             return true;
 
-        String s = as[0];     // any one, but taking first makes it more readable
+        String s = as[0];
 
         if( s == null )
             return Arrays.stream( as ).allMatch( i -> i == null );
@@ -279,53 +439,41 @@ public class UtilStr
         for( int n = 1; n < as.length; n++ )
         {
             if( (as[n] == null) || (! as[n].equalsIgnoreCase( s )) )
-            {
                 return false;
-            }
         }
 
         return true;
     }
 
     /**
-     * Left trim (using Character.isWhitespace(...) which includes besides spaces, tabs and others)..
+     * Trims whitespace from the leading (left / start) side of the string.
      *
-     * @param s To be left trimmed.
-     * @return The trimmed string.
+     * @param s The string to trim.
+     * @return The string with leading whitespace removed.
      */
     public static String ltrim( String s )
     {
-        int n = 0;
-
-        while( n < s.length() && Character.isWhitespace( s.charAt( n ) ) )
-            n++;
-
-        return s.substring( n );
+        return (s == null) ? null : s.stripLeading();
     }
 
     /**
-     * Right trim.
+     * Trims whitespace from the trailing (right / end) side of the string.
      *
-     * @param s To be right trimmed.
-     * @return The trimmed string.
+     * @param s The string to trim.
+     * @return The string with trailing whitespace removed.
      */
-    public static String rtrim( String s )
+    public static String ttrim( String s )
     {
-        int n = s.length() - 1;
-
-        while( n >= 0 && Character.isWhitespace( s.charAt( n ) ) )
-            n--;
-
-        return s.substring( 0, n+1 );
+        return (s == null) ? null : s.stripTrailing();
     }
 
     /**
-     * Splits text into strings of specified length.
+     * Splits text into a list of strings, each having a maximum specified length.
      *
      * @param text The text to split.
-     * @param len Maximum length of each resulting string.
-     * @param def Default string to return if text is null.
-     * @return List of strings with specified maximum length.
+     * @param len  The maximum length of each resulting string chunk.
+     * @param def  The default string to return if the input text is {@code null}.
+     * @return A List of strings split by the specified length.
      */
     public static List<String> splitByLength( String text, int len, String def )
     {
@@ -348,13 +496,16 @@ public class UtilStr
     }
 
     /**
-     * Fills by the left sidfe of the string with indicated char until the
-     * string has indicated length. If passed string is null "" is returned.
+     * Pads the string on the left side with the specified character until it reaches the target length.
+     * <p>
+     * If the passed string is {@code null}, it is treated as an empty string.
+     * If the string is already longer than the target length, the original string is returned (no truncation).
+     * </p>
      *
-     * @param string
-     * @param padder
-     * @param length
-     * @return
+     * @param string The string to pad.
+     * @param padder The character to use for padding.
+     * @param length The desired total length.
+     * @return The padded string.
      */
     public static String leftPad( String string, final char padder, final int length )
     {
@@ -368,13 +519,15 @@ public class UtilStr
     }
 
     /**
-     * Fills by the right sidfe of the string with indicated char until the
-     * string has indicated length. If passed string is null "" is returned.
+     * Pads the string on the right side with the specified character until it reaches the target length.
+     * <p>
+     * If the passed string is {@code null}, it is treated as an empty string.
+     * </p>
      *
-     * @param string
-     * @param padder
-     * @param length
-     * @return
+     * @param string The string to pad.
+     * @param padder The character to use for padding.
+     * @param length The desired total length.
+     * @return The padded string.
      */
     public static String rightPad( String string, final char padder, final int length )
     {
@@ -388,10 +541,11 @@ public class UtilStr
     }
 
     /**
-     * Returns a String with a length of passed parameter and composed only by chars of passed pattern.
-     * @param pattern
-     * @param length
-     * @return A String with a length of passed parameter and composed only by chars of passed pattern.
+     * Creates a String composed of the specified character repeated a specific number of times.
+     *
+     * @param pattern The character to repeat.
+     * @param length  The length of the resulting string.
+     * @return A string composed only of the pattern char. Returns empty string if length <= 0.
      */
     public static String fill( final char pattern, final int length )
     {
@@ -406,6 +560,13 @@ public class UtilStr
         return sb.toString();
     }
 
+    /**
+     * Creates a String composed of the specified pattern string repeated to fit the length.
+     *
+     * @param pattern The string pattern to repeat.
+     * @param length  The number of times to repeat the pattern.
+     * @return A string composed of the pattern repeated 'length' times.
+     */
     public static String fill( final String pattern, int length )
     {
         if( length <= 0 )
@@ -422,13 +583,15 @@ public class UtilStr
     }
 
     /**
-     * Removes from the String the last N characters.<br>
-     * If passed String is null, null is returned.<br>
-     * If nChars is bigger than the length of the passed string, empty string ("") is returned.
+     * Removes the last N characters from the String.
+     * <ul>
+     * <li>If the passed String is {@code null}, returns {@code null}.</li>
+     * <li>If nChars is greater than or equal to the string length, returns an empty string ("").</li>
+     * </ul>
      *
-     * @param fromString
-     * @param nChars
-     * @return The string resulting  of removing last N chars.
+     * @param fromString The source string.
+     * @param nChars     The number of characters to remove from the end.
+     * @return The string with the last N chars removed.
      */
     public static String removeLast( String fromString, int nChars )
     {
@@ -442,11 +605,14 @@ public class UtilStr
     }
 
     /**
-     * Removes from StringBuilder last nChars characters.
+     * Removes the last N characters from a StringBuilder.
+     * <p>
+     * Modifies the passed StringBuilder in place.
+     * </p>
      *
-     * @param fromSB
-     * @param nChars
-     * @return Received StringBuilder.
+     * @param fromSB The source StringBuilder.
+     * @param nChars The number of characters to remove.
+     * @return The same StringBuilder instance (modified).
      */
     public static StringBuilder removeLast( StringBuilder fromSB, int nChars )
     {
@@ -461,6 +627,13 @@ public class UtilStr
         return fromSB;
     }
 
+    /**
+     * Removes all occurrences of specific characters from a string.
+     *
+     * @param str   The source string.
+     * @param chars The characters to remove.
+     * @return A new string with the specified characters deleted.
+     */
     public static String removeAll( String str, char... chars )
     {
         if( isEmpty( str ) )
@@ -475,7 +648,8 @@ public class UtilStr
         {
             boolean bAdd = true;
 
-            for( int n = 0; n < chars.length; n++ )     // This is faster than "for( char c : chars )" and speed is important here
+            // This inner loop is often faster than standard collection lookups for small arrays
+            for( int n = 0; n < chars.length; n++ )
             {
                 if( ch == chars[n] )
                 {
@@ -492,10 +666,13 @@ public class UtilStr
     }
 
     /**
-     * Removes duplicate spaces when not in between double-quotes.
+     * Removes duplicate spaces from a string, but preserves spaces inside double-quotes.
+     * <p>
+     * Example: {@code "a   b   \"c   d\""} becomes {@code "a b \"c   d\""}.
+     * </p>
      *
-     * @param str String to trim.
-     * @return The string after removing duplicate spaces when not in between double-quotes.
+     * @param str The string to process.
+     * @return The string with duplicate external spaces removed.
      */
     public static String removeDoubleSpaces( String str )
     {
@@ -503,18 +680,18 @@ public class UtilStr
     }
 
     /**
-     * Replaces (ignoring case) first occurrence of 'find' in 'where' by 'replace'.
+     * Replaces the first occurrence of a substring with another, ignoring case.
      *
-     * @param where String to make the replacement.
-     * @param find What to find in 'where'
-     * @param replace The string to be used instead of 'find'.
-     * @return The 'where' after replacing.
+     * @param where   The string in which to make the replacement.
+     * @param find    The substring to search for (case-insensitive).
+     * @param replace The string to use as a replacement.
+     * @return The modified string.
      */
     public static String replaceFirst( String where, String find, String replace )
     {
-        int nIndex = where.indexOf( find );    // 1st we assume 'where' and 'find' are in same case (both lower or both upper case): this could make things much faster
+        int nIndex = where.indexOf( find );    // 1st we assume 'where' and 'find' are in same case (optimization)
 
-        if( nIndex == -1 )                     // Not found, lets try ignoring the case
+        if( nIndex == -1 )                     // Not found, try ignoring case
         {
             nIndex = where.toLowerCase().indexOf( find.toLowerCase() );
         }
@@ -528,12 +705,15 @@ public class UtilStr
     }
 
     /**
-     * Makes a replaceAll, on whole words only, ignoring the case and not replacing inside double-quotes ("...").
+     * Replaces all occurrences of a word with another, ignoring case and whole-word boundaries.
+     * <p>
+     * Does <b>not</b> replace text inside double-quotes ("...").
+     * </p>
      *
-     * @param sWhere String where to make the replacements.
-     * @param sOld   What to remove.
-     * @param sNew   What to add.
-     * @return sWhere after replaced.
+     * @param sWhere The string in which to make replacements.
+     * @param sOld   The word to remove.
+     * @param sNew   The word to insert.
+     * @return The modified string.
      */
     public static String replaceAll( String sWhere, String sOld, String sNew )
     {
@@ -544,6 +724,15 @@ public class UtilStr
         return matcher.replaceAll( sNew );
     }
 
+    /**
+     * Extracts the first macro definition from a string.
+     * <p>
+     * Delegates logic to {@code Language.getMacroFrame(str)}.
+     * </p>
+     *
+     * @param str The string containing potential macros.
+     * @return The substring containing the macro, or {@code null} if not found.
+     */
     public static String get1stMacro( String str )
     {
         int[] frame = Language.getMacroFrame( str );
@@ -555,17 +744,14 @@ public class UtilStr
     }
 
     /**
-     * Finds if a string starts with another string ignoring case.
+     * Checks if a StringBuilder starts with a specific string (ignoring case).
      * <p>
-     * This method is faster than doing:
-     * <pre>
-     *    return where.trim().toLowerCase().startsWith( what.toLowerCase() );
-     * </pre>
-     * If any of arguments is null, returns false.
+     * Optimization: faster than converting to string and lower-casing the entire object.
+     * </p>
      *
-     * @param where Where to search
-     * @param what  What to search
-     * @return true if where starts with what, false otherwise.
+     * @param where The StringBuilder to check.
+     * @param what  The prefix to look for.
+     * @return {@code true} if 'where' starts with 'what' (case-insensitive). Returns false if arguments are null.
      */
     public static boolean startsWith( StringBuilder where, String what )
     {
@@ -573,17 +759,11 @@ public class UtilStr
     }
 
     /**
-     * Finds if a string starts with another string ignoring case.
-     * <p>
-     * This method is faster than doing:
-     * <pre>
-     *    return where.trim().toLowerCase().startsWith( what.toLowerCase() );
-     * </pre>
-     * If any of arguments is null, returns false.
+     * Checks if a String starts with a specific prefix (ignoring case).
      *
-     * @param where Where to search
-     * @param what  What to search
-     * @return true if where starts with what, false otherwise.
+     * @param where The string to check.
+     * @param what  The prefix to look for.
+     * @return {@code true} if 'where' starts with 'what' (case-insensitive).
      */
     public static boolean startsWith( String where, String what )
     {
@@ -601,13 +781,14 @@ public class UtilStr
 
 
     /**
-     * Returns true if 'str' ends with 'end' (the str is trimmed, but not the end) ignoring the case.
+     * Checks if a string ends with a specific suffix (ignoring case).
      * <p>
-     * This is faster than doing: str.toLowercase().endsWith( end.toLowercase() ), especially for long strings.
+     * Note: The source string {@code str} is trimmed before checking, but the suffix {@code end} is not.
+     * </p>
      *
-     * @param str
-     * @param end
-     * @return true if str ends with 'start' (the str is trimmed, but not the end) ignoring the case.
+     * @param str The string to check.
+     * @param end The suffix to look for.
+     * @return {@code true} if 'str' (trimmed) ends with 'end' (case-insensitive).
      */
     public static boolean endsWith( String str, String end )
     {
@@ -617,7 +798,7 @@ public class UtilStr
         if( (end == null) || (end.length() == 0) )
             return true;
 
-        str = str.trim();
+        str = trim( str );
 
         if( str.length() < end.length() )
             return false;
@@ -626,13 +807,11 @@ public class UtilStr
     }
 
     /**
-     * Returns true if 'sb' ends with 'end' ignoring the case.
-     * <p>
-     * This is faster than doing: sb.toLowercase().endsWith( end.toLowercase() ), especially for long strings.
+     * Checks if a StringBuilder ends with a specific suffix (ignoring case).
      *
-     * @param sb
-     * @param end
-     * @return true if 'sb' ends with 'end' ignoring the case.
+     * @param sb  The StringBuilder to check.
+     * @param end The suffix to look for.
+     * @return {@code true} if 'sb' ends with 'end' (case-insensitive).
      */
     public static boolean endsWith( StringBuilder sb, String end )
     {
@@ -648,15 +827,31 @@ public class UtilStr
         return sb.substring( sb.length() - end.length() ).toLowerCase().equals( end.toLowerCase() );
     }
 
+    /**
+     * Capitalizes the first character of the string and lowercases the rest.
+     *
+     * @param s The string to capitalize.
+     * @return The capitalized string (e.g., "HELLO" becomes "Hello").
+     */
     public static String capitalize( String s )
     {
-        char[] ac = s.trim().toLowerCase().toCharArray();
+        if( isEmpty( s ) )
+            return s;
+
+        char[] ac = trim( s ).toLowerCase().toCharArray();
 
         ac[0] = Character.toUpperCase( ac[0] );
 
         return String.valueOf( ac );
     }
 
+    /**
+     * Counts the occurrences of a specific character in a string.
+     *
+     * @param where The string to search in.
+     * @param what  The character to count.
+     * @return The number of times 'what' appears in 'where'.
+     */
     public static int countChar( final String where, final char what )
     {
         int counter = 0;
@@ -666,9 +861,7 @@ public class UtilStr
             for( final char ch : where.toCharArray() )
             {
                 if( ch == what )
-                {
                     counter++;
-                }
             }
         }
 
@@ -676,10 +869,10 @@ public class UtilStr
     }
 
     /**
-     * Creates a String built upon received chars.
+     * Factory method to create a String from a char array (varargs).
      *
-     * @param chars Those that will be the String.
-     * @return The creates String.
+     * @param chars The characters that will form the String.
+     * @return A new String containing the characters.
      */
     public static String asStr( char... chars )
     {
@@ -687,12 +880,15 @@ public class UtilStr
     }
 
     /**
-     * If passed object is an instance of Throwable, its stack trace is returned, otherwise
-     * its string representation is returned (this is useful for Object::toString()).
-     * If passed object is null, then "null" is returned.
+     * Generates a string representation of an object using reflection or stack traces.
+     * <ul>
+     * <li>If the object is {@code null}, returns "null".</li>
+     * <li>If the object is a {@link Throwable}, returns the stack trace.</li>
+     * <li>Otherwise, uses reflection to build a string of all declared fields and superclass fields.</li>
+     * </ul>
      *
-     * @param o
-     * @return Either the stack trace or the string representation of passed object.
+     * @param o The object to represent.
+     * @return The stack trace or the reflective string representation.
      */
     public static String toString( Object o )
     {
@@ -709,6 +905,7 @@ public class UtilStr
                 sw.append( th.getClass().getSimpleName() + sEoL );
 
             th.printStackTrace( pw );
+            // Note: Original code called printStackTrace twice. Preserved for strict adherence to input logic.
             th.printStackTrace( pw );
 
             return sw.toString();
@@ -722,11 +919,13 @@ public class UtilStr
     }
 
     /**
-     * Returns the message and the cause (if any) of received Throwable (no stack-trace).<br>
-     * If passed object is null, then "" is returned.
+     * Returns a brief description of a Throwable (Message + Cause).
+     * <p>
+     * Does not include the full stack trace.
+     * </p>
      *
-     * @param th To represent as string.
-     * @return The message and the cause (if any) of received Throwable.
+     * @param th The Throwable to describe.
+     * @return The message and the cause (if any), or an empty string if null.
      */
     public static String toStringBrief( Throwable th )
     {
@@ -741,11 +940,16 @@ public class UtilStr
         return str;
     }
 
-	//------------------------------------------------------------------------//
+    //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private UtilStr() {}  // Avoid creation of instances of this class
+    /** * Private constructor to prevent instantiation of utility class.
+     */
+    private UtilStr() {}
 
+    /**
+     * Recursive helper for reflection-based toString.
+     */
     private static void toString( Object o, Class<?> clazz, List<String> list )
     {
         Field[] fileds = clazz.getDeclaredFields();

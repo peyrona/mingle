@@ -7,6 +7,7 @@ import java.util.Enumeration;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -123,14 +124,14 @@ public class OneToMany<K,V>
         boolean[] removed = { false };
 
         map.computeIfPresent( key, (k, list) ->
-        {
-            if( list.remove( value ) )
-            {
-                removed[0] = true;
-                return list.isEmpty() ? null : list; // Remove key if list is empty
-            }
-            return list;
-        } );
+                                {
+                                    if( list.remove( value ) )
+                                    {
+                                        removed[0] = true;
+                                        return list.isEmpty() ? null : list; // Remove key if list is empty
+                                    }
+                                    return list;
+                                } );
 
         return removed[0];
     }
@@ -144,6 +145,50 @@ public class OneToMany<K,V>
     public List<V> removeAll(K key)
     {
         return map.remove( key );
+    }
+
+    /**
+ * Moves a value from one key to another.
+ * <p>
+ * <b>Warning:</b> This operation is NOT atomic. It performs a remove followed by an add.
+ * During the transition, the value may be temporarily invisible to other threads.
+ * <p>
+ * If the source and destination keys are the same, the operation results in a no-op.
+ *
+ * @param oldKey the key to remove the value from (can be null, in which case no removal occurs)
+ * @param newKey the key to add the value to (cannot be null)
+ * @param value the value to move
+ */
+    public void moveValue( K oldKey, K newKey, V value )
+    {
+        Objects.requireNonNull( newKey, "Target key (newKey) cannot be null" );
+
+        if( oldKey != null && oldKey.equals( newKey ) )   // Check for self-move:
+            return;                                       // Moving to the same key is a no-op
+
+        // Remove from old key (Modify list in-place to maintain reference consistency)
+        if( oldKey != null )
+        {
+            map.computeIfPresent( oldKey, (k, list) ->
+                          {
+                              list.remove( value );                  // Modify in-place
+                              return list.isEmpty() ? null : list;   // Cleanup empty list
+                          } );
+        }
+
+        // Add to new key (Modify list in-place)
+        map.compute( newKey, (k, existingList) ->
+             {
+                 if( existingList == null )
+                 {
+                     List<V> newList = new CopyOnWriteArrayList<>();
+                     newList.add( value );
+                     return newList;
+                 }
+
+                 existingList.add( value ); // Modify in-place
+                 return existingList;
+             } );
     }
 
     /**

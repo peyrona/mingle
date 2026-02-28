@@ -119,6 +119,7 @@ public final class Language
 
     /**
      * Converts received object into string and prefixes and postfixes using ::QUOTE.
+     * Special characters in the content are escaped for safe Une source representation.
      *
      * @param o Object to convert
      * @return Received object converted into string and prefixes and postfixes using ::QUOTE.
@@ -130,10 +131,77 @@ public final class Language
         if( s == null || s.isEmpty() )
             return "" + QUOTE + QUOTE;    // Checked: returns proper value
 
-        if( s.charAt(0) == QUOTE && UtilStr.isLastChar( s, QUOTE ) )
+        return QUOTE + escapeString( s ) + QUOTE;
+    }
+
+    /**
+     * Escapes special characters in a string for Une source representation.
+     * This is the inverse of {@link #unescapeString(String)}.
+     *
+     * @param s Raw string content (without surrounding quotes).
+     * @return Escaped string content safe to wrap in QUOTE characters.
+     */
+    public static String escapeString( String s )
+    {
+        StringBuilder sb = new StringBuilder( s.length() + 8 );
+
+        for( int i = 0; i < s.length(); i++ )
+        {
+            char c = s.charAt( i );
+
+            switch( c )
+            {
+                case '"' : sb.append( "\\\"" ); break;
+                case '\\': sb.append( "\\\\" ); break;
+                case '\n': sb.append( "\\n"  ); break;
+                case '\r': sb.append( "\\r"  ); break;
+                case '\t': sb.append( "\\t"  ); break;
+                default  : sb.append( c );
+            }
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Unescapes a string that was escaped with {@link #escapeString(String)}.
+     * Processes escape sequences: {@code \"}, {@code \\}, {@code \n}, {@code \r}, {@code \t}.
+     *
+     * @param s Escaped string content (without surrounding quotes).
+     * @return Unescaped string with actual special characters.
+     */
+    public static String unescapeString( String s )
+    {
+        if( s.indexOf( '\\' ) == -1 )
             return s;
 
-        return QUOTE + s + QUOTE;
+        StringBuilder sb = new StringBuilder( s.length() );
+
+        for( int i = 0; i < s.length(); i++ )
+        {
+            char c = s.charAt( i );
+
+            if( c == '\\' && i + 1 < s.length() )
+            {
+                char next = s.charAt( ++i );
+
+                switch( next )
+                {
+                    case 'n' : sb.append( '\n' ); break;
+                    case 'r' : sb.append( '\r' ); break;
+                    case 't' : sb.append( '\t' ); break;
+                    case '\\': sb.append( '\\' ); break;
+                    case '"' : sb.append( '"'  ); break;
+                    default  : sb.append( next );
+                }
+            }
+            else
+            {
+                sb.append( c );
+            }
+        }
+
+        return sb.toString();
     }
 
     //------------------------------------------------------------------------//

@@ -48,7 +48,7 @@ THEN get("ram" ):add( ram:format("##") )
      get("both"):put( time() +" RAM", ram:format("##") )
 
 WHEN cpu >= 0 AND get("cpu"):size() == 5
-THEN console = "{"+ time() +"} CPU "+ get("cpu") + _NL_
+THEN console = "{"+ time() +"} CPU "+ get("cpu") + _NL_    # _NL_ --> is replace by --> "\n"
 
 WHEN ram >= 0 AND get("ram"):size() == 5
 THEN console = "{"+ time() +"} RAM "+ get("ram") + _NL_

@@ -1,0 +1,201 @@
+#==================================================================================================================================
+# Of Wolves and Rabbits
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# A predator-prey simulation told entirely in Une's declarative rules.
+#
+# Based on the Lotka-Volterra equations, this example proves that complex emergent behaviour
+# does not require imperative loops. A handful of rules — each one a sentence in the story —
+# are enough to birth a world and watch it live and die.
+#
+# Watch sixty rabbits and eight wolves share a meadow for the very first and last time.
+#
+# Topics demonstrated:
+#   · Embedded Java for simultaneous state updates — both populations computed from the
+#     same snapshot before either value is applied, avoiding sequential-mutation artefacts.
+#   · ExEn cache (put/get) used as both a day counter and a narrative-gate pair, ensuring
+#     each plot moment is announced exactly once regardless of how many ticks satisfy it.
+#   · WHEN conditions that read as natural sentences.
+#   · Multiple THEN actions per rule.
+#   · CellSetDriver, ClockDriver, and OutputDriver working in concert.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# Initialisation: open the ExEn cache, set the stage, greet the audience.
+#
+SCRIPT
+    ONSTART
+    LANGUAGE Une
+    FROM {
+             put( "day"  , 0      )    # Simulation day counter
+             put( "gate" , pair() )    # Narrative gates: each key marks a plot moment already announced
+
+             console = "════════════════════════════════════════════════════"
+             console = "            Of Wolves and Rabbits"
+             console = "            A Tale Told in Rules"
+             console = "════════════════════════════════════════════════════"
+             console = "\n"
+             console = "The meadow awakens. Spring is in the air."
+             console = "Sixty rabbits graze contentedly in the tall grass,"
+             console = "unaware that eight wolves watch from the tree line."
+             console = "\n"
+         }
+
+
+#==================================================================================================================================
+# DEVICES
+#==================================================================================================================================
+
+DEVICE day_tick                     # The heartbeat of the world — one tick = one simulated day
+    DRIVER ClockDriver
+        CONFIG interval = 2s
+
+DEVICE rabbits                      # Current rabbit population
+    DRIVER CellSetDriver
+        CONFIG value = 60
+
+DEVICE wolves                       # Current wolf population
+    DRIVER CellSetDriver
+        CONFIG value = 8
+
+DEVICE console                      # Narrative output
+    DRIVER OutputDriver
+
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# The engine: reads both populations at the same instant, computes the next generation, and
+# posts both changes through the EventBus so downstream rules evaluate against fresh values.
+#
+# Lotka-Volterra discrete model (per tick):
+#
+#   new_rabbits = max(0, floor( r · (1 + α − w·β) ))
+#   new_wolves  = max(0, floor( w · (1 + r·δ − γ) ))
+#
+#   α = 0.30   rabbit intrinsic growth rate
+#   β = 0.015  predation coefficient (rabbits taken per wolf per day)
+#   δ = 0.008  wolf reproduction efficiency per rabbit
+#   γ = 0.15   wolf natural death rate
+#
+SCRIPT evolve
+    LANGUAGE Java
+    CALL "evolve"
+    FROM {
+             public void evolve( IRuntime rt )
+             {
+                 // Read both populations from the same snapshot — before touching anything
+                 double r = ((Number) ((IDevice) rt.get( "rabbits" )).value()).doubleValue();
+                 double w = ((Number) ((IDevice) rt.get( "wolves"  )).value()).doubleValue();
+
+                 final double alpha = 0.30;    // Rabbit intrinsic growth rate
+                 final double beta  = 0.015;   // Predation: rabbits killed per wolf per day
+                 final double delta = 0.008;   // Wolf reproduction efficiency per rabbit
+                 final double gamma = 0.15;    // Wolf natural death rate
+
+                 // Compute the next generation — both values derived from the old snapshot
+                 int newR = (int) java.lang.Math.max( 0, java.lang.Math.floor( r * (1 + alpha - w * beta) ) );
+                 int newW = (int) java.lang.Math.max( 0, java.lang.Math.floor( w * (1 + r * delta - gamma) ) );
+
+                 // Post through the EventBus so devices update and narrative rules re-evaluate
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "rabbits", newR ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "wolves",  newW ) );
+             }
+         }
+
+
+#==================================================================================================================================
+# RULES
+#==================================================================================================================================
+
+# ─── The heartbeat ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN day_tick                        # Every tick: advance the calendar and run the population engine
+THEN put( "day", get("day") + 1 )
+     evolve
+
+# ─── Periodic census ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN rabbits > 0 AND get("day"):mod(5) IS 0             # While rabbits survive: a headcount every five days
+THEN console = "[ Day " + get("day") + " ]  Rabbits: " + rabbits + "  ·  Wolves: " + wolves
+
+WHEN rabbits IS 0 AND wolves > 0 AND get("day"):mod(5) IS 0     # After the rabbits are gone: the wolves are counted in silence
+THEN console = "[ Day " + get("day") + " ]  The meadow echoes.  " + wolves + " wolves remain, hunting silence."
+
+# ─── The story of the rabbits ─────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN rabbits > 80 AND get("gate"):get("r_boom", 0) IS 0
+THEN get("gate"):put( "r_boom", 1 )
+     console = "The warren has never been so full: " + rabbits + " rabbits share the meadow."
+     console = "Young ones tumble through the clover. The elders keep one eye on the tree line."
+
+WHEN rabbits < 30 AND wolves > 0 AND get("gate"):get("r_worry", 0) IS 0
+THEN get("gate"):put( "r_worry", 1 )
+     console = "A cold wind moves through the warren. Only " + rabbits + " remain."
+     console = "The survivors huddle close, listening for howls in the dark."
+
+WHEN rabbits < 10 AND wolves > 0 AND get("gate"):get("r_crisis", 0) IS 0
+THEN get("gate"):put( "r_crisis", 1 )
+     console = "Catastrophe. Only " + rabbits + " rabbits cling to life as the wolves close in."
+
+WHEN rabbits IS 1 AND get("gate"):get("r_one", 0) IS 0
+THEN get("gate"):put( "r_one", 1 )
+     console = "One. A single rabbit, crouched beneath a thistle, trembling."
+
+WHEN rabbits IS 0 AND wolves > 0 AND get("gate"):get("r_gone", 0) IS 0
+THEN get("gate"):put( "r_gone", 1 )
+     console = "The last rabbit has vanished from the meadow."
+     console = "The wolves pause, muzzles raised, confused by the silence."
+
+# ─── The story of the wolves ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN wolves > 25 AND get("gate"):get("w_rise", 0) IS 0
+THEN get("gate"):put( "w_rise", 1 )
+     console = wolves + " wolves now prowl the valley."
+     console = "They hunt in relays. There is no safe hour for the rabbits."
+
+WHEN wolves > 55 AND get("gate"):get("w_peak", 0) IS 0
+THEN get("gate"):put( "w_peak", 1 )
+     console = "The pack stands at " + wolves + ". This meadow has never seen so many predators."
+     console = "But with the rabbits thinning fast, the feast cannot last."
+
+WHEN wolves < 20 AND rabbits IS 0 AND get("gate"):get("w_hunger", 0) IS 0
+THEN get("gate"):put( "w_hunger", 1 )
+     console = "Hunger walks with the wolves now. " + wolves + " remain — lean, restless, hollow-eyed."
+     console = "There is nothing left to hunt."
+
+WHEN wolves < 5 AND wolves > 0 AND rabbits IS 0 AND get("gate"):get("w_last", 0) IS 0
+THEN get("gate"):put( "w_last", 1 )
+     console = "Only " + wolves + " wolves remain, ghost-thin, wandering in circles."
+     console = "They have forgotten what it felt like to be full."
+
+# ─── The endings ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN wolves IS 0 AND rabbits IS 0     # Extinction: both species gone
+THEN console = _NL_
+     console = "════════════════════════════════════════════════════"
+     console = "               S I L E N C E"
+     console = "════════════════════════════════════════════════════"
+     console = "After " + get("day") + " days, the meadow is empty."
+     console = "Both species gone — not with fury, but with arithmetic."
+     console = "The grass grows untouched. The wind moves through it anyway."
+     console = "Nature does not mourn. Nature begins again."
+
+WHEN wolves IS 0 AND rabbits > 0 AND get("gate"):get("rabbits_win", 0) IS 0    # Upset: wolves vanish first
+THEN get("gate"):put( "rabbits_win", 1 )
+     console = _NL_
+     console = "════════════════════════════════════════════════════"
+     console = "          T H E   W A R R E N   W I N S"
+     console = "════════════════════════════════════════════════════"
+     console = "The last wolf has perished."
+     console = rabbits + " rabbits inherit the meadow — for now."
+     console = "They will multiply without fear, until the meadow can no longer hold them."
+     console = "And somewhere, in the hills beyond, something stirs."
+     console = "There is always something that stirs."
+     exit()
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

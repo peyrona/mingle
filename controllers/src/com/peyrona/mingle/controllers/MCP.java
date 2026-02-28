@@ -7,11 +7,14 @@ import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.commands.ICommand;
+import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -33,6 +36,7 @@ import java.util.Map;
  *   <li>max_tokens: Maximum tokens in response (optional, default: 1024)</li>
  *   <li>temperature: Sampling temperature 0.0-2.0 (optional, default: 0.7)</li>
  *   <li>system: System prompt/instructions (optional)</li>
+ *   <li>context: Name of a DEVICE whose current value is appended to the system prompt on every request (optional)</li>
  * </ul>
  * <p>
  * Write accepts:
@@ -50,13 +54,13 @@ public final class MCP
        extends ControllerBase
 {
     // Configuration keys
-    private static final String KEY_URI         = "uri";
-    private static final String KEY_API_KEY     = "api_key";
-    private static final String KEY_MODEL       = "model";
+    private static final String KEY_URI         = "uri";         // The value of this key is never null because it is declared as REQUIRED in DRIVER declaration
+    private static final String KEY_API_KEY     = "api_key";     // The value of this key is never null because it is declared as REQUIRED in DRIVER declaration
+    private static final String KEY_MODEL       = "model";       // The value of this key is never null because it is declared as REQUIRED in DRIVER declaration
     private static final String KEY_TIMEOUT     = "timeout";
     private static final String KEY_MAX_TOKENS  = "max_tokens";
     private static final String KEY_TEMPERATURE = "temperature";
-    private static final String KEY_SYSTEM      = "system";
+    private static final String KEY_CONTEXT     = "context";     // A device name
 
     // Default values
     private static final int    DEFAULT_TIMEOUT     = 60;
@@ -71,43 +75,13 @@ public final class MCP
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
     {
         setDeviceName( deviceName );
-        setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
-        setDeviceConfig( deviceInit );   // Store raw config first, validated values will be stored at the end
-
-        // Validate required parameters
-        String sUri    = (String) get( KEY_URI );
-        String sApiKey = (String) get( KEY_API_KEY );
-        String sModel  = (String) get( KEY_MODEL );
-
-        if( UtilStr.isEmpty( sUri ) )
-        {
-            sendIsInvalid( "Missing required parameter: 'uri'" );
-            setValid( false );
-        }
-
-        if( UtilStr.isEmpty( sApiKey ) )
-        {
-            sendIsInvalid( "Missing required parameter: 'api_key'" );
-            setValid( false );
-        }
-
-        if( UtilStr.isEmpty( sModel ) )
-        {
-            sendIsInvalid( "Missing required parameter: 'model'" );
-            setValid( false );
-        }
-
-        if( ! isValid() )
-            return;
+        setListener( listener );        // Must be at beginning: in case an error happens, Listener is needed
+        setDeviceConfig( deviceInit );  // Store raw config first, validated values will be stored at the end
 
         try
         {
-            // Store configuration
-            set( KEY_URI, new URI( sUri ) );
-            set( KEY_API_KEY, sApiKey );
-            set( KEY_MODEL, sModel );
-
             // Optional parameters with defaults
+
             Object oTimeout = get( KEY_TIMEOUT );
             int timeout = (oTimeout != null) ? ((Number) oTimeout).intValue() : DEFAULT_TIMEOUT;
 
@@ -118,13 +92,15 @@ public final class MCP
             float temperature = (oTemperature != null) ? ((Number) oTemperature).floatValue() : DEFAULT_TEMPERATURE;
 
             // Store validated configuration (overwrites raw values with validated ones)
-            set( KEY_TIMEOUT, Math.max( 1, timeout ) );
-            set( KEY_MAX_TOKENS, Math.max( 1, maxTokens ) );
+
+            set( KEY_TIMEOUT    , Math.max( 1, timeout ) );
+            set( KEY_MAX_TOKENS , Math.max( 1, maxTokens ) );
             set( KEY_TEMPERATURE, Math.max( 0f, Math.min( 2f, temperature ) ) );
 
-            String system = (String) get( KEY_SYSTEM );
-            if( system != null )
-                set( KEY_SYSTEM, system );
+            String context = (String) get( KEY_CONTEXT );
+
+            if( context != null )
+                set( KEY_CONTEXT, context );
 
             setValid( true );
         }
@@ -140,12 +116,32 @@ public final class MCP
         if( isInvalid() || (! super.start( rt )) )
             return false;
 
-        // Create HTTP client with configured timeout
-        int timeout = (int) get( KEY_TIMEOUT );
+        try
+        {
+            set( KEY_URI, new URI( (String) get( KEY_URI ) ) );
+        }
+        catch( URISyntaxException ex )
+        {
+            sendIsInvalid( "Invalid URI: "+ get( KEY_URI ) );
+        }
 
-        httpClient = HttpClient.newBuilder()
-                               .connectTimeout( Duration.ofSeconds( timeout ) )
-                               .build();
+        if( get( KEY_CONTEXT ) != null )    // A device name
+        {
+            ICommand dev = getRuntime().get( (String) get( KEY_CONTEXT ) );
+
+                 if( dev == null )                 sendIsInvalid( "Device '"+ get( KEY_CONTEXT ) +"' not found." );
+            else if( ! (dev instanceof IDevice) )  sendIsInvalid( "Device '"+ dev.name() +"' is not a DEVICE, but a "+ dev.getClass().getSimpleName() );
+        }
+
+        if( isValid() )
+        {
+            int timeout = (int) get( KEY_TIMEOUT );
+
+            httpClient = HttpClient.newBuilder()
+                                   .connectTimeout( Duration.ofSeconds( timeout ) )
+                                   .build();
+        }
+
         return isValid();
     }
 
@@ -162,7 +158,7 @@ public final class MCP
     {
         // LLM APIs are request/response based, not readable on demand
         // The response is sent via sendChanged() after write()
-        sendIsNotReadable();
+        sendReaded( "" );
     }
 
     /**
@@ -205,7 +201,7 @@ public final class MCP
         String model        = (String) get( KEY_MODEL );
         int    maxTokens    = (int) get( KEY_MAX_TOKENS );
         float  temperature  = (float) get( KEY_TEMPERATURE );
-        String systemPrompt = (String) get( KEY_SYSTEM );
+        String systemPrompt = null;
 
         JsonObject root = new JsonObject();
                    root.add( "model"      , model );
@@ -214,20 +210,19 @@ public final class MCP
 
         JsonArray messages = new JsonArray();
 
-        // Add system message if configured
-        if( request instanceof pair )
-        {
-            pair pReq = (pair) request;
-            Object sysOverride = pReq.get( "system" );
+        // Append context device value to the system prompt when configured
+        String contextDeviceName = (String) get( KEY_CONTEXT );
 
-            if( sysOverride != null )
-                systemPrompt = sysOverride.toString();
+        if( UtilStr.isNotEmpty( contextDeviceName ) )
+        {
+            Object value = ((IDevice) getRuntime().get( contextDeviceName )).value();
+
+            if( UtilStr.isNotEmpty( value ) )
+                systemPrompt = value.toString();
         }
 
-        if( systemPrompt != null && ! systemPrompt.isEmpty() )
-        {
+        if( UtilStr.isNotEmpty( systemPrompt ) )
             messages.add( new JsonObject().add( "role", "system" ).add( "content", systemPrompt ) );
-        }
 
         // Process request based on type
         if( request instanceof String )       // Simple String

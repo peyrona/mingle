@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.lexer.Language;
@@ -71,6 +83,43 @@ public class UtilComm
     //------------------------------------------------------------------------//
     private UtilComm() {}  // Avoid this class instances creation
     //------------------------------------------------------------------------//
+
+    public static boolean isValidIP( String ip )
+    {
+        if( UtilStr.isEmpty( ip ))
+            return false;
+
+        return isValidIPv4( ip ) || isValidIPv6( ip );
+    }
+
+    public static boolean isValidIPv4( String ip )
+    {
+        try
+        {
+            InetAddress inet = InetAddress.getByName( ip );
+            return inet instanceof java.net.Inet4Address &&
+                   ! ip.contains( ":" )                  &&
+                   inet.getHostAddress().equals( ip );  // Make sure it's not IPv6 mapped
+        }
+        catch( UnknownHostException e )
+        {
+            return false;
+        }
+    }
+
+    public static boolean isValidIPv6( String ip )
+    {
+        try
+        {
+            InetAddress inet = InetAddress.getByName( ip );
+            return inet instanceof Inet6Address &&
+                   ! ip.contains( "." );            // Avoid IPv4-compatible IPv6 addresses
+        }
+        catch( UnknownHostException e )
+        {
+            return false;
+        }
+    }
 
     /**
      * Checks if the given port number is a valid UDP port.

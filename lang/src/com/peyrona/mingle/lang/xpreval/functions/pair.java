@@ -3,6 +3,7 @@ package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -17,18 +18,24 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * A simple dictionary: key/value pairs; where key must be a String or Number
- * (internally always stored as a lowercase String).
+ * A case-insensitive dictionary implementation for the Une language that stores key-value pairs.
  * <p>
- * This collection is case-insensitive for String keys and achieves O(1) lookup
- * performance by normalizing all keys to lowercase. Numeric keys are canonicalized
- * such that '1' and '1.0' refer to the same entry.
+ * This collection maps String or Number keys to any valid Une value. Keys are case-insensitive
+ * and normalized to lowercase for consistent lookup, achieving O(1) retrieval performance.
+ * Numeric keys are canonicalized such that '1' and '1.0' refer to the same entry.
  * <p>
- * Values can be any valid Une type.
+ * <b>Thread Safety:</b> All mutating operations are thread-safe using a ConcurrentHashMap.
+ * Property change listeners can be registered to receive notifications of modifications.
+ * <p>
+ * <b>Key Normalization:</b>
+ * <ul>
+ *   <li>String keys are converted to lowercase</li>
+ *   <li>Number keys are converted to String (1, 1.0, 1.00 all become "1")</li>
+ * </ul>
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ * @see com.peyrona.mingle.lang.xpreval.functions.list
+ * @see <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class pair
              extends ExtraTypeCollection<pair>
@@ -40,28 +47,40 @@ public final class pair
     // NOTE: As Une is case insentivive, entries are stored in lowercase to ensure O(1) performance.
 
     /**
-     * A Pair set is technically named a "dictionary". It can be considered as a special type of list: in a
-     * dictionary every item of the list is a pair of values (instead of one single value).<br>
-     * Dictionaries look like this:<br>
-     * <pre>
-     *      name = John Doe, age = 27, married = true
-     * </pre>
-     *
-     * To create a new 'pair', a set of even parameters is needed: first one is used as key, second as this key's value,
-     * third is a new key and fourth this key's value and so on...<br>
-     * Although not mandatory, it is recommended that all keys will be strings. Values can be any Une valid value.<br>
-     * Another way is to pass a well-formed JSON object as a string.<br>
-     * <br>
-     * A 'pair' can be created in the following ways:
+     * Constructs a new pair instance with optional initial data.
+     * <p>
+     * Accepts multiple argument formats:
      * <ul>
-     *     <li>pair() --> Creates an empty pairs build</li>
-     *     <li>pair( "name", "John Doe", "age", 27, "married", true ) --> Creates the previously mentioned pairs build.</li>
-     *     <li>pair( "{ \"age\": 27, \"name\": \"Frank\" }" ) --> Plain JSON object</li>
-     *     <li>pair( string ) --> Using only one string that represents a valid JSON object: can contain any other JSON value.
-     *         This string can be returned from <code>::toString()</code> or from <code>::serialize():toString()</code>) </li>
+     *   <li><b>Empty:</b> {@code new pair()} creates an empty dictionary.</li>
+     *   <li><b>Key-value pairs:</b> {@code new pair("name", "John", "age", 27)} adds alternating key-value arguments.
+     *       Keys must be String or Number; values can be any valid Une type.</li>
+     *   <li><b>Plain JSON object:</b> {@code new pair("{\"age\":27,\"name\":\"Frank\"}")} parses a JSON object string.
+     *   <li><b>Serialized JSON:</b> {@code new list("{\"class\":\"...\",\"data\":{...}}")} deserializes from
+     *       {@link #serialize()} output.</li>
      * </ul>
+     * <p>
+     * <b>Examples:</b>
+     * <pre>{@code
+     * // Empty dictionary
+     * pair p1 = new pair();
      *
-     * @param items
+     * // Key-value initialization
+     * pair p2 = new pair("name", "John Doe", "age", 27, "married", true);
+     *
+     * // From plain JSON object
+     * pair p3 = new pair("{\"age\":27,\"name\":\"Frank\"}");
+     *
+     * // From serialized format
+     * pair p4 = new pair("{\"class\":\"com.peyrona.mingle.lang.xpreval.functions.pair\",\"data\":{\"name\":\"John\"}}");
+     * }</pre>
+     *
+     * @param items Optional arguments:
+     *            <ul>
+     *              <li>(empty) - Empty pair</li>
+     *              <li>(key, value, key, value, ...) - Alternating key-value pairs</li>
+     *              <li>(String) - JSON object string to parse</li>
+     *            </ul>
+     * @throws MingleException If key-value count is not even, JSON parsing fails, or keys are not String/Number
      */
     public pair( Object... items )
     {
@@ -109,11 +128,24 @@ public final class pair
     }
 
     //------------------------------------------------------------------------//
+    // PUBLIC INTERFACE
 
     /**
-     * Returns the size (number of pairs) of this dictionary.
+     * Returns the class simple name in lower case.
      *
-     * @return The size (number of items) of this dictionary.
+     * @return The class simple name in lower case.
+     */
+    public String type()
+    {
+       return getClass().getSimpleName().toLowerCase();
+    }
+
+    /**
+     * Returns the number of key-value pairs in this dictionary.
+     * <p>
+     * Equivalent to {@link #len()}.
+     *
+     * @return The number of entries in this dictionary
      */
     public int size()
     {
@@ -121,9 +153,11 @@ public final class pair
     }
 
     /**
-     * Returns the size (number of pairs) of this dictionary.
+     * Returns the number of key-value pairs in this dictionary.
+     * <p>
+     * Alias for {@link #size()} provided for consistency with other collection types.
      *
-     * @return The size (number of items) of this dictionary.
+     * @return The number of entries in this dictionary
      */
     public int len()
     {
@@ -131,12 +165,9 @@ public final class pair
     }
 
     /**
-     * Returns true if the dictionary has no elements.<br>
-     * <br>
-     * This method is equivalent to: size() == 0
+     * Tests whether this dictionary contains no entries.
      *
-     * @return true if the dictionary has no elements.
-     * @see #size()
+     * @return {@code true} if this dictionary contains no key-value mappings; {@code false} otherwise
      */
     public boolean isEmpty()
     {
@@ -144,9 +175,11 @@ public final class pair
     }
 
     /**
-     * Deletes all item pairs.
+     * Removes all key-value mappings from this dictionary.
+     * <p>
+     * Fires property change events for each removed value.
      *
-     * @return The pairs build itself.
+     * @return This dictionary instance (for method chaining)
      */
     public pair empty()
     {
@@ -165,10 +198,14 @@ public final class pair
     }
 
     /**
-     * Returns the 'value' associated with passed 'key' or "" if key was not found.
+     * Retrieves the value associated with the specified key.
+     * <p>
+     * Returns an empty string if the key does not exist.
+     * <p>
+     * Keys are case-insensitive. Both String and Number types are accepted.
      *
-     * @param key Must be a String or Number (Numbers are converted to Strings internally).
-     * @return The value associated with passed 'key' or "" if key was not found.
+     * @param key The key whose associated value is to be returned. Must be String or Number.
+     * @return The value associated with the key, or an empty string if the key is not present
      */
     public Object get( Object key )
     {
@@ -176,11 +213,13 @@ public final class pair
     }
 
     /**
-     * Returns the 'value' associated with passed 'key' or def value if the 'key' does not exist.
+     * Retrieves the value associated with the specified key, returning a default value if not found.
+     * <p>
+     * Keys are case-insensitive. Both String and Number types are accepted.
      *
-     * @param key Must be a String or Number (Numbers are converted to Strings internally).
-     * @param def The value to be returned in case the dictionary does not have the key.
-     * @return The value associated with passed 'key' or the default value.
+     * @param key The key whose associated value is to be returned. Must be String or Number.
+     * @param def The default value to return if the key is not present
+     * @return The value associated with the key, or {@code def} if the key is not present
      */
     public Object get( Object key, Object def )
     {
@@ -188,12 +227,16 @@ public final class pair
     }
 
     /**
-     * Adds a new pair to the current build of pairs or replaces current value for
-     * a new one if key currently existed.
+     * Associates the specified value with the specified key.
+     * <p>
+     * If the dictionary previously contained a mapping for the key, the old value is replaced.
+     * Fires a property change event when a value is added or modified.
+     * <p>
+     * Keys are case-insensitive and normalized to lowercase internally.
      *
-     * @param key Pair key. Must be a String or Number (internally stored as lowercase String).
-     * @param value Pair value. Any valid Une data.
-     * @return Itself.
+     * @param key The key with which the specified value is to be associated. Must be String or Number.
+     * @param value The value to be associated with the specified key. Any valid Une type.
+     * @return This dictionary instance (for method chaining)
      */
     public pair put( Object key, Object value )
     {
@@ -206,10 +249,13 @@ public final class pair
     }
 
     /**
-     * Add all items in passed dictionary to this dictionary.
+     * Copies all mappings from the specified dictionary into this dictionary.
+     * <p>
+     * Existing mappings are overwritten for any keys present in both dictionaries.
      *
-     * @param oPair Pair instance to be added.
-     * @return Itself.
+     * @param oPair The dictionary whose mappings are to be copied. Must be a {@code pair} instance.
+     * @return This dictionary instance (for method chaining)
+     * @throws MingleException If {@code oPair} is not an instance of {@code pair}
      */
     public pair putAll( Object oPair )
     {
@@ -225,9 +271,11 @@ public final class pair
     }
 
     /**
-     * Returns a list with all keys of this dictionary (all are strings).
+     * Returns a list containing all keys in this dictionary.
+     * <p>
+     * All keys are returned as lowercase strings (their normalized form).
      *
-     * @return A list with all keys of this dictionary (all are strings).
+     * @return A new {@link list} containing all keys in this dictionary
      */
     public list keys()
     {
@@ -235,9 +283,9 @@ public final class pair
     }
 
     /**
-     * Returns a list with all values of this dictionary.
+     * Returns a list containing all values in this dictionary.
      *
-     * @return A list with all values of this dictionary.
+     * @return A new {@link list} containing all values in this dictionary
      */
     public list values()
     {
@@ -245,13 +293,12 @@ public final class pair
     }
 
     /**
-     * Returns true if this pair contains a mapping for the specified key.
-     * More formally, returns true if and only if this pair contains a mapping
-     * for a key k such that Objects.equals(key, k). (There can be at most one
-     * such mapping.)
+     * Tests whether this dictionary contains a mapping for the specified key.
+     * <p>
+     * Key lookup is case-insensitive.
      *
-     * @param key key whose presence in this map is to be tested
-     * @return true if this pair contains a mapping for the specified key
+     * @param key The key whose presence in this dictionary is to be tested. Must be String or Number.
+     * @return {@code true} if this dictionary contains a mapping for the specified key; {@code false} otherwise
      */
     public boolean hasKey( Object key )
     {
@@ -266,12 +313,10 @@ public final class pair
     }
 
     /**
-     * Returns true if this pair maps one or more keys to the specified value.
-     * More formally, returns true if and only if this pair contains at least
-     * one mapping to a value v such that Objects.equals(value, v).
+     * Tests whether this dictionary maps one or more keys to the specified value.
      *
-     * @param value value whose presence in this map is to be tested
-     * @return true if this pair maps one or more keys to the specified value
+     * @param value The value whose presence in this dictionary is to be tested
+     * @return {@code true} if this dictionary maps one or more keys to the specified value; {@code false} otherwise
      */
     public boolean hasValue( Object value )
     {
@@ -279,17 +324,18 @@ public final class pair
     }
 
     /**
-     * Negates (invert) the boolean value associated with the specified key.
+     * Inverts the boolean or binary numeric value associated with the specified key.
+     * <p>
+     * Supported value types:
      * <ul>
-     *   <li>If value is Boolean: true becomes false, false becomes true.</li>
-     *   <li>If value is Number 0: becomes 1.</li>
-     *   <li>If value is Number 1: becomes 0.</li>
-     *   <li>Otherwise: throws MingleException.</li>
+     *   <li>{@code Boolean}: {@code true} becomes {@code false}, {@code false} becomes {@code true}</li>
+     *   <li>{@code Number 0}: Becomes {@code 1}</li>
+     *   <li>{@code Number 1}: Becomes {@code 0}</li>
      * </ul>
      *
-     * @param key The key whose value is to be inverted. Must be a String or Number.
-     * @return The pair itself.
-     * @throws MingleException If value for key is not boolean, 0, or 1.
+     * @param key The key whose value is to be inverted. Must be String or Number.
+     * @return This dictionary instance (for method chaining)
+     * @throws MingleException If the key does not exist, or if its value is not a boolean or numeric 0/1
      */
     public pair negate( Object key )
     {
@@ -313,10 +359,12 @@ public final class pair
     }
 
     /**
-     * Deletes the 'pair' which key is passed 'key'.
+     * Removes the mapping for the specified key from this dictionary if present.
+     * <p>
+     * Fires a property change event when a value is removed.
      *
-     * @param key The key of the pair to be deleted. Must be a String or Number.
-     * @return The pairs build itself.
+     * @param key The key whose mapping is to be removed. Must be String or Number.
+     * @return This dictionary instance (for method chaining)
      */
     public pair del( Object key )
     {
@@ -329,9 +377,12 @@ public final class pair
     }
 
     /**
-     * Deep clones this pair instance.
+     * Creates a deep copy of this dictionary.
+     * <p>
+     * All nested values that are {@code list} or {@code pair} instances are also cloned recursively.
+     * Immutable values (Boolean, Number, String) are shared.
      *
-     * @return A deep clone of this pair.
+     * @return A deep clone of this dictionary
      */
     @Override
     public pair clone()
@@ -353,11 +404,46 @@ public final class pair
 
  // public pair sort() --> does not make sense becasue Map does not keep its order
 
+    /**
+     * Parses a delimited string into key-value pairs and adds them to this dictionary.
+     * <p>
+     * Uses comma as the entry separator and equals sign as the key-value separator.
+     * Existing entries are overwritten if keys match.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p = new pair();
+     * p.split("name=John,age=27,married=true");
+     * // Result: {name=John, age=27, married=true}
+     * }</pre>
+     *
+     * @param items The string to parse, containing entries separated by commas and key-value pairs separated by equals
+     * @return This dictionary instance (for method chaining)
+     */
     public pair split( Object items )
     {
         return split( items, ",", "=" );
     }
 
+    /**
+     * Parses a delimited string into key-value pairs and adds them to this dictionary.
+     * <p>
+     * Each entry is separated by {@code entrySep}, and within each entry, keys and values
+     * are separated by {@code pairSep}. If an entry does not contain the key-value separator,
+     * the entry becomes a key with an empty string as its value.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p = new pair();
+     * p.split("name:John|age:27|married:true", "|", ":");
+     * // Result: {name=John, age=27, married=true}
+     * }</pre>
+     *
+     * @param items The string to parse, containing key-value entries
+     * @param entrySep The separator between key-value entries (e.g., ",", "|")
+     * @param pairSep The separator between keys and values (e.g., "=", ":")
+     * @return This dictionary instance (for method chaining)
+     */
     public pair split( Object items, Object entrySep, Object pairSep )
     {
         List pairs = new list().split( items, entrySep ).asList();
@@ -390,6 +476,23 @@ public final class pair
     //------------------------------------------------------------------------//
     // OVERRIDEN
 
+    /**
+     * Applies an expression to each key-value pair and returns a new dictionary with the results.
+     * <p>
+     * Within the expression, {@code x} represents the key and {@code y} represents the value.
+     * The expression is evaluated for each mapping, and the result becomes the new value for that key.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p = new pair("a", 1, "b", 2, "c", 3);
+     * pair result = p.map("y * 2");
+     * // Result: {a=2, b=4, c=6}
+     * }</pre>
+     *
+     * @param expr An Une expression that uses {@code x} (key) and/or {@code y} (value) variables
+     * @return A new dictionary with transformed values
+     * @throws MingleException If the expression returns null
+     */
     @Override
     public pair map( Object expr )
     {
@@ -415,6 +518,23 @@ public final class pair
         return p2Ret;
     }
 
+    /**
+     * Filters this dictionary based on a boolean expression applied to each key-value pair.
+     * <p>
+     * Within the expression, {@code x} represents the key and {@code y} represents the value.
+     * Only entries where the expression evaluates to {@code true} are included in the result.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p = new pair("a", 1, "b", 2, "c", 3, "d", 4);
+     * pair result = p.filter("y > 2");
+     * // Result: {c=3, d=4}
+     * }</pre>
+     *
+     * @param expr An Une expression that evaluates to a boolean, using {@code x} (key) and/or {@code y} (value)
+     * @return A new dictionary containing only the entries that satisfy the expression
+     * @throws MingleException If this dictionary is empty or the expression does not return a boolean
+     */
     @Override
     public pair filter( Object expr )
     {
@@ -435,7 +555,7 @@ public final class pair
 
                 checkIsBoolean( sExpr, result );
 
-                if( (boolean) result )
+                if( (boolean) result )    // if( true )
                     p2Ret.put( entry.getKey(), entry.getValue() );
             }
         }
@@ -443,6 +563,21 @@ public final class pair
         return p2Ret;
     }
 
+    /**
+     * Reduces all values in this dictionary to a single value using the specified expression.
+     * <p>
+     * Equivalent to calling {@code values().reduce(expr)}.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p = new pair("a", 1, "b", 2, "c", 3);
+     * Object sum = p.reduce("x + y");  // Result: 6
+     * }</pre>
+     *
+     * @param expr An Une expression for the reduction, using {@code x} (accumulator) and {@code y} (current value)
+     * @return The result of applying the reduction expression to all values
+     * @throws MingleException If this dictionary is empty
+     */
     @Override
     public Object reduce( Object expr )
     {
@@ -451,6 +586,23 @@ public final class pair
         return values().reduce( expr );
     }
 
+    /**
+     * Modifies this dictionary to retain only entries whose keys exist in the specified dictionary.
+     * <p>
+     * Entries with keys not present in the other dictionary are removed.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p1 = new pair("a", 1, "b", 2, "c", 3);
+     * pair p2 = new pair("b", 20, "c", 30);
+     * p1.intersect(p2);
+     * // p1 now contains: {b=2, c=3}
+     * }</pre>
+     *
+     * @param oPair The dictionary whose keys define the intersection. Must be a {@code pair} instance.
+     * @return This dictionary instance (for method chaining)
+     * @throws MingleException If {@code oPair} is not an instance of {@code pair}
+     */
     @Override
     public pair intersect( Object oPair )
     {
@@ -471,6 +623,23 @@ public final class pair
         return this;
     }
 
+    /**
+     * Adds all mappings from the specified dictionary to this dictionary.
+     * <p>
+     * This is an alias for {@link #putAll(Object)}. Existing mappings are overwritten
+     * if keys overlap.
+     * <p>
+     * <b>Example:</b>
+     * <pre>{@code
+     * pair p1 = new pair("a", 1, "b", 2);
+     * pair p2 = new pair("c", 3, "a", 10);
+     * p1.union(p2);
+     * // p1 now contains: {a=10, b=2, c=3}
+     * }</pre>
+     *
+     * @param oPair The dictionary whose mappings are to be added. Must be a {@code pair} instance.
+     * @return This dictionary instance (for method chaining)
+     */
     @Override
     public pair union( Object oPair )
     {
@@ -478,19 +647,23 @@ public final class pair
     }
 
     /**
-     * Compares this pair to another pair.
+     * Compares this dictionary to another for ordering.
      * <p>
      * Returns:
      * <ul>
-     *    <li> 1 : when this pair is bigger (has more items) than passed pair.</li>
-     *    <li> 0 : when this pair is the same as passed pair.</li>
-     *    <li>-1 : when this pair is lower (has less items) than passed pair.</li>
-     *    <li>-1 : when this pair does not contain a key that exist in passed pair.</li>
-     *    <li> 1 : when this pair value is not the same as the value for the passed pair key.</li>
-     *    <li>-1 : when passed pair is null.</li>
+     *   <li>{@code 1} if this dictionary has more entries than {@code o}</li>
+     *   <li>{@code -1} if this dictionary has fewer entries than {@code o}</li>
+     *   <li>{@code 0} if both dictionaries have the same keys and values</li>
+     *   <li>{@code -1} if a key in this dictionary is not present in {@code o}</li>
+     *   <li>{@code 1} if a value differs between the dictionaries</li>
+     *   <li>{@code -1} if {@code o} is {@code null}</li>
      * </ul>
-     * @param o Date to compare (argument must be of type pair).
-     * @return 1, 0 or -1
+     * <p>
+     * String value comparisons are case-insensitive.
+     *
+     * @param o The dictionary to compare to. Must be a {@code pair} instance.
+     * @return {@code -1}, {@code 0}, or {@code 1} based on the comparison rules
+     * @throws MingleException If {@code o} is not an instance of {@code pair}
      */
     @Override
     public int compareTo( Object o )
@@ -534,12 +707,24 @@ public final class pair
         return 0;
     }
 
+    /**
+     * Returns a string representation of this dictionary.
+     * <p>
+     * Format: {@code {key1=value1, key2=value2, ...}}
+     *
+     * @return A string representation of this dictionary
+     */
     @Override
     public String toString()
     {
         return UtilColls.toString( inner );
     }
 
+    /**
+     * Returns the hash code value for this dictionary.
+     *
+     * @return The hash code value
+     */
     @Override
     public int hashCode()
     {
@@ -548,6 +733,16 @@ public final class pair
         return hash;
     }
 
+    /**
+     * Compares this dictionary to the specified object for equality.
+     * <p>
+     * Returns {@code true} if and only if the specified object is also a {@code pair}
+     * and both dictionaries contain the same key-value mappings.
+     * Comparison is case-insensitive for string values.
+     *
+     * @param obj The object to compare for equality
+     * @return {@code true} if the specified object is equal to this dictionary
+     */
     @Override
     public boolean equals( Object obj )
     {
@@ -568,8 +763,21 @@ public final class pair
     //------------------------------------------------------------------------//
     // TO BE USED FROM SCRIPTS
 
+    /**
+     * Serializes this dictionary to a JSON object.
+     * <p>
+     * The serialized format includes:
+     * <ul>
+     *   <li>{@code "class"}: The fully qualified class name</li>
+     *   <li>{@code "data"}: A JSON object containing all key-value mappings</li>
+     * </ul>
+     * <p>
+     * This can be passed to {@link #deserialize(JsonObject)} to reconstruct the dictionary.
+     *
+     * @return A JSON object representing this dictionary
+     */
     @Override
-    public Object serialize()
+    public JsonObject serialize()
     {
         JsonObject jo = Json.object();
 
@@ -584,11 +792,21 @@ public final class pair
                    .add( "data" , jo );
     }
 
+    /**
+     * Deserializes a JSON object into this dictionary.
+     * <p>
+     * Clears any existing entries and populates from the JSON data.
+     * The JSON object should have a {@code "data"} field containing a JSON object
+     * with key-value mappings.
+     *
+     * @param json A JSON object containing serialized pair data, typically from {@link #serialize()}
+     * @return This dictionary instance (for method chaining)
+     */
     @Override
-    public pair deserialize( Object o )
+    public pair deserialize( JsonObject json )
     {
-        UtilJson   json = parse( o );
-        JsonObject jo   = json.getObject( "data", null );
+        JsonValue  jv = json.get( "data" );
+        JsonObject jo = jv.isObject() ? jv.asObject() : null;
 
         empty();
 
@@ -598,6 +816,13 @@ public final class pair
         return this;
     }
 
+    /**
+     * Returns an iterator over the entries in this dictionary.
+     * <p>
+     * The iterator returns {@link java.util.Map.Entry} objects.
+     *
+     * @return An iterator over the key-value mappings in this dictionary
+     */
     @Override
     public Iterator iterator()
     {

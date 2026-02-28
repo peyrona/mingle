@@ -31,7 +31,6 @@ DEVICE hygrometer_1
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 0
-           type SET "analog"
            mode SET "input"
 
 
@@ -42,7 +41,6 @@ DEVICE hygrometer_2
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 2
-           type SET "analog"
            mode SET "input"
 
 
@@ -53,7 +51,6 @@ DEVICE sensor_1
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 3
-           type SET "digital"
            mode SET "input"
 
 
@@ -64,7 +61,6 @@ DEVICE sensor_2
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 7
-           type SET "digital"
            mode SET "input"
 
 
@@ -72,7 +68,6 @@ DEVICE garden_watering
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 27
-           type SET "digital"
            mode SET "output"
 
 
@@ -80,7 +75,6 @@ DEVICE garden_soft_lights
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 28
-           type SET "digital"
            mode SET "output"
 
 
@@ -88,7 +82,6 @@ DEVICE garden_alarm_lights
     DRIVER RPiGpioDriver
         CONFIG
            pin  SET 29
-           type SET "digital"
            mode SET "output"
 
 
@@ -126,27 +119,33 @@ THEN garden_watering SET OFF
 
 # SOFT LIGHTS ------------------------------------------------------------------------------
 
+USE _LATITUDE_  AS 38.511364
+    _LONGITUDE_ AS -3.883442
+
+
 WHEN clock                         \
      AND garden_soft_lights IS OFF \
-     AND time() >= time():twilightSunSet()
+     AND now >= now:twilightSunSet( _LATITUDE_ , _LONGITUDE_ )
 THEN garden_soft_lights SET ON
-     garden_log SET "["+ date() +" "+ time() +"] Soft lights ON"
-
+     garden_log SET "["+ date() +" "+ now +"] Soft lights ON"
+USE  now AS time()
 
 WHEN clock                        \
      AND garden_soft_lights IS ON \
-     AND time() >= time():twilightSunRise()
+     AND now >= now:twilightSunRise( _LATITUDE_ , _LONGITUDE_ )
 THEN garden_soft_lights SET OFF
-     garden_log SET "["+ date() +" "+ time() +"] Soft lights OFF"
+     garden_log SET "["+ date() +" "+ now +"] Soft lights OFF"
+USE  now AS time()
 
 # ALARM LIGHTS -----------------------------------------------------------------------------
 
 WHEN ANY Sensor IS ON
-     AND time() > time():twilightSunSet()
-     AND time() < time():twilightSunRise()
+     AND now > now:twilightSunSet( _LATITUDE_ , _LONGITUDE_ )
+     AND now < now:twilightSunRise( _LATITUDE_ , _LONGITUDE_ )
 THEN garden_alarm_lights SET ON
-     garden_log SET "["+ date() +" "+ time() +"] Sensor ON and Alarm lights ON"
+     garden_log SET "["+ date() +" "+ now +"] Sensor ON and Alarm lights ON"
      garden_alarm_lights SET OFF AFTER 10m
+USE  now AS time()
 
 
 # POTENTIAL DAMAGED DEVICES CHECK ----------------------------------------------------------

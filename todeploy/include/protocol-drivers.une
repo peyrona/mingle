@@ -59,7 +59,15 @@ DRIVER MCPDriver                              # MCP (Model Context Protocol) dri
         timeout     AS number                 # Request timeout in seconds. By default 60
         max_tokens  AS number                 # Maximum tokens in response. By default 1024
         temperature AS number                 # Sampling temperature 0.0-2.0. By default 0.7
-        system      AS string                 # System prompt/instructions. By default empty
+        context     AS string                 # Name of a DEVICE whose value is appended to the system prompt. By default empty
+
+
+DRIVER AgentNLDriver                          # Natural language interaction driver — delegates LLM calls to an MCP DEVICE
+    SCRIPT AgentNLController
+    CONFIG
+        mcp         AS string REQUIRED        # Name of the MCP DEVICE to use for LLM calls
+        log         AS string                 # Name of a DEVICE where the raw LLM response is posted. By default empty
+        exclude     AS string                 # Comma-separated names (devices, rules, scripts) to exclude from the LLM context. By default empty
 
 
 DRIVER SerialDriver                           # Serial port (RS-232/RS-485) communication driver
@@ -78,6 +86,18 @@ DRIVER SerialDriver                           # Serial port (RS-232/RS-485) comm
         interval    AS number                 # Polling interval in millis. When x <= 0, auto-read. Min interval: 500 millis.
         reconnect   AS boolean                # Enable/disable automatic reconnection. By default true
         max_retries AS number                 # Maximum reconnection attempts (-1 = unlimited). By default 7
+
+
+# DRIVER ZigbeeDriver                         # Zigbee network coordinator driver
+#     SCRIPT ZigbeeController
+#     CONFIG
+#         port        AS string REQUIRED      # Serial port for Zigbee dongle (e.g.: "/dev/ttyUSB0", "COM3")
+#         dongle      AS string REQUIRED      # Dongle type: "ember", "cc2531", "conbee", "xbee", "telegesis"
+#         channel     AS number               # Zigbee channel 11-26. By default: 11
+#         pan_id      AS string               # PAN ID as hex (0x0000-0xFFFF) or "auto". By default: "auto"
+#         network_key AS string               # 128-bit key as 32 hex chars or "auto". By default: "auto"
+#         permit_join AS boolean              # Allow new devices to join on startup. By default: false
+#         interval    AS number               # Polling interval in ms (0 = event-driven). By default: 0
 
 #----------------------------------------------------------------------------------------------------------------------------------
 
@@ -114,36 +134,29 @@ SCRIPT MCPController                                  # MCP controller for LLM A
    CALL "com.peyrona.mingle.controllers.MCP"
 
 
+SCRIPT AgentNLController                              # Natural language controller; delegates LLM calls to an MCP DEVICE
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.AgentNL"
+
+
 SCRIPT SerialController                               # Serial port controller for RS-232/RS-485 communication
    LANGUAGE java
    FROM "file://{*home.lib*}controllers.jar"
-        "file://{*home.lib*}controllers/nrjavaserial-5.2.1.jar"
    CALL "com.peyrona.mingle.controllers.serial.SerialClient"
 
 
-DRIVER ZigbeeDriver                                   # Zigbee network coordinator driver
-    SCRIPT ZigbeeController
-    CONFIG
-        port        AS string REQUIRED                # Serial port for Zigbee dongle (e.g.: "/dev/ttyUSB0", "COM3")
-        dongle      AS string REQUIRED                # Dongle type: "ember", "cc2531", "conbee", "xbee", "telegesis"
-        channel     AS number                         # Zigbee channel 11-26. By default: 11
-        pan_id      AS string                         # PAN ID as hex (0x0000-0xFFFF) or "auto". By default: "auto"
-        network_key AS string                         # 128-bit key as 32 hex chars or "auto". By default: "auto"
-        permit_join AS boolean                        # Allow new devices to join on startup. By default: false
-        interval    AS number                         # Polling interval in ms (0 = event-driven). By default: 0
-
-
-SCRIPT ZigbeeController                               # Zigbee controller for ZHA device communication
-   LANGUAGE java
-   FROM "file://{*home.lib*}controllers.jar"
-        "file://{*home.lib*}controllers/nrjavaserial-5.2.1.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.serial-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.ember-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.cc2531-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.conbee-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.xbee-1.4.14.jar"
-        "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.telegesis-1.4.14.jar"
-   CALL "com.peyrona.mingle.controllers.zigbee.ZigbeeClient"
+# SCRIPT ZigbeeController                               # Zigbee controller for ZHA device communication
+#    LANGUAGE java
+#    FROM "file://{*home.lib*}controllers.jar"
+#         "file://{*home.lib*}controllers/jSerialComm-2.11.4.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.serial-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.ember-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.cc2531-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.conbee-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.xbee-1.4.14.jar"
+#         "file://{*home.lib*}controllers/zigbee/com.zsmartsystems.zigbee.dongle.telegesis-1.4.14.jar"
+#    CALL "com.peyrona.mingle.controllers.zigbee.ZigbeeClient"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

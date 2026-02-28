@@ -42,16 +42,18 @@
     # Monitoring (HTTP Server and ExEn Bridge) module.
     # See The_Mingle_Standard_Platform.pdf for more info.
     {
-      "module"      : "monitoring",
-      "host"        : null,                               # Host name (by default 'localhost')
-      "port"        : null,                               # Port to attend HTTP (by default 8080)
-      "timeout"     : 1800,                               # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
-      "max_sessions": 64,                                 # Maxium amount of sessions
-      "allow"       : "intranet",                         # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
-      "user_base"   : null                                # Folder for Dashboards and static content (erved via HTTP/S). By default "{*home*}/etc/gum_user_base"
-     #"ssl"         : { "port": null,                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
-     #                  "path": "{*home*}keystore.jks",   # Path to "keystore.jks" file (can not be null)
-     #                  "pwd" : "adminadmin" },           # Password for the "keystore.jks" file (can not be null)
+      "module"         : "monitoring",
+      "host"           : null,                   # Host name (by default 'localhost')
+      "port"           : null,                   # Port to attend HTTP (by default 8080)
+      "timeout"        : 1800,                   # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
+      "allow"          : "intranet",             # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
+      "user_base"      : null,                   # Folder for Dashboards and static content (served via HTTP/S). By default "{*home*}/etc/gum_user_base"
+      "shared_secret"  : null,                   # HMAC shared secret for API authentication. If null, authentication is disabled.
+      "hmac_tolerance" : 60,                     # Accept timestamps within ±N seconds. Default: 60
+      "master_password": null                    # To access dahsboards as admin (new, del, etc) and to access file manger. To allow all users: null
+     #"ssl": { "port": null,                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
+     #         "path": "{*home*}keystore.jks",   # Path to "keystore.jks" file (can not be null)
+     #         "pwd" : "adminadmin" },           # Password for the "keystore.jks" file (can not be null)
     },
 
     # Plugable Arithmetic and Logical Expression Evaluator to be used (loaded at run-time)
@@ -68,16 +70,19 @@
       "uris"  : ["file://{*home.lib*}cil.jar"]
     },
 
-    # Network grid: to send messages (changes and requests).
-    # Used by ExEns (Stick) to broadcast messages to other ExEns in the same grid.
-    # Used by "monitoring" (Gum) to find the network protocol that an ExEn accepts.
-    # "network" key here contains which one to use (among those under module "network").
-    # To tune, use an object e.g.: { "name": "Plain Socket Server", "port": 4444 }.
-    # One or more "locahost" can be used: the Stick will create one server per each one.
+    # Grid: to receive and send messages (changes and requests).
+    # Used by:
+    #    * ExEns (Stick) to broadcast messages to other ExEns in the same grid.
+    #    * Gum (monitoring) to find the network protocol that an ExEn accepts.
+    #
+    # The "network" key here contains which one to use (among those under module "network").
+    # To fine-tune, use an object e.g.: { "name": "Plain Socket Server", "port": 4444 }.
+    # One or more "localhost" can be used: the Stick will create one server per each one.
     {
         "module": "grid",
         "nodes" : [
-                    { "host": "localhost"          , "network": { "name": "Plain Socket Server", "init": { "port": 44444 } } } #,
+                    { "host": "localhost", "network": "Plain Socket Server" }
+                  # { "host": "localhost"          , "network": { "name": "Plain Socket Server", "init": { "port": 44444 } } },
                   # { "host": "192.168.1.111:65533", "network": { "name": "Plain Socket Client", "timeout": 90 } }
                   ]
     },

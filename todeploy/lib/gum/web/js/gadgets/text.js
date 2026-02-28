@@ -9,14 +9,16 @@ class GumText extends GumGadget
 
         if( p_base.isEmpty( props ) )
         {
-            this.exen      = null;
-            this.device    = null;
-            this.label     = "This is a fixed text";
+            this.exen           = null;
+            this.device         = null;
+            this.accessor       = null;     // Key (for pair) or 1-based index (for list)
+            this._devValueType_ = null;     // "list", "pair", or "scalar" — auto-detected, not persisted
+            this.label          = "This is a fixed text";
             this.align     = "left";
             this.rows      = 1  ;
             this.keep      = 0  ;       // Keep only last N lines (0 == all)
             this.size      = 100;       // Font size (relative as %)
-            this.color     = "#000000";
+            this.color     = null;
             this.bold      = false;
             this.italic    = false;
             this.underline = false;
@@ -54,14 +56,23 @@ class GumText extends GumGadget
         if( isOngoing )
             return this;
 
-        let sHTML = (this.rows <= 1) ? '<label id="'+ this.id +'" class="label">'+
-                                       '</label>'
-                                     : '<textarea id="'+ this.id +'" class="textarea is-expanded" rows="'+ this.rows +'">'+
-                                       '<textarea>';
+        let $el;
+
+        if( this.rows <= 1 )
+        {
+            $el = GumGadget.cloneTemplate( "tpl-text-label" );
+        }
+        else
+        {
+            $el = GumGadget.cloneTemplate( "tpl-text-textarea" );
+            $el.attr( 'rows', this.rows );
+        }
+
+        $el.attr( 'id', this.id );
 
         let $txt = this.getContentArea()
                        .empty()
-                       .append( sHTML )
+                       .append( $el )
                        .children()
                        .first();     // The label or the textarea
 
@@ -97,7 +108,7 @@ class GumText extends GumGadget
         else                  $txt.val(  txt );
 
         $txt.css('fontSize', this.size +'%')
-            .css('color', this.color)
+            .css('color', this.color || null)       // null removes the inline style (inherits CSS)
             .css('background-color', 'rgba(0, 0, 0, 0)');
 
         this._updateListener_();
@@ -120,10 +131,15 @@ class GumText extends GumGadget
 
         let fn = function( action, payload )
                 {
-                    if( ! payload.value )
+                    if( ! self._devValueType_ )
+                        self._devValueType_ = self._detectValueType_( payload.value );
+
+                    let xResolved = self._resolveAccessor_( payload.value, self.accessor, payload.name );
+
+                    if( xResolved === null || xResolved === undefined )
                         return;
 
-                    let sTxt = self.label.replace( /\{\*device\*\}/gi, payload.value.toString() );
+                    let sTxt = self.label.replace( /\{\*device\*\}/gi, xResolved.toString() );
 
                     if( self.rows === 1 )    // It is a <label></label>
                     {
@@ -145,6 +161,8 @@ class GumText extends GumGadget
                                 $txt.val( last + sTxt );
                         }
                     }
+
+                    self._executeUserCode_( action, payload );
                 };
 
         this._addListener( this.exen, this.device, fn );

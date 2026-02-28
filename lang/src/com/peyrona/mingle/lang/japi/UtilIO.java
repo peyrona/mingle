@@ -1,22 +1,30 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.lexer.Language;
 import java.io.BufferedInputStream;
-import java.io.BufferedWriter;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileFilter;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
-import java.io.OutputStreamWriter;
 import java.io.Reader;
 import java.io.StringReader;
-import java.io.Writer;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLConnection;
@@ -30,7 +38,9 @@ import java.nio.file.Path;
 import java.nio.file.PathMatcher;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
 import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.attribute.FileAttribute;
 import java.text.Normalizer;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -373,6 +383,11 @@ public final class UtilIO
         if( sPath.contains( sMacro ) )
             sPath = replaceFileMacro( sPath, sMacro, UtilSys.getTmpDir().getAbsolutePath() );
 
+        sMacro = Language.buildMacro( "home.etc" );
+
+        if( sPath.contains( sMacro ) )
+            sPath = replaceFileMacro( sPath, sMacro, UtilSys.getEtcDir().getAbsolutePath() );
+
         return sPath;
     }
 
@@ -454,7 +469,7 @@ public final class UtilIO
      *    {*home.lib*}my_libs/*      // Files only in my_libs folder (non-recursive)
      *    {*home.tmp*}my_temps/**    // Files in my_temps folder and all sub-folders (recursive)
      *    *.java                     // All .java files in current directory only
-     *    **<kbd>/<kbd>*.txt         // All .txt files in current directory and sub-directories
+     *    **<kbd>/</kbd>*.txt        // All .txt files in current directory and sub-directories
      * </code>
      *
      * @param asPaths[n]
@@ -1322,30 +1337,17 @@ public final class UtilIO
         return sPath;
     }
 
-    /**
-     * In received string, replaces reserved chars by '_'
-     *
-     * @param str String to be transformed.
-     * @return Transformed string.
-     */
-    private static String normalizeFileName( String str )
-    {
-        str = Normalizer.normalize( str, Normalizer.Form.NFC )  // Remove diacritics (accents) and normalize to NFC form
-                        .replaceAll("[^\\w.-]", "_")            // Replace characters not allowed in file names with an underscore
-                        .trim();                                // Remove leading and trailing whitespaces
-
-        int maxLength = 255;    // Maximum file name length for most file systems
-
-        if( str.length() > maxLength )
-            str = str.substring( 0, maxLength );
-
-        return str;
-    }
-
     private static URI toURI( String str )
     {
-        return (UtilComm.getFileProtocol( str ) == null) ? new File( str ).toURI()    // When no protocol is declared, "file://" is assumed
-                                                         : URI.create( str );
+        UtilComm.Protocol prot = UtilComm.getFileProtocol( str );
+
+        if( prot == null )
+            return new File( str ).toURI();
+
+        if( prot == UtilComm.Protocol.file )
+            return new File( str.replaceFirst( "^file:/+", "/" ) ).toURI();     // Normalize: file:/ file:// and file:/// all produce the same File.toURI()
+
+        return URI.create( str );
     }
 
     //------------------------------------------------------------------------//
@@ -1353,127 +1355,330 @@ public final class UtilIO
     // Thread safe when a new instance is created by user at run-time
     //------------------------------------------------------------------------//
 
+    /**
+     * A fluent utility class for writing text or binary data to files.
+     * <p>
+     * This class is optimized for Java 11+ using the NIO.2 API ({@link java.nio.file}). It supports both standard file writing and temporary file generation.
+     * </p>
+     * <p>
+     * Usage example:
+     * <pre>{@code
+     * File result = new FileWriter()
+     *      .setSanitizeName(true)
+     *      .setFile("output.txt")
+     *      .append("Hello World");
+     * }</pre>
+     * </p>
+     */
     public static final class FileWriter
     {
-        private File    file        = null;
-        private boolean isTemporal  = false;
-        private String  extension   = null;
-        private Charset charset     = Charset.defaultCharset();
+        /**
+         * The target path for writing. Internal representation uses NIO Path.
+         */
+        private Path path = null;
+
+        /**
+         * Flag indicating if the file is a temporary file generated internally.
+         */
+        private boolean isTemporal = false;
+
+        /**
+         * Flag to enable sanitization of the filename (removing illegal characters).
+         */
+        private boolean bSanitize = false;
+
+        /**
+         * Extension used if the file is marked as temporal.
+         */
+        private String extension = null;
+
+        /**
+         * Character set for writing strings. Defaults to UTF-8 for consistency.
+         */
+        private Charset charset = StandardCharsets.UTF_8;
+
+        /**
+         * Flag indicating if the path was generated internally by the temporal logic.
+         */
         private boolean isGenerated = false;
 
-        private FileWriter()    // Only accesible from this class
+        //------------------------------------------------------------------------//
+
+        /**
+         * Private constructor to enforce instantiation via the enclosing class or static factories.
+         */
+        private FileWriter()
         {
+            // Accessible only from within the enclosing class
         }
 
         //------------------------------------------------------------------------//
 
-        public FileWriter setFile( File f )
+        /**
+         * Sets the target file using a {@link File} object.
+         * <p>
+         * If sanitization is enabled, the file name will be cleaned of illegal characters. This method also ensures the parent directories exist.
+         * </p>
+         *
+         * @param f The file to write to.
+         * @return This instance for method chaining.
+         * @throws NullPointerException if the provided file is null.
+         * @throws IOException          if parent directories cannot be created.
+         */
+        public FileWriter setFile( File f ) throws IOException
         {
-            if( ! f.getParentFile().exists() )
-                mkdirs( f.getParentFile() );
+            // Convert legacy File to NIO Path
+            Path targetPath = f.toPath();
 
-            file = new File( f.getParentFile(), normalizeFileName( f.getName() ) );
+            if( bSanitize )
+            {
+                Path   parent        = targetPath.getParent();
+                String sanitizedName = sanitizeFileName( targetPath.getFileName().toString() );
+
+                // If parent is null, it means we are in the current directory
+                if( parent != null )
+                    targetPath = parent.resolve( sanitizedName );
+                else
+                    targetPath = Path.of( sanitizedName );
+            }
+
+            // Ensure parent directories exist
+            Path parent = targetPath.getParent();
+
+            if( parent != null )
+                Files.createDirectories( parent );
+
+            this.path = targetPath;
 
             return this;
         }
 
-        public FileWriter setFile( String nameAndPath )
+        /**
+         * Sets the target file using a string path.
+         *
+         * @param nameAndPath The path and name of the file.
+         * @return This instance for method chaining.
+         * @throws IOException if parent directories cannot be created.
+         */
+        public FileWriter setFile( String nameAndPath ) throws IOException
         {
             return setFile( new File( nameAndPath ) );
         }
 
+        /**
+         * Sets the character encoding for writing strings.
+         * <p>
+         * Defaults to UTF-8 if not specified or if null is passed.
+         * </p>
+         *
+         * @param set The charset to use.
+         * @return This instance for method chaining.
+         */
         public FileWriter setCharset( Charset set )
         {
-            if( set != null )
-                charset = set;
-
+            this.charset = (set != null) ? set : StandardCharsets.UTF_8;
             return this;
         }
 
+        /**
+         * Enables or disables file name sanitization.
+         * <p>
+         * If enabled, illegal characters will be replaced with underscores and diacritics removed.
+         * </p>
+         *
+         * @param b True to enable, false to disable.
+         * @return This instance for method chaining.
+         */
+        public FileWriter setSanitizeName( boolean b )
+        {
+            this.bSanitize = b;
+            return this;
+        }
+
+        /**
+         * Configures the writer to generate a temporary file.
+         * <p>
+         * If this method is called, the writer will ignore any user-supplied file path and generate a unique file name in the system temporary directory.
+         * </p>
+         *
+         * @param ext The extension for the temporary file (e.g., "tmp", "log").
+         * @return This instance for method chaining.
+         */
         public FileWriter setTemporal( String ext )
         {
-            extension  = ext;
-            isTemporal = true;
+            this.extension  = ext;
+            this.isTemporal = true;
             return this;
         }
 
+        /**
+         * Replaces the file content with the provided string.
+         * <p>
+         * This operation truncates the existing file or creates a new one. It uses NIO {@link StandardOpenOption#TRUNCATE_EXISTING} for atomic replacement.
+         * </p>
+         *
+         * @param str The string content to write.
+         * @return The {@link File} object representing the written file.
+         * @throws IOException If an I/O error occurs.
+         */
         public File replace( String str ) throws IOException
         {
-         // check(); --> Do not do this
+            check(); // Ensure path is initialized
 
-            if( (file != null) && file.exists() )
-                Files.delete( file.toPath() );
+            // Files.writeString with TRUNCATE_EXISTING handles the "delete if exists" logic natively and atomically.
+            Files.writeString(  path,
+                                str,
+                                charset,
+                                StandardOpenOption.CREATE,
+                                StandardOpenOption.TRUNCATE_EXISTING,
+                                StandardOpenOption.SYNC );    // Ensures data is written to storage before returning
 
-            return append( str );
+            return path.toFile();
         }
 
+        /**
+         * Replaces the file content with the provided binary data.
+         * <p>
+         * This operation truncates the existing file or creates a new one.
+         * </p>
+         *
+         * @param data The byte array to write.
+         * @return The {@link File} object representing the written file.
+         * @throws IOException If an I/O error occurs.
+         */
         public File replace( byte[] data ) throws IOException
         {
-         // check(); <-- Do not do this
+            check(); // Ensure path is initialized
 
-            if( (file != null) && file.exists() )
-                Files.delete( file.toPath() );
+            Files.write( path,
+                         data,
+                         StandardOpenOption.CREATE,
+                         StandardOpenOption.TRUNCATE_EXISTING,
+                         StandardOpenOption.SYNC );
 
-            return append( data );
+            return path.toFile();
         }
 
+        /**
+         * Appends the provided string to the file.
+         * <p>
+         * Creates the file if it does not exist. Uses efficient NIO buffer writing.
+         * </p>
+         *
+         * @param str The string content to append.
+         * @return The {@link File} object representing the written file.
+         * @throws IOException If an I/O error occurs.
+         */
         public File append( String str ) throws IOException
         {
-            check();
+            check(); // Ensure path is initialized
 
-            try( Writer writer = new BufferedWriter( new OutputStreamWriter( new FileOutputStream( file, true ), charset ) ) )
-            {
-                writer.append( str );
-                writer.flush();
-            }
+            Files.writeString(  path,
+                                str,
+                                charset,
+                                StandardOpenOption.CREATE,
+                                StandardOpenOption.APPEND );
 
-            return file;
+            return path.toFile();
         }
 
+        /**
+         * Appends the provided binary data to the file.
+         * <p>
+         * Creates the file if it does not exist.
+         * </p>
+         *
+         * @param data The byte array to append.
+         * @return The {@link File} object representing the written file.
+         * @throws IOException If an I/O error occurs.
+         */
         public File append( byte[] data ) throws IOException
         {
-            check();
+            check(); // Ensure path is initialized
 
-            try( FileOutputStream fos = new FileOutputStream( file, true ))
-            {
-                fos.write( data );
-                fos.flush();
-            }
+            Files.write( path,
+                         data,
+                         StandardOpenOption.CREATE,
+                         StandardOpenOption.APPEND );
 
-            return file;
+            return path.toFile();
         }
 
-        //------------------------------------------------------------------------//
+        // ------------------------------------------------------------------------//
+        // PRIVATES
+        /**
+         * Sanitizes a filename by removing diacritics, replacing illegal characters, and enforcing a maximum length of 255 characters.
+         *
+         * @param str The filename to sanitize.
+         * @return A clean, file-system safe filename.
+         */
+        private static String sanitizeFileName( String str )
+        {
+            str = Normalizer.normalize( str, Normalizer.Form.NFC )   // Normalize to NFC and remove diacritics
+                            .replaceAll( "[^\\w.-]", "_" )           // Replace non-word characters (except . and -)
+                            .trim();
 
-        private void check() throws IOException   // Has to distinguish between a user-supplied file and the internally generated temp file.
+            if( str.length() > 255 )      // Enforce maximum filename length
+                str = str.substring( 0, 255 );
+
+            return str;
+        }
+
+        /**
+         * Validates the internal state and generates a temp file if necessary.
+         *
+         * @throws IOException If the file state is invalid or temp file creation fails.
+         */
+        private void check() throws IOException
         {
             if( isTemporal )
             {
-                // [FIX] Only throw if the file exists AND it was not generated by us
-                if( (file != null) && (! isGenerated) )
-                    throw new IOException( "File is temporal but name was specified" );
+                // If user manually set a file while setTemporal was true, reject it
+                // unless we generated it ourselves internally.
+                if( path != null && !isGenerated )
+                    throw new IOException( "File is temporal but name was specified explicitly. Use setFile(...) only for non-temporal files." );
 
-                if( file == null )
+                // If path is null, generate a new temp file
+                if( path == null )
                 {
-                    file        = newTempFile();
-                    isGenerated = true;      // [FIX] Mark as internally generated
+                    path = newTempFile();
+                    isGenerated = true;
                 }
             }
             else
             {
-                if( file == null )
-                    throw new IOException( "No target file, use: setFile(...)" );
+                if( path == null )
+                    throw new IOException( "No target file specified. Use setFile(...) or setTemporal(...)." );
             }
         }
 
-        private File newTempFile()
+        /**
+         * Creates a new temporary file in the system temporary directory.
+         * <p>
+         * Uses NIO {@link Files#createTempFile} for atomic creation and guaranteed uniqueness.
+         * </p>
+         *
+         * @return The {@link Path} to the newly created temporary file.
+         * @throws IOException If the file cannot be created.
+         */
+        private Path newTempFile() throws IOException
         {
-            File f = new File( UtilSys.getTmpDir(),
-                               addExtension( UUFileName(), extension ) );
+            // Resolve system temp directory
+            Path tmpDir = Path.of( System.getProperty( "java.io.tmpdir" ) );
 
-            f.deleteOnExit();
+            // Prepare prefix and suffix for temp file
+            String prefix = UUID.randomUUID().toString();
+            String suffix = (extension != null && ! extension.isEmpty())
+                            ? (extension.startsWith( "." ) ? extension : "." + extension)
+                            : ".tmp";
 
-            return f;
+            // Create the file atomically with default permissions
+            Path tempPath = Files.createTempFile( tmpDir, prefix, suffix, new FileAttribute<?>[0] );
+
+            // Mark for deletion on JVM exit (safety net)
+            tempPath.toFile().deleteOnExit();
+
+            return tempPath;
         }
     }
 

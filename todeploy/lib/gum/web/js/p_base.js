@@ -996,19 +996,19 @@ var p_base =
     },
 
     /**
-     * Returns true when the server is localhost (normally during developing stage).
+     * Checks if the current page is running on localhost.
+     * Returns true if the hostname is 'localhost', '127.0.0.1', or '[::1]'.
      *
-     * @returns true when the server is localhost (normally during developing stage)
+     * Note: This does not detect local network IPs (e.g., 192.168.x.x).
      */
     isLocalHost : function()
     {
         const hostname = window.location.hostname;
 
-        return hostname === 'localhost' ||
-               hostname === '127.0.0.1' ||
-               hostname.startsWith('192.168.') ||
-               hostname.startsWith('10.') ||
-               hostname.endsWith('.local');
+        return ( hostname === 'localhost' ||
+                 hostname === '127.0.0.1' ||
+                 hostname === '[::1]'     ||
+                 hostname.startsWith('127.') );
     },
 
     /**

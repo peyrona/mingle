@@ -40,14 +40,9 @@ final class TblEditions
     @Override
     protected void onShowRowDetails()
     {
-        Member pair = model.getRow( getSelectedRow() )
-                           .toJSON()
-                           .asObject()
-                           .iterator()
-                           .next();
-
-        String         sRequest = pair.getName();
-        JsonValue      jvalue   = (pair.getValue().isNull() ? Json.NULL : pair.getValue());
+        ExEnComm  comm     = model.getRow( getSelectedRow() );
+        String    sRequest = comm.request.name();
+        JsonValue jvalue   = (comm.payload == null || comm.payload.isNull()) ? Json.NULL : comm.payload;
         GTable<Member> table    = new GTable<>( new DetailsTableModel(), 30, 99 );
 
         if( jvalue.isArray() )    // ExEnComm.Request.List

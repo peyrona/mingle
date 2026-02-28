@@ -17,6 +17,8 @@ public class UtilUI
     // We use System.in directly. Closing this reader would close System.in, so we usually keep it open for the app's lifecycle.
     private static final BufferedReader reader = new BufferedReader( new InputStreamReader( System.in, StandardCharsets.UTF_8 ) );
 
+    private static volatile long lastActivityMs = System.currentTimeMillis();
+
     //------------------------------------------------------------------------//
     // MISCE METHODS
 
@@ -120,6 +122,9 @@ public class UtilUI
         return false;
     }
 
+    /** Returns the timestamp (ms) of the last user input, for idle detection. */
+    public static long getLastActivityMs() { return lastActivityMs; }
+
     //------------------------------------------------------------------------//
     // METHODS RELATED WITH USER INPUTS
 
@@ -133,9 +138,13 @@ public class UtilUI
         {
             String line = reader.readLine();
 
-            if( line == null )
-                return "";
+            if( line == null )    // EOF: stdin closed (SSH connection lost)
+            {
+                System.out.println( "\nInput stream closed (SSH connection lost?). Exiting." );
+                System.exit( 0 );
+            }
 
+            lastActivityMs = System.currentTimeMillis();
             return line.trim().toLowerCase();
         }
         catch( IOException e )
@@ -164,16 +173,15 @@ public class UtilUI
         }
     }
 
-    public static String readFileName( String prompt )
+    public static String readFileName( String prompt, String extension )
     {
         while( true )
         {
             String input = readInput( prompt );
 
             if( input.isEmpty() )
-            {
                 return "";
-            }
+
             if( input.contains( "*" ) || input.contains( "?" ) )
             {
                 if( isValidWildcardPattern( input ) )
@@ -183,10 +191,13 @@ public class UtilUI
             }
             else
             {
-                File file = new File( input );
+                String[] filenamesToTry = buildFilenamesToTry( input, extension );
 
-                if( file.exists() )
-                    return input;
+                for( String filename : filenamesToTry )
+                {
+                    if( new File( filename ).exists() )
+                        return filename;
+                }
 
                 System.out.println( "File does not exist. Enter a valid file or press [Enter] to exit." );
             }
@@ -219,6 +230,19 @@ public class UtilUI
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    private static String[] buildFilenamesToTry( String input, String extension )
+    {
+        if( UtilSys.isEmpty( extension ) )
+            return new String[]{ input };
+
+        extension = extension.startsWith( "." ) ? extension : "." + extension;
+
+        if( input.toLowerCase().endsWith( extension.toLowerCase() ) )
+            return new String[]{ input };
+
+        return new String[]{ input, input + extension };
+    }
 
     /**
      * Clears any pending keystrokes from the input buffer.

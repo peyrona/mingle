@@ -12,18 +12,22 @@ class GumGauge extends GumGadget
             this.width  = gum.isUsingFreeLayout() ? 180 : "100%";      // Rewritten from parent
             this.height = gum.isUsingFreeLayout() ?  90 : "100%";      // Rewritten from parent
 
-            this.exen      = null;
-            this.device    = null;
-            this.wrapper   = null;     // Instance of class GaugeWrap
+            this.exen           = null;
+            this.device         = null;
+            this.accessor       = null;     // Key (for pair) or 1-based index (for list)
+            this._devValueType_ = null;     // "list", "pair", or "scalar" — auto-detected, not persisted
+            this.wrapper        = null;     // Instance of class GaugeWrap
             this.min       = 0;        // Min value
             this.max       = 100;      // Max value
             this.angle     = 0;
             this.radius    = 95;
             this.thick     = 38;       // Arc thickness
             this.zones     = [];       // Colored zones: { start : <num>, end: <num>, color: <str> }
-            this.ticks     = true;     // Show ticks or not (Divisions: 6, Length: 50, Color: #333333, Width: 10) (Subdivisions: 3, Length: 30, Color: #666666, Width: 6)
-            this.ticks_pos = [];       // Show ticks  values at their position
-            this.decimals  = 0;        // Decimal digits for current device value
+            this.ticks        = true;      // Show ticks or not (Divisions: 6, Length: 50, Color: #333333, Width: 10) (Subdivisions: 3, Length: 30, Color: #666666, Width: 6)
+            this.ticks_pos    = [];        // Show tick values at their position
+            this.ticks_color  = '#333333'; // Color for tick marks and tick labels
+            this.needle_color = '#000000'; // Color of the pointer needle
+            this.decimals     = 0;         // Decimal digits for current device value
         }
     }
 
@@ -61,9 +65,12 @@ class GumGauge extends GumGadget
         if( isOngoing )
             return this;
 
+        let $canvas = GumGadget.cloneTemplate( "tpl-gauge" );
+        $canvas.attr( 'id', this.id );
+
         this.getContentArea()
             .empty()
-            .append('<canvas id="'+ this.id +'"></canvas>');
+            .append( $canvas );
 
         this.getContentArea()
             .attr('width' , Math.max( this.getContentArea().width() , 48 ))
@@ -104,11 +111,18 @@ class GumGauge extends GumGadget
 
             let fn = function( action, payload )
                     {
-                        if( self._isValidValue( "Number", payload.value, payload.name ) )
+                        if( ! self._devValueType_ )
+                            self._devValueType_ = self._detectValueType_( payload.value );
+
+                        let xValue = self._resolveAccessor_( payload.value, self.accessor, payload.name );
+
+                        if( xValue !== null && self._isValidValue( "Number", xValue, payload.name ) )
                         {
                             self._hasErrors( false );
-                            self.wrapper.set( payload.value );
+                            self.wrapper.set( xValue );
                         }
+
+                        self._executeUserCode_( action, payload );
                     };
 
             this._addListener( this.exen, this.device, fn );
@@ -150,13 +164,13 @@ class GaugeWrap
             {
                 length: 0.6,
                 strokeWidth: 0.045,
-                color: '#000000'
+                color: config.needle_color || '#000000'
             },
 
             staticLabels:
             {
                 labels: this._getTicksValues_( config ),
-                color : "#000000",
+                color : config.ticks_color || '#333333',
                 font  : "14px sans-serif"
             },
 
@@ -240,15 +254,17 @@ class GaugeWrap
         if( ! config.ticks )
             return null;
 
+        let color = config.ticks_color || '#333333';
+
         return  {
                     divisions: 6,
                     divWidth : 1,
                     divLength: 0.4,
-                    divColor : '#333333',
+                    divColor : color,
                     subDivisions: 3,
                     subLength   : 0.2,
                     subWidth    : 0.6,
-                    subColor    : '#666666'
+                    subColor    : color
                 };
     }
 }

@@ -47,7 +47,7 @@ DRIVER FileDriver                      # Reads and/or writes to local file or re
         append   AS boolean            # When TRUE and file is writable, new values are appended at EoF. TRUE by default.
         autoFeed AS boolean            # When TRUE, writes values in a new line (otherwise "{*nl*}" is needed). By default TRUE.
         charset  AS string             # By default, default charset (platform def. for local files and UTF-8 for remote files).
-        interval AS number             # Time between reads. Optional, Default: only readed once, when ExEn starts.
+        interval AS number             # Time between reads. Default 0: only readed once, when ExEn starts.
 
 
 DRIVER SystemMonitorDriver             # This DRIVER reports CPU, JVM RAM and Disk usages (as percent).

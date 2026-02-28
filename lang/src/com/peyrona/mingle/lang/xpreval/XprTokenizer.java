@@ -37,12 +37,12 @@ public final class XprTokenizer
 
     public XprTokenizer( String sXpr )
     {
-        this( new Lexer( sXpr ).getLexemes() );
-    }
+        Lexer lexer = new Lexer( sXpr );
 
-    public XprTokenizer( List<Lexeme> lstLexems )
-    {
-        tokenize( lstLexems );
+        lstErrors.addAll( lexer.getErrors() );
+
+        if( lstErrors.isEmpty() )
+            tokenize( new Lexer( sXpr ).getLexemes() );
     }
 
     //------------------------------------------------------------------------//
@@ -120,9 +120,6 @@ public final class XprTokenizer
             Lexeme lex = lstLexemes.get( n );
 
             if( lex.isError() )       // Should not process errors, but all other lexemes has to be processed to find new errors
-                continue;
-
-            if( lex.isDelimiter() )   // Skip '\n'  or  ';'
                 continue;
 
                  if( lex.isNumber() )                    lstTokens.add( new XprToken( lex, XprToken.NUMBER ) );

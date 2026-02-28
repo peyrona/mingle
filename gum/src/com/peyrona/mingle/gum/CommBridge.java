@@ -15,6 +15,7 @@ import com.peyrona.mingle.network.NetworkConfig;
 import com.peyrona.mingle.network.socket.SocketClient;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.zip.ZipException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -718,8 +719,13 @@ public class CommBridge extends WebSocketAdapter
                 @Override
                 public void writeFailed( Throwable throwable )
                 {
-                    // Log failure but don't cleanup session here - let periodic cleanup handle it
-                    // This avoids race conditions where multiple sends fail simultaneously
+                    // ZipException is expected when a compressed send races with session close:
+                    // the deflater is finalized before the write completes. It's benign — ignore it.
+                    if( throwable instanceof ZipException )
+                        return;
+
+                    // Log failure but don't cleanup session here - let periodic cleanup handle it.
+                    // This avoids race conditions where multiple sends fail simultaneously.
                     logWarning( "Failed to send WebSocket message", throwable );
                 }
             } );

@@ -8,6 +8,7 @@ import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.lexer.CodeError;
 import java.net.URI;
 import java.util.List;
 import java.util.Map;
@@ -40,8 +41,14 @@ public class NashornRT implements ICandi.ILanguage
 
         Prepared prepared = new Prepared( source );         // Can not prepare because CompiledScript is not convertible into a String or String Base64 or whatever
 
+        if( engine == null )
+        {
+            prepared.addError( "Nashorn JavaScript engine is not available: requires Java 11 or earlier" );
+            return prepared.setCallName( call );
+        }
+
         if( UtilStr.isEmpty( call ) )  call = null;
-        else                           prepared.addError( "CALL clause is not yet suported: insert the call inside your JavaScript code" );  //call = call.trim();
+        else                           prepared.addError( "CALL clause is not yet supported: insert the call inside your JavaScript code" );
 
         // Compiled just to check if it has errors (inside ::bind(...) it is needed to compile again)
 
@@ -51,8 +58,16 @@ public class NashornRT implements ICandi.ILanguage
         }
         catch( ScriptException se )
         {
-            prepared.addError( "Error compiling. Cause:\n"+ UtilStr.toString( se ) );
+            int line = se.getLineNumber();
+            int col  = se.getColumnNumber();
+
+            prepared.addError( new CodeError( se.getMessage(),
+                                              line < 0 ? 0 : line,
+                                              col  < 0 ? 0 : col ) );
         }
+
+        if( prepared.getErrors().length > 0 )
+            prepared.setCode( (String) null );    // Saves RAM
 
         return prepared.setCallName( call );
     }
@@ -102,7 +117,14 @@ public class NashornRT implements ICandi.ILanguage
         }
         catch( ScriptException exc )
         {
-            throw new MingleException( "Error executing. Cause: "+ exc.getMessage(), exc );
+            int    line = exc.getLineNumber();
+            int    col  = exc.getColumnNumber();
+            String msg  = "JavaScript runtime error"
+                        + (line > 0 ? " at line " + line : "")
+                        + (col  > 0 ? ", column " + col  : "")
+                        + ": " + exc.getMessage();
+
+            throw new MingleException( msg, exc );
         }
     }
 }

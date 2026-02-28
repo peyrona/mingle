@@ -29,7 +29,7 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
-import java.util.WeakHashMap;
+import java.util.HashMap;
 
 /**
  * This class uses JNA to access natively needed C functions in WiringPi library.<br>
@@ -131,7 +131,7 @@ final class WiringPi
 
     private static volatile boolean bInited = false;
     private static final    Object INIT_LOCK = new Object();
-    private static final    Map<Integer,PinCallback> callbackMap = Collections.synchronizedMap( new WeakHashMap<>() );
+    private static final    Map<Integer,PinCallback> callbackMap = Collections.synchronizedMap( new HashMap<>() );
 
     static boolean isInited()
     {

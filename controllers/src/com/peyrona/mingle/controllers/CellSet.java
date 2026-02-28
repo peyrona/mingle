@@ -5,7 +5,6 @@ import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
-import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.exen.IEventBus;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Dispatcher;
@@ -15,10 +14,13 @@ import com.peyrona.mingle.lang.messages.MsgDeviceChanged;
 import com.peyrona.mingle.lang.xpreval.functions.ExtraTypeCollection;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
@@ -39,10 +41,13 @@ setDeviceConfig of cells and every cell can contain a value or a formula.<br>
 public final class   CellSet
              extends ControllerBase
 {
-    private static final String KEY_VALUE = "value";
-    private static final Map<String,CellValue>        map = new ConcurrentHashMap<>();
-    private static       Dispatcher<MsgDeviceChanged> dis = null;    // Needed to recalculate new values for all affected cells every time a device changes its value
-    private static       IEventBus.Listener           ebl = null;
+    private static final String                    KEY_VALUE = "value";
+    private static final Object                       LOCK   = new Object();
+    private static final Map<String,CellValue>        map    = new ConcurrentHashMap<>();
+    private static final AtomicInteger                nCount = new AtomicInteger( 0 );    // To track live instances (before clean-up)
+    private static       Dispatcher<MsgDeviceChanged> dis    = null;                      // Needed to recalculate new values for all affected cells every time a device changes its value
+    private static       IEventBus.Listener           ebl    = null;
+    private              PropertyChangeListener       pcl    = null;
 
     //------------------------------------------------------------------------//
     // This controller is always valid
@@ -52,22 +57,9 @@ public final class   CellSet
     {
         setDeviceName( deviceName );                       // Must be 1st
         setListener( listener );                           // Must be at begining: in case an error happens, Listener is needed
-        setDeviceConfig( deviceConf );
         set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );     // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
 
-        // Can not validate the value now because caould be a formula and for thisd case, the Runtime is needed.
-
-        // 'list' and 'pair' classes can be modified (list:add( 5 )) without this driver knowing it.
-        // That is why the following is needed.
-        if( get( KEY_VALUE ) instanceof ExtraTypeCollection )
-        {
-            PropertyChangeListener pcl = (PropertyChangeEvent pce) ->
-                                        {
-                                            sendReaded( CellSet.this.get( KEY_VALUE ) );
-                                        };
-
-            ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
-        }
+        // Can not validate the value now because could be a formula and for thisd case, the Runtime is needed.
 
         setValid( true );
     }
@@ -87,10 +79,17 @@ public final class   CellSet
         if( isInvalid() )
             return false;
 
-        synchronized( this )
+        nCount.incrementAndGet();
+
+        synchronized( LOCK )    // Class-level lock guards static fields dis and ebl
         {
-            if( dis != null )
-                return true;
+            // This is needed because 'list' and 'pair' classes can be modified directly (list:add( 5 )).
+            if( get( KEY_VALUE ) instanceof ExtraTypeCollection )
+            {
+                pcl = (PropertyChangeEvent pce) -> sendChanged( CellSet.this.get( KEY_VALUE ) );    // Bug 3 fix: sendChanged (not sendReaded) so dependent formula cells are notified
+
+                ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
+            }
 
             Consumer<MsgDeviceChanged> consumer = (msg) ->
                 {
@@ -128,20 +127,35 @@ public final class   CellSet
     @Override
     public void stop()
     {
-        getRuntime().bus().remove( ebl );
+        if( ! isStarted() )
+            return;
 
-        ebl = null;
+        if( nCount.decrementAndGet() == 0 )   // Only tear down shared resources when the very last instance stops.
+        {
+            synchronized( LOCK )
+            {
+                if( ebl != null )
+                {
+                    getRuntime().bus().remove( ebl );
+                    ebl = null;
+                }
 
-        if( dis != null )
-            dis.stop();
+                if( dis != null )
+                {
+                    dis.stop();
+                    dis = null;
+                }
+            }
+        }
 
-        dis = null;
+        if( getDeviceName() != null )      // Only remove this instance's cell, not all cells
+            map.remove( getDeviceName() );
 
-        // Only remove this instance's cell, not all cells
-        String deviceName = getDeviceName();
-
-        if( deviceName != null )
-            map.remove( deviceName );
+        if( pcl != null )
+        {
+            ((ExtraTypeCollection) get( KEY_VALUE )).removePropertyChangeListener( pcl );
+            pcl = null;
+        }
 
         super.stop();
     }
@@ -170,57 +184,76 @@ public final class   CellSet
         if( isInvalid() )
             return;
 
+        if( newVal == null )
+            return;
+
         CellValue cv = map.get( getDeviceName() );
-        Object    va = ((IDevice) getRuntime().get( getDeviceName() )).value();
 
-        if( cv != null && ! Objects.equals( cv.read(), newVal ) )
-        {
-            Object value = cv.write( newVal );
+        if( cv == null )
+            return;
 
-            if( value != null )
-                sendChanged( value );
-        }
+        // Always notify; the change must be reported
+        sendChanged( cv.write( newVal ) );
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
     /**
-     * Check if there is a circular reference
+     * Check if there is a circular reference using a full DFS over the cell graph.
+     * <p>
+     * The previous 2-hop check (A→B→A) missed chains of three or more cells
+     * (e.g. A→B→C→A). This DFS walks all reachable formula cells and reports
+     * a cycle as soon as a path leads back to the cell being registered.
      *
-     * @param cellVal
-     * @return
+     * @param cv the CellValue of the cell currently being registered
+     * @return true if a cycle is detected (also marks the controller invalid via sendIsInvalid)
      */
     private boolean hasCircularRef( CellValue cv )
     {
         if( ! cv.isFormula() )
             return false;
 
-        if( cv.xpreval == null )
+        Set<String> visited = new HashSet<>();
+
+        if( dfsHasCycle( getDeviceName(), cv, visited ) )
+        {
+            String formulaStr = (cv.xpreval != null) ? cv.xpreval.toString() : "null";
+            sendIsInvalid( "Circular reference in: "+ formulaStr );
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * DFS helper: returns true if any path reachable from {@code cv} leads back
+     * to {@code originName}.
+     *
+     * @param originName the cell being registered (the cycle root we are looking for)
+     * @param cv         the CellValue whose formula vars are explored next
+     * @param visited    set of cell names already fully explored (prevents re-visiting)
+     * @return true when a path back to originName is found
+     */
+    private boolean dfsHasCycle( String originName, CellValue cv, Set<String> visited )
+    {
+        IXprEval xpr = cv.xpreval;    // single atomic read; safe after isFormula() establishes happens-before
+
+        if( xpr == null )
             return false;
 
-        for( String var1 : cv.xpreval.getVars().keySet() )
+        for( String var : xpr.getVars().keySet() )
         {
-            if( map.containsKey( var1 ) )       // true means that passed var (which appears in the cellName's formula) is another cell
-            {
-                CellValue referencedCell = map.get( var1 );
+            if( var.equals( originName ) )
+                return true;
 
-                if( referencedCell != null && referencedCell.isFormula() )    // and this referenced cell contains also a formula
-                {
-                    if( referencedCell.xpreval != null )
-                    {
-                        for( String var2 : referencedCell.xpreval.getVars().keySet() )     // So we have to find if the vars contained in this xpr references the other cell
-                        {
-                            if( var2.equals( getDeviceName() ) )
-                            {
-                                String formulaStr = (cv.xpreval != null) ? cv.xpreval.toString() : "null";
-                                sendIsInvalid( "Circular reference in: "+ formulaStr +" on variable: "+ var2 );
-                                return true;              // 'sendIsInvalid(...)' sets this Controller instance to 'inval
-                            }
-                        }
-                    }
-                }
-            }
+            if( ! visited.add( var ) )
+                continue;
+
+            CellValue referenced = map.get( var );
+
+            if( referenced != null && referenced.isFormula() && dfsHasCycle( originName, referenced, visited ) )
+                return true;
         }
 
         return false;
@@ -240,7 +273,7 @@ public final class   CellSet
 
         CellValue( Object val )
         {
-            init( val );
+            update( val );
         }
 
         //------------------------------------------------------------------------//
@@ -253,17 +286,22 @@ public final class   CellSet
 
         //------------------------------------------------------------------------//
 
-        boolean isFormula()
+        // isFormula(), read(), write() and onDeviceChanged() are synchronized on the
+        // CellValue instance.  Without this, the Dispatcher consumer thread (which calls
+        // onDeviceChanged) races with the controller thread (read/write) and the
+        // PropertyChangeListener thread, causing torn reads/writes of 'value' and 'xpreval'.
+
+        synchronized boolean isFormula()
         {
             return xpreval != null;
         }
 
         boolean hasErrors()
         {
-            return bErrors;
+            return bErrors;    // only called during single-threaded init (start()) or from within synchronized onDeviceChanged()
         }
 
-        Object read()
+        synchronized Object read()
         {
             return value;    // If has errors, 'value' already contains the errors
         }
@@ -274,11 +312,10 @@ public final class   CellSet
          * @param value
          * @return
          */
-        Object write( Object val )
+        synchronized Object write( Object val )
         {
-            init( val );    // This allows to change Cell's current formula for a new formula at runtime.
+            update( val );  // This allows to change Cell's current formula for a new formula at runtime.
                             // I do not think anyone is going to use this possibility, but it can be done.
-
             return value;
         }
 
@@ -290,7 +327,7 @@ public final class   CellSet
          * @param devValue
          * @return
          */
-        Object onDeviceChanged( String devName, Object devValue )
+        synchronized Object onDeviceChanged( String devName, Object devValue )
         {
             if( isFormula() )
             {
@@ -312,31 +349,29 @@ public final class   CellSet
 
         //------------------------------------------------------------------------//
 
-        private void init( Object val )
+        private void update( Object val )   // Invoked from CellSet::write(...) (which is sync)
         {
-            if( val instanceof String )
+            if( val.getClass().equals( String.class ) )
             {
                 String str = val.toString().trim();
 
                 if( (str.length() > 0) && (str.charAt( 0 ) == '=') )
                 {
-                    str = str.substring( 1 )          // substr to avoid '='
-                             .replace( '\'', '"' );   // e.g.: "myDevice +'%'"
+                    str = new StringBuilder( str ).deleteCharAt(0).toString();   // substr to jump '=' (strange but this is the fastest way)
+
+                    if( xpreval != null && str.equals( xpreval.toString() ) )    // toString() returns the original xpr
+                        return;
 
                     xpreval = getRuntime().newXprEval().build( str, null, getRuntime()::getGroupMemberNames );
 
-                    if( xpreval != null )
-                    {
-                        List<ICandi.IError> errors = xpreval.getErrors();
-                        bErrors = UtilColls.isNotEmpty( errors );
+                    List<ICandi.IError> errors = xpreval.getErrors();
 
-                        value   = bErrors ? "Error(s): "+ errors.toString()
-                                          : null;    // Will be inited when 'xpreval' is evaluated for the 1st time
-                    }
-                    else
+                    bErrors = UtilColls.isNotEmpty( errors );
+
+                    if( bErrors )
                     {
-                        bErrors = true;
-                        value   = "Error: Unable to create expression evaluator";
+                        xpreval = null;
+                        value   = "Error: Unable to create expression evaluator:\n"+ errors.toString();
                     }
                 }
                 else

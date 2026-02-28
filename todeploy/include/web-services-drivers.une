@@ -12,12 +12,12 @@
 # --------------------------------------------------------------------------------------------------------------------------------
 # To send text messages to a Telegram Bot
 
-DRIVER TelegramDriver                         # This DRIVER sends values to a Telegram Boot
+DRIVER TelegramDriver                  # This DRIVER sends values to a Telegram Boot
     SCRIPT TelegramController
     CONFIG
-        chat  AS string REQUIRED              # The target chat ID
-        token AS string REQUIRED              # Chat's token
-
+        chat    AS string REQUIRED     # The target chat ID
+        token   AS string REQUIRED     # Chat's token
+        timeout AS number
 
 # --------------------------------------------------------------------------------------------------------------------------------
 # This driver invokes the Open-Meteo weather web service retrieveing weather information.
@@ -77,27 +77,40 @@ DRIVER OpenMeteoDriver                   # To retrieve weather information using
         frame     AS number              # Hours to retrive starting at 'forecast' (when forecast > 0). Default: 1h. Minimum: 1h.
         timezone  AS string              # A valid OpenMeteo timezone. By default "auto" (guessed by IP).
         metric    AS boolean             # Use metric system? When false, Imperial will be used. By default, TRUE.
-                                         # Any thing different for FALSE (ignoring case), will be considered TRUE.
+                                          # Any thing different for FALSE (ignoring case), will be considered TRUE.
 
-#==================================================================================================================================
+# --------------------------------------------------------------------------------------------------------------------------------
+# SonoffTH10 temperature sensor driver
+# Reads temperature from SonoffTH10 device via HTTP API and returns it in Celsius (converting it if necessary)
+
+DRIVER SonoffTh10Driver
+    SCRIPT SonoffTh10Controller
+    CONFIG
+        ip       AS string REQUIRED     # SonoffTH10 IP address (e.g., "192.168.1.100")
+        interval AS number              # Read interval in seconds (default: 60)
+
+# ===================================================================================================================================
 # The rest of tis file contains the SCRIPTs needed by the DRIVERs declared above.
 #
 # Unless you are an experienced developer, you should simply ignore the rest of this file.
-#==================================================================================================================================
+# ===================================================================================================================================
 
 # A Controller is just a concept: a piece of software written in any acceptable Mingle language that deals with the physical world.
 # A Controller is a SCRIPT used by DRIVERS as intermediators with the physical world.
-
 
 SCRIPT TelegramController                             # The controller for the TelegramDriver
    LANGUAGE java
    FROM "file://{*home.lib*}controllers.jar"
    CALL "com.peyrona.mingle.controllers.Telegram"
 
-
 SCRIPT OpenMeteoController                            # The controller for the OpenMeteoDriver
    LANGUAGE java
    FROM "file://{*home.lib*}controllers.jar"
    CALL "com.peyrona.mingle.controllers.WeatherOpenMeteo"
+
+SCRIPT SonoffTh10Controller                           # The controller for the SonoffTh10Driver
+   LANGUAGE java
+   FROM "file://{*home.lib*}controllers.jar"
+   CALL "com.peyrona.mingle.controllers.sonoff.SonoffTh10"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

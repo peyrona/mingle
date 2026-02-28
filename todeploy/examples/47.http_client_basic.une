@@ -87,7 +87,7 @@ WHEN geo_info
          console = "Latitude : " + geo:get( "lat" )
          console = "Longitude: " + geo:get( "lon" )
          console = "ISP      : " + geo:get( "isp" )
-USE geo AS pair():fromJSON( geo_info )
+USE geo AS pair( geo_info )
 
 
 #==================================================================================================================================
@@ -106,7 +106,7 @@ DEVICE bitcoin_price
 
 WHEN bitcoin_price
     THEN console = "["+ time() +"] Bitcoin: $" + btc:get( "rate" ) + " USD"
-USE btc AS pair():fromJSON( bitcoin_price ):get( "bpi" ):get( "USD" )
+USE btc AS pair( bitcoin_price ):get( "bpi" ):get( "USD" )
 
 
 #==================================================================================================================================
@@ -144,22 +144,21 @@ DEVICE echo_api
 
 # Device to trigger POST request (using a button simulation)
 DEVICE send_button
-    DRIVER CellDriver
+    DRIVER CellSetDriver
         CONFIG
             value = false
 
 
 # When button is pressed, send a POST request
-WHEN send_button = true
-    THEN echo_api  = pair():put( "method", "POST" ) \
-                          :put( "body", "{\"message\":\"Hello from Mingle!\",\"timestamp\":\""+ time() +"\"}" )
-         console   = "["+ time() +"] POST request sent"
+WHEN send_button
+THEN echo_api  = pair():put( "method", "POST" ) \
+                       :put( "body", "{\"message\":\"Hello from Mingle!\",\"timestamp\":\""+ time() +"\"}" )
+     console   = "["+ time() +"] POST request sent"
 
 
 # Display the API response
 WHEN echo_api
-    THEN console = "["+ time() +"] API Response received"
-         console = "Response: "+ echo_api
+THEN console = "["+ time() +"] API Response received\nResponse: "+ echo_api
 
 
 #==================================================================================================================================
@@ -177,57 +176,57 @@ DEVICE rest_api
 
 # Trigger devices for demo
 DEVICE do_get
-    DRIVER CellDriver
+    DRIVER CellSetDriver
         CONFIG
             value = false
 
 
 DEVICE do_put
-    DRIVER CellDriver
+    DRIVER CellSetDriver
         CONFIG
             value = false
 
 
 DEVICE do_patch
-    DRIVER CellDriver
+    DRIVER CellSetDriver
         CONFIG
             value = false
 
 
 DEVICE do_delete
-    DRIVER CellDriver
+    DRIVER CellSetDriver
         CONFIG
             value = false
 
 
 # GET - Read a resource (triggered by do_get or automatically on start)
-WHEN do_get = true
-    THEN console = "["+ time() +"] Executing GET request..."
+WHEN do_get
+THEN console = "["+ time() +"] Executing GET request..."
 
 
 # Display GET response
 WHEN rest_api
-    THEN console = "["+ time() +"] REST Response: " + rest_api:substring( 0, 100 ) + "..."
+THEN console = "["+ time() +"] REST Response: " + rest_api:mid( 0, 100 ) + "..."
 
 
 # PUT - Replace entire resource
-WHEN do_put = true
-    THEN rest_api = pair():put( "method", "PUT" ) \
-                         :put( "body", "{\"id\":1,\"title\":\"Updated Title\",\"body\":\"Updated content\",\"userId\":1}" )
-         console  = "["+ time() +"] PUT request sent"
+WHEN do_put
+THEN rest_api = pair():put( "method", "PUT" ) \
+                      :put( "body", "{\"id\":1,\"title\":\"Updated Title\",\"body\":\"Updated content\",\"userId\":1}" )
+     console  = "["+ time() +"] PUT request sent"
 
 
 # PATCH - Partial update
-WHEN do_patch = true
-    THEN rest_api = pair():put( "method", "PATCH" ) \
-                         :put( "body", "{\"title\":\"Patched Title\"}" )
-         console  = "["+ time() +"] PATCH request sent"
+WHEN do_patch
+THEN rest_api = pair():put( "method", "PATCH" ) \
+                      :put( "body", "{\"title\":\"Patched Title\"}" )
+     console  = "["+ time() +"] PATCH request sent"
 
 
 # DELETE - Remove resource
-WHEN do_delete = true
-    THEN rest_api = pair():put( "method", "DELETE" )
-         console  = "["+ time() +"] DELETE request sent"
+WHEN do_delete
+THEN rest_api = pair():put( "method", "DELETE" )
+     console  = "["+ time() +"] DELETE request sent"
 
 
 #==================================================================================================================================
@@ -243,12 +242,12 @@ DEVICE health_check
             timeout  = 5
 
 
-WHEN health_check:contains( "error" )
-    THEN console = "[ALERT] Health check failed: " + health_check
+WHEN health_check:search( "error" ) > 0
+THEN console = "[ALERT] Health check failed: " + health_check
 
 
-WHEN health_check AND NOT health_check:contains( "error" )
-    THEN console = "["+ time() +"] Health check OK"
+WHEN health_check AND NOT health_check:search( "error" )
+THEN console = "["+ time() +"] Health check OK"
 
 
 #==================================================================================================================================

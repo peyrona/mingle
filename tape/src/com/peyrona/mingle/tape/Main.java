@@ -70,7 +70,9 @@ public class Main
         }
 
         System.out.println( getlogo() );
-        System.out.println( "A transpiler for the Une language\n" );
+        System.out.println( "A transpiler for the Une language" );
+
+        boolean bOK = true;
 
         if( lstURIs.isEmpty() )
         {
@@ -81,16 +83,19 @@ public class Main
             try
             {
                 for( URI uri : lstURIs )
-                    TranspilerTask.execute( config, charset, uri );
+                {
+                    if( ! TranspilerTask.execute( config, charset, uri ) )
+                        bOK = false;
+                }
             }
             catch( Exception exc )
             {
                 System.out.println( "MSP internal error:\n"+ UtilStr.toString( exc ) );
-                System.exit( 1 );
+                bOK = false;
             }
         }
 
-        System.exit( 0 );
+        System.exit( (bOK ? 0 : 1) );
     }
 
     //------------------------------------------------------------------------//

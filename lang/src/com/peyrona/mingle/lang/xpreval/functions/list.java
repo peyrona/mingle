@@ -3,6 +3,7 @@ package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
@@ -23,12 +24,25 @@ import java.util.Objects;
 import java.util.Set;
 
 /**
- * A list which items can be added, deleted, filter and accessed in many ways.<br>
- * In Une, lists are 1 based instead of 0 based.
+ * A dynamic list container for storing and manipulating collections of items in the Une language.
+ * <p>
+ * This class provides a comprehensive API for list operations including adding, removing,
+ * filtering, mapping, and accessing elements. All operations are thread-safe
+ * via synchronization on the internal list.
+ * <p>
+ * <b>Indexing:</b> Lists in Une are 1-based (first element is at index 1),
+ * unlike traditional programming languages which use 0-based indexing.
+ * <p>
+ * <b>Maximum Size:</b> A maximum capacity constraint can be set via the
+ * {@code size()} method. When this limit is reached, adding new elements
+ * automatically removes the oldest element (FIFO behavior).
+ * <p>
+ * <b>Thread Safety:</b> All mutating operations are synchronized, making this class
+ * safe for concurrent access from multiple threads.
  *
  * @author Francisco José Morero Peyrona
- *
- * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ * @see com.peyrona.mingle.lang.xpreval.functions.pair
+ * @see <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
 public final class list
              extends ExtraTypeCollection<list>
@@ -39,30 +53,39 @@ public final class list
     //------------------------------------------------------------------------//
 
     /**
-     * Class constructor.<br>
-     *
-     * A 'list' can be created in the following ways:
+     * Constructs a new {@code list} instance.
+     * <p>
+     * Accepts various argument combinations to initialize the list:
      * <ul>
-     *     <li>To create an empty list: list()</li>
-     *     <li>Using an arbitrary number of values: list( "A string", 2022, true )</li>
-     *     <li>Using split() -- list():split("A string,2022,true"). Note: default separator is comma.</li>
-     *     <li>Using split() and separator -- list():split("A string|2022|true", "|")</li>
-     *     <li>Using only one string that represents a valid JSON array: can contain any other JSON value.
-     *         This string can be returned from <code>::toString()</code> or from <code>::serialize():toString()</code></li>
+     *   <li><b>Empty:</b> {@code new list()} creates an empty list.</li>
+     *   <li><b>Values:</b> {@code new list("A", 2022, true)} adds all arguments as items.</li>
+     *   <li><b>Split:</b> {@code new list().split("A,2022|true")} splits string by comma (default).</li>
+     *   <li><b>Split with separator:</b> {@code new list().split("A|2022|true", "|")} uses custom separator.</li>
+     *   <li><b>JSON array:</b> {@code new list("[1,2,3]")} parses a JSON array.</li>
+     *   <li><b>JSON serialization:</b> {@code new list("{\"class\":\"...\",\"data\":[1,2,3]}")} deserializes from JSON.</li>
      * </ul>
+     * <p>
+     * When adding string values, they are automatically converted to their appropriate
+     * numeric types (e.g., "12.5" becomes {@code 12.5f}) for consistency.
      *
-     * @param items To populate the list.
+     * @param args Optional arguments. Valid formats are:
+     *            <ul>
+     *              <li>(empty) - Empty list</li>
+     *              <li>(values...) - Items to add</li>
+     *              <li>(String) - JSON array to parse</li>
+     *              <li>(String, String) - String and separator (use with split())</li>
+     *            </ul>
      */
-    public list( Object... items )
+    public list( Object... args )
     {
-        if( UtilColls.isEmpty( items ) )
+        if( UtilColls.isEmpty( args ) )
             return;
 
         // Single string argument: try JSON parsing
 
-        if( items.length == 1 && (items[0] instanceof String) )
+        if( args.length == 1 && (args[0] instanceof String) )
         {
-            String s = items[0].toString().trim();
+            String s = args[0].toString().trim();
 
             if( s.charAt( 0 ) == '{' || s.charAt( 0 ) == '[' )
             {
@@ -73,7 +96,7 @@ public final class list
                     if( jv.isObject() )
                     {
                         // From serialize().toString() format: { "class": "...", "data": [...] }
-                        deserialize( jv );
+                        deserialize( jv.asObject() );
                         return;
                     }
                     else if( jv.isArray() )
@@ -93,16 +116,27 @@ public final class list
 
         // Add all items to the inner list
 
-        for( Object item : items )
+        for( Object item : args )
             add( item );
     }
 
     //------------------------------------------------------------------------//
+    // PUBLIC INTERFACE
 
     /**
-     * Returns the size (number of items) of the list.
+     * Returns the class simple name in lower case.
      *
-     * @return The size (number of items) of the list.
+     * @return The class simple name in lower case.
+     */
+    public String type()
+    {
+       return getClass().getSimpleName().toLowerCase();
+    }
+
+    /**
+     * Gets the number of items in the list.
+     *
+     * @return The number of items currently stored in the list.
      */
     public int size()
     {
@@ -110,10 +144,17 @@ public final class list
     }
 
     /**
-     * Set maximum list size.
+     * Sets the maximum size constraint for the list.
+     * <p>
+     * When the maximum size is reached, adding new elements automatically
+     * removes the oldest element (FIFO behavior) to maintain the constraint.
+     * <p>
+     * For example, setting {@code size(10)} on a list with 15 elements
+     * will remove the 5 oldest elements.
      *
-     * @param maxSize Maximum number of items allowed.
-     * @return Itself.
+     * @param maxSize The maximum number of items allowed in the list (must be positive).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the specified maximum size is less than or equal to 0.
      */
     public list size( Object maxSize )
     {
@@ -134,9 +175,9 @@ public final class list
     }
 
     /**
-     * Returns the size (number of items) of the list.
+     * Gets the number of items in the list (alias for {@link #size()}).
      *
-     * @return The size (number of items) of the list.
+     * @return The number of items currently stored in the list.
      */
     public int len()
     {
@@ -144,10 +185,11 @@ public final class list
     }
 
     /**
-     * Set maximum list size.
+     * Sets the maximum size constraint for the list (alias for {@link #size(Object)}).
      *
-     * @param maxSize Maximum number of items allowed.
-     * @return Itself.
+     * @param maxSize The maximum number of items allowed in the list (must be positive).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the specified maximum size is less than or equal to 0.
      */
     public list len( Object maxSize )
     {
@@ -155,11 +197,11 @@ public final class list
     }
 
     /**
-     * Returns true if the list has no elements.<br>
-     * <br>
-     * This method is equivalent to: size() == 0
+     * Checks if the list contains no elements.
+     * <p>
+     * This method is equivalent to: {@code size() == 0}
      *
-     * @return true if the list has no elements.
+     * @return {@code true} if the list has no elements, {@code false} otherwise.
      * @see #size()
      */
     public boolean isEmpty()
@@ -168,9 +210,12 @@ public final class list
     }
 
     /**
-     * Deletes all items.
+     * Removes all items from the list.
+     * <p>
+     * This method clears the entire list and fires property change notifications
+     * for each removed element.
      *
-     * @return The list itself.
+     * @return {@code this} for method chaining.
      */
     public list empty()
     {
@@ -189,19 +234,18 @@ public final class list
     }
 
     /**
-     * Returns the index of the first occurrence of the specified element in this list (1-based),
-     * or 0 if this list does not contain the element.
+     * Returns the 1-based index of the first occurrence of the specified element in this list.
      * <p>
-     * This method performs type-aware comparison:
+     * If the element is not found, returns {@code 0}. This method performs
+     * type-aware comparison:
      * <ul>
-     *   <li>Numbers are compared by value (e.g., Integer 5 equals Float 5.0)</li>
-     *   <li>Strings are compared case-insensitively</li>
-     *   <li>Other types use standard equals() comparison</li>
+     *   <li><b>Numbers:</b> Compared by numeric value (e.g., {@code Integer 5} equals {@code Float 5.0f})</li>
+     *   <li><b>Strings:</b> Compared case-insensitively</li>
+     *   <li><b>Other types:</b> Use standard {@code equals()} comparison</li>
      * </ul>
      *
-     * @param item What to check.
-     * @return The index of the first occurrence of the specified element in this list (1-based),
-     *         or 0 if this list does not contain the element.
+     * @param item The element to search for in the list.
+     * @return The 1-based index of the first occurrence, or {@code 0} if not found.
      * @see #has(java.lang.Object)
      */
     public int index( Object item )
@@ -249,13 +293,12 @@ public final class list
     }
 
     /**
-     * Returns true if the list contains passed item.
-     * <pre>has( item )</pre>
-     * is equivalent to
-     * <pre>index( item ) > 0</pre>
+     * Checks if the list contains the specified item.
+     * <p>
+     * This method is equivalent to: {@code index(item) > 0}
      *
-     * @param item What to check.
-     * @return true if the list contains passed item.
+     * @param item The element to search for in the list.
+     * @return {@code true} if the list contains the item, {@code false} otherwise.
      * @see #index(java.lang.Object)
      */
     public boolean has( Object item )
@@ -264,12 +307,18 @@ public final class list
     }
 
     /**
-     * Returns the item at the ordinal position of passed index (list are 1 based: first item is 1).<br>
-     * Negative index counts back  the end of the list, so -1 is the last item of the list, -2
-     * is the last before the last item and so on.<br>
+     * Returns the element at the specified 1-based index position in the list.
+     * <p>
+     * Negative index counts backward from the end of the list:
+     * <ul>
+     *   <li>{@code -1}: Last item</li>
+     *   <li>{@code -2}: Second to last item</li>
+     *   <li>And so on...</li>
+     * </ul>
      *
-     * @param index The ordinal position of the item to be retrieved.
-     * @return The item at the ordinal position of passed index (list are 1 based: first item is 1).
+     * @param index The 1-based ordinal position of the item to retrieve.
+     * @return The element at the specified position.
+     * @throws MingleException If the index is out of bounds.
      */
     public Object get( Object index )
     {
@@ -277,13 +326,21 @@ public final class list
     }
 
     /**
-     * Replaces the item at the 'index' ordinal position (1 based) by the passed 'item'.<br>
-     * Negative index counts back from the end of the list, so -1 is the last item of
-     * the list, -2 is the last before the last item and so on.
+     * Replaces the element at the specified 1-based index position with a new value.
+     * <p>
+     * Negative index counts backward from the end of the list:
+     * <ul>
+     *   <li>{@code -1}: Last item</li>
+     *   <li>{@code -2}: Second to last item</li>
+     *   <li>And so on...</li>
+     * </ul>
+     * <p>
+     * This method fires a property change notification.
      *
-     * @param item The new value (any valid Une data type).
-     * @param index The ordinal position of the item to be replaced.
-     * @return The list itself.
+     * @param index The 1-based ordinal position of the element to replace.
+     * @param item The new value to set (any valid Une data type).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the index is out of bounds.
      */
     public list set( Object index, Object item )
     {
@@ -295,20 +352,26 @@ public final class list
     }
 
     /**
-     * Negates (invert) the value at the specified index.<br>
-     * <br>
-     * Negative index counts back from the end of the list, so -1 is the last item of
-     * the list, -2 is the last before the last item and so on.
+     * Negates (inverts) the value at the specified 1-based index position.
+     * <p>
+     * Negative index counts backward from the end of the list:
      * <ul>
-     *   <li>If value is Boolean: true becomes false, false becomes true.</li>
-     *   <li>If value is Number 0: becomes 1.</li>
-     *   <li>If value is Number 1: becomes 0.</li>
-     *   <li>Otherwise: throws MingleException.</li>
+     *   <li>{@code -1}: Last item</li>
+     *   <li>{@code -2}: Second to last item</li>
+     *   <li>And so on...</li>
+     * </ul>
+     * <p>
+     * Supported value types for negation:
+     * <ul>
+     *   <li><b>Boolean:</b> {@code true} becomes {@code false}, {@code false} becomes {@code true}</li>
+     *   <li><b>Number 0:</b> Becomes {@code 1}</li>
+     *   <li><b>Number 1:</b> Becomes {@code 0}</li>
+     *   <li><b>Other types:</b> Throws {@code MingleException}</li>
      * </ul>
      *
-     * @param index The ordinal position of the item to be inverted (1-based).
-     * @return The list itself.
-     * @throws MingleException If value at index is not boolean, 0, or 1.
+     * @param index The 1-based ordinal position of the element to negate.
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the value at index is not boolean, 0, or 1.
      */
     public list negate( Object index )
     {
@@ -329,12 +392,15 @@ public final class list
     }
 
     /**
-     * Returns the last item in the list.
-     * <pre>last()</pre>
-     * is equivalent to
-     * <pre>get( -1 )</pre>
+     * Returns the last element in the list.
+     * <p>
+     * This method is equivalent to: {@code get(-1)}
+     * <p>
+     * Note: This method uses 0-based indexing internally, matching Java's
+     * {@code List.get()} behavior.
      *
-     * @return The last item in the list.
+     * @return The last element in the list.
+     * @throws MingleException If the list is empty.
      * @see #get(java.lang.Object)
      */
     public Object last()
@@ -345,13 +411,13 @@ public final class list
     }
 
     /**
-     * Returns the last item in the list.
-     * <pre>last()</pre>
-     * is equivalent to
-     * <pre>get( -1 )</pre>
+     * Returns the last element in the list, or a default value if the list is empty.
+     * <p>
+     * This method is equivalent to: {@code get(-1)} but provides a
+     * default value instead of throwing an exception when empty.
      *
-     * @param def Value to return if list is empty
-     * @return The last item in the list.
+     * @param def The default value to return if the list is empty.
+     * @return The last element in the list, or {@code def} if empty.
      * @see #get(java.lang.Object)
      */
     public Object last( Object def )
@@ -363,10 +429,18 @@ public final class list
     }
 
     /**
-     * Adds passed 'item' at the end (tail) of the list.<br>
+     * Adds a new element to the end (tail) of the list.
+     * <p>
+     * If the list has a maximum size constraint and is at capacity, the oldest
+     * element is automatically removed (FIFO behavior) before adding the new element.
+     * <p>
+     * String values are automatically converted to appropriate numeric types
+     * (e.g., "12.5" becomes {@code 12.5f}) for consistency.
+     * <p>
+     * This method fires a property change notification.
      *
-     * @param item Item to be added (any valid Une data type).
-     * @return The list itself.
+     * @param item The element to add (any valid Une data type).
+     * @return {@code this} for method chaining.
      */
     public list add( Object item )
     {
@@ -391,41 +465,38 @@ public final class list
     }
 
     /**
-     * Inserts passed 'item' at the ordinal position of 'index' shifting right all items after 'index'.<br>
-     * Negative index counts back from the end of the list, so -1 is the last item of the list, -2 is the
-     * last before the last item and so on.
-     * <br>
-     * If received parameter is instance of this class (list), the list itself will be appended as one single item.
+     * Inserts an element at the specified 1-based index position, shifting existing
+     * elements to the right.
+     * <p>
+     * Negative index counts backward from the end of the list:
+     * <ul>
+     *   <li>{@code -1}: Insert before last item</li>
+     *   <li>{@code -2}: Insert before second to last item</li>
+     *   <li>And so on...</li>
+     * </ul>
+     * <p>
+     * If the parameter is an instance of this class ({@code list}), the list itself
+     * will be appended as a single element (not flattened).
+     * <p>
+     * If the list has a maximum size constraint and is at capacity, the oldest
+     * element is automatically removed before adding the new element.
      *
-     * @param item Item (any valid Une data type) to be added.
-     * @param index The ordinal position of the item to be added.
-     * @return The list itself.
+     * @param item The element to insert (any valid Une data type).
+     * @param index The 1-based ordinal position where to insert the element.
+     * @return {@code this} for method chaining.
      */
     public list add( Object item, Object index )
     {
         if( item instanceof String )
             item = UtilType.toUne( item.toString() );     // v.g.: "12.5" --> 12.5f
 
-        int    ndx;
-        Object old = "";
+        Object old = null;
+        int    ndx = toIndex( index, true );
 
-        synchronized( inner )
-        {
-            // Remove oldest element if list is at max capacity
-            if( inner.size() >= maxLen )
-            {
-                Object _old = inner.get( 0 );
-                inner.remove( 0 );
-                firePropertyChanged( _old, inner.isEmpty() ? "" : inner.get( 0 ) );
-            }
+        if( ndx < inner.size() )
+            old = inner.get( ndx );
 
-            ndx = toIndex( index, true );
-
-            if( ndx < inner.size() )
-                old = inner.get( ndx );
-
-            inner.add( ndx, item );
-        }
+        inner.add( ndx, item );
 
         firePropertyChanged( old, item );
 
@@ -433,10 +504,14 @@ public final class list
     }
 
     /**
-     * Appends all items in passed 'lst' list at the end (tail) of the list..<br>
+     * Appends all elements from the specified list to the end (tail) of this list.
+     * <p>
+     * Elements are added in their original order from the source list.
+     * If the source list is this same list instance, elements are duplicated.
      *
-     * @param lst List to be added.
-     * @return The list itself.
+     * @param lst The list containing elements to add (must be an instance of {@code list}).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the parameter is not a {@code list} instance.
      */
     public list addAll( Object lst )
     {
@@ -454,13 +529,20 @@ public final class list
     }
 
     /**
-     * Inserts all items in passed 'lst' list at the ordinal position of 'index' shifting right all items after 'index'.<br>
-     * Negative index counts back from the end of the list, so -1 is the last item of the list, -2 is the last before
-     * the last item and so on.
+     * Inserts all elements from the specified list at the specified 1-based index position.
+     * <p>
+     * Existing elements from the insertion point onward are shifted to the right.
+     * Negative index counts backward from the end of the list:
+     * <ul>
+     *   <li>{@code -1}: Insert before last item</li>
+     *   <li>{@code -2}: Insert before second to last item</li>
+     *   <li>And so on...</li>
+     * </ul>
      *
-     * @param lst List to be added.
-     * @param index The ordinal position of the item to be added.
-     * @return The list itself.
+     * @param lst The list containing elements to insert (must be an instance of {@code list}).
+     * @param index The 1-based ordinal position where to insert the elements.
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the parameter is not a {@code list} instance.
      */
     public list addAll( Object lst, Object index )
     {
@@ -481,18 +563,25 @@ public final class list
     }
 
     /**
-     * Deletes 'item' from the list.<br>
+     * Deletes an element from the list by value or index position.
+     * <p>
+     * This method supports multiple deletion modes:
      * <ul>
-     *     <li>If received 'value' is a number, the item at the ordinal position of passed 'value' is deleted, shifting left all items after 'value'.<br>
-     *         Negative index counts back from the end of the list, so -1 is the last item of the list, -2 is the last before the last item and so on.</li>
-     *     <li>If received 'value' is a string and the list contains it, this item will be deleted. But if the string represents a number, it is
-     *         converted into an integer and the item at this index will be deleted.<br>
-     *         In both cases, items after the deleted one will shifted left.</li>
-     *     <li>Otherwise, 'value' will be searched into the list and if it exist, it will deleted and items after the deleted one will shifted left.</li>
+     *   <li><b>By number:</b> If the value is a number, deletes the element at
+     *       that 1-based ordinal position. Negative index counts backward from the end.</li>
+     *   <li><b>By string (numeric):</b> If the string represents a number,
+     *       it's converted to an integer and used as a 1-based index position.</li>
+     *   <li><b>By string (non-numeric):</b> Searches for a case-insensitive match
+     *       and deletes the first occurrence found.</li>
+     *   <li><b>By other object:</b> Searches for an exact match using
+     *       {@code equals()} and deletes the first occurrence found.</li>
      * </ul>
+     * <p>
+     * Elements after the deleted one are shifted left to fill the gap.
      *
-     * @param value The item to delete or the ordinal position of the item to be deleted.
-     * @return The list itself.
+     * @param value The element to delete, or the 1-based ordinal position of the element to delete.
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the element to delete is not found.
      */
     public list del( Object value )
     {
@@ -528,10 +617,12 @@ public final class list
      * <p>
      * The returned list is a completely independent copy with all elements cloned:
      * <ul>
-     *   <li>Primitive types (Boolean, Number, String, date, time) are copied by reference (they are immutable)</li>
-     *   <li>Complex types (other ExtraTypeCollection instances) are recursively cloned</li>
-     *   <li>The new list has the same maximum length constraint as the original</li>
-     *   <li>Property change listeners are NOT copied to the cloned list</li>
+     *   <li><b>Primitive/Immutable types:</b> Boolean, Number, String, {@code date}, {@code time}
+     *       are copied by reference (they are immutable).</li>
+     *   <li><b>Complex types:</b> Other {@code ExtraTypeCollection} instances
+     *       are recursively cloned.</li>
+     *   <li><b>Capacity:</b> The new list inherits the same maximum length constraint.</li>
+     *   <li><b>Listeners:</b> Property change listeners are NOT copied to the cloned list.</li>
      * </ul>
      * Modifications to the cloned list or its elements do not affect the original list.
      *
@@ -559,8 +650,12 @@ public final class list
 
     /**
      * Rotates all elements one position to the right, moving the last element to the front.
+     * <p>
+     * This method is equivalent to: {@code rotate(1)}
+     * <p>
+     * For a list {@code [1, 2, 3, 4, 5]}, the result is {@code [5, 1, 2, 3, 4]}.
      *
-     * @return Itself.
+     * @return {@code this} for method chaining.
      */
     public list rotate()
     {
@@ -570,15 +665,24 @@ public final class list
     }
 
     /**
-     * Rotates the elements in the list.
+     * Rotates elements in the list by the specified number of positions.
+     * <p>
+     * Rotation direction depends on the sign of the places parameter:
      * <ul>
-     *    <li>If no parameter is passed, shifts all elements 1 position to the right.</li>
-     *    <li>If 'places' is positive, rotates all elements N positions to the right.</li>
-     *    <li>If 'places' is negative, rotates all elements N positions to the left.</li>
+     *   <li><b>No parameter:</b> Rotates all elements 1 position to the right.</li>
+     *   <li><b>Positive:</b> Rotates all elements N positions to the right.</li>
+     *   <li><b>Negative:</b> Rotates all elements N positions to the left.</li>
+     * </ul>
+     * <p>
+     * Examples:
+     * <ul>
+     *   <li>{@code [1, 2, 3, 4, 5]} with {@code rotate()} → {@code [5, 1, 2, 3, 4]}</li>
+     *   <li>{@code [1, 2, 3, 4, 5]} with {@code rotate(2)} → {@code [4, 5, 1, 2, 3]}</li>
+     *   <li>{@code [1, 2, 3, 4, 5]} with {@code rotate(-1)} → {@code [2, 3, 4, 5, 1]}</li>
      * </ul>
      *
-     * @param places Number of positions to rotate (optional, default is 1).
-     * @return Itself.
+     * @param places The number of positions to rotate (optional, default is 1).
+     * @return {@code this} for method chaining.
      */
     public list rotate( Object places )
     {
@@ -591,9 +695,14 @@ public final class list
     }
 
     /**
-     * Remove duplicates.
+     * Removes duplicate elements from the list while preserving order.
+     * <p>
+     * Only the first occurrence of each element is retained. Subsequent duplicates
+     * are removed. The relative order of unique elements is maintained.
+     * <p>
+     * This method fires property change notifications for each removed duplicate.
      *
-     * @return Itself.
+     * @return {@code this} for method chaining.
      */
     public list uniquefy()
     {
@@ -626,9 +735,14 @@ public final class list
     }
 
     /**
-     * Sorts the list into ascending order, according to the natural ordering of its elements.
+     * Sorts the list into ascending order according to the natural ordering of its elements.
+     * <p>
+     * Elements must implement {@code Comparable} or be of standard Une data types
+     * (Boolean, Number, String, date, time, list, pair, etc.).
+     * <p>
+     * Sorting is stable (equal elements retain their relative order).
      *
-     * @return The list itself.
+     * @return {@code this} for method chaining.
      */
     public list sort()
     {
@@ -638,9 +752,11 @@ public final class list
     }
 
     /**
-     * Reverses the order of the elements in the specified list.
+     * Reverses the order of elements in the list in place.
+     * <p>
+     * The first element becomes the last, and vice versa.
      *
-     * @return The list itself.
+     * @return {@code this} for method chaining.
      */
     public list reverse()
     {
@@ -649,33 +765,44 @@ public final class list
         return this;
     }
 
-    public list split( Object items )
+    /**
+     * Splits a string by comma and adds all parts as new items to the list.
+     * <p>
+     * This is a convenience method equivalent to: {@code split(string, ",")}
+     *
+     * @param string The string to split by comma.
+     * @return {@code this} for method chaining.
+     */
+    public list split( Object string )
     {
-        return split( items, "," );
+        return split( string, "," );
     }
 
     /**
-     * Splits a string into its elements using received separator and adds all new items at the end of the list.<br>
-     * <br>
-     * NOTE: separator is used as a Java regular expression, unless it is one single character: in this case it
-     * will be properly escaped.
+     * Splits a string into elements using the specified separator and adds all new
+     * items to the end of the list.
+     * <p>
+     * The separator is used as a Java regular expression, unless it's a single
+     * character, in which case it will be properly escaped.
+     * <p>
+     * Empty strings resulting from the split are filtered out and not added to the list.
      *
-     * @param items
-     * @param separator
-     * @return Itself
+     * @param string The string to split.
+     * @param separator The separator string or regular expression.
+     * @return {@code this} for method chaining.
      */
-    public list split( Object items, Object separator )
+    public list split( Object string, Object separator )
     {
-        if( UtilStr.isEmpty( items ) )
+        if( UtilStr.isEmpty( string ) )
             return this;
 
         if( UtilStr.isEmpty( separator ) )
         {
-            add( items );
+            add( string );
             return this;
         }
 
-        String ite = items.toString();
+        String ite = string.toString();
         String sep = Language.escape( separator.toString() );
 
         for( String s : ite.split( sep ) )
@@ -687,17 +814,36 @@ public final class list
     //------------------------------------------------------------------------//
     // OVERRIDEN
 
+    /**
+     * Maps (transforms) each element of the list using the specified expression.
+     * <p>
+     * The expression is evaluated for each element with {@code x} bound to the
+     * current element value. The result of each evaluation becomes a new element
+     * in the returned list.
+     * <p>
+     * Example:
+     * <pre>
+     * // Multiply each number by 2
+     * list: [1, 2, 3].map( "x * 2" )  // Returns: [2, 4, 6]
+     * // Get year from each date
+     * list: [date("2020-01-01"), date("2021-06-15")].map( "x:year()" )  // Returns: [2020, 2021]
+     * </pre>
+     *
+     * @param expr The expression to evaluate for each element.
+     * @return A new list containing the transformed elements.
+     * @throws MingleException If the expression returns no value for any element.
+     */
     @Override
     public list map( Object expr )
     {
         list     l2Ret = new list();
-        IXprEval yajer = new NAXE().build( expr.toString().replace( '\'', '"' ) );    // e.g.: "x == 'paco'"
+        IXprEval naxe  = new NAXE().build( expr.toString() );
 
         synchronized( inner )
         {
             for( int n = 0; n < inner.size(); n++ )
             {
-                Object result = yajer.eval( "x", inner.get( n ) );
+                Object result = naxe.eval( "x", inner.get( n ) );
 
                 if( result == null )
                     throw new MingleException( expr +": returns no value" );
@@ -709,24 +855,43 @@ public final class list
         return l2Ret;
     }
 
+    /**
+     * Filters the list, keeping only elements that satisfy the specified expression.
+     * <p>
+     * The expression is evaluated for each element with {@code x} bound to the
+     * current element value. Only elements where the expression evaluates to {@code true}
+     * are included in the returned list.
+     * <p>
+     * Example:
+     * <pre>
+     * // Keep only even numbers
+     * list: [1, 2, 3, 4, 5].filter( "x % 2 == 0" )  // Returns: [2, 4]
+     * // Keep only positive numbers
+     * list: [-1, 0, 1, -2, 2].filter( "x > 0" )  // Returns: [1, 2]
+     * </pre>
+     *
+     * @param expr The boolean expression to evaluate for each element.
+     * @return A new list containing only elements that satisfy the expression.
+     * @throws MingleException If the expression does not evaluate to a boolean value.
+     */
     @Override
     public list filter( Object expr )
     {
         checkNotEmpty( inner );
 
         list     l2Ret = new list();
-        String   sExpr = expr.toString().replace( '\'', '"' );     // e.g.: "x == 'paco'"
-        IXprEval yajer = new NAXE().build( sExpr );
+        String   sExpr = expr.toString();
+        IXprEval naxe  = new NAXE().build( sExpr );
 
         synchronized( inner )
         {
             for( int n = 0; n < inner.size(); n++ )
             {
-                Object result = yajer.eval( "x", inner.get( n ) );
+                Object result = naxe.eval( "x", inner.get( n ) );
 
                 checkIsBoolean( sExpr, result );
 
-                if( (boolean) result )
+                if( (boolean) result )    // if true...
                     l2Ret.add( inner.get( n ) );
             }
         }
@@ -734,6 +899,23 @@ public final class list
         return l2Ret;
     }
 
+    /**
+     * Reduces the list to a single value by accumulating results across all elements.
+     * <p>
+     * The expression is evaluated repeatedly, with {@code x} and {@code y} bound to
+     * successive pairs of elements:
+     * <ul>
+     *   <li>First iteration: {@code x} = element[0], {@code y} = element[1]</li>
+     *   <li>Second iteration: {@code x} = previous result, {@code y} = element[2]</li>
+     *   <li>And so on...</li>
+     * </ul>
+     * <p>
+     * For a single-element list, that element is returned without evaluation.
+     *
+     * @param expr The expression to reduce elements with.
+     * @return The accumulated result after processing all elements.
+     * @throws MingleException If the list has only one element (no reduction needed).
+     */
     @Override
     public Object reduce( Object expr )
     {
@@ -742,7 +924,7 @@ public final class list
         if( inner.size() == 1 )
             return inner.get( 0 );
 
-        IXprEval naxe = new NAXE().build( expr.toString().replace( '\'', '"' ) );    // e.g.: "x == 'paco'"
+        IXprEval naxe = new NAXE().build( expr.toString() );
                  naxe.set( "x", inner.get(0) );
                  naxe.set( "y", inner.get(1) );
 
@@ -762,10 +944,17 @@ public final class list
     }
 
     /**
-     * Deletes from this list all items that does not exist in passed 'list'.
+     * Removes from this list all elements that do not exist in the specified list.
+     * <p>
+     * After this operation, this list will contain only elements that were
+     * present in both lists (intersection). The relative order of remaining
+     * elements is preserved.
+     * <p>
+     * String comparison is case-insensitive.
      *
-     * @param oList List to compare with.
-     * @return The list itself.
+     * @param oList The list to compare against (must be an instance of {@code list}).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the parameter is not a {@code list} instance.
      */
     @Override
     public list intersect( Object oList )
@@ -814,10 +1003,14 @@ public final class list
     }
 
     /**
-     * Adds all items in passed 'list' to this list.
+     * Adds all elements from the specified list to this list.
+     * <p>
+     * Duplicates are allowed (the list can contain the same element multiple times).
+     * The maximum size constraint (if set) is respected during addition.
      *
-     * @param oList List to be added.
-     * @return The list itself.
+     * @param oList The list containing elements to add (must be an instance of {@code list}).
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the parameter is not a {@code list} instance.
      */
     @Override
     public list union( Object oList )
@@ -826,16 +1019,20 @@ public final class list
     }
 
     /**
-     * Compares this list to another list.
+     * Compares this list to another list based on size and element equality.
      * <p>
-     * Returns:
+     * Comparison rules:
      * <ul>
-     *    <li> 1 : when this list is bigger (has more items) than passed list.</li>
-     *    <li> 0 : when this list is the same as passed list despiting the order of the items.</li>
-     *    <li>-1 : when this list is lower (has less items) than passed list or at least one item in this list is not in passed list.</li>
+     *   <li><b>Greater:</b> Returns {@code 1} when this list has more elements.</li>
+     *   <li><b>Equal:</b> Returns {@code 0} when lists have the same number of elements
+     *       and all elements match (order-independent, case-insensitive for strings).</li>
+     *   <li><b>Less:</b> Returns {@code -1} when this list has fewer elements or
+     *       at least one element in this list is not present in the other list.</li>
      * </ul>
-     * @param o Date to compare (argument must be of type list).
-     * @return 1, 0 or -1
+     *
+     * @param o The list to compare with (must be an instance of {@code list}).
+     * @return {@code 1} if greater, {@code 0} if equal, {@code -1} if less.
+     * @throws MingleException If the parameter is not a {@code list} instance.
      */
     @Override
     public int compareTo( Object o )
@@ -891,14 +1088,36 @@ public final class list
         return UtilColls.toString( inner );
     }
 
+    /**
+     * Returns a hash code value for this list.
+     * <p>
+     * This method is supported for the benefit of hash tables such as those provided by
+     * {@link java.util.HashMap}.
+     *
+     * @return A hash code value for this object.
+     */
     @Override
     public int hashCode()
     {
         int hash = 7;
             hash = 53 * hash + Objects.hashCode( this.inner );
+
         return hash;
     }
 
+    /**
+     * Checks if this list is equal to another object.
+     * <p>
+     * Two lists are considered equal if:
+     * <ul>
+     *   <li>Both are instances of {@code list}</li>
+     *   <li>They have the same number of elements</li>
+     *   <li>All corresponding elements are equal (order-independent, case-insensitive for strings)</li>
+     * </ul>
+     *
+     * @param obj The object to compare with (may be {@code null}).
+     * @return {@code true} if the object represents the same list, {@code false} otherwise.
+     */
     @Override
     public boolean equals( Object obj )
     {
@@ -920,9 +1139,12 @@ public final class list
     // TO USE A 'LIST' AS IF IT WERE A 'STACK'
 
     /**
-     * Looks at the object at the top of this stack (last added item) without removing it from the stack.
+     * Peeks at the object at the top of this stack without removing it.
+     * <p>
+     * This method treats the list as a stack, where the top is the
+     * last added element (equivalent to {@code last()} without exception on empty list).
      *
-     * @return The object at the top of this stack.
+     * @return The object at the top of the stack, or the default value if empty.
      */
     public Object peek()
     {
@@ -930,9 +1152,13 @@ public final class list
     }
 
     /**
-     * Removes the object at the top of this stack and returns that object as the value of this function.
+     * Removes and returns the object at the top of this stack.
+     * <p>
+     * This method treats the list as a stack, where the top is the
+     * last added element. The element is removed from the list.
      *
-     * @return The value of the removed object.
+     * @return The object that was at the top of the stack.
+     * @throws MingleException If the list is empty.
      */
     public Object pop()
     {
@@ -945,9 +1171,12 @@ public final class list
 
     /**
      * Pushes an item onto the top of this stack.
+     * <p>
+     * This method treats the list as a stack, adding the element to the end.
+     * Equivalent to: {@code add(item)}.
      *
-     * @param item Item to be pushed.
-     * @return Itself.
+     * @param item The item to push onto the stack.
+     * @return {@code this} for method chaining.
      */
     public list push( Object item )
     {
@@ -957,8 +1186,21 @@ public final class list
     //------------------------------------------------------------------------//
     // TO BE USED FROM SCRIPTS
 
+    /**
+     * Serializes this list to a JSON object.
+     * <p>
+     * The JSON structure is:
+     * <pre>
+     * {
+     *   "class": "com.peyrona.mingle.lang.xpreval.functions.list",
+     *   "data": [1, 2, 3, "four", true]
+     * }
+     * </pre>
+     *
+     * @return A JSON object containing the class name and a JSON array of all elements.
+     */
     @Override
-    public Object serialize()
+    public JsonObject serialize()
     {
         JsonArray ja = Json.array();
 
@@ -973,31 +1215,70 @@ public final class list
                    .add( "data" , ja );
     }
 
+    /**
+     * Deserializes a JSON object to populate this list instance.
+     * <p>
+     * Expects a JSON object in the format produced by {@link #serialize()}.
+     * The list is cleared and populated with elements from the JSON array.
+     *
+     * @param o The JSON object containing a "data" array field.
+     * @return {@code this} for method chaining.
+     * @throws MingleException If the JSON structure is invalid.
+     */
     @Override
-    public list deserialize( Object o )
+    public list deserialize( JsonObject json )
     {
-        UtilJson  json = parse( o );
-        JsonArray ja   = json.getArray( "data", null );     // At this point it is never null
+        JsonValue jv = json.get( "data" );
+        JsonArray ja = jv.isArray() ? jv.asArray() : null;     // At this point it is never null
 
         empty();
 
-        for( JsonValue jv : ja.values() )
-            add( UtilJson.toUneType( jv ) );
+        for( JsonValue val : ja.values() )
+            add( UtilJson.toUneType( val ) );
 
         return this;
     }
 
+    /**
+     * Returns an iterator over the elements in this list.
+     * <p>
+     * The returned iterator provides sequential access to all elements.
+     * Note that the iterator is not thread-safe for concurrent modifications.
+     *
+     * @return An iterator for this list.
+     */
     @Override
     public Iterator iterator()
     {
         return inner.iterator();
     }
 
+    /**
+     * Returns a standard Java {@link java.util.ArrayList} containing a shallow copy of all elements.
+     * <p>
+     * The returned list is independent of the internal list but elements
+     * are shared (shallow copy). Modifications to the returned list do not
+     * affect this {@code list} instance, and vice versa.
+     *
+     * @return A new {@code ArrayList} with all elements from this list.
+     */
     public List<Object> asList()
     {
         return new ArrayList( inner );
     }
 
+    /**
+     * Returns a typed Java {@link java.util.ArrayList} containing only elements of the
+     * specified class.
+     * <p>
+     * Elements that are {@code null} or not assignable to the specified class
+     * are filtered out.
+     *
+     * @param <T> The type of elements to include.
+     * @param clazz The class to filter elements by (must not be {@code null}).
+     * @return A new typed {@code ArrayList} containing only matching elements.
+     * @param <T> The type parameter.
+     */
     public <T> List<T> asListOf( Class<T> clazz )
     {
         List<T> l = new ArrayList<>( inner.size() );
@@ -1010,19 +1291,37 @@ public final class list
         }
 
         return l;
-
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE
+    /**
+     * Converts a 1-based Une index to a 0-based Java index.
+     * <p>
+     * This method handles the conversion from Une's 1-based indexing to Java's
+     * 0-based indexing. Does not allow appending (index must be within bounds).
+     *
+     * @param index The 1-based Une index to convert.
+     * @return The 0-based Java index.
+     * @throws MingleException If the index is out of bounds.
+     */
     private int toIndex( Object index )
-
     {
-
         return toIndex( index, false );
-
     }
 
+    /**
+     * Converts a 1-based Une index to a 0-based Java index.
+     * <p>
+     * This method handles the conversion from Une's 1-based indexing to Java's
+     * 0-based indexing.
+     *
+     * @param index The 1-based Une index to convert.
+     * @param allowAppend If {@code true}, allows index equal to size (for append position).
+     *                      If {@code false}, index must be strictly within bounds.
+     * @return The 0-based Java index.
+     * @throws MingleException If the index is out of bounds.
+     */
     private int toIndex( Object index, boolean allowAppend )
     {
         int n = UtilType.toInteger( index );

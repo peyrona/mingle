@@ -31,7 +31,7 @@ import java.util.concurrent.CompletionStage;
  * <p>
  * <b>Status notifications:</b>
  * <ul>
- *   <li><b>Gen2+</b>: A persistent WebSocket connection ({@code ws://{address}/rpc}) receives
+ *   <li><b>Gen2+</b>: A persistent WebSocket connection ({@code ws://{ip}/rpc}) receives
  *       real-time {@code NotifyStatus} events whenever the device state changes. The {@code read()}
  *       method is still available for on-demand status queries.</li>
  *   <li><b>Gen1</b>: No push mechanism is available for color/brightness changes (Gen1 webhooks
@@ -40,10 +40,10 @@ import java.util.concurrent.CompletionStage;
  * <p>
  * Configuration parameters:
  * <ul>
- *   <li>address: IP address of the Shelly device (required). E.g.: "192.168.1.100"</li>
- *   <li>channel: Channel ID, usually 0 (optional, default: 0)</li>
+ *   <li>ip      : IP address of the Shelly device (required). E.g.: "192.168.1.100"</li>
+ *   <li>channel : Channel ID, usually 0 (optional, default: 0)</li>
  *   <li>interval: Polling interval in milliseconds for status updates (optional, default: 5000)</li>
- *   <li>timeout: HTTP request timeout in seconds (optional, default: 10)</li>
+ *   <li>timeout : HTTP request timeout in seconds (optional, default: 10)</li>
  * </ul>
  * <p>
  * Write accepts:
@@ -78,7 +78,7 @@ public final class ShellyRGBWPM
        extends LightCtrlBase
 {
     // Configuration keys
-    private static final String KEY_ADDRESS = "address";
+    private static final String KEY_IP      = "ip";
     private static final String KEY_CHANNEL = "channel";
     private static final String KEY_TYPE    = "type";
 
@@ -100,12 +100,12 @@ public final class ShellyRGBWPM
 
     private HttpClient httpClient = null;
     private URI        rpcUri     = null;
-    private String     baseUrl    = null;      // Base URL without path (e.g. "http://192.168.1.100")
-    private short      deviceGen  = GEN2;      // Default assumption
-    private String     deviceType = TYPE_RGBW; // Mingle device type
+    private String     baseUrl    = null;       // Base URL without path (e.g. "http://192.168.1.100")
+    private short      deviceGen  = GEN2;       // Default assumption
+    private String     deviceType = TYPE_RGBW;  // Mingle device type
     private String     deviceMode = MODE_COLOR; // Hardware operating mode
     private pair       fakeState  = null;
-    private WebSocket  webSocket  = null;      // Gen2 WebSocket for push notifications
+    private WebSocket  webSocket  = null;       // Gen2 WebSocket for push notifications
 
     //------------------------------------------------------------------------//
 
@@ -115,12 +115,12 @@ public final class ShellyRGBWPM
         setDeviceName( deviceName );
         setListener( listener );
 
-        String address = (String) deviceConf.get( KEY_ADDRESS );   // Guarrantee to exists because it is REQUIRED
+        String ip = (String) deviceConf.get( KEY_IP );   // Guarrantee to exists because it is REQUIRED
 
         try
         {
             // Build base URL
-            baseUrl = address.startsWith( "http" ) ? address : "http://" + address;
+            baseUrl = ip.startsWith( "http" ) ? ip : "http://" + ip;
 
             // Remove trailing slash if present
             if( baseUrl.endsWith( "/" ) )
@@ -131,7 +131,7 @@ public final class ShellyRGBWPM
                 baseUrl = baseUrl.substring( 0, baseUrl.length() - 4 );
 
             // Store configuration
-            set( KEY_ADDRESS, address );
+            set( KEY_IP, ip );
 
             int channel = ((Number) deviceConf.getOrDefault( KEY_CHANNEL, 0f )).intValue();
             set( KEY_CHANNEL, Math.max( 0, channel ) );
@@ -157,7 +157,7 @@ public final class ShellyRGBWPM
             return true;
 
         if( getHttpClient() == null )
-            sendGenericError( ILogger.Level.SEVERE, "No route to: "+ getClass().getSimpleName() +", at: "+ get( KEY_ADDRESS ) );
+            sendGenericError( ILogger.Level.SEVERE, "No route to: "+ getClass().getSimpleName() +", at: "+ get( KEY_IP ) );
 
         return true;
     }
@@ -285,7 +285,7 @@ public final class ShellyRGBWPM
                                        .build();
             }
 
-            if( UtilComm.isReachable( (String) get( KEY_ADDRESS ) ) )
+            if( UtilComm.isReachable( (String) get( KEY_IP ) ) )
             {
                 detectGeneration();
 
@@ -406,7 +406,7 @@ public final class ShellyRGBWPM
      * Opens a persistent WebSocket connection to the Gen2 device for receiving
      * real-time {@code NotifyStatus} events.
      * <p>
-     * The WebSocket URI is {@code ws://{address}/rpc}. After connecting, an initial
+     * The WebSocket URI is {@code ws://{ip}/rpc}. After connecting, an initial
      * {@code RGBW.GetStatus} request is sent with a {@code src} field so that the
      * device knows where to route notifications.
      */

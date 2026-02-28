@@ -104,16 +104,14 @@ public class EvalProfile
 
             for( int n = 0; n < (itera/100); n++ )    // JIT warm-up
             {
-                lexer    = new Lexer( xpr );
-                lstInfix = (new XprPreProc( lexer.getLexemes(), null )).getAsInfix();
+                lstInfix = (new XprPreProc( xpr, null )).getAsInfix();
             }
 
             start = System.currentTimeMillis();       // Parsing
 
             for( int n = 0; n < itera; n++ )
             {
-                lexer    = new Lexer( xpr );
-                lstInfix = (new XprPreProc( lexer.getLexemes(), null )).getAsInfix();
+                lstInfix = (new XprPreProc( xpr, null )).getAsInfix();
             }
 
             end = System.currentTimeMillis();

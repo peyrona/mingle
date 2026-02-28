@@ -13,14 +13,9 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.InetAddress;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.UnknownHostException;
 import java.util.List;
 
 /**
@@ -49,11 +44,11 @@ public class Main
         UtilSys.setLogger( "gum", config );
         UtilSys.getLogger().say( getLogo() );
 
+        int port = config.get( "monitoring", "port", 8080 );
+
         try
         {
             String     host    = config.get( "monitoring", "host", "" );
-            int        port    = config.get( "monitoring", "port", 8080 );
-            int        maxSess = config.get( "monitoring", "max_sessions", 64 );
             String     allow   = config.get( "monitoring", "allow", "intranet" );
             JsonObject joSSL   = config.get( "monitoring", "ssl", Json.object() );
             int        timeout = config.get( "monitoring", "timeout", 1800 );      // Inseconds
@@ -61,27 +56,17 @@ public class Main
             checkPreRequisites( joSSL );
 
             if( UtilStr.isEmpty( host ) )
-            {
-                try
-                {
-                    host = InetAddress.getLocalHost().getHostAddress();
-                }
-                catch( UnknownHostException uhe )
-                {
-                    host = "localhost";
-                }
-            }
+                host = "0.0.0.0";          // Bind to all interfaces to accept both localhost and local IP
 
-            UtilJson   juSSL   = (joSSL == null) ? null : new UtilJson( joSSL );
-            HttpServer server  = new HttpServer( host,
-                                                 port,
-                                                 maxSess,
-                                                 allow,
-                                                 timeout,
-                                                 (juSSL == null) ?   -1 : juSSL.getInt(    "port",   -1 ),
-                                                 (juSSL == null) ? null : juSSL.getString( "path", null ),
-                                                 (juSSL == null) ? null : juSSL.getString( "pwd" , null ) )
-                                     .start();
+            UtilJson   juSSL  = (joSSL == null) ? null : new UtilJson( joSSL );
+            HttpServer server = new HttpServer( host,
+                                                port,
+                                                allow,
+                                                timeout,
+                                                (juSSL == null) ?   -1 : juSSL.getInt(    "port",   -1 ),
+                                                (juSSL == null) ? null : juSSL.getString( "path", null ),
+                                                (juSSL == null) ? null : juSSL.getString( "pwd" , null ) )
+                                    .start();
 
             // By using a hook we maximize the possibilities the finalization code will be
             // invoked: even if INTERRUPT signal (Ctrl-C) is used, the JVM will invoke this hook.
@@ -116,7 +101,18 @@ public class Main
         }
         catch( Exception ioe )
         {
-            System.out.println( UtilStr.toString( ioe ) );
+            Throwable cause = ioe;
+
+            while( cause != null && !(cause instanceof java.net.BindException) )
+                cause = cause.getCause();
+
+            if( cause instanceof java.net.BindException )
+                System.out.println( "ERROR: Port " + port + " is already in use.\n" +
+                                    "Is another Gum instance running? " +
+                                    "Change 'monitoring.port' in config.json to use a different port." );
+            else
+                System.out.println( UtilStr.toString( ioe ) );
+
             System.out.println( "Can not continue" );
             System.exit( 1 );
         }
@@ -131,14 +127,17 @@ public class Main
                             '\n'+
                             "Syntax:\n"+
                             "\tgum [-config=<URI>] [-host=<host>] [-port=<port>] [-user=<user_name>] [-password=<pwd>] [-help] [-h]\n"+
-                            "\t\tconfig    A JSON file (local or remote) with the configuration to use. By default, '{*home*}config.json'.\n"+
-                            "\t\thost      Host name. By default, 'localhost'.\n"+
-                            "\t\tport      Port number. By default, '8080'.\n"+
-                            "\t\tuser      User name for authentication in: admin users to the web interface and Database. By default ''.\n"+
-                            "\t\tpassword  Password for authentication (same as 'user'). By default, ''.\n"+
-                            '\n'+
-                            "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n"+
-                            '\n'+
+                            "\t\tconfig           A JSON file (local or remote) with the configuration to use. By default, '{*home*}config.json'.\n"+
+                            "\t\thost             Host name. By default, '0.0.0.0' (all interfaces).\n"+
+                            "\t\tport             Port number. By default, '8080'.\n"+
+                            "\t\tallow            One of: 'local' (192.168.7.*), 'intranet' (192.168.*.*) or 'any'. Default is 'intranet'\n"+
+                            "\t\tuser_base        Folder for Dashboards and static content (served via HTTP/S). By default '{*home*}/etc/gum_user_base'\n"+
+                            "\t\tshared_secret    HMAC shared secret for API authentication. If null, authentication is disabled.\n"+
+                            "\t\thmac_tolerance   Accept timestamps within ±N seconds. Default: 60 seconds.\n"+
+                            "\t\tmaster_password  To access dahsboards as master (new, del, etc) and to access file manger. To allow all users: null.\n"+
+                            "\t\tssl              { port: <nn>, path: <{*home*}keystore.jks>, user: <name>, password: <pwd> }\n"+
+                            "\n\n"+
+                            "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n\n"+
                             "For detailed information, refer to the handbook or visit: https://github.com/peyrona/mingle/docs" );
     }
 
@@ -187,30 +186,6 @@ public class Main
 
             if( joSSL.get( "pwd" ).isNull() )
                 throw new IOException( "Can not attend SSL without a 'keystore.jks' password" );
-        }
-
-        if( Util.getServedFilesDir().isDirectory() &&
-            UtilColls.isEmpty( Util.getServedFilesDir().list() ) )
-        {
-            File fReadMe = new File( Util.getServedFilesDir(), "READ_ME.txt" );
-
-            if( ! fReadMe.exists() )
-            {
-                UtilIO.newFileWriter()
-                      .setFile( fReadMe )
-                      .append( "The files shown here are served by Gum from context 'gum/user_files'.\nFor full files URL, refer to Gum startup info.\n\n"+
-                               "Dashboards are stored under '"+ Util.getBoardsDir().getName() +"' folder: every Dashboard is stored in a folder having the same name as the Dashboard itself.");
-            }
-
-            File fUsers = new File( Util.getServedFilesDir(), "users.json" );
-
-            if( ! fUsers.exists() )
-            {
-                InputStream  is = Main.class.getResourceAsStream( "users.json" );
-                OutputStream os = new FileOutputStream( fUsers );
-
-                UtilIO.copy(  is, os );
-            }
         }
     }
  }

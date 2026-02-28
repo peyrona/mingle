@@ -13,8 +13,8 @@ WHEN weather                     # Weather is updated evey hour, but we want to 
 THEN weather_info SET weather    # store the weather updates (hourly) into a Cell and read this Cell (using a clock) every minute.
 
 
-WHEN (clock OR weather_info) \                     # We send info to TTS every time the clock or the weather info are updated.
-     AND weather_info:type() IS "pair"             # But only if weather_info was already updated (depends on WebService response).
+WHEN (clock OR weather_info)     # We send info to TTS every time the clock or the weather info are updated.
+     AND weather_info            # But only if weather_info was already updated (depends on WebService response).
 THEN TTS SET "Weather now is "+ weather_codes:get( weather_info:get( "code" ):int() ) + ".  " + \
              "Current temperature is "+ weather_info:get( "temperature" ) + " Celsius degrees.  "+ \
              "Currently the precipitation probability is "+ weather_info:get( "precipitation" ):format( "##" ) +" percent"

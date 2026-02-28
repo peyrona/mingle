@@ -12,12 +12,13 @@ class GumChart extends GumGadget
             this.width  = gum.isUsingFreeLayout() ? 480 : 0;     // Rewritten from parent
             this.height = gum.isUsingFreeLayout() ? 320 : 0;     // Rewritten from parent
 
-            this.devices   = [];        // [ {exen:oExen, name:"devName", color:"#00ff00"}, ... ]
+            this.devices   = [];        // [ {exen:oExen, name:"devName", accessor:null, label:null, color:"#00ff00"}, ... ]
             this.wrapper   = null;      // An instance of ChartWrap (the ChartWrap instance contains a reference to the GumChart instance)
             this.x_title   = null;
             this.y_title   = null;
             this.lbl_clr   = null;      // For X and Y titles and X and Y ticks (values)
             this.time_zone = null;
+            this.ts_round  = 'millis';  // Timestamp rounding: 'millis', 'secs', 'mins', 'hours'
             this.db_jars   = null;      // From here to the end there is the JDBC Driver information to retrieve data from a DB
             this.db_jdbc   = null;
             this.db_url    = null;
@@ -70,7 +71,12 @@ class GumChart extends GumGadget
 
         this._updateListeners_();
 
-        return super.show( isOngoing );
+        super.show( isOngoing );
+
+        // Apply lbl_clr to non-Chart.js elements (gadget title, template labels)
+        this.wrapper._applyLabelColor_();
+
+        return this;
     }
 
     /**
@@ -78,11 +84,30 @@ class GumChart extends GumGadget
      */
     distill()
     {
-        return super.distill( ["wrapper"] );
+        let props = super.distill( ["wrapper"] );
+
+        if( props.devices )
+        {
+            for( let dev of props.devices )
+                delete dev._valueType_;
+        }
+
+        return props;
     }
 
     //-----------------------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    _roundTimestamp_( ts )
+    {
+        switch( this.ts_round )
+        {
+            case 'secs' : return Math.round( ts / 1000    ) * 1000;
+            case 'mins' : return Math.round( ts / 60000   ) * 60000;
+            case 'hours': return Math.round( ts / 3600000 ) * 3600000;
+            default     : return ts;    // 'millis' or null/undefined — no rounding
+        }
+    }
 
     _updateListeners_()
     {
@@ -92,16 +117,26 @@ class GumChart extends GumGadget
         {
             let self = this;
 
-            for( let item of this.devices )     // [ {exen:oExen, name:"devName", color:"#00ff00"}, ... ]
+            for( let item of this.devices )     // [ {exen:oExen, name:"devName", color:"#00ff00", accessor:null, label:null}, ... ]
             {
+                let sLabel = item.label || (item.accessor ? item.name +'['+ item.accessor +']' : item.name);
+
                 let fn = function( action, payload )   // Better to have a function per device
                     {
-                        if( payload && payload.name !== undefined && payload.when !== undefined &&
-                            self._isValidValue( "Number", payload.value, payload.name ) )
+                        if( ! item._valueType_ )
+                            item._valueType_ = self._detectValueType_( payload.value );
+
+                        let xValue = self._resolveAccessor_( payload.value, item.accessor, payload.name );
+
+                        if( xValue !== null &&
+                            payload.name !== undefined && payload.when !== undefined &&
+                            self._isValidValue( "Number", xValue, payload.name ) )
                         {
                             self._hasErrors( false );
-                            self.wrapper.plot( payload.name, payload.when, payload.value );
+                            self.wrapper.plot( sLabel, self._roundTimestamp_( payload.when ), xValue );
                         }
+
+                        self._executeUserCode_( action, payload );
                     };
 
                 this._addListener( item.exen, item.name, fn );
@@ -363,9 +398,11 @@ class ChartWrap
 
         for( const device of this.parent.devices )
         {
-            this.aSeries.push( { label: device.name, data: [] } );
+            let sLabel = device.label || (device.accessor ? device.name +'['+ device.accessor +']' : device.name);
 
-            aDataset.push( { label          : device.name,
+            this.aSeries.push( { label: sLabel, data: [] } );
+
+            aDataset.push( { label          : sLabel,
                              borderColor    : device.color,
                              backgroundColor: device.color,
                              fill           : false,
@@ -399,6 +436,20 @@ class ChartWrap
             $div[0].style.visibility = (isDbPanelVisible ? "visible" : "hidden");     // Shows or hides these controls: time-ini, time-end and button Load/Live
 
         return this;
+    }
+
+    /**
+     * Applies lbl_clr to all non-Chart.js text elements: gadget title, template labels, etc.
+     */
+    _applyLabelColor_()
+    {
+        let lbl_clr = p_base.isEmpty( this.parent.lbl_clr ) ? 'black' : this.parent.lbl_clr;
+
+        // Template labels: "Show only last...", "Show historic", etc.
+        // Note: the gadget card title is intentionally excluded — it supports HTML,
+        // so the user can style it freely via the "Gadget title" field.
+        let $tpl = $('#'+this.divId);
+        $tpl.find('label').css( 'color', lbl_clr );
     }
 
     //------------------------------------------------------------------------//
@@ -579,71 +630,32 @@ class ChartWrap
     // All, canvas and time-frame controls at bottom right
     _getChartDiv_( nWidth, nHeight )
     {
-        return '<div id="'+ this.divId +'">'+
-                        '<div>'+                       // Chart.js can not share the div where canvas is with any other element: chart goes crazy
-                            '<canvas'+
-                                ' width ="'+ parseInt( nWidth  ) +'"'+
-                                ' height="'+ parseInt( nHeight ) +'">'+
-                            '</canvas>'+
-                        '</div>'+
-                        '<div class="columns">'+       // div for load data and for select time frame
-                            '<div class="column is-half is-narrow" name="chart_data_load_panel" style="visibility:hidden">'+
-                                '<label class="label is-small">Show historic</label>'+
-                                '<div class="field is-horizontal">'+
-                                    '<div class="field-body pl-5">'+
-                                        '<label class="label is-small pr-3">From</label>'+
-                                        '<div class="field">'+
-                                            '<p class="control">'+
-                                                '<input class="input is-small" type="datetime-local" name="from_date">'+
-                                            '</p>'+
-                                        '</div>'+
-                                    '</div>'+
-                                    '<div class="field-body pl-5">'+
-                                        '<label class="label is-small pr-3">To</label>'+
-                                        '<div class="field">'+
-                                            '<p class="control">'+
-                                                '<input class="input is-small" type="datetime-local" name="to_date">'+
-                                            '</p>'+
-                                        '</div>'+
-                                    '</div>'+
-                                    '<p class="pl-5 pr-5">'+
-                                        '<button class="button is-small is-info" name="btnLoadOrLive" onclick="ChartWrap._loadFromDB_(\''+ this.parent.id +'\')">Load</button>'+
-                                    '</p>'+
-                                '</div>'+
-                            '</div>'+
-                            '<div class="column is-half is-narrow pr-5">'+
-                                '<div class="field">'+
-                                    '<div class="field-label is-small is-pulled-right">'+
-                                        '<label class="label">Show only last... (0 for all)</label>'+
-                                    '</div>'+
-                                    '<br>'+
-                                    '<div class="field-body is-pulled-right">'+
-                                        '<div class="field has-addons has-addons-centered">'+
-                                            '<p class="control">'+
-                                                '<input class="input is-small" type="number" name="txtTimeFrame" value="0" min="0" style="width:9em;" onchange="ChartWrap._setTimeFrame_(\''+ this.parent.id +'\')">'+
-                                            '</p>'+
-                                            '<p class="control">'+
-                                                '<span class="select is-small">'+
-                                                    '<select name="lstTimeFrameUnit" onchange="ChartWrap._setTimeFrame_(\''+ this.parent.id +'\')">'+
-                                                        '<option>mins</option>'+
-                                                        '<option>hours</option>'+
-                                                        '<option>days</option>'+
-                                                    '</select>'+
-                                                '</span>'+
-                                            '</p>'+
-                                        '</div>'+
-                                    '</div>'+
-                                '</div>'+
-                            '</div>'+
-                        '</div>'+
-                    '</div>';
+        let $tpl     = GumGadget.cloneTemplate( "tpl-chart" );
+        let parentId = this.parent.id;
+
+        $tpl.attr( 'id', this.divId );
+
+        $tpl.find( 'canvas' )
+            .attr( 'width',  parseInt( nWidth  ) )
+            .attr( 'height', parseInt( nHeight ) );
+
+        // Bind event handlers (replacing inline onclick attributes)
+        $tpl.find( '[name="btnLoadOrLive"]'   ).on( 'click',  function() { ChartWrap._loadFromDB_(   parentId ); } );
+        $tpl.find( '[name="txtTimeFrame"]'    ).on( 'input',  function() { ChartWrap._setTimeFrame_( parentId ); } );
+        $tpl.find( '[name="lstTimeFrameUnit"]').on( 'change', function() { ChartWrap._setTimeFrame_( parentId ); } );
+
+        return $tpl;
     }
 
     _getChartOptions_()
     {
-        let x_title = p_base.isEmpty( this.parent.x_title ) ? null    : this.parent.x_title.trim();
-        let y_title = p_base.isEmpty( this.parent.y_title ) ? null    : this.parent.y_title.trim();
-        let lbl_clr = p_base.isEmpty( this.parent.lbl_clr ) ? 'black' : this.parent.lbl_clr;
+        let x_title  = p_base.isEmpty( this.parent.x_title ) ? null    : this.parent.x_title.trim();
+        let y_title  = p_base.isEmpty( this.parent.y_title ) ? null    : this.parent.y_title.trim();
+        let lbl_clr  = p_base.isEmpty( this.parent.lbl_clr ) ? 'black' : this.parent.lbl_clr;
+        let ts_round = this.parent.ts_round || 'millis';
+        let timeUnit = (ts_round === 'secs'  ? 'second' :
+                        ts_round === 'mins'  ? 'minute' :
+                        ts_round === 'hours' ? 'hour'   : null);   // null = Chart.js auto-detects
 
         let options =
             {
@@ -654,6 +666,9 @@ class ChartWrap
                                 x:  {
                                         type   : 'time',
                                         display: true,
+                                        border : {
+                                                    color: lbl_clr
+                                                 },
                                         grid   : {
                                                     display: false
                                                  },
@@ -667,18 +682,24 @@ class ChartWrap
                                                     maxTicksLimit: 10
                                                  },
                                         time   : {
+                                                    unit          : timeUnit,   // null = auto; forced when rounding is applied
                                                     displayFormats: {
-                                                        second: 'HH:mm:ss',
-                                                        minute: 'HH:mm',
-                                                        hour  : 'HH:mm'
+                                                        millisecond: 'HH:mm:ss.SSS',
+                                                        second     : 'HH:mm:ss',
+                                                        minute     : 'HH:mm',
+                                                        hour       : 'HH:mm'
                                                     },
                                                     tooltipFormat: 'PPpp'    // Full date and time for tooltip
                                                  }
                                     },
                                 y:  {
                                         display: true,
+                                        border : {
+                                                    color: lbl_clr
+                                                 },
                                         grid   : {
-                                                    display: true
+                                                    display: true,
+                                                    color  : lbl_clr + '20'    // Same color with low opacity
                                                  },
                                         title  : {
                                                     text   : y_title,
@@ -743,8 +764,9 @@ class ChartWrap
             return;
 
         let wrapper    = instance.chart;
-        let $txtValue  = $('#'+divId4Chart+' [name="txtTimeFrame"]');
-        let $lstUnit   = $('#'+divId4Chart+' [name="lstTimeFrameUnit"]');
+        let sDivId     = wrapper.divId;
+        let $txtValue  = $('#'+sDivId+' [name="txtTimeFrame"]');
+        let $lstUnit   = $('#'+sDivId+' [name="lstTimeFrameUnit"]');
 
         if( $txtValue.length === 0 || $lstUnit.length === 0 )
         {
@@ -798,20 +820,22 @@ class ChartWrap
      */
     static _loadFromDB_( divId4Chart )
     {
-        let $btnLoadOrLive = $('#'+divId4Chart+' [name="btnLoadOrLive"]');
-        let instance       = ChartWrap._aInstances_.find( item => item.id === divId4Chart );
+        let instance = ChartWrap._aInstances_.find( item => item.id === divId4Chart );
 
         if( ! instance || ! instance.chart )
             return;
 
         let wrapper = instance.chart;
         let gadget  = wrapper.parent;
+        let sDivId  = wrapper.divId;
 
         if( ! gadget )
         {
             console.error("Chart wrapper has no parent gadget");
             return;
         }
+
+        let $btnLoadOrLive = $('#'+sDivId+' [name="btnLoadOrLive"]');
 
         if( $btnLoadOrLive.length === 0 )
         {
@@ -827,8 +851,8 @@ class ChartWrap
             return;
         }
 
-        let $fromDate = $('#'+divId4Chart+' [name="from_date"]');
-        let $toDate   = $('#'+divId4Chart+' [name="to_date"]');
+        let $fromDate = $('#'+sDivId+' [name="from_date"]');
+        let $toDate   = $('#'+sDivId+' [name="to_date"]');
 
         if( $fromDate.length === 0 || $toDate.length === 0 )
         {

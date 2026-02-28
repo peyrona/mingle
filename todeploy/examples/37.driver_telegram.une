@@ -11,12 +11,24 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
+# USE _CHAT_  AS "\"ThisIsMyTelegramChatId\""     # Change this to your chat id
+#     _TOKEN_ AS "\"ThisIsMyTelegramBotToken\""   # Change this to your bot token
+
+
+USE _CHAT_  AS "-336373800"
+    _TOKEN_ AS "531072848:AAGJ2X7lIWwpD5HNvpEXeKSkmOH2TThOIFc"
+
+
 WHEN clock AND time():hour() IS 22
 THEN MyTelegram SET "Alarm changed to On"
 
 
 WHEN clock AND time():hour() IS 7
 THEN MyTelegram SET "Alarm changed to Off"
+
+
+WHEN MyTelegram
+THEN console SET MyTelegram
 
 # --------------------------------------------------------------------------------------------------------------------------------
 
@@ -26,10 +38,14 @@ DEVICE clock                     # We use this DEVICE to force the evaluation of
             interval SET 59m     # RULEs having this sensor in their WHEN clause will be reevaluated every 59 minutes
 
 
+DEVICE console
+	DRIVER OutputDriver
+
+
 DEVICE MyTelegram
     DRIVER TelegramDriver                     # This Driver allows to send messages to a Telegram Bot
     CONFIG
-        chat  SET "ThisIsMyChatId"            # Change this to your chat id
-        token SET "ThisIsMyTelegramBotToken"  # Change this to your bot token
+        chat  SET _CHAT_
+        token SET _TOKEN_
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -26,7 +26,7 @@ var free =
     saved : function()
     {
         this._isChanged_ = false;    // Reset changed flag because all gadgets were saved
-        
+
         // Reset all gadget changed flags
         for( const gadget of this._aGadgets_ )
             gadget._isChanged_ = false;
@@ -104,8 +104,8 @@ var free =
                .css('z-index', gadget.z)
                .append( gadget.getContainer() )
                .offset( { left: gadget.x, top: gadget.y } )
-               .on( 'mousedown', (event) => free._setFocused_( event ) )
-               .on( 'dblclick' , (event) => free._edit_( event ) )
+               .on( 'mousedown'  , (event) => free._setFocused_( event ) )
+               .on( 'contextmenu', (event) => free._onContextMenu_( event ) )
                .draggable( { start: function(event,ui) { free._onGadgetDragStart_( event, ui ); },
                               drag : function(event,ui) { free._onGadgetDrag_( event, ui, true  ); },
                               stop : function(event,ui) { free._onGadgetDrag_( event, ui, false ); } } );
@@ -145,7 +145,10 @@ var free =
                                 '<td>Shift + Click</td><td>To add/remove a gadget to/from selection (multi-selection)</td>'+
                             '</tr>'+
                             '<tr>'+
-                                '<td>Double click</td><td>Open properties editor dialog for selected</td>'+
+                                '<td>Right-click</td><td>Opens context menu (Properties, Clone, Delete)</td>'+
+                            '</tr>'+
+                            '<tr>'+
+                                '<td>F2</td><td>Open properties editor for selected gadget</td>'+
                             '</tr>'+
                             '<tr>'+
                                 '<td>Drag</td><td>Changes position</td>'+
@@ -178,11 +181,11 @@ var free =
                                 '<td>Del</td><td>Deletes selected gadget(s) (asking for confirmation)</td>'+
                             '</tr>'+
                             '<tr>'+
-                                '<td>Esc</td><td>Closes a dialog</td>'+
+                                '<td>Esc</td><td>Closes dialogs</td>'+
                             '</tr>'+
                         '</tbody>'+
                     '</table>'+
-                    '<p class="mt-1 is-pulled-right" style="font-size:80%">Note: you can press [Esc] to close this dialog</p>';
+                    '<p class="mt-1 is-pulled-right" style="font-size:80%">You can press [Esc] to close this dialog</p>';
 
         $('<div>'+ sHTML +'</div>')
             .dialog( { title     : "Help :: FREE LAYOUT",
@@ -213,7 +216,6 @@ var free =
                     '<span>' +
                         '<i class="gum-mini-btn ti ti-copy" title="Clone highlighted gadget" onclick="free._clone_()"></i>' +
                         '<i class="gum-mini-btn ti ti-trash" title="Delete highlighted gadget(s)" onclick="free._del_()"></i>' +
-                        '<i class="gum-mini-btn ti ti-code" title="HTML and JavaScript editor" onclick="gum._coder_()"></i>' +
                     '</span>' +
                 '</div>' +
                 '<div id="gum-align-toolbar" style="display:flex; justify-content:space-between; align-items:center; margin-top: 4px;">' +
@@ -320,6 +322,23 @@ var free =
         {
             this._gadgetFocus_.edit();
         }
+
+        return this;
+    },
+
+    _onContextMenu_ : function( event )
+    {
+        event.preventDefault();
+        event.stopPropagation();
+
+        this._setFocused_( event );
+
+        gt.showContextMenu( event.pageX, event.pageY,
+            [
+                { label: 'Properties [F2]',  icon: 'settings',  action: () => free._edit_()  },
+                { label: 'Clone [Ins]',      icon: 'copy',      action: () => free._clone_() },
+                { label: 'Delete [Del]',     icon: 'trash',     action: () => free._del_()   }
+            ] );
 
         return this;
     },
@@ -480,7 +499,12 @@ var free =
 
         // Make only evt.preventDefault(); when the key is used by this function
 
-        if( evt.keyCode === 45 )    // 45 == insert
+        if( evt.keyCode === 113 )    // 113 == F2
+        {
+            evt.preventDefault();
+            free._edit_();
+        }
+        else if( evt.keyCode === 45 )    // 45 == insert
         {
             evt.preventDefault();
             free._clone_();

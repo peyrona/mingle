@@ -3,20 +3,25 @@ package com.peyrona.mingle.lang.xpreval.functions;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Language;
-import java.io.IOException;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.reflect.Method;
 import java.lang.reflect.Modifier;
 import java.net.InetAddress;
+import java.net.InetSocketAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
+import java.net.UnknownHostException;
+import java.nio.channels.SelectionKey;
+import java.nio.channels.Selector;
+import java.nio.channels.SocketChannel;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -26,8 +31,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
-import java.util.Random;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -280,6 +285,51 @@ public final class StdXprFns
                (clazz == time.class) ||
                (clazz == list.class) ||
                (clazz == pair.class);
+    }
+
+    /** Maps short type names to their corresponding extended type classes. */
+    private static final Map<String, Class<? extends ExtraType>> EXT_TYPES = Map.of(
+        "date", date.class,
+        "time", time.class,
+        "list", list.class,
+        "pair", pair.class
+    );
+
+    /**
+     * Creates a new empty instance of an extended data type given its name.
+     * Accepts both short names ("date", "time", "list", "pair") and
+     * fully-qualified class names.
+     *
+     * @param sName The type name (short or fully-qualified).
+     * @return A new empty ExtraType instance, or {@code null} if the name is not recognized.
+     */
+    public static ExtraType<?> newExtendedType( String sName )
+    {
+        sName = sName.trim().toLowerCase();
+
+        Class<? extends ExtraType> clazz = EXT_TYPES.get( sName );
+
+        if( clazz == null )
+        {
+            // Try FQCN: extract simple name from fully-qualified
+            int dot = sName.lastIndexOf( '.' );
+
+            if( dot >= 0 )
+                clazz = EXT_TYPES.get( sName.substring( dot + 1 ) );
+        }
+
+        if( clazz == null )
+            return null;
+
+        try
+        {
+            return clazz.getDeclaredConstructor( Object[].class )
+                         .newInstance( (Object) new Object[0] );
+        }
+        catch( Exception e )
+        {
+            return null;
+        }
     }
 
     /**
@@ -959,7 +1009,7 @@ public final class StdXprFns
         float min = UtilType.toFloat( lower );
         float max = UtilType.toFloat( upper );
 
-        return (float) (new Random().nextFloat() * (max - min) + min);
+        return (float) (ThreadLocalRandom.current().nextFloat() * (max - min) + min);
     }
 
     /**
@@ -1042,8 +1092,18 @@ public final class StdXprFns
     @SuppressWarnings("unused")
     protected String trim( Object string )
     {
-        return string.toString().trim();
+        return UtilStr.trim( string.toString() );
     }
+
+//    blank()
+//    {
+//
+//    }
+//
+//    isBlank()
+//    {
+//
+//    }
 
     /**
      * Reverses the string representation of an object.
@@ -1179,7 +1239,7 @@ public final class StdXprFns
     *         otherwise, an empty {@code String}.
     */
     @SuppressWarnings("unused")
-    protected String Char( Object codePoint )
+    protected String unichar( Object codePoint )
     {
         int code = UtilType.toInteger( codePoint );
 
@@ -1187,6 +1247,79 @@ public final class StdXprFns
             return "";
 
         return new String( Character.toChars( code ) );
+    }
+
+    /**
+     * Returns the Unicode code point of the first character in the given string.
+     * This method serves as a Java equivalent to Excel's UNICODE function.
+     *
+     * <p> The method extracts the first character (or Unicode code point) from the input string.
+     * If the first character is a high surrogate (part of a supplementary Unicode character),
+     * it will combine with the following low surrogate to return the full code point.
+     *
+     * <p> Key features:
+     * <ul>
+     *   <li>Correctly handles supplementary Unicode characters (those requiring two {@code char}
+     *       values, like emoji or ancient scripts)</li>
+     *   <li>Validates input to ensure it is not null or empty</li>
+     *   <li>Returns the code point as an {@code int} in the range 0 to 0x10FFFF</li>
+     * </ul>
+     *
+     * <p> Example usage:
+     * <pre>{@code
+     * unicode("A");           // Returns: 65
+     * unicode("€");           // Returns: 8364
+     * unicode("😀");          // Returns: 128512 (U+1F600)
+     * unicode("你");          // Returns: 20320 (U+4F60)
+     * unicode("Hello");       // Returns: 72 (only first character 'H' is considered)
+     * }</pre>
+     *
+     * <p> Comparison with Excel's UNICODE:
+     * <table border="1" cellpadding="3" cellspacing="0" style="margin-top: 0.5em">
+     * <caption>Excel UNICODE vs Java unicode()</caption>
+     * <tr>
+     *   <th>Aspect</th>
+     *   <th>Excel UNICODE</th>
+     *   <th>Java unicode()</th>
+     * </tr>
+     * <tr>
+     *   <td><b>Input</b></td>
+     *   <td>A text string (can be longer than one character)</td>
+     *   <td>A String (any length)</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Output</b></td>
+     *   <td>Unicode code point of the first character</td>
+     *   <td>Unicode code point of the first character</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Supplementary characters</b></td>
+     *   <td>Returns correct code point (e.g., 😀 → 128512)</td>
+     *   <td>Returns correct code point using surrogate pair decoding</td>
+     * </tr>
+     * <tr>
+     *   <td><b>Empty input</b></td>
+     *   <td>Returns #VALUE! error</td>
+     *   <td>Throws IllegalArgumentException</td>
+     * </tr>
+     * </table>
+     *
+     * @param str the input string (must not be null or empty)
+     * @return the Unicode code point (as an int) of the first character in the string
+     * @throws IllegalArgumentException if the input string is null or empty
+     *
+     * @see Character#codePointAt(CharSequence, int)
+     * @see Character#isSurrogate(char)
+     * @see Character#toChars(int)
+     *
+     * @since 1.0
+     */
+    protected int unicode( Object str )
+    {
+        if( str == null || str.toString().isEmpty() )
+            throw new IllegalArgumentException( "Input string must not be null or empty" );
+
+        return str.toString().codePointAt( 0 );   // codePointAt handles surrogate pairs automatically
     }
 
     /**
@@ -1445,23 +1578,6 @@ public final class StdXprFns
         return "";
     }
 
-    /**
-     * Returns the system-dependent line separator string.<br>
-     * On UNIX systems, it returns "\n"; on Microsoft Windows systems it returns "\r\n".
-     * <p>
-     * Example:
-     * <ul>
-     *    <li><code>"Hello" + newLine() + "World"</code></li>
-     * </ul>
-     *
-     * @return the system-dependent line separator string.
-     */
-    @SuppressWarnings("unused")
-    protected String newLine()
-    {
-        return System.lineSeparator();
-    }
-
     //------------------------------------------------------------------------//
     // MISCELLANEOUS FUNCTIONS
 
@@ -1632,6 +1748,7 @@ public final class StdXprFns
      * @return A <code>pair</code> with 2 entries: "name" and "value".
      */
     @SuppressWarnings("unused")
+// FIXME: esto no funciona, probarlo con el ejemplo #17.
     protected pair getTriggeredBy()    // This method is needed here so it can be invoked from an expession
     {                                  // (although it is not commonly used).
         if( threadTriggered.get().isEmpty() )
@@ -1672,25 +1789,70 @@ public final class StdXprFns
      * <p>
      * Examples:
      * <ul>
-     *    <li><code>isReachable("google.com", 1000)</code></li>
-     *    <li><code>isReachable("192.168.1.1", 500)</code></li>
+     *    <li><code>isReachable("google.com" , 443, 1000)</code></li>
+     *    <li><code>isReachable("192.168.1.1",  80,  500)</code></li>
+     * </ul>
+     *
+     * GUARANTEES:<br>
+     * This component determines whether a remote host is reachable with the following hard requirement:
+     * <ul>
+     *    <li>The method must never return a false positive.</li>
+     *    <li>False negatives are acceptable (firewall/port-closed → false).</li>
+     * </ul>
+     * <br>
+     * CPU EFFICIENCY NOTES:<br>
+     * <ul>
+     *    <li>NIO non-blocking connect: thread is NOT parked for the full timeout.<li>
+     *    <li>Selector.select(millis) yields the CPU until the OS signals readiness.</li>
+     *    <li>DNS resolved upfront to isolate and short-circuit that failure mode.</li>
      * </ul>
      *
      * @param host    The host to test.
+     * @param port    The host port to test.
      * @param timeout Timeout in milliseconds.
      * @return {@code true} if reachable, {@code false} otherwise.
      */
-    @SuppressWarnings("unused")
-    protected boolean isReachable( Object host, Object timeout )
+    protected boolean isReachable( Object host, Object port, Object timeout )
     {
+        int nPort  = Math.abs( UtilType.toInteger( port ) );
+        int millis = Math.max( 300, Math.abs( UtilType.toInteger( timeout ) ) );
+
+        if( ! UtilComm.isValidPort( nPort ) )
+            throw new MingleException( MingleException.INVALID_ARGUMENTS, nPort );
+
+        // 1. Resolve DNS separately — fail fast, no ambiguity
+        final InetAddress addr;
+
         try
         {
-            int millis = Math.max( 100, Math.abs( UtilType.toInteger( timeout ) ) );
-
-            return InetAddress.getByName( host.toString() )
-                              .isReachable( millis );
+            addr = InetAddress.getByName( host.toString() );
         }
-        catch( IOException e )
+        catch( UnknownHostException e )
+        {
+            return false;  // DNS failure → definitively unreachable
+        }
+
+        // 2. NIO non-blocking connect — CPU yields to OS during wait
+        try( SocketChannel channel = SocketChannel.open(); Selector selector = Selector.open() )
+        {
+            channel.configureBlocking( false );
+            channel.register( selector, SelectionKey.OP_CONNECT );
+            channel.connect( new InetSocketAddress( addr, nPort ) );
+
+            // select() releases the CPU; OS wakes us when connect resolves
+            if( selector.select( millis ) == 0 )
+                return false;  // Timeout — no response within deadline
+
+            SelectionKey key = selector.selectedKeys().iterator().next();
+
+            if( ! key.isConnectable() )
+                return false;
+
+            // finishConnect() completes the 3-way handshake or throws on refusal
+            return channel.finishConnect();  // true = SYN-ACK received
+
+        }
+        catch( Exception e )
         {
             return false;
         }

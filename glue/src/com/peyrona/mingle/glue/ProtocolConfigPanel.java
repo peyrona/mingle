@@ -231,8 +231,7 @@ public final class ProtocolConfigPanel extends JPanel
         btn.addActionListener( e ->
         {
             JFileChooser fc = new JFileChooser();
-
-            fc.setFileSelectionMode( JFileChooser.FILES_ONLY );
+                         fc.setFileSelectionMode( JFileChooser.FILES_ONLY );
 
             if( ! lstExt.isEmpty() )
             {

@@ -6,7 +6,6 @@ import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilUnit;
-import com.peyrona.mingle.lang.lexer.Lexer;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.HashMap;
@@ -449,7 +448,7 @@ public class EvalTest_Junit_v4
 
     private void print( String xpr )
     {
-        XprPreProc preproc = new XprPreProc( new Lexer( xpr ).getLexemes(), null );
+        XprPreProc preproc = new XprPreProc( xpr, null );
 
         if( ! preproc.getErrors().isEmpty() )
             throw new MingleException("Errors");
@@ -473,7 +472,7 @@ public class EvalTest_Junit_v4
         {
             Object result;
 
-            XprPreProc preproc = new XprPreProc( new Lexer( xpr ).getLexemes(), null );
+            XprPreProc preproc = new XprPreProc( xpr, null );
 
             if( ! preproc.getErrors().isEmpty() )
             {

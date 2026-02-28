@@ -3,7 +3,6 @@ package com.peyrona.mingle.lang.xpreval;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilUnit;
-import com.peyrona.mingle.lang.lexer.Lexer;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.time.LocalDate;
@@ -612,11 +611,19 @@ public class EvalTest
         }
 
         @Test
-        @DisplayName("Should evaluate char function")
-        void testChar()
+        @DisplayName("Should evaluate unichar function")
+        void testUniChar()
         {
-            test( "char(65)", "A" );
-            test( "97:char()", "a" );
+            test( "unichar(65)", "A" );
+            test( "97:unichar()", "a" );
+        }
+
+        @Test
+        @DisplayName("Should evaluate unichar function")
+        void testUniCode()
+        {
+            test( "unicode(\"A\")", 65 );
+            //////////////////////////////////////////////test( "65:unicode()"  , "a" );
         }
 
         @Test
@@ -705,7 +712,7 @@ public class EvalTest
         @DisplayName("Should evaluate network functions")
         void testNetworkFunctions()
         {
-            test( "isReachable(\"localhost\", 100 )", true );
+            test( "isReachable(\"localhost\", 22, 100 )", true );
             test( "localIPs():len() > 0", true );
         }
 
@@ -889,6 +896,19 @@ public class EvalTest
         void testTimeFromHoursMinutesSeconds()
         {
             test( "time(12, 30, 42) == time(\"12:30:42\")", true );
+        }
+
+        @Test
+        @DisplayName("Should check isAfter and isBefore")
+        void testIsAfterAndIsBefore()
+        {
+            test( "time(\"14:00\"):isAfter( time(\"13:00\") )", true );
+            test( "time(\"13:00\"):isAfter( time(\"14:00\") )", false );
+            test( "time(\"13:00\"):isAfter( time(\"13:00\") )", false );
+
+            test( "time(\"13:00\"):isBefore( time(\"14:00\") )", true );
+            test( "time(\"14:00\"):isBefore( time(\"13:00\") )", false );
+            test( "time(\"13:00\"):isBefore( time(\"13:00\") )", false );
         }
     }
 
@@ -1088,8 +1108,10 @@ public class EvalTest
         void testListMapReduce()
         {
             test( "list(1,2,3,4):map(\"x*2\") == list(2,4,6,8)", true );
+            test( "list(\"A\",\"B\",\"C\"):map(\"x + \\\"0\\\"\") == list(\"A0\",\"B0\",\"C0\")", true );
             test( "list(1,2,3,4):reduce(\"x+y\")", 10f );
             test( "list(\"A\",\"B\",\"C\"):reduce(\"x+y\")", "ABC" );
+
         }
 
         @Test
@@ -2369,6 +2391,61 @@ public class EvalTest
             sleep( 1000 );
             assertTrue( passed.get(), "WITHIN should detect boolean flip" );
         }
+
+        @Test
+        @DisplayName( "WITHIN should resolve FALSE immediately when condition starts false" )
+        void testWithinStartsWithFalseCondition()
+        {
+            AtomicBoolean passed = new AtomicBoolean( false );
+            long now = System.currentTimeMillis();
+
+            IXprEval xpr = new NAXE().build( "var > 50 WITHIN 1000",
+                                             (value) -> {
+                                                 long time = System.currentTimeMillis() - now;
+                                                 assertEquals( Boolean.FALSE, value );
+                                                 assertTrue( time < 500, "Should resolve quickly, not wait for timer expiry" );
+                                                 passed.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 30.0f );    // 30 > 50 is FALSE from the start
+
+            // Trigger apply() while timer is running; condition is still FALSE
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 30.0f ); } }, 200 );
+
+            sleep( 1500 );
+            assertTrue( passed.get(), "WITHIN should have resolved FALSE when condition started false" );
+        }
+
+        @Test
+        @DisplayName( "WITHIN must never fire TRUE after condition briefly spikes then stays false" )
+        void testWithinBriefSpikeDoesNotFireTrue()
+        {
+            AtomicBoolean spuriousTrue = new AtomicBoolean( false );
+
+            IXprEval xpr = new NAXE().build( "var > 50 WITHIN 1000",
+                                             (value) -> {
+                                                 if( Boolean.TRUE.equals( value ) )
+                                                     spuriousTrue.set( true );
+                                             },
+                                             null );
+
+            xpr.eval( "var", 80.0f );    // Condition TRUE (80 > 50): timer T1 starts
+
+            // Condition drops below 50 — cancels T1, fires FALSE callback
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 30.0f ); } }, 200 );
+
+            // After T1 is cancelled, next set() starts T2 (condition still false)
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 30.0f ); } }, 400 );
+
+            // While T2 is running, condition remains false — T2 must resolve FALSE
+            new Timer().schedule( new TimerTask() { @Override public void run() { xpr.set( "var", 30.0f ); } }, 600 );
+
+            // Wait past all timers
+            sleep( 2500 );
+
+            assertFalse( spuriousTrue.get(), "WITHIN must never fire TRUE when condition is false" );
+        }
     }
 
     //------------------------------------------------------------------------//
@@ -2396,7 +2473,7 @@ public class EvalTest
 
         try
         {
-            XprPreProc preproc = new XprPreProc( new Lexer( xpr ).getLexemes(), null );
+            XprPreProc preproc = new XprPreProc( xpr, null );
 
             if( ! preproc.getErrors().isEmpty() )
             {
@@ -2528,7 +2605,8 @@ public class EvalTest
         // String function tests
         System.out.println( "--- String Function Tests ---" );
         total++; if( runTest( "Size/Len functions", () -> test.new StringFunctionTests().testSizeLen() ) ) passed++; else failed++;
-        total++; if( runTest( "Char function", () -> test.new StringFunctionTests().testChar() ) ) passed++; else failed++;
+        total++; if( runTest( "Char function", () -> test.new StringFunctionTests().testUniChar() ) ) passed++; else failed++;
+        total++; if( runTest( "Char function", () -> test.new StringFunctionTests().testUniCode() ) ) passed++; else failed++;
         total++; if( runTest( "Left/Right functions", () -> test.new StringFunctionTests().testLeftRight() ) ) passed++; else failed++;
         total++; if( runTest( "Reverse function", () -> test.new StringFunctionTests().testReverse() ) ) passed++; else failed++;
         total++; if( runTest( "Case conversion", () -> test.new StringFunctionTests().testCaseConversion() ) ) passed++; else failed++;
@@ -2680,6 +2758,8 @@ public class EvalTest
         total++; if( runTest( "Nested parens futures", () -> test.new AdvancedTemporalOperatorTests().testNestedParenthesesWithFutures() ) ) passed++; else failed++;
         total++; if( runTest( "AFTER boolean var", () -> test.new AdvancedTemporalOperatorTests().testAfterWithBooleanVariable() ) ) passed++; else failed++;
         total++; if( runTest( "WITHIN boolean flip", () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanVariableFlip() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN starts false", () -> test.new AdvancedTemporalOperatorTests().testWithinStartsWithFalseCondition() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN spike regression", () -> test.new AdvancedTemporalOperatorTests().testWithinBriefSpikeDoesNotFireTrue() ) ) passed++; else failed++;
         System.out.println();
 
         // Summary

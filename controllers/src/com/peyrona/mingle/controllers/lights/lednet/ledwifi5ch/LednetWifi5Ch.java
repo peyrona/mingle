@@ -29,7 +29,7 @@ public final class LednetWifi5Ch
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        String sIpAddr = deviceInit.get( "address" ).toString();    // This is mandatory
+        String sIpAddr = deviceInit.get( "ip" ).toString();    // This is mandatory
 
 // TODO: quitar este rem
 /**
@@ -38,7 +38,7 @@ public final class LednetWifi5Ch
 //            if( ! isFaked() )
 //                device = new Wifi5ChDevice( sIpAddr, (val) -> sendWriteError( val, new IOException( "Error writing in socket at "+ device.getIP() ) )  );
 
-            set( "address", sIpAddr );
+            set( "ip", sIpAddr );
             setValid( true );
         }
         catch( IOException ioe )
@@ -49,7 +49,7 @@ public final class LednetWifi5Ch
 */
 // ELIMINAR LAS SIGUIENTES LINEAS -->
         setValid( true );
-        set( "address", sIpAddr );
+        set( "ip", sIpAddr );
     }
 
     @Override

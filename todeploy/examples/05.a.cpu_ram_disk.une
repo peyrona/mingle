@@ -38,11 +38,11 @@ WHEN CPU ABOVE -1                                               # CPU value will
 THEN console SET "Used CPU  is " + CPU:format("##0.00") + "%"   # 'format(...)' function allows precisely this
 
 
-WHEN RAM ABOVE -1                                               # RAM value will always be above -1
+WHEN RAM                                                        # RAM value will always be not zero
 THEN console SET "Used RAM  is " + RAM:format("##0.00") + "%"
 
 
-WHEN Disk ABOVE -1                                              # Disk value will always be above -1
+WHEN Disk                                                       # Disk value will always be not zero
 THEN console SET "Used Disk is " + Disk:format("##0.00") + "%"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -12,9 +12,11 @@ class GumSSD extends GumGadget
             this.width  = gum.isUsingFreeLayout() ? 120 : "100%";       // Rewritten from parent
             this.height = gum.isUsingFreeLayout() ?  32 : "100%";       // Rewritten from parent
 
-            this.exen     = null ;
-            this.device   = null ;
-            this.color    = "lcd";
+            this.exen           = null ;
+            this.device         = null ;
+            this.accessor       = null ;    // Key (for pair) or 1-based index (for list)
+            this._devValueType_ = null ;    // "list", "pair", or "scalar" — auto-detected, not persisted
+            this.color          = "lcd";
             this.integers = 4    ;
             this.decimals = 2    ;
             this.wrapper  = null ;    // instance of class SevenSegmentDisplay
@@ -57,12 +59,12 @@ class GumSSD extends GumGadget
         {
             sId4SVG = p_base.uuid();
 
-            let sHTML = '<svg id="'+ sId4SVG +'">'+
-                        '</svg>';
+            let $svg = GumGadget.cloneTemplate( "tpl-ssd" );
+            $svg.attr( 'id', sId4SVG );
 
             this.getContentArea()
                 .empty()
-                .append( sHTML );
+                .append( $svg );
         }
         else
         {
@@ -109,9 +111,14 @@ class GumSSD extends GumGadget
 
             let fn = function( action, payload )
                     {
-                        if( self._isValidValue( "Number", payload.value, payload.name ) )
+                        if( ! self._devValueType_ )
+                            self._devValueType_ = self._detectValueType_( payload.value );
+
+                        let xValue = self._resolveAccessor_( payload.value, self.accessor, payload.name );
+
+                        if( xValue !== null && self._isValidValue( "Number", xValue, payload.name ) )
                         {
-                            let sValue = payload.value.toFixed( self.decimals );
+                            let sValue = xValue.toFixed( self.decimals );
 
                             if( parseInt( sValue ).toString().length > self.integers )
                             {
@@ -123,6 +130,8 @@ class GumSSD extends GumGadget
                                 self.wrapper.Value = sValue;
                             }
                         }
+
+                        self._executeUserCode_( action, payload );
                     };
 
             this._addListener( this.exen, this.device, fn );

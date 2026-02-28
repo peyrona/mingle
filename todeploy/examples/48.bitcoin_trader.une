@@ -12,7 +12,7 @@
 #==================================================================================================================================
 
 WHEN bitcoin_json
-THEN recent:add( pair():fromJSON( bitcoin_json ):get("data"):get("amount") )
+THEN recent:add( pair( bitcoin_json ):get("data"):get("amount") )
    # console SET "["+ time() +"] JSON = "+ bitcoin_json  # Uncomment this line to see the JSON raw data
 
 WHEN recent

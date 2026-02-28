@@ -94,6 +94,9 @@ public final class UneEditorPane extends RTextScrollPane
 
         SyntaxScheme scheme = rsta.getSyntaxScheme();
 
+//        Font baseFont = rsta.getFont();
+//        Font boldFont = baseFont.deriveFont( Font.BOLD );
+
         // Comments (gray)
         scheme.getStyle( Token.COMMENT_EOL ).foreground = new Color( 120, 120, 120 );
 
@@ -135,7 +138,11 @@ public final class UneEditorPane extends RTextScrollPane
         scheme.getStyle( Token.VARIABLE ).foreground = new Color( 78, 201, 176 );
 
         // Annotations / Macros: {*name*} (light green)
-        scheme.getStyle( Token.ANNOTATION ).foreground = new Color( 181, 206, 168 );
+     // scheme.getStyle( Token.ANNOTATION ).foreground = new Color( 108, 161, 146 );
+        scheme.getStyle( Token.ANNOTATION ).foreground = new Color( 230, 114, 90 );
+
+        // scape sequences: \n, \t, etc
+        scheme.getStyle( Token.REGEX ).foreground = new Color( 230, 114, 90 );
 
         // Inline code braces (yellow)
         scheme.getStyle( Token.MARKUP_TAG_DELIMITER ).foreground = new Color( 128, 128, 128 );
@@ -333,7 +340,7 @@ public final class UneEditorPane extends RTextScrollPane
 
         for( String sLine : asLines )
         {
-            sb.append( UtilStr.rtrim( sLine ) )    // Removes extra spaces at the end of the line
+            sb.append( UtilStr.ttrim( sLine ) )    // Removes extra spaces at the end of the line
               .append( UtilStr.sEoL );             // System dependent cEoL
         }                                          // Note that textArea.setClearWhitespaceLinesEnabled( true ) only works on lines contaning only white spaces
 
@@ -717,7 +724,7 @@ public final class UneEditorPane extends RTextScrollPane
         // Composes the string from the array
         for( String sLine : asLines )
         {
-            sb.append( UtilStr.rtrim( sLine ) )
+            sb.append( UtilStr.ttrim( sLine ) )
               .append( UtilStr.sEoL );
         }
 

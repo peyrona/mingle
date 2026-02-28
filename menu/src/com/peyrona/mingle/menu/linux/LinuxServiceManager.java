@@ -225,6 +225,27 @@ public class LinuxServiceManager extends AbstractServiceManager
     //------------------------------------------------------------------------//
     // Private helper methods
 
+    /**
+     * Returns the OS user that should own the service process.
+     * <p>
+     * Service files must be created as root (written to /etc/systemd/system/),
+     * but the service itself should run as the user who owns the Mingle installation.
+     * When the menu is invoked via sudo, {@code SUDO_USER} holds the original user name.
+     * Falling back to {@code user.name} covers the case where the menu runs as the
+     * target user directly (e.g., via polkit or a setuid wrapper).
+     *
+     * @return The user name for the {@code User=} directive in the service file.
+     */
+    private String getServiceUser()
+    {
+        String sudoUser = System.getenv( "SUDO_USER" );
+
+        if( UtilSys.isNotEmpty( sudoUser ) )
+            return sudoUser;
+
+        return System.getProperty( "user.name" );
+    }
+
     private String getServiceName( String componentName )
     {
         return SERVICE_PREFIX + componentName + SERVICE_SUFFIX;
@@ -238,6 +259,7 @@ public class LinuxServiceManager extends AbstractServiceManager
     private String buildServiceFileContent( String componentName, String execStart )
     {
         final String scriptDir = UtilSys.getWorkingDir().getAbsolutePath();
+        final String userName  = getServiceUser();
 
         return "[Unit]\n"
             + "Description=Mingle " + componentName.substring( 0, 1 ).toUpperCase() + componentName.substring( 1 ) + "\n"
@@ -247,6 +269,7 @@ public class LinuxServiceManager extends AbstractServiceManager
             + "\n"
             + "[Service]\n"
             + "Type=simple\n"
+            + "User=" + userName + "\n"
             + "WorkingDirectory=" + scriptDir + "\n"
             + "ExecStart=" + execStart + "\n"
             + "Restart=on-failure\n"

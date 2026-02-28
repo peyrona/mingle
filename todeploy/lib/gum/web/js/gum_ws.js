@@ -300,16 +300,16 @@ var gum_ws =
 
         switch( sValueClass.toLowerCase() )
         {
-            case "string" : /* nothing to do */                                                             break;
-            case "boolean": xValue = xValue.toString().trim().toLowerCase() === 'true';                     break;
+            case "string" : /* nothing to do */                                                       break;
+            case "boolean": xValue = xValue.toString().trim().toLowerCase() === 'true';               break;
             case "number" :
-            case "numeric": xValue = parseFloat( xValue );                                                  break;
-            case "date"   : xValue = { class: 'date', data: xValue.getTime() };                             break;
-            case "time"   : xValue = { class: 'time', data: p_base.millisSinceMidnight( xValue ) / 1000 };  break;    // x / 1000 because my time() class uses seconds
+            case "numeric": xValue = parseFloat( xValue );                                            break;
+            case "date"   : xValue = { class: 'date', data: xValue.toISOString().substring( 0,10 ) }; break;    // "YYYY-MM-DD"
+            case "time"   : xValue = { class: 'time', data: gum_ws._formatTime_( xValue ) };          break;    // "HH:mm:ss"
             case "array"  :
-            case "list"   : xValue = { class: 'list', data: xValue };                                       break;
+            case "list"   : xValue = { class: 'list', data: xValue };                                 break;
             case "object" :
-            case "pair"   : xValue = { class: 'pair', data: xValue };                                       break;
+            case "pair"   : xValue = { class: 'pair', data: xValue };                                 break;
             default       : throw xValue +": unknown value type";
         }
 
@@ -492,6 +492,31 @@ var gum_ws =
             exen2 = JSON.parse( exen2 );
 
         return p_base.jsonAreEquals( exen1, exen2 );
+    },
+
+    /**
+     * Formats a value as an ISO time string "HH:mm:ss".
+     * Accepts a Date instance or a number representing seconds since midnight.
+     *
+     * @param {Date|number} xValue A Date object or seconds since midnight.
+     * @returns {string} Time formatted as "HH:mm:ss".
+     */
+    _formatTime_ : function( xValue )
+    {
+        if( xValue instanceof Date )
+        {
+            let h = String( xValue.getHours()   ).padStart( 2, '0' );
+            let m = String( xValue.getMinutes() ).padStart( 2, '0' );
+            let s = String( xValue.getSeconds() ).padStart( 2, '0' );
+            return h + ':' + m + ':' + s;
+        }
+
+        // xValue is seconds since midnight (number)
+        let totalSec = Math.floor( xValue );
+        let h = String( Math.floor( totalSec / 3600 )      ).padStart( 2, '0' );
+        let m = String( Math.floor( (totalSec % 3600) / 60 )).padStart( 2, '0' );
+        let s = String( totalSec % 60                       ).padStart( 2, '0' );
+        return h + ':' + m + ':' + s;
     },
 
     /**

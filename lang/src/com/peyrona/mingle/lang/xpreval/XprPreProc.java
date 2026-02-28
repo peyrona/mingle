@@ -3,9 +3,9 @@ package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
-import com.peyrona.mingle.lang.lexer.Lexeme;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -40,17 +40,18 @@ final class XprPreProc
      *   <li>Makes arithmetic optimizations.</li>
      * </ul>
      *
+     * @param xpr
      * @param fnGroupWise A function that receives the name of a group and returns the list of devices belonging to this group.
      * @return Itself.
      */
-    XprPreProc( List<Lexeme> lexemes, Function<String,String[]> fnGroupWise )
+    XprPreProc( String xpr, Function<String,String[]> fnGroupWise )
     {
-        XprTokenizer   tokenizer = new XprTokenizer( lexemes );
+        XprTokenizer   tokenizer = new XprTokenizer( xpr );
         List<XprToken> lstTmp    = tokenizer.getTokens();
 
         lstErrors.addAll( tokenizer.getErrors() );     // If tokenizer.getErrors() is empty, no harm
 
-        if( validate( lstTmp ) )
+        if( validate( lstTmp, xpr ) )
         {
             if( fnGroupWise != null )
                 lstTmp = doAllAny( lstTmp, fnGroupWise );
@@ -229,7 +230,7 @@ final class XprPreProc
     // Aux func invoked from ::doAllAny(...)
     private boolean isAllOrAny( XprToken token )
     {
-        return  token != null                      &&
+        return  token != null                          &&
                 token.isType( XprToken.RESERVED_WORD ) &&
                 token.isText( XprUtils.sALL, XprUtils.sANY );
     }
@@ -266,12 +267,14 @@ final class XprPreProc
         }
     }
 
-    private boolean validate( List<XprToken> lstTokens )    // Invoked after preprocessed: no "ANY", no "ALL", but with "AFTER" and "WITHIN"
+    private boolean validate( List<XprToken> lstTokens, String xpr )    // Invoked after preprocessed: no "ANY", no "ALL", but with "AFTER" and "WITHIN"
     {
         if( lstTokens.isEmpty() )
         {
-            lstErrors.add( new CodeError( "Expression is empty", -1, -1 ) );
-            return false;
+            if( UtilStr.isEmpty( xpr ) )      // Truly empty input is an error; non-empty input that stripped to nothing (e.g. escape chars) is not
+                lstErrors.add( new CodeError( "Expression is empty", -1, -1 ) );
+
+            return false;                     // Either way, nothing to process
         }
 
         return true;

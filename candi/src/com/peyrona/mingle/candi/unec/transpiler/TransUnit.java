@@ -90,7 +90,7 @@ public final class TransUnit
             }
 
             if( bAuto )
-                lstCommands.add( new ParseInclude( new Lexer( "INCLUDE \"file://{*home.inc*}standard-replaces.une\"" ).getLexemes() ) );
+                lstCommands.add( new ParseInclude( new Lexer( "INCLUDE \"{*home.inc*}standard-replaces.une\"" ).getLexemes() ) );
         }
     }
 

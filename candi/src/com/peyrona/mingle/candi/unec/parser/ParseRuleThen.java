@@ -230,7 +230,9 @@ public class ParseRuleThen extends ParseBase
             Lexeme val2set = lexemes.get(2);
 
             if( val2set.isBasicDataType() )    // Must be before next if
-                return new Action( Action.Type.AssignBasicData, nAfter, sTarget, UtilType.toUne( val2set ) );
+                return new Action( Action.Type.AssignBasicData, nAfter, sTarget,
+                                   val2set.isString() ? Language.toString( val2set.text() )   // Strings stored as quoted NAXE literals: "value"
+                                                      : UtilType.toUne( val2set ) );
 
             if( validateName( val2set ) )      // Must be after previous if
                 return new Action( Action.Type.AssignDevice, nAfter, sTarget, val2set.text() );

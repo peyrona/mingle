@@ -167,11 +167,58 @@ final class UneTokenMaker extends AbstractTokenMaker
                         addToken( segment, currentTokenStart, i, Token.LITERAL_STRING_DOUBLE_QUOTE, newStartOffset + currentTokenStart );
                         currentTokenType = STATE_NONE;
                     }
-                    else if( c == '{' && i + 1 < end && array[i + 1] == '*' )
+                    else if( c == '\\' && i + 1 < end )
                     {
-                        // Macro inside string - highlight but stay in string
-                        // Just continue, we'll handle the whole string as one token
+                        // Check if it's a valid escape sequence: \n, \r, \t, \\, \"
+                        char nextChar = array[i + 1];
+
+                        if( nextChar == 'n' || nextChar == 'r' || nextChar == 't' || nextChar == '\\' || nextChar == '"' )
+                        {
+                            // First, add the string content before the escape sequence
+                            if( i > currentTokenStart )
+                                addToken( segment, currentTokenStart, i - 1, Token.LITERAL_STRING_DOUBLE_QUOTE, newStartOffset + currentTokenStart );
+
+                            // Add the escape sequence as a separate token
+                            addToken( segment, i, i + 1, Token.REGEX, newStartOffset + i );
+
+                            // Skip the escaped character
+                            i++;
+
+                            // Start a new string token
+                            currentTokenStart = i + 1;
+                        }
+                        // If not a recognized escape, treat as normal string content
                     }
+                    else if( c == '{' && i + 1 < end && array[i + 1] == '*' )    // Macro inside string - tokenize as separate ANNOTATION token
+                    {
+                        if( i > currentTokenStart )    // First, add the string content before the macro
+                            addToken( segment, currentTokenStart, i - 1, Token.LITERAL_STRING_DOUBLE_QUOTE, newStartOffset + currentTokenStart );
+
+                        int macroEnd = -1;   // Find the closing *}
+
+                        for( int j = i + 2; j < end - 1; j++ )
+                        {
+                            if( array[j] == '*' && array[j + 1] == '}' )
+                            {
+                                macroEnd = j + 1;
+                                break;
+                            }
+                        }
+
+                        if( macroEnd != -1 )    // Found complete macro - add it as ANNOTATION token
+                        {
+                            addToken( segment, i, macroEnd, Token.ANNOTATION, newStartOffset + i );
+
+                            i = macroEnd;       // Update position and continue string tokenization after macro
+                            currentTokenStart = macroEnd + 1;
+                        }
+                        else
+                        {
+                            // Unclosed macro - treat the opening {* as normal string content
+                            // This handles multi-line macros gracefully
+                        }
+                    }
+
                     // Continue string (including newlines for multi-line strings)
                     break;
 
@@ -190,9 +237,8 @@ final class UneTokenMaker extends AbstractTokenMaker
                     break;
 
                 case STATE_MACRO:
-                    if( c == '*' && i + 1 < end && array[i + 1] == '}' )
+                    if( c == '*' && i + 1 < end && array[i + 1] == '}' )   // End of macro
                     {
-                        // End of macro
                         addToken( segment, currentTokenStart, i + 1, Token.ANNOTATION, newStartOffset + currentTokenStart );
                         i++; // Skip the '}'
                         currentTokenType = STATE_NONE;

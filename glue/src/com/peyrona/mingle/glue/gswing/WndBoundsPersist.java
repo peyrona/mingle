@@ -2,8 +2,8 @@ package com.peyrona.mingle.glue.gswing;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.glue.Main;
+import com.peyrona.mingle.glue.SettingsManager;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.lexer.Language;
@@ -117,7 +117,7 @@ public final class WndBoundsPersist
         }
 
         if( UtilStr.isEmpty( name ) )
-            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+            throw new MingleException( MingleException.INVALID_ARGUMENTS, "'name' is empty" );
 
         return name;
     }

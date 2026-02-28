@@ -12,7 +12,7 @@
                             </div>
                         </div>
                     </div>
-                    <div class="column is-one-third">
+                    <div class="column is-narrow">
                         <label class="label">Title location</label>
                         <div class="field">
                             <label class="radio">
@@ -21,12 +21,29 @@
                               </label>
                               <label class="radio">
                                 <input type="radio" name="card_title_location" value="center" onchange="dlgChart.gehme.changed(this)">
-                                Center
+                                Middle
                               </label>
                               <label class="radio">
                                 <input type="radio" name="card_title_location" value="south" onchange="dlgChart.gehme.changed(this)">
                                 South
                               </label>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <label class="label">Title alignment</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="left" onchange="dlgChart.gehme.changed(this)">
+                                Left
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="center" onchange="dlgChart.gehme.changed(this)" checked>
+                                Center
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="right" onchange="dlgChart.gehme.changed(this)">
+                                Right
+                            </label>
                         </div>
                     </div>
                 </div>
@@ -53,8 +70,28 @@
                     <div class="column">
                         <div class="field">
                             <label class="label">Titles & Labels</label>
-                            <div class="control">
-                                <input class="input" name="lbl_clr" type="color" onchange="dlgChart.gehme.changed(this)">
+                            <div class="field has-addons mb-0">
+                                <p class="control">
+                                    <button class="button" type="button" name="lbl_clr_toggle" title="Toggle custom color" onclick="dlgChart._toggleLblClr_()">
+                                        <span class="icon"><i class="ti ti-check"></i></span>
+                                    </button>
+                                </p>
+                                <p class="control is-expanded">
+                                    <input class="input" name="lbl_clr" type="color" disabled onchange="dlgChart.gehme.changed(this)">
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <div class="field">
+                            <label class="label">Timestamp rounding</label>
+                            <div class="select">
+                                <select name="ts_round" onchange="dlgChart.gehme.changed(this)">
+                                    <option value="millis">Milliseconds</option>
+                                    <option value="secs">Seconds</option>
+                                    <option value="mins">Minutes</option>
+                                    <option value="hours">Hours</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -103,85 +140,95 @@
             </div>
 
             <div class="box">                                               <!-- LIVE DATA ========================== -->
-                <p class="is-size-5 mb-3"><b>Retrieve live data from Devices</b></p>
-                <div class="columns">
-                    <div class="column">
-                        <table>
-                            <tr>
-                                <td><b>Series:&nbsp;</b></td>
-                                <td><div id="div-dlg-chart-toolbar-series"></div></td>
-                            </tr>
-                        </table>
-                        <table id="tbl-dlg-chart-series" class="table is-bordered is-stripped is-fullwidth">
-                            <thead>
-                                <tr style="background-color:#444444;">
-                                    <th style="color:#F9E79F;">Target ExEn</th>
-                                    <th style="color:#F9E79F;">Device name</th>
-                                    <th style="color:#F9E79F;">Color (hex)</th>
+                <p class="is-size-5 mb-3" style="cursor:pointer; user-select:none;" onclick="dlgChart._toggleSection_('chart-section-devices')">
+                    <i class="ti ti-chevron-down"></i>&nbsp;<b>Retrieve live data from Devices</b>
+                </p>
+                <div id="chart-section-devices">
+                    <div class="columns">
+                        <div class="column">
+                            <table>
+                                <tr>
+                                    <td><b>Series:&nbsp;</b></td>
+                                    <td><div id="div-dlg-chart-toolbar-series"></div></td>
                                 </tr>
-                            </thead>
-                        </table>
+                            </table>
+                            <table id="tbl-dlg-chart-series" class="table is-bordered is-stripped is-fullwidth">
+                                <thead>
+                                    <tr style="background-color:#444444;">
+                                        <th style="color:#F9E79F;">Target ExEn</th>
+                                        <th style="color:#F9E79F;">Device name</th>
+                                        <th style="color:#F9E79F;">Key / Index</th>
+                                        <th style="color:#F9E79F;">Label</th>
+                                        <th style="color:#F9E79F;">Color (hex)</th>
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
 
             <div class="box">                                               <!-- DATABASE ============================ -->
-                <p class="is-size-5 mb-3"><b>Retrieve data from a DataBase</b></p>
-                <div class="columns">
-                    <div class="column">
-                        <div class="field">
-                            <label class="label">JARs</label>
-                            <div class="control">
-                                <input class="input" name="db_jars" type="text" placeholder="JDBC driver JARs (comma separated)" onchange="dlgChart.gehme.changed(this)">
+                <p class="is-size-5 mb-3" style="cursor:pointer; user-select:none;" onclick="dlgChart._toggleSection_('chart-section-database')">
+                    <i class="ti ti-chevron-right"></i>&nbsp;<b>Retrieve data from a DataBase</b>
+                </p>
+                <div id="chart-section-database" style="display:none;">
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">JARs</label>
+                                <div class="control">
+                                    <input class="input" name="db_jars" type="text" placeholder="JDBC driver JARs (comma separated)" onchange="dlgChart.gehme.changed(this)">
+                                </div>
                             </div>
-                        </div>
-                        <div class="field">
-                            <label class="label">JDBC</label>
-                            <div class="control">
-                                <input class="input" name="db_jdbc" type="text" placeholder="JDBC driver class" onchange="dlgChart.gehme.changed(this)">
+                            <div class="field">
+                                <label class="label">JDBC</label>
+                                <div class="control">
+                                    <input class="input" name="db_jdbc" type="text" placeholder="JDBC driver class" onchange="dlgChart.gehme.changed(this)">
+                                </div>
                             </div>
-                        </div>
-                        <div class="field">
-                            <label class="label">URL</label>
-                            <div class="control">
-                                <input class="input" name="db_url" type="text" placeholder="example: jdbc:h2:{*home*}etc/mydb" onchange="dlgChart.gehme.changed(this)">
+                            <div class="field">
+                                <label class="label">URL</label>
+                                <div class="control">
+                                    <input class="input" name="db_url" type="text" placeholder="example: jdbc:h2:{*home*}etc/mydb" onchange="dlgChart.gehme.changed(this)">
+                                </div>
                             </div>
-                        </div>
-                        <div class="columns">
-                            <div class="column">
-                                <div class="field">
-                                    <label class="label">User name</label>
-                                    <div class="control">
-                                        <input class="input" name="db_user" type="text" placeholder="Can be empty" onchange="dlgChart.gehme.changed(this)">
+                            <div class="columns">
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label">User name</label>
+                                        <div class="control">
+                                            <input class="input" name="db_user" type="text" placeholder="Can be empty" onchange="dlgChart.gehme.changed(this)">
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="column">
+                                    <div class="field">
+                                        <label class="label">User password</label>
+                                        <div class="control">
+                                            <input class="input" name="db_pwd" type="text" placeholder="Can be empty" onchange=" dlgChart.gehme.changed(this)">
+                                        </div>
                                     </div>
                                 </div>
                             </div>
-                            <div class="column">
-                                <div class="field">
-                                    <label class="label">User password</label>
-                                    <div class="control">
-                                        <input class="input" name="db_pwd" type="text" placeholder="Can be empty" onchange=" dlgChart.gehme.changed(this)">
-                                    </div>
-                                </div>
-                            </div>
                         </div>
-                    </div>
-                    <div class="column">
-                        <table>
-                            <tr>
-                                <td><b>Data storage:&nbsp;</b></td>
-                                <td><div id="div-dlg-chart-toolbar-db"></div></td>
-                            </tr>
-                        </table>
-                        <table id="tbl-dlg-chart-db" class="table is-bordered is-stripped is-fullwidth">
-                            <thead>
-                                <tr style="background-color:#444444;">
-                                    <th style="color:#F9E79F;">Table name</th>
-                                    <th style="color:#F9E79F;">Timestamp column</th>
-                                    <th style="color:#F9E79F;">Values column</th>
+                        <div class="column">
+                            <table>
+                                <tr>
+                                    <td><b>Data storage:&nbsp;</b></td>
+                                    <td><div id="div-dlg-chart-toolbar-db"></div></td>
                                 </tr>
-                            </thead>
-                        </table>
+                            </table>
+                            <table id="tbl-dlg-chart-db" class="table is-bordered is-stripped is-fullwidth">
+                                <thead>
+                                    <tr style="background-color:#444444;">
+                                        <th style="color:#F9E79F;">Table name</th>
+                                        <th style="color:#F9E79F;">Timestamp column</th>
+                                        <th style="color:#F9E79F;">Value column</th>
+                                    </tr>
+                                </thead>
+                            </table>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -214,6 +261,8 @@ var dlgChart =
         if( gum.isUsingGridLayout() )  $('#grid-fields').show();
         else                           $('#grid-fields').hide();
 
+        this._setLblClrEnabled_( ! p_base.isEmpty( gadget.lbl_clr ) );
+
         return this;
     },
 
@@ -226,15 +275,77 @@ var dlgChart =
 
     //-------------------------------------------------------------------------------------------------//
 
+    /**
+     * Toggles the label color input between enabled (custom color) and disabled (default color / null).
+     */
+    _toggleLblClr_()
+    {
+        let $input = $('#properties-chart [name="lbl_clr"]');
+        let isEnabled = ! $input.prop( 'disabled' );
+
+        this._setLblClrEnabled_( ! isEnabled );
+
+        this.gehme.gadget.lbl_clr = isEnabled ? null : $input.val();
+        this.gehme.fnOnChanged();
+    },
+
+    /**
+     * Sets the label color input enabled/disabled state and updates the toggle button and hint text.
+     *
+     * @param {boolean} bEnabled Whether the color input should be enabled.
+     */
+    _setLblClrEnabled_( bEnabled )
+    {
+        let $input  = $('#properties-chart [name="lbl_clr"]');
+        let $button = $('#properties-chart [name="lbl_clr_toggle"]');
+
+        $input.prop( 'disabled', ! bEnabled );
+
+        if( bEnabled )  $button.addClass(    'is-primary' );
+        else            $button.removeClass( 'is-primary' );
+    },
+
+    /**
+     * Toggles the visibility of a collapsible section and updates its chevron icon.
+     *
+     * @param {string} sSectionId The id of the content div to toggle.
+     */
+    _toggleSection_( sSectionId )
+    {
+        let $section = $( '#' + sSectionId );
+        let $icon    = $section.prev().find( 'i.ti' );
+
+        $section.slideToggle( 200, function()
+        {
+            let isVisible = $section.is( ':visible' );
+
+            $icon.removeClass( 'ti-chevron-down ti-chevron-right' )
+                 .addClass( isVisible ? 'ti-chevron-down' : 'ti-chevron-right' );
+        });
+    },
+
     _initTableEditor4Series_()
     {
         this.teSerie = new TableEditor( {
                                         table         : "tbl-dlg-chart-series",
                                         toolbar       : "div-dlg-chart-toolbar-series",
+                                        onInfo        : function()
+                                                        {
+                                                            dlgChart._showSeriesInfo_();
+                                                        },
                                         onCellPreEdit : function( table, nRowIndex, sColName, value )
                                                         {
                                                             if( (sColName === "exen") || (sColName === "name") )
                                                                 dlgChart.gehme.setColEditor( table, sColName );
+
+                                                            if( sColName === "accessor" )
+                                                            {
+                                                                let devs = dlgChart.gehme.gadget.devices;
+                                                                let vt   = devs[nRowIndex] ? devs[nRowIndex]._valueType_ : null;
+
+                                                                if( vt === "scalar" )
+                                                                    return null;    // Cancel edit — confirmed scalar value
+                                                            }
 
                                                             return value;
                                                         },
@@ -246,9 +357,11 @@ var dlgChart =
 
                                                                 switch( sColName )
                                                                 {
-                                                                    case "exen" : devs[nRowIndex].exen  = value = value.trim().replace( /\\"/g, '"' );   break;   // This 'replace(...)' removes extra '\'value.trim();
-                                                                    case "name" : devs[nRowIndex].name  = value.trim().toLowerCase();                    break;
-                                                                    case "color": devs[nRowIndex].color = (p_base.isEmpty( value ) ? "#00AA00" : value); break;
+                                                                    case "exen"    : devs[nRowIndex].exen     = value = value.trim().replace( /\\"/g, '"' );      break;   // This 'replace(...)' removes extra '\'value.trim();
+                                                                    case "name"    : devs[nRowIndex].name     = value.trim().toLowerCase();                       break;
+                                                                    case "accessor": devs[nRowIndex].accessor = p_base.isEmpty( value ) ? null : value.trim();    break;
+                                                                    case "label"   : devs[nRowIndex].label    = p_base.isEmpty( value ) ? null : value.trim();    break;
+                                                                    case "color"   : devs[nRowIndex].color    = (p_base.isEmpty( value ) ? "#00AA00" : value);    break;
                                                                 }
 
                                                                 dlgChart.gehme.fnOnChanged();
@@ -258,14 +371,14 @@ var dlgChart =
                                                         },
                                         onRowAppended : function( table, nRow )
                                                         {
-                                                            let oExEn = gum.getAllExEn()[0];          // Array is guarranteed to be non empty
-                                                            let aoDev = gum.getDeviceNames4( oExEn );
-                                                            let sName = p_base.isEmpty(aoDev) ? "No devices in ExEn" : aoDev[0];
-                                                            let oRow  = { exen: JSON.stringify( oExEn ).replace( /\\"/g, '"' ), name: sName, color: '#00AA00' };
+                                                            let oExEn = gum.getAllExEn()[0];          // Array is guaranteed to be non empty
+                                                            let oRow  = { exen: JSON.stringify( oExEn ).replace( /\\"/g, '"' ), name: "", accessor: null, label: null, color: '#00AA00' };
 
-                                                            table.setValue( nRow, "exen" , oRow.exen  );
-                                                            table.setValue( nRow, "name" , oRow.name  );
-                                                            table.setValue( nRow, "color", oRow.color );
+                                                            table.setValue( nRow, "exen"    , oRow.exen  );
+                                                            table.setValue( nRow, "name"    , oRow.name  );
+                                                            table.setValue( nRow, "accessor", ""          );
+                                                            table.setValue( nRow, "label"   , ""          );
+                                                            table.setValue( nRow, "color"   , oRow.color );
 
                                                             dlgChart.gehme.gadget.devices.push( oRow );
                                                             dlgChart.gehme.fnOnChanged();
@@ -280,12 +393,70 @@ var dlgChart =
                                                             dlgChart.gehme.gadget.devices.push( table.getRowData( nRow ) );
                                                             dlgChart.gehme.fnOnChanged();
                                                         },
+                                        onRowMoved    : function( table, nFrom, nTo )
+                                                        {
+                                                            let arr = dlgChart.gehme.gadget.devices;
+                                                            arr.splice( nTo, 0, arr.splice( nFrom, 1 )[0] );
+                                                            dlgChart.gehme.fnOnChanged();
+                                                        },
                                         columns       : [
-                                                          { name: "exen" , minwidth: 12, maxwidth: 32, editor: '<select></select>'    },
-                                                          { name: "name" , minwidth:  8, maxwidth: 16, editor: '<select></select>'    },
-                                                          { name: "color", minwidth:  8, maxwidth:  8, editor: '<input type="color">' }
+                                                          { name: "exen"    , minwidth: 12, maxwidth: 32, editor: '<select></select>'    },
+                                                          { name: "name"    , minwidth:  8, maxwidth: 16, editor: '<select></select>'    },
+                                                          { name: "accessor", minwidth:  5, maxwidth:  8, editor: '<input type="text" placeholder="">' },
+                                                          { name: "label"   , minwidth:  6, maxwidth: 16, editor: '<input type="text" placeholder="Optional">' },
+                                                          { name: "color"   , minwidth:  8, maxwidth:  8, editor: '<input type="color">' }
                                                         ]
                                     } );
+    },
+
+    _showSeriesInfo_()
+    {
+        let sHTML =
+            '<div style="padding:10px;">' +
+                '<p class="mb-3">Each row defines a <b>data series</b> plotted on the chart. ' +
+                    'Normally, each row shows one single device value variations on time. Although '+
+                    'a single device with a composite value (<code>list()</code> or <code>pair()</code>) can feed ' +
+                    'multiple series &mdash;one per key or index.</p>' +
+                '<table class="table is-bordered is-fullwidth">' +
+                    '<thead><tr style="background-color:#444444;">' +
+                        '<th style="color:#F9E79F;">Column</th>' +
+                        '<th style="color:#F9E79F;">Description</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' +
+                        '<tr>' +
+                            '<td><b>Target ExEn</b></td>' +
+                            '<td>The Execution Engine instance that owns the device.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Device name</b></td>' +
+                            '<td>The device to monitor. Its value changes feed this series.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Key / Index</b></td>' +
+                            '<td>Required when the device value is a <code>list()</code> or <code>pair()</code>. ' +
+                                'For lists: a <b>1-based</b> numeric index (e.g. <code>1</code>, <code>2</code>). ' +
+                                'For pairs: the key name (case-insensitive). ' +
+                                'Leave empty for scalar devices.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Label</b></td>' +
+                            '<td>Optional display name shown in the chart legend. ' +
+                                'If empty, a label is auto-generated from the device name and accessor ' +
+                                '(e.g. <code>weather[temperature]</code>).</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Color</b></td>' +
+                            '<td>The color used to render this series line.</td>' +
+                        '</tr>' +
+                    '</tbody>' +
+                '</table>' +
+            '</div>';
+
+        $('<div></div>').html( sHTML )
+                        .dialog( { title   : 'Series columns information',
+                                   modal   : true,
+                                   width   : 620
+                                 } );
     },
 
     _initTableEditor4DB_()

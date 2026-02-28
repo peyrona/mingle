@@ -72,7 +72,15 @@ class GumPie extends GumGadget
      */
     distill()
     {
-        return super.distill( ["wrapper"] );
+        let props = super.distill( ["wrapper"] );
+
+        if( props.slices )
+        {
+            for( let slice of props.slices )
+                delete slice._valueType_;
+        }
+
+        return props;
     }
 
     //-----------------------------------------------------------------------------------------//
@@ -86,16 +94,25 @@ class GumPie extends GumGadget
         {
             let self = this;
 
-            for( let item of this.slices )     // [ {exen:oExen, name:"devName", label:"Label", color:"#00ff00"}, ... ]
+            for( let item of this.slices )     // [ {exen:oExen, name:"devName", label:"Label", color:"#00ff00", accessor:null}, ... ]
             {
+                let sSliceId = item.accessor ? item.name +'['+ item.accessor +']' : item.name;
+
                 let fn = function( action, payload )
                     {
-                        if( payload && payload.name !== undefined &&
-                            self._isValidValue( "Number", payload.value, payload.name ) )
+                        if( ! item._valueType_ )
+                            item._valueType_ = self._detectValueType_( payload.value );
+
+                        let xValue = self._resolveAccessor_( payload.value, item.accessor, payload.name );
+
+                        if( xValue !== null && payload.name !== undefined &&
+                            self._isValidValue( "Number", xValue, payload.name ) )
                         {
                             self._hasErrors( false );
-                            self.wrapper.updateSlice( payload.name, payload.value );
+                            self.wrapper.updateSlice( sSliceId, xValue );
                         }
+
+                        self._executeUserCode_( action, payload );
                     };
 
                 this._addListener( item.exen, item.name, fn );
@@ -230,7 +247,9 @@ class PieWrap
         {
             for( const slice of this.parent.slices )
             {
-                aLabels.push( slice.label || slice.name );
+                let sSliceId = slice.accessor ? slice.name +'['+ slice.accessor +']' : slice.name;
+
+                aLabels.push( slice.label || sSliceId );
                 aData.push( 0 );    // Initial value, will be updated by listeners
                 aColors.push( slice.color || this._randomColor_() );
             }
@@ -268,11 +287,14 @@ class PieWrap
     //------------------------------------------------------------------------//
     // PRIVATE METHODS
 
-    _findSliceIndex_( sDevName )
+    _findSliceIndex_( sSliceId )
     {
         for( let n = 0; n < this.parent.slices.length; n++ )
         {
-            if( this.parent.slices[n].name === sDevName )
+            let slice    = this.parent.slices[n];
+            let sId      = slice.accessor ? slice.name +'['+ slice.accessor +']' : slice.name;
+
+            if( sId === sSliceId )
                 return n;
         }
 
@@ -281,12 +303,14 @@ class PieWrap
 
     _getChartDiv_( nWidth, nHeight )
     {
-        return '<div id="'+ this.divId +'" style="width:100%; height:100%;">'+
-                   '<canvas'+
-                       ' width ="'+ parseInt( nWidth  ) +'"'+
-                       ' height="'+ parseInt( nHeight ) +'">'+
-                   '</canvas>'+
-               '</div>';
+        let $tpl = GumGadget.cloneTemplate( "tpl-pie" );
+
+        $tpl.attr( 'id', this.divId );
+        $tpl.find( 'canvas' )
+            .attr( 'width',  parseInt( nWidth  ) )
+            .attr( 'height', parseInt( nHeight ) );
+
+        return $tpl;
     }
 
     _getChartOptions_()

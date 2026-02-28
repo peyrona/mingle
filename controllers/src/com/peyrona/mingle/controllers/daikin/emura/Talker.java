@@ -2,18 +2,33 @@
 package com.peyrona.mingle.controllers.daikin.emura;
 
 import com.peyrona.mingle.lang.japi.UtilStr;
-import com.peyrona.mingle.lang.japi.UtilUnit;
-import java.io.BufferedReader;
-import java.io.DataOutputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.MalformedURLException;
-import java.net.URL;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 
 /**
- * This is the class that really talks with the Emura machine.
+ * Low-level HTTP transport for communicating with a Daikin Emura air conditioner
+ * over its local REST API.
+ * <p>
+ * Supports three operations against the Emura's built-in HTTP server:
+ * <ul>
+ *   <li>{@link #get()} &ndash; reads sensor data ({@code /aircon/get_sensor_info})</li>
+ *   <li>{@link #read()} &ndash; reads control state ({@code /aircon/get_control_info})</li>
+ *   <li>{@link #write(String)} &ndash; sends a control command
+ *       ({@code /aircon/set_control_info}) and returns the resulting state</li>
+ * </ul>
+ * <p>
+ * Thread safety: all public methods are {@code synchronized} so that only one
+ * HTTP transaction is in-flight at any given time, preventing command collisions
+ * on the single-threaded Emura firmware.
+ * <p>
+ * Uses Java&nbsp;11's {@link HttpClient} with built-in connection pooling and
+ * automatic keep-alive, avoiding the overhead of opening a new TCP connection
+ * per request.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -21,134 +36,149 @@ import java.nio.charset.StandardCharsets;
  */
 final class Talker
 {
-    private final URL urlCtrlGet;
-    private final URL urlCtrlSet;
-    private final URL urlSensors;
+    /** Timeout for establishing a TCP connection to the Emura unit. */
+    private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds( 30 );
+
+    /** Timeout for receiving the full HTTP response body. */
+    private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds( 30 );
+
+    private static final String USER_AGENT = "Java Daikin Emura Controller";
+
+    private final HttpClient httpClient;
+    private final URI        uriCtrlGet;
+    private final URI        uriCtrlSet;
+    private final URI        uriSensors;
 
     //----------------------------------------------------------------------------//
 
-    Talker( String sHost ) throws MalformedURLException
+    /**
+     * Creates a new Talker bound to the given Emura host.
+     *
+     * @param sHost IP address or hostname of the Emura unit (e.g. {@code "192.168.7.246"}).
+     * @throws IOException if {@code sHost} produces an invalid URI.
+     */
+    Talker( String sHost ) throws IOException
     {
-        urlCtrlGet = new URL( "http://"+ sHost +"/aircon/get_control_info" );
-        urlCtrlSet = new URL( "http://"+ sHost +"/aircon/set_control_info" );
-        urlSensors = new URL( "http://"+ sHost +"/aircon/get_sensor_info"  );
+        try
+        {
+            String sBase = "http://" + sHost;
+
+            uriCtrlGet = URI.create( sBase + "/aircon/get_control_info" );
+            uriCtrlSet = URI.create( sBase + "/aircon/set_control_info" );
+            uriSensors = URI.create( sBase + "/aircon/get_sensor_info"  );
+        }
+        catch( IllegalArgumentException iae )
+        {
+            throw new IOException( "Invalid Emura host address: " + sHost, iae );
+        }
+
+        httpClient = HttpClient.newBuilder()
+                               .connectTimeout( CONNECT_TIMEOUT )
+                               .build();
     }
 
     //----------------------------------------------------------------------------//
     // PACKAGE SCOPE
 
+    /**
+     * Reads current sensor values (inside/outside temperature, humidity).
+     *
+     * @return raw response body from {@code /aircon/get_sensor_info}
+     *         (e.g. {@code "ret=OK,htemp=23.0,otemp=18.5,..."}).
+     * @throws IOException if the request fails or the response is invalid.
+     */
     synchronized String get() throws IOException
     {
-        return read( urlSensors );
+        return doGet( uriSensors );
     }
 
+    /**
+     * Reads the current control state (power, mode, fan, wings, targets).
+     *
+     * @return raw response body from {@code /aircon/get_control_info}
+     *         (e.g. {@code "ret=OK,pow=1,mode=3,stemp=22.0,..."}).
+     * @throws IOException if the request fails or the response is invalid.
+     */
     synchronized String read() throws IOException
     {
-        return read( urlCtrlGet );
+        return doGet( uriCtrlGet );
     }
 
+    /**
+     * Sends a control command and returns the resulting machine state.
+     * <p>
+     * The {@code values} string must be URL-encoded form data containing at
+     * least the mandatory fields: {@code pow}, {@code mode}, {@code f_rate},
+     * {@code f_dir}, {@code stemp}, and {@code shum}.
+     * <p>
+     * Example: {@code "pow=0&mode=6&f_rate=3&f_dir=0&stemp=22.0&shum=75"}
+     *
+     * @param values form-encoded control parameters.
+     * @return the raw control state after applying the command (via a
+     *         follow-up {@link #read()} call).
+     * @throws IOException if the POST request fails, returns a non-200 status,
+     *         or the subsequent read returns an invalid response.
+     */
     synchronized String write( String values ) throws IOException
     {
-        HttpURLConnection conn = null;
-
+        HttpRequest request = HttpRequest.newBuilder( uriCtrlSet )
+                                         .timeout( REQUEST_TIMEOUT )
+                                         .header( "Content-Type", "application/x-www-form-urlencoded" )
+                                         .header( "User-Agent", USER_AGENT )
+                                         .POST( HttpRequest.BodyPublishers.ofString( values, StandardCharsets.UTF_8 ) )
+                                         .build();
         try
         {
-            byte[] aData = values.getBytes(StandardCharsets.UTF_8);
+            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
 
-            conn = connect( urlCtrlSet );
-            conn.setRequestProperty( "Content-Length", String.valueOf( aData.length ) );
-
-            try( DataOutputStream dos = new DataOutputStream( conn.getOutputStream() ) )
-            {
-                dos.write( aData );
-                dos.flush();
-            }
-
-            int n = conn.getResponseCode();
-
-            if( n != HttpURLConnection.HTTP_OK )
-                throw new IOException( "HTTP response code="+ n );
+            if( response.statusCode() != 200 )
+                throw new IOException( "HTTP response code=" + response.statusCode() );
 
             return read();
         }
-        finally
+        catch( InterruptedException ie )
         {
-            if( conn != null )
-                conn.disconnect();
+            Thread.currentThread().interrupt();
+            throw new IOException( "HTTP request interrupted", ie );
         }
     }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
-    private HttpURLConnection connect( URL url ) throws IOException
+    /**
+     * Sends a GET request and validates that the response starts with {@code "ret=OK"}.
+     *
+     * @param uri target endpoint URI.
+     * @return validated response body.
+     * @throws IOException if the request fails, returns a non-200 status, or
+     *         the body does not start with {@code "ret=OK"}.
+     */
+    private String doGet( URI uri ) throws IOException
     {
-        HttpURLConnection conn = null;
-
+        HttpRequest request = HttpRequest.newBuilder( uri )
+                                         .timeout( REQUEST_TIMEOUT )
+                                         .header( "User-Agent", USER_AGENT )
+                                         .GET()
+                                         .build();
         try
         {
-            boolean bPOST = urlCtrlSet.equals( url );
+            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
 
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod( (bPOST ? "POST" : "GET") );
-            conn.setDoInput( true );
-            conn.setDoOutput( bPOST );
-            conn.setUseCaches( false );
-            conn.setRequestProperty( "Content-Type", "application/x-www-form-urlencoded" );
-            conn.setRequestProperty( "User-Agent"  , "Java Daikin Emura Controller");    // Some servers may reject requests without a User-Agent header.
-            conn.setConnectTimeout( (int) (2 * UtilUnit.MINUTE) );
-            conn.setReadTimeout(    (int) (2 * UtilUnit.MINUTE) );
+            if( response.statusCode() != 200 )
+                throw new IOException( "HTTP response code=" + response.statusCode() + " from " + uri );
 
-            return conn;
+            String sBody = response.body();
+
+            if( UtilStr.isEmpty( sBody ) || ! sBody.startsWith( "ret=OK" ) )
+                throw new IOException( "Invalid response from Emura: " + sBody );
+
+            return sBody;
         }
-        catch( IOException ioe )
+        catch( InterruptedException ie )
         {
-            if( conn != null )
-                conn.disconnect();
-
-            throw ioe;
+            Thread.currentThread().interrupt();
+            throw new IOException( "HTTP request interrupted", ie );
         }
     }
-
-    private String read( URL url ) throws IOException
-    {
-        HttpURLConnection conn = null;
-
-        try
-        {
-            conn = connect( url );
-
-            try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) ) )
-            {
-                String        sLine;
-                StringBuilder sbRet = new StringBuilder();
-
-                while( (sLine = in.readLine()) != null )
-                {
-                    sbRet.append( sLine );
-                }
-
-                if( UtilStr.isEmpty( sbRet ) || ! UtilStr.startsWith( sbRet, "ret=OK" ) )
-                    throw new IOException( "Invalid response from Emura: " + sbRet );
-
-                return sbRet.toString();
-            }
-        }
-        finally
-        {
-            if( conn != null )
-                conn.disconnect();
-        }
-    }
-
-    //----------------------------------------------------------------------------//
-    // FOR TESTING PURPOSES
-
-//    public static void main( String[] as ) throws MalformedURLException, IOException
-//    {
-//        Talker et = new Talker( "192.168.7.246" );
-//
-//        System.out.println( et.read() );
-//        System.out.println( et.write("pow=0&mode=6&f_rate=3&f_dir=0&stemp=22.0&shum=75") );   // AC expects at least these values
-//    }
 }

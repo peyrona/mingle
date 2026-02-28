@@ -107,6 +107,30 @@ public final class SettingsManager
     }
 
     /**
+     * Gets the index of the focused editor tab.
+     *
+     * @return The focused tab index, or 0 if not set
+     */
+    public static int getEditorFocused()
+    {
+        loadConfig();
+        JsonValue jv = config.get( "editorFocused" );
+        return (jv == null || !jv.isNumber()) ? 0 : jv.asInt();
+    }
+
+    /**
+     * Sets the index of the focused editor tab.
+     *
+     * @param index The focused tab index
+     */
+    public static void setEditorFocused( int index )
+    {
+        loadConfig();
+        config.set( "editorFocused", index );
+        saveConfig();
+    }
+
+    /**
      * Gets the list of hidden tips.
      *
      * @return List of tip strings

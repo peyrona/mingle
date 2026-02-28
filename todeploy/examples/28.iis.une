@@ -1,0 +1,317 @@
+#==================================================================================================================================
+# IIS — The Intelligent Isolated Station
+# ─────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+# An autonomous space station managing a 30-minute cascade incident entirely through Une rules.
+# Each rule explains itself: "I fired because X, and I did Y."
+# Critical alerts are spoken aloud via TTS; every decision is logged to the console.
+#
+# Story arc (one simulated minute = 3 real seconds):
+#   Minutes  1–5  All systems nominal — routine orbit operations.
+#   Minute   6    INCIDENT: micrometeorite punctures solar array B — output collapses to 25%.
+#   Minutes  7–14 Crisis deepens: battery drains, heating throttles, CO₂ and O₂ drift.
+#   Minute   15   Partial repair: solar restored to 65%. Bleeding slows.
+#   Minutes 16–21 Station holds at low power — atmosphere remains hazardous.
+#   Minute   22   Full repair: solar array at 100%. Recovery begins.
+#   Minutes 23–28 Systems climb back. Atmosphere clears. Temperature rises.
+#   Minutes 29–30 All clear. Commander logs the incident.
+#
+# Topics demonstrated:
+#   · Scripted telemetry timeline in embedded Java — all five system readings updated
+#     simultaneously from the same snapshot, preventing sequential-mutation artefacts.
+#   · ExEn narrative-gate cache pair: each plot moment fires exactly once.
+#   · TTS (SunFreeTTSDriver) for critical spoken alerts; OutputDriver for full detail.
+#   · Rules that explain their own reasoning — every THEN output names its cause and action.
+#   · CellSetDriver for mutable simulation state.
+#   · Periodic system status reports interleaved with event-driven narrative.
+#
+# NOTE: audio hardware (sound card + speakers) is required for TTS output.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# Initialise the ExEn cache and open with the mission briefing.
+#
+SCRIPT
+    ONSTART
+    LANGUAGE Une
+    FROM {
+             put( "gate", pair() )    # Narrative gate: each key records a plot event already announced
+
+             console = "════════════════════════════════════════════════════════════════════"
+             console = "  IIS — Intelligent Isolated Station  ·  Mission Simulation v1.0"
+             console = "════════════════════════════════════════════════════════════════════"
+             console = "  ORBITAL ALTITUDE  :  417 km"
+             console = "  CREW              :  6 personnel"
+             console = "  SIMULATION RATE   :  1 simulated minute per 3 seconds"
+             console = "════════════════════════════════════════════════════════════════════"
+             console = _NL_
+             voice   = "Station IIS online. All systems nominal. Beginning mission simulation."
+         }
+
+
+#==================================================================================================================================
+# DEVICES
+#==================================================================================================================================
+
+DEVICE sim_tick                                         # Heartbeat: one tick = one simulated minute
+    DRIVER ClockDriver
+        CONFIG interval = 3s
+
+DEVICE sim_time                                         # Current simulated minute (incremented by the AI engine)
+    DRIVER CellSetDriver
+        CONFIG value = 0
+
+DEVICE solar_output                                     # Solar array output, percent of maximum
+    DRIVER CellSetDriver
+        CONFIG value = 100
+
+DEVICE power_level                                      # Station battery + solar, percent of capacity
+    DRIVER CellSetDriver
+        CONFIG value = 100
+
+DEVICE temperature                                      # Cabin air temperature, degrees Celsius
+    DRIVER CellSetDriver
+        CONFIG value = 22.1
+
+DEVICE co2_ppm                                          # Cabin CO₂ concentration, parts per million
+    DRIVER CellSetDriver
+        CONFIG value = 560
+
+DEVICE o2_level                                         # Cabin oxygen concentration, percent
+    DRIVER CellSetDriver
+        CONFIG value = 21.0
+
+DEVICE console                                          # Detailed text log
+    DRIVER OutputDriver
+
+DEVICE voice                                            # Spoken critical alerts
+    DRIVER SunFreeTTSDriver
+
+
+#----------------------------------------------------------------------------------------------------------------------------------
+# The AI Engine: reads the current simulation minute and applies the scripted mission
+# telemetry for that minute. All five readings are computed before any is posted, ensuring
+# the EventBus delivers a consistent snapshot to every downstream rule.
+#
+# Timeline constants:
+#   Min  6 : Micrometeorite impact — solar drops to 25%
+#   Min 15 : Repair crew begins — solar recovers to 65%
+#   Min 22 : Repair complete   — solar restored to 100%
+#
+SCRIPT station_ai
+    LANGUAGE Java
+    CALL "tick"
+    FROM {
+             public void tick( IRuntime rt )
+             {
+                 int t = ((Number) ((IDevice) rt.get( "sim_time" )).value()).intValue();
+
+                 double solar, power, temp, co2, o2;
+
+                 // Scripted telemetry by simulated minute
+                      if (t ==  1) { solar=100; power=100; temp=22.1; co2= 560; o2=21.0; }
+                 else if (t ==  2) { solar=100; power=100; temp=22.3; co2= 545; o2=21.0; }
+                 else if (t ==  3) { solar=100; power=100; temp=22.5; co2= 535; o2=21.1; }
+                 else if (t ==  4) { solar=100; power=100; temp=22.4; co2= 520; o2=21.1; }
+                 else if (t ==  5) { solar=100; power=100; temp=22.4; co2= 515; o2=21.2; }
+                 else if (t ==  6) { solar= 25; power= 93; temp=22.2; co2= 530; o2=21.0; } // IMPACT
+                 else if (t ==  7) { solar= 25; power= 86; temp=22.0; co2= 555; o2=21.0; }
+                 else if (t ==  8) { solar= 25; power= 79; temp=21.7; co2= 590; o2=20.9; }
+                 else if (t ==  9) { solar= 25; power= 72; temp=21.3; co2= 635; o2=20.8; }
+                 else if (t == 10) { solar= 25; power= 65; temp=20.8; co2= 690; o2=20.7; }
+                 else if (t == 11) { solar= 25; power= 58; temp=20.2; co2= 770; o2=20.5; }
+                 else if (t == 12) { solar= 25; power= 51; temp=19.5; co2= 870; o2=20.4; }
+                 else if (t == 13) { solar= 25; power= 45; temp=18.7; co2= 990; o2=20.2; }
+                 else if (t == 14) { solar= 25; power= 40; temp=17.8; co2=1130; o2=20.1; }
+                 else if (t == 15) { solar= 65; power= 42; temp=17.2; co2=1290; o2=20.0; } // PARTIAL REPAIR
+                 else if (t == 16) { solar= 65; power= 43; temp=16.7; co2=1470; o2=19.8; }
+                 else if (t == 17) { solar= 65; power= 44; temp=16.2; co2=1650; o2=19.6; }
+                 else if (t == 18) { solar= 65; power= 46; temp=15.8; co2=1830; o2=19.4; }
+                 else if (t == 19) { solar= 65; power= 48; temp=15.5; co2=1990; o2=19.2; }
+                 else if (t == 20) { solar= 65; power= 50; temp=15.3; co2=2080; o2=19.1; } // CO₂ PEAK
+                 else if (t == 21) { solar= 65; power= 52; temp=15.5; co2=1960; o2=19.3; }
+                 else if (t == 22) { solar=100; power= 57; temp=15.8; co2=1760; o2=19.4; } // FULL REPAIR
+                 else if (t == 23) { solar=100; power= 64; temp=16.5; co2=1520; o2=19.6; }
+                 else if (t == 24) { solar=100; power= 72; temp=17.4; co2=1250; o2=19.9; }
+                 else if (t == 25) { solar=100; power= 80; temp=18.6; co2= 980; o2=20.2; }
+                 else if (t == 26) { solar=100; power= 87; temp=19.9; co2= 770; o2=20.5; }
+                 else if (t == 27) { solar=100; power= 93; temp=21.1; co2= 630; o2=20.8; }
+                 else if (t == 28) { solar=100; power= 97; temp=21.9; co2= 560; o2=21.0; }
+                 else if (t == 29) { solar=100; power=100; temp=22.3; co2= 535; o2=21.1; }
+                 else if (t == 30) { solar=100; power=100; temp=22.5; co2= 520; o2=21.1; }
+                 else              { solar=100; power=100; temp=22.4; co2= 518; o2=21.1; } // steady state
+
+                 // Post all updates simultaneously — all reads happened above before any write
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "solar_output", solar ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "power_level",  power ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "temperature",  temp  ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "co2_ppm",      co2   ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "o2_level",     o2    ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "sim_time",     (t+1) ) );
+             }
+         }
+
+#==================================================================================================================================
+# RULES
+#==================================================================================================================================
+
+# ─── The heartbeat ────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN sim_tick                                           # Every 3 seconds: advance the simulation
+THEN station_ai
+
+
+# ─── Periodic status reports ──────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN sim_time AND sim_time:mod(5) IS 0 AND sim_time > 0
+THEN console = _NL_
+     console = "┌─ STATUS REPORT ─ min " + sim_time + " ─────────────────────────────────────────────────┐"
+     console = "│  Solar: " + solar_output:format("000.0") + "%   Power: " + power_level:format("00") + "%   Temp: " + temperature:format("000.0") + "°C   CO₂: " + co2_ppm:format("0000") + " ppm   O₂: " + o2_level:format("00.0") + "%  │"
+     console = "└───────────────────────────────────────────────────────────────────────────┘"
+     console = _NL_
+
+
+# ─── Solar array events ───────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN solar_output < 50 AND get("gate"):get("solar_fail", 0) IS 0
+THEN get("gate"):put( "solar_fail", 1 )
+     console = "[SOLAR]        min-" + sim_time + ": Micrometeorite confirmed on array B — output fell to " + solar_output + "%. Because battery is now the primary source, power drain begins."
+     voice   = "Alert. Solar array failure detected. Power generation at " + solar_output + " percent. Switching to battery reserves."
+
+WHEN solar_output > 60 AND solar_output < 90 AND get("gate"):get("solar_partial", 0) IS 0
+THEN get("gate"):put( "solar_partial", 1 )
+     console = "[SOLAR]        min-" + sim_time + ": Repair crew has replaced junction B-7 — solar output climbed to " + solar_output + "%. Because power generation now exceeds minimum threshold, battery drain is reduced."
+     voice   = "Repair crew reports partial success. Solar output at " + solar_output + " percent. Power stabilising."
+
+WHEN solar_output > 95 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("solar_full", 0) IS 0
+THEN get("gate"):put( "solar_full", 1 )
+     console = "[SOLAR]        min-" + sim_time + ": Full solar array nominal at " + solar_output + "%. Because generation now exceeds demand, charging of battery reserves has begun."
+
+
+# ─── Power management ─────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN power_level < 90 AND power_level > 70 AND get("gate"):get("p_watch", 0) IS 0
+THEN get("gate"):put( "p_watch", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery at " + power_level:format("##") + "% — because solar input is at " + solar_output + "%, reserves are being consumed. Monitoring trajectory."
+
+WHEN power_level < 70 AND get("gate"):get("p_shedding", 0) IS 0
+THEN get("gate"):put( "p_shedding", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery at " + power_level:format("##") + "% — because solar deficit is sustained, initiating load shedding AMBER. Science module, gym, and entertainment systems offline."
+     voice   = "Power conservation mode activated. Non-essential systems offline."
+
+WHEN power_level < 52 AND get("gate"):get("p_critical", 0) IS 0
+THEN get("gate"):put( "p_critical", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery at " + power_level:format("##") + "% — CRITICAL threshold crossed. Because heating and CO₂ scrubbers are drawing more than available, both are now throttled."
+     voice   = "Battery critical. Emergency power conservation active. Life support systems throttled."
+
+WHEN power_level < 43 AND get("gate"):get("p_emergency", 0) IS 0
+THEN get("gate"):put( "p_emergency", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery at " + power_level:format("##") + "% — EMERGENCY floor reached. Because further drain risks irreversible cell damage, all non-life-critical loads suspended."
+
+WHEN power_level > 60 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("p_recovering", 0) IS 0
+THEN get("gate"):put( "p_recovering", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery climbing through " + power_level:format("##") + "%. Because solar input now exceeds demand, throttled systems are being progressively restored."
+
+WHEN power_level > 85 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("p_nominal", 0) IS 0
+THEN get("gate"):put( "p_nominal", 1 )
+     console = "[POWER MGMT]   min-" + sim_time + ": Battery at " + power_level:format("##") + "% — within nominal range. Load shedding protocol AMBER has been lifted."
+
+
+# ─── Thermal control ──────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN temperature < 21.0 AND temperature > 19.0 AND get("gate"):get("t_cooling", 0) IS 0
+THEN get("gate"):put( "t_cooling", 1 )
+     console = "[THERMAL]      min-" + sim_time + ": Cabin temperature at " + temperature:format("#0.0") + "°C — because available heating power dropped with battery level, a slow thermal descent has begun."
+
+WHEN temperature < 19.0 AND temperature > 17.5 AND get("gate"):get("t_warning", 0) IS 0
+THEN get("gate"):put( "t_warning", 1 )
+     console = "[THERMAL]      min-" + sim_time + ": Temperature at " + temperature:format("#0.0") + "°C — because power budget is " + power_level:format("##") + "%, heaters cannot maintain set-point. Crew advised to don thermal survival suits."
+     voice   = "Warning. Cabin temperature falling below safe threshold. Don thermal suits."
+
+WHEN temperature < 17.0 AND get("gate"):get("t_critical", 0) IS 0
+THEN get("gate"):put( "t_critical", 1 )
+     console = "[THERMAL]      min-" + sim_time + ": Temperature at " + temperature:format("#0.0") + "°C — hypothermia risk. Because heating is at minimum, all crew confined to insulated mid-section. Activities suspended."
+
+WHEN temperature > 18.5 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("t_recovering", 0) IS 0
+THEN get("gate"):put( "t_recovering", 1 )
+     console = "[THERMAL]      min-" + sim_time + ": Temperature rising through " + temperature:format("#0.0") + "°C — because heating capacity has been restored alongside power recovery, thermal ascent is confirmed."
+
+WHEN temperature > 21.0 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("t_nominal", 0) IS 0
+THEN get("gate"):put( "t_nominal", 1 )
+     console = "[THERMAL]      min-" + sim_time + ": Cabin temperature nominal at " + temperature:format("#0.0") + "°C. Thermal control systems confirm stable equilibrium."
+
+
+# ─── Life support: carbon dioxide ─────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN co2_ppm > 700 AND co2_ppm < 1000 AND get("gate"):get("co2_elevated", 0) IS 0
+THEN get("gate"):put( "co2_elevated", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ at " + co2_ppm:format("####") + " ppm — elevated. Because scrubber throughput is limited by power budget, amine cartridge cycling has been increased within available wattage."
+
+WHEN co2_ppm > 1000 AND get("gate"):get("co2_warning", 0) IS 0
+THEN get("gate"):put( "co2_warning", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ at " + co2_ppm:format("####") + " ppm — WARNING. Because scrubber fans cannot reach full speed under current power constraints, primary CO₂ removal cannisters are being pre-activated."
+
+WHEN co2_ppm > 1600 AND get("gate"):get("co2_danger", 0) IS 0
+THEN get("gate"):put( "co2_danger", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ at " + co2_ppm:format("####") + " ppm — DANGEROUS. Because scrubbers remain throttled, emergency LiOH backup cannisters have been deployed. Crew instructed to limit physical exertion."
+     voice   = "Danger. Carbon dioxide concentration hazardous. Emergency scrubbing activated."
+
+WHEN co2_ppm > 2000 AND get("gate"):get("co2_critical", 0) IS 0
+THEN get("gate"):put( "co2_critical", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ at " + co2_ppm:format("####") + " ppm — CRITICAL. Because all passive measures are saturated, crew have been issued full masks. Awaiting power restoration."
+
+WHEN co2_ppm < 1100 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("co2_improving", 0) IS 0
+THEN get("gate"):put( "co2_improving", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ descending through " + co2_ppm:format("####") + " ppm — because scrubbers are responding to the improved power budget, CO₂ removal rate now exceeds crew output."
+
+WHEN co2_ppm < 700 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("co2_nominal", 0) IS 0
+THEN get("gate"):put( "co2_nominal", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": CO₂ nominal at " + co2_ppm:format("####") + " ppm. Crew masks removed. Atmospheric composition confirmed within OSHA 18000 limits."
+
+
+# ─── Life support: oxygen ─────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN o2_level < 20.8 AND o2_level > 20.2 AND get("gate"):get("o2_watch", 0) IS 0
+THEN get("gate"):put( "o2_watch", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": O₂ at " + o2_level:format("#0.0") + "% — slightly low. Because electrolysis is constrained by power shortage, O₂ replenishment rate has dropped below consumption. Monitoring."
+
+WHEN o2_level < 20.1 AND o2_level > 19.5 AND get("gate"):get("o2_warning", 0) IS 0
+THEN get("gate"):put( "o2_warning", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": O₂ at " + o2_level:format("#0.0") + "% — WARNING. Because power cannot sustain full electrolysis, emergency O₂ reserves are being drawn. Physical exertion prohibited."
+     voice   = "Warning. Oxygen level below minimum safe threshold. Reserve tanks online."
+
+WHEN o2_level < 19.5 AND get("gate"):get("o2_critical", 0) IS 0
+THEN get("gate"):put( "o2_critical", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": O₂ CRITICAL at " + o2_level:format("#0.0") + "% — because both electrolysis and reserve feeds are insufficient at this power level, emergency O₂ packs have been distributed to all crew."
+
+WHEN o2_level > 20.3 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("o2_recovering", 0) IS 0
+THEN get("gate"):put( "o2_recovering", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": O₂ recovering to " + o2_level:format("#0.0") + "% — because electrolysis has been fully restored with the power budget, O₂ reserves are being replenished."
+
+WHEN o2_level > 20.8 AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("o2_nominal", 0) IS 0
+THEN get("gate"):put( "o2_nominal", 1 )
+     console = "[LIFE-SUPPORT] min-" + sim_time + ": O₂ nominal at " + o2_level:format("#0.0") + "%. Emergency reserve tanks sealed and logged for inspection."
+
+
+# ─── All clear ────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+
+WHEN solar_output > 95 AND power_level > 90 AND temperature > 21.0 AND co2_ppm < 600 AND o2_level > 20.8
+     AND get("gate"):get("solar_fail", 0) IS 1 AND get("gate"):get("all_clear", 0) IS 0
+THEN get("gate"):put( "all_clear", 1 )
+     console = "\n"
+     console = "════════════════════════════════════════════════════════════════════"
+     console = "  [COMMANDER]  min-" + sim_time + ": INCIDENT RESOLVED."
+     console = "  Because all subsystems have returned to nominal parameters, the"
+     console = "  emergency stand-down order is now in effect. Logging to flight"
+     console = "  records. Crew commended. Repair EVA team stood down."
+     console = "════════════════════════════════════════════════════════════════════"
+     console = "\n"
+     voice   = "All systems nominal. Emergency stand-down. Station is go. Well done."
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -83,6 +83,11 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
+DEVICE log
+    DRIVER FileDriver
+        CONFIG
+            file SET "{*home.tmp*}serial_test.log\n"
+
 # ---------------------------------------------------------------------------------------------------------------------------------
 # EXAMPLE 1: AUTO Mode (Default) - Continuous Reading
 # ---------------------------------------------------------------------------------------------------------------------------------
@@ -92,13 +97,13 @@
 DEVICE ArduinoTemp
     DRIVER SerialDriver
         CONFIG
-            port     AS "/dev/ttyUSB0"   # Change this to your port
-            baudrate AS 9600
+            port     SET "/dev/ttyUSB0"   # Change this to your port
+            baudrate SET 9600
             # interval is not specified, so AUTO mode is used (default)
 
-RULE
-    WHEN ArduinoTemp CHANGED
-    THEN log( "New temperature received: " + ArduinoTemp )
+
+WHEN ArduinoTemp
+THEN log SET "New temperature received: " + ArduinoTemp
 
 # ---------------------------------------------------------------------------------------------------------------------------------
 # EXAMPLE 2: INTERVAL Mode - Periodic Reading
@@ -109,26 +114,12 @@ RULE
 DEVICE SerialSensor
     DRIVER SerialDriver
         CONFIG
-            port     AS "/dev/ttyACM0"   # Change this to your port
-            baudrate AS 115200
-            interval AS 2s               # Read every 2000ms (2 seconds)
+            port     SET "/dev/ttyACM0"   # Change this to your port
+            baudrate SET 115_200          # Use '_' to improve readability
+            interval SET 2s               # Read every 2000ms (2 seconds)
 
-RULE
-    WHEN SerialSensor CHANGED
-    THEN log( "Sensor value (read every 2s): " + SerialSensor )
 
-# ---------------------------------------------------------------------------------------------------------------------------------
-# EXAMPLE 3: INTERVAL Mode - Slow Polling for Battery-Powered Devices
-# ---------------------------------------------------------------------------------------------------------------------------------
-# For battery-powered or low-bandwidth devices, use longer intervals.
+WHEN SerialSensor
+THEN log SET "Sensor value: " + SerialSensor
 
-DEVICE BatteryDevice
-    DRIVER SerialDriver
-        CONFIG
-            port     AS "/dev/ttyUSB1"
-            baudrate AS 9600
-            interval AS 10_000           # Read every 10 seconds (10000ms)
-
-RULE
-    WHEN BatteryDevice CHANGED
-    THEN log( "Battery device reading: " + BatteryDevice )
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

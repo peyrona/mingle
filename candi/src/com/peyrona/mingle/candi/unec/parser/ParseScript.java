@@ -47,7 +47,8 @@ public final class ParseScript extends ParseBase
         List<Lexeme> lstTokenFrom = getClauseContents( "FROM" );
 
         name      = findName();
-        isInline  = UtilColls.isNotEmpty( lstTokenFrom ) && lstTokenFrom.get(0).isInline();   // Before 'callName' because 'callName' uses it
+        Lexeme firstMeaningful = UtilColls.find( lstTokenFrom, (lex) -> ! lex.isDelimiter() );
+        isInline  = (firstMeaningful != null) && firstMeaningful.isInline();               // Before 'callName' because 'callName' uses it
         language  = getLang( getClauseContents( "language" ) );                               // Before 'from' because 'from' uses it
         callName  = getCall( getClauseContents( "call"     ) );                               // This must preserve the string-case
         from      = getFrom( getClauseContents( "from"     ) );
@@ -207,8 +208,21 @@ public final class ParseScript extends ParseBase
             }
         }
         else
-        {   // TODO; esto no va bien
-            addErrors( lexSource.line(), 0, Arrays.asList( compiled.getErrors() ) );
+        {
+            // lexSource.line() is the line of the closing '}' (Lexer sets it after readUntil).
+            // To get the line of the first content character we subtract the number of newlines
+            // inside the block.  Single-line blocks have zero newlines, so firstContentLine ==
+            // closingLine, which is correct (opening and closing brace are on the same line).
+            String content         = lexSource.text();
+            int    contentNewlines = 0;
+
+            for( int n = 0; n < content.length(); n++ )
+                if( content.charAt( n ) == '\n' ) contentNewlines++;
+
+            int firstContentLine = (contentNewlines == 0) ? lexSource.line()
+                                                           : lexSource.line() - contentNewlines - 1;
+
+            addErrors( firstContentLine, 0, Arrays.asList( compiled.getErrors() ) );
         }
 
         return code;

@@ -1,5 +1,6 @@
 package com.peyrona.mingle.menu;
 
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.menu.core.IProcessManager.ProcessInfo;
 import com.peyrona.mingle.menu.core.Orchestrator;
 import com.peyrona.mingle.menu.util.UtilSys;
@@ -10,6 +11,8 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.io.RandomAccessFile;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.LinkedList;
@@ -32,6 +35,9 @@ final class Menu
 
     void run( String... args )
     {
+        if( Main.getIdleTimeoutHours() > 0 )
+            startIdleWatchdog( Main.getIdleTimeoutHours() );
+
         String option = "";
 
         if( args.length > 0 )
@@ -116,6 +122,46 @@ final class Menu
     }
 
     //------------------------------------------------------------------------//
+    // IDLE WATCHDOG
+    //------------------------------------------------------------------------//
+
+    /**
+     * Starts a daemon thread that exits the application after the specified number
+     * of idle hours with no user input. Intended for unattended SSH sessions.
+     *
+     * @param idleHours Maximum idle time in hours before auto-exit (must be &gt; 0).
+     */
+    private void startIdleWatchdog( int idleHours )
+    {
+        long timeoutMs = idleHours * 3_600_000L;
+
+        Thread watchdog = new Thread( () ->
+        {
+            while( true )
+            {
+                try
+                {
+                    Thread.sleep( 60_000 );   // Check once per minute
+
+                    if( System.currentTimeMillis() - UtilUI.getLastActivityMs() >= timeoutMs )
+                    {
+                        System.out.println( "\nNo input for " + idleHours + " hour(s). Exiting." );
+                        System.exit( 0 );
+                    }
+                }
+                catch( InterruptedException e )
+                {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }, "Menu-Idle-Watchdog" );
+
+        watchdog.setDaemon( true );
+        watchdog.start();
+    }
+
+    //------------------------------------------------------------------------//
     // LAUNCHER FUNCTIONS
     //------------------------------------------------------------------------//
 
@@ -142,7 +188,7 @@ final class Menu
         {
             if( Main.isInteractive() )
             {
-                String fileName = UtilUI.readFileName( "Une file(s) to compile ('*' and '?' allowed) or [Enter] to cancel:" );
+                String fileName = UtilUI.readFileName( "Une file(s) to compile ('*' and '?' allowed) or [Enter] to cancel:", null );
 
                 if( fileName.isEmpty() )
                     return;
@@ -163,7 +209,7 @@ final class Menu
         if( Main.isInteractive() && isFileNeeded( args ) )
         {
             System.out.println( "'.model' can be provided or not. Can be taken also from 'config.json'. See help for more info." );
-            String fileName = UtilUI.readFileName( "Provide '.model' file, or just [Enter] for no model: " );
+            String fileName = UtilUI.readFileName( "Provide '.model' file, or just [Enter] for no model: ", "model" );
 
             if( ! fileName.isEmpty() )
                 args = append( args, fileName );
@@ -174,18 +220,17 @@ final class Menu
         switch( mode )
         {
             case "lowram":
-                lstOpts.add( "-XX:+UseG1GC" );
-                lstOpts.add( "-XX:+UseStringDeduplication" );
-                lstOpts.add( "-XX:+UseCompressedOops"      );
+                lstOpts.add( "-XX:+UseSerialGC" );
+                lstOpts.add( "-XX:+UseCompressedOops" );
                 break;
 
             case "debug":
-                lstOpts.add( "-XX:+UseG1GC" );
+                lstOpts.add( "-XX:+UseSerialGC" );
                 lstOpts.add( "-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=0.0.0.0:8800" );
                 break;
 
             case "profile":
-                lstOpts.add( "-XX:+UseG1GC" );
+                lstOpts.add( "-XX:+UseSerialGC" );
                 lstOpts.add( "-Dcom.sun.management.jmxremote"                    );
                 lstOpts.add( "-Dcom.sun.management.jmxremote.port=1099"          );
                 lstOpts.add( "-Dcom.sun.management.jmxremote.ssl=false"          );
@@ -195,12 +240,9 @@ final class Menu
                 break;
 
             case "resident":    // Configure for long-running background service
-                lstOpts.add( "-XX:+UseG1GC" );
+                lstOpts.add( "-XX:+UseSerialGC" );
                 lstOpts.add( "-Xms16m" );                           // Initial heap
                 lstOpts.add( "-Xmx512m" );                          // Max heap
-                lstOpts.add( "-XX:+UseG1GC" );                      // Modern GC
-                lstOpts.add( "-XX:MaxGCPauseMillis=200" );          // Responsive GC
-                lstOpts.add( "-XX:+UseStringDeduplication" );       // Memory efficiency
                 lstOpts.add( "-Djava.awt.headless=true" );          // No GUI components
                 break;
 
@@ -350,7 +392,8 @@ final class Menu
             for( int n = 0; n < lstProcs.size(); n++ )
             {
                 ProcessInfo proc = lstProcs.get( n );
-                String      cmd = (proc.command.length() <= 60) ? proc.command : (proc.command.substring( 0, 57 ) + "...");
+                String      cmd = proc.command;
+                            cmd = (cmd.length() <= 60) ? cmd : ("..."+ cmd.substring( cmd.length() - 57 ));
 
                 System.out.println( (char)('A' + n) +". "+
                                     UtilUI.rightPad( proc.jar   , ' ', 8 ) +
@@ -719,6 +762,11 @@ final class Menu
                              "--------------\n" +
                              "H - Help      : Show this help screen\n" +
                              "X - Exit      : Exit the menu (with process cleanup option)\n" +
+                             "\n"+
+                             "Options to configure this app\n" +
+                             "-----------------------------\n" +
+                             "-nu   : Skip update check (no update)\n" +
+                             "-idle : Hours being idle to auto exit (0 -> never, default 5)\n" +
                              "\n" +
                              "CONFIGURATION:\n" +
                              "--------------\n" +
@@ -737,6 +785,8 @@ final class Menu
                              "menu s file.model   # Run Stick in default mode\n" +
                              "menu i              # Run Stick with remote debugging enabled\n" +
                              "menu a file.une     # Compile Une file with Tape\n" +
+                             "menu -nu            # Skip update check (no update)\n" +
+                             "menu -nu s          # Skip update check and launch Stick\n" +
                              "\n" +
                              "LOG VIEWER (V option):\n" +
                              "---------------------\n" +
@@ -800,9 +850,31 @@ final class Menu
 
     private void showMainMenu()
     {
+        String sHost;
+
+        try
+        {
+            sHost = InetAddress.getLocalHost().getHostName();
+        }
+        catch( IOException ioe )
+        {
+            try
+            {
+                sHost = InetAddress.getLocalHost().getHostAddress();
+            }
+            catch( UnknownHostException ex )
+            {
+                sHost = "unknown";
+            }
+        }
+
+        sHost = "::: Mingle Menu ("+  sHost +"):::";
+        sHost = (sHost.length() > 22) ? sHost.substring( 0, 21 ) : sHost;
+        sHost = UtilStr.leftPad( sHost, ' ', 48 - (sHost.length() / 2) );
+
         UtilUI.clearScreen();
         System.out.println( "================================================" );
-        System.out.println( "            ::: Mingle Menu :::" );
+        System.out.println( sHost );
         System.out.println( "================================================" );
 
         if( orchestrator.isProcessManagerAvailable() )
@@ -825,8 +897,8 @@ final class Menu
             System.out.println( "------------------------------------------------" );
         }
 
-        System.out.println( " O - Info.......System information" );
-        System.out.println( " E - Services...Service Manager" );
+        System.out.println( " O - Info........System information" );
+        System.out.println( " E - Services....Service Manager" );
         System.out.println( "------------------------------------------------" );
         System.out.println( " H - Help" );
         System.out.println( " X - Exit" );

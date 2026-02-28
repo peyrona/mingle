@@ -35,7 +35,7 @@ public class GTable<T> extends JTable
     public GTable( GTableModel<T> model, int... anColWidths )
     {
         if( model == null )
-            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+            throw new MingleException( MingleException.INVALID_ARGUMENTS, model );
 
         this.model = model;
 

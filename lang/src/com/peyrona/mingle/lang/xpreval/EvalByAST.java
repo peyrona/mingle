@@ -235,14 +235,7 @@ final class EvalByAST
 
         if( executor == null )  // Because the expression does not have futures, it can be evaluated now -------------------------------------
         {
-            if( root == null )
-                throw new MingleException( "Cannot evaluate expression: AST root is null (expression has errors)" );
-
-            result = root.eval( mapVars, hasAllVars );
-
-            // Convert to boolean if expression is boolean type and result isn't already Boolean
-            if( isBoolean && (result != null) && ! (result instanceof Boolean) )
-                result = UtilType.isTruthy( result );
+            result = _eval_();
 
             if( (result != null) && (onSolved != null) )            // onSolved is allowed to be null when the expression has no futures
                 onSolved.accept( result );
@@ -265,14 +258,7 @@ final class EvalByAST
             }
             else                     // If the eval is already initialized...
             {
-                if( root == null )
-                    throw new MingleException( "Cannot evaluate expression: AST root is null (expression has errors)" );
-
-                result = root.eval( mapVars, hasAllVars );
-
-                // Convert to boolean if expression is boolean type and result isn't already Boolean
-                if( isBoolean && (result != null) && ! (result instanceof Boolean) )
-                    result = UtilType.isTruthy( result );
+                result = _eval_();
 
                 if( result != null )
                 {
@@ -742,9 +728,12 @@ final class EvalByAST
             if( "list".equals( fn ) ) return list.class;
             if( "pair".equals( fn ) ) return pair.class;
 
-            // For other functions, try to infer from return type
+            // For other functions, try to infer from return type.
+            // Object.class means the return type is unknown at compile time (e.g. get()),
+            // so we return null to skip method validation rather than wrongly reject it.
             int nArgs = (node.getFnArgs() == null) ? 0 : node.getFnArgs().size();
-            return StdXprFns.getReturnType( token.text(), nArgs );
+            Class<?> rt = StdXprFns.getReturnType( token.text(), nArgs );
+            return (rt == Object.class) ? null : rt;
         }
 
         // Chained ':' — infer from the right-side method's return type
@@ -762,9 +751,15 @@ final class EvalByAST
                     boolean isOnExtended = StdXprFns.isExtendedType( leftType );
 
                     if( isOnExtended )
-                        return getMethodReturnType( leftType, methodToken.text(), nArgs );
+                    {
+                        Class<?> rt = getMethodReturnType( leftType, methodToken.text(), nArgs );
+                        return (rt == Object.class) ? null : rt;
+                    }
                     else
-                        return StdXprFns.getReturnType( methodToken.text(), nArgs + 1, false );
+                    {
+                        Class<?> rt = StdXprFns.getReturnType( methodToken.text(), nArgs + 1, false );
+                        return (rt == Object.class) ? null : rt;
+                    }
                 }
             }
         }
@@ -1154,6 +1149,20 @@ final class EvalByAST
                 Thread.currentThread().interrupt();
             }
         }
+    }
+
+    private Object _eval_()
+    {
+        if( root == null )
+            throw new MingleException( "Cannot evaluate expression: AST root is null because expression has errors" );
+
+        Object result = root.eval( mapVars, hasAllVars );
+
+        // Convert to boolean if expression is boolean type and result isn't already Boolean
+        if( isBoolean && (result != null) && ! (result instanceof Boolean) )
+            result = UtilType.isTruthy( result );
+
+        return result;
     }
 
     //------------------------------------------------------------------------//

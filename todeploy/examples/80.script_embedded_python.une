@@ -34,7 +34,7 @@ print( "Time is: "+ str( LocalTime.now() ) )
 
 SCRIPT Python_2
    ONSTART
-   LANGUAGE python
+   LANGUAGE Python
    FROM {
 
 def doIt():

@@ -2,7 +2,6 @@
 package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
-import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
@@ -14,7 +13,6 @@ import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
-import com.peyrona.mingle.lang.lexer.Language;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
@@ -76,7 +74,7 @@ final class HttpServer
      * @param keystorePassword Password for the keystore
      * @throws Exception if there's an error setting up the server
      */
-    HttpServer( String host, int httpPort, int maxSessions, String allowed, int timeout, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
+    HttpServer( String host, int httpPort, String allowed, int timeout, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
     {
         ServerConfig.setClientIPScope( allowed );    // Store in shared configuration
 
@@ -130,7 +128,8 @@ final class HttpServer
                       "Dashboard's folder : " + Util.getBoardsDir().getCanonicalPath() + "/\n" +
                       "Serving files from : " + Util.getServedFilesDir().getCanonicalPath() + "/\n" +
                       "    * at context   : " + sServer + "user-files/\n" +
-                      "    * UI manager   : " + sServer + "file_mgr/index.html\n";
+                      "    * UI manager   : " + sServer + "file_mgr/index.html\n"+
+                      "Note: 'localhost' can be used when running locally.\n";
 
         if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
             logger.say( "HTTPS services available at port " + httpsPort + '\n' );
@@ -146,7 +145,16 @@ final class HttpServer
         server.start();
 
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern( "yyyy-MM-dd HH:mm:ss" );
-        String msg = "["+ LocalDateTime.now().format( formatter ) +"] Gum started...";
+        String            sNow      = '[' + LocalDateTime.now().format( formatter ) +']';
+
+        Runtime runtime   = Runtime.getRuntime();
+        long    nMaxRAM   = runtime.maxMemory()   / UtilUnit.MEGA_BYTE;
+        long    nTotRAM   = runtime.totalMemory() / UtilUnit.MEGA_BYTE;
+        long    nUsedRAM  = (runtime.totalMemory() - runtime.freeMemory()) / UtilUnit.MEGA_BYTE;
+
+        String  msg = sNow + " JVM RAM: "+ nUsedRAM +" Mb used of "+ nTotRAM +" Mb (Max to alloc: "+ nMaxRAM +" Mb)\n"+
+                      sNow + " Gum started...";
+
         logger.say( msg );
 
         server.join();
@@ -349,13 +357,10 @@ final class HttpServer
         context.addServlet( uploadHolder, "/*" );
 
         uploadHolder.getRegistration().setMultipartConfig(
-            new MultipartConfigElement(
-                System.getProperty( "java.io.tmpdir" ),  // Temp directory
-                100 * 1024 * 1024,                        // Max file size: 100MB
-                150 * 1024 * 1024,                        // Max request size: 150MB
-                1024 * 1024                               // File size threshold: 1MB
-            )
-        );
+            new MultipartConfigElement( System.getProperty( "java.io.tmpdir" ),
+                                        100 * UtilUnit.MEGA_BYTE,
+                                        150 * UtilUnit.MEGA_BYTE,
+                                          1 * UtilUnit.MEGA_BYTE ) );
 
         return context;
     }
@@ -459,30 +464,52 @@ final class HttpServer
                 if( contentType != null && contentType.startsWith( "application/json" ) )
                 {
                     int    length = request.getContentLength();    // getContentLength() returns -1 if the length is unknown
-                    byte[] buffer = new byte[Math.max( length, 1024)];
+                    byte[] buffer;
 
-                    try( InputStream is = request.getInputStream() )
+                    if( length > 0 )
                     {
-                        int bytesRead = 0;
-                        int totalRead = 0;
+                        buffer = new byte[length];
 
-                        while( totalRead < length && bytesRead != -1 )
+                        try( InputStream is = request.getInputStream() )
                         {
-                            bytesRead = is.read( buffer, totalRead, length - totalRead );
-                            if( bytesRead > 0 )
-                                totalRead += bytesRead;
+                            int bytesRead = 0;
+                            int totalRead = 0;
+
+                            while( totalRead < length && bytesRead != -1 )
+                            {
+                                bytesRead = is.read( buffer, totalRead, length - totalRead );
+
+                                if( bytesRead > 0 )
+                                    totalRead += bytesRead;
+                            }
+
+                            if( totalRead != length )
+                                throw new IOException( "Incomplete request data received: expected " + length + ", got " + totalRead );
+                        }
+                    }
+                    else    // Unknown/chunked content - read all available
+                    {
+                        try( InputStream is = request.getInputStream();
+                             java.io.ByteArrayOutputStream baos = new java.io.ByteArrayOutputStream() )
+                        {
+                            byte[] temp = new byte[4096];
+                            int    bytesRead;
+
+                            while( (bytesRead = is.read( temp )) != -1 )
+                                baos.write( temp, 0, bytesRead );
+
+                            buffer = baos.toByteArray();
                         }
 
-                        if( length > -1 && totalRead != length )
-                            throw new IOException( "Incomplete request data received" );
+                        if( buffer.length == 0 )
+                            throw new IOException( "No request data received" );
                     }
 
-                    String   sj   = new String( buffer, StandardCharsets.UTF_8 );
-                    UtilJson uj   = new UtilJson( sj );
-                    String   user = uj.getString( "username", null );
-                    String   pwd  = uj.getString( "password", null );
+                    String   sj  = new String( buffer, StandardCharsets.UTF_8 );
+                    UtilJson uj  = new UtilJson( sj );
+                    String   pwd = uj.getString( "password", null );
 
-                    processLogin( request, response, user, pwd );
+                    processLogin( request, response, pwd );
                 }
                 else
                 {
@@ -497,16 +524,15 @@ final class HttpServer
             }
         }
 
-        private void processLogin( HttpServletRequest request, HttpServletResponse response,
-                                  String username, String password ) throws IOException
+        private void processLogin( HttpServletRequest request, HttpServletResponse response, String password ) throws IOException
         {
             String  requestedWith = request.getHeader( "X-Requested-With" );
             boolean isAJAXRequest = "XMLHttpRequest".equals( requestedWith );
 
-            if( isAJAXRequest && isAdmin( username, password ) )
+            if( isAJAXRequest && isMaster( password ) )
             {
                 HttpSession session = request.getSession( true );
-                session.setAttribute( KEY_USER_ID, username );
+                            session.setAttribute( KEY_USER_ID, "user_logged" );
 
                 response.setStatus( HttpServletResponse.SC_OK );
                 response.setContentType( "application/json" );
@@ -519,40 +545,14 @@ final class HttpServer
             }
         }
 
-        private boolean isAdmin( String username, String password ) throws IOException
+        private boolean isMaster( String password ) throws IOException
         {
-            return "admin".equalsIgnoreCase( authenticateUser( username, password ) );
-        }
+            String sMasterPwd = UtilSys.getConfig().get( "monitoring", "master_password", "" );
 
-        private String authenticateUser( String username, String password ) throws IOException
-        {
-            File fUsers = new File( Util.getServedFilesDir(), "users.json" );
+            if( UtilStr.isEmpty( sMasterPwd ) )
+                return true;
 
-            if( UtilIO.canRead( fUsers ) != null )
-                return null;
-
-            String    sJSON  = UtilIO.getAsText( fUsers );
-            JsonArray jArray = UtilJson.parse( sJSON ).asArray();
-
-            for( int n = 0; n < jArray.size(); n++ )
-            {
-                JsonObject jObj = jArray.get( n ).asObject();
-                String     name = jObj.getString( "user", "" );
-                String     pwd  = jObj.getString( "pwd" , "" );
-
-                if( Language.hasMacro( pwd ) )
-                {
-                    LocalDateTime ldt = LocalDateTime.now();
-
-                    pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "d" ), String.valueOf( ldt.getDayOfMonth() ) );
-                    pwd = UtilStr.replaceAll( pwd, Language.buildMacro( "h" ), String.valueOf( ldt.getHour()       ) );
-                }
-
-                if( name.equalsIgnoreCase( username ) && pwd.equals( password ) )
-                    return jObj.getString( "role", "" );
-            }
-
-            return null;
+            return "admin".equalsIgnoreCase( password );
         }
     }
 
@@ -841,7 +841,7 @@ final class HttpServer
                     try
                     {
                         session = httpRequest.getSession( true );
-                        session.setAttribute( KEY_USER_ID, "local_client" );
+                        session.setAttribute( KEY_USER_ID, "user_local" );
                         isAllowed = true;
                     }
                     catch( IllegalStateException e )
@@ -1015,33 +1015,35 @@ final class HttpServer
         {
             String sURI = request.getRequestURI();
 
-            if( sURI.endsWith( ".js.map" ) ||      // Ignore JS debugging file,
-                sURI.endsWith( "favicon.ico" ) )   // also this stupidity.
+            // Ignore common non-error 404s
+            if( sURI.endsWith( ".js.map"     ) ||    // Ignore JS debugging file
+                sURI.endsWith( "favicon.ico" ) )     // Ignore favicon requests
                 return;
 
             Throwable cause  = (Throwable) request.getAttribute( "javax.servlet.error.exception"   );
             Integer   status = (Integer)   request.getAttribute( "javax.servlet.error.status_code" );
 
-            logger.log( Level.SEVERE, "=== ERROR HANDLER TRIGGERED ===\n"+
-                                      "Target: " + target    +'\n'+
-                                      "Status: " + status    +'\n'+
-                                      "Request URI: " + sURI +'\n' );
+            // Determine log level based on status code
+            Level logLevel = (status != null && status == 404) ? Level.WARNING : Level.SEVERE;
+
+            logger.log( logLevel, "=== ERROR HANDLER TRIGGERED ===\n"+
+                                  "Target:  "+ target  +'\n'+
+                                  "Status:  "+ status  +'\n'+
+                                  "Request: "+ request +'\n' );
 
             if( cause != null )
-                logger.log( Level.SEVERE, cause, "Exception: " + cause.getClass().getName() );
+                logger.log( logLevel, cause, "Exception: " + cause.getClass().getName() );
 
             cause = (Throwable) request.getAttribute( "javax.servlet.error.exception" );
 
-            if( cause != null )  logger.log( Level.SEVERE, cause, "CRITICAL SERVER ERROR:\n" );
-            else                 logger.log( Level.SEVERE, "Server error with no exception attached. Target: " + target +", Status: "+ status );
+            if( cause != null )  logger.log( logLevel, cause, "ERROR:\n" );
+            else                 logger.log( logLevel, "Server error with no exception attached. Target: " + target +", Status: "+ status );
 
             if( ! response.isCommitted() )
             {
                 response.setContentType( "application/json" );
-
                 String errorMsg = (cause != null) ? cause.getMessage() : "Unknown error on target: " + target +", Status: "+ status;
-
-                response.getWriter().write( "{\"error\":"+ Json.value( errorMsg ).toString() + "}" );   // Safe JSON quoting
+                response.getWriter().write( "{\"error\":"+ Json.value( errorMsg ).toString() + "}" );
             }
 
             baseRequest.setHandled( true );

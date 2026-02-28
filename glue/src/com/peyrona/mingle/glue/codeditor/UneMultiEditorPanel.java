@@ -143,7 +143,7 @@ public final class UneMultiEditorPanel extends JPanel
 
         UtilSys.executor( true )
                .delay( 250 )
-               .execute( () -> // Dirty, but works (I tried many other things but none worked)
+               .execute( () -> SwingUtilities.invokeLater( () -> // Ensures Swing operations run on the EDT
                                 {
                                     JFrame parent = JTools.getParent( this, JFrame.class );
 
@@ -173,7 +173,7 @@ public final class UneMultiEditorPanel extends JPanel
 
                                     if( tabbedPane.getTabCount() == 0 )     // There were no saved file list
                                         onOpen();
-                                } );
+                                } ) );
 
 
         SwingUtilities.invokeLater( () ->
@@ -402,7 +402,7 @@ public final class UneMultiEditorPanel extends JPanel
             futureSave.set( UtilSys.executor( false )
                                    .delay( 5 * UtilUnit.MINUTE )
                                    .rate( 5 * UtilUnit.MINUTE )
-                                   .execute( () -> onSave( null ) ) );
+                                   .execute( () -> SwingUtilities.invokeLater( () -> onSave( null ) ) ) );
         }
     }
 
@@ -572,6 +572,7 @@ public final class UneMultiEditorPanel extends JPanel
         }
 
         SettingsManager.setEditorFiles( jaEdit );
+        SettingsManager.setEditorFocused( tabbedPane.getSelectedIndex() );
     }
 
     private void restoreOpenedFiles()
@@ -595,7 +596,15 @@ public final class UneMultiEditorPanel extends JPanel
                                     } );
 
             if( tabbedPane.getTabCount() > 0 )
-                tabbedPane.setSelectedIndex( 0 );
+            {
+                // Must be deferred: GTabbedPane.addTab() posts invokeLater calls that
+                // select the newly added tab, so we need to run after those complete.
+                SwingUtilities.invokeLater( () ->
+                {
+                    int focused = Math.min( SettingsManager.getEditorFocused(), tabbedPane.getTabCount() - 1 );
+                    tabbedPane.setSelectedIndex( Math.max( 0, focused ) );
+                } );
+            }
         }
         catch( Exception exc )
         {

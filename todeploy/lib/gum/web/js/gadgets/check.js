@@ -12,9 +12,11 @@ class GumCheck extends GumGadget
             this.width  = gum.isUsingFreeLayout() ? 64 : "100%";      // Rewritten from parent
             this.height = gum.isUsingFreeLayout() ? 28 : "100%";      // Rewritten from parent
 
-            this.exen     = null;
-            this.device   = null;
-            this.icon_on  = 'default_on.png';
+            this.exen           = null;
+            this.device         = null;
+            this.accessor       = null;     // Key (for pair) or 1-based index (for list)
+            this._devValueType_ = null;     // "list", "pair", or "scalar" — auto-detected, not persisted
+            this.icon_on        = 'default_on.png';
             this.icon_off = 'default_off.png';
             this.actuable = false;     // Can toogle (on click) its associated device state?
         }
@@ -47,11 +49,13 @@ class GumCheck extends GumGadget
         if( isOngoing )
             return this;
 
-        let img = '<img id="'+ this.id +'"src="images/'+ this.icon_off +'">';
+        let $img = GumGadget.cloneTemplate( "tpl-check" );
+        $img.attr( 'id', this.id )
+            .attr( 'src', 'images/' + this.icon_off );
 
         this.getContentArea()
             .empty()
-            .append( img );
+            .append( $img );
 
         $('#'+this.id).attr('width' , Math.max( this.getContentArea().width() , 16 ))
                       .attr('height', Math.max( this.getContentArea().height(), 16 ))
@@ -79,11 +83,18 @@ class GumCheck extends GumGadget
 
             let fn = function( action, payload )
                     {
-                        if( self._isValidValue( "Boolean", payload.value, payload.name ) )
+                        if( ! self._devValueType_ )
+                            self._devValueType_ = self._detectValueType_( payload.value );
+
+                        let xValue = self._resolveAccessor_( payload.value, self.accessor, payload.name );
+
+                        if( xValue !== null && self._isValidValue( "Boolean", xValue, payload.name ) )
                         {
                             self._hasErrors( false );
-                            $id.attr('src', (payload.value ? sOn : sOff) );
+                            $id.attr('src', (xValue ? sOn : sOff) );
                         }
+
+                        self._executeUserCode_( action, payload );
                     };
 
             this._addListener( this.exen, this.device, fn );

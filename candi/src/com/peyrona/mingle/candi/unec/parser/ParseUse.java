@@ -206,8 +206,10 @@ public final class ParseUse extends ParseBase
                                UtilColls.getAt( before, -1 ).isQuote();
 
             this.before = Collections.unmodifiableList( (isQuoted ? before.subList( 1, before.size()-1 ) : before) );
-            this.after  = Collections.unmodifiableList( after );
-            this.hash   = Lexer.toCode( before ).toUpperCase();    // Better (it will be faster most part of the times) toUpper than toLower
+
+            this.after = Collections.unmodifiableList( after );
+
+            this.hash = Lexer.toCode( before ).toUpperCase();    // Better (it will be faster most part of the times) toUpper than toLower
         }
 
         void replaceIn( List<Lexeme> list )
@@ -223,7 +225,9 @@ public final class ParseUse extends ParseBase
                     String search = Language.buildMacro( Lexer.toCode( before ) );
                            search = "(?i)"+  Pattern.quote( search );             // (?i) -> ignore-case. The replace is inside a string: "Say {*_CONST_*}"
 
-                    String replac = Lexer.toCode( after );
+                    String replac = (after.size() == 1 && after.get( 0 ).isString())
+                                  ? after.get( 0 ).text()
+                                  : Lexer.toCode( after );
 
                     lex.updateUsign( lex.text().replaceAll( search, replac ) );   // Not needed to do toUne(...) beacuse lexeme is an String
                 }

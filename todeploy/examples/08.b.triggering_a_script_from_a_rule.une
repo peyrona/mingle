@@ -26,6 +26,7 @@ DEVICE RAM
            metric   SET "jvmram"
             interval SET 3s
 
+
 DEVICE Disk
     INIT
         groups SET "metric"

@@ -1267,7 +1267,6 @@ public final class JTools
                      jfc.setDialogType( JFileChooser.OPEN_DIALOG );
                      jfc.setCurrentDirectory( ((fFolder == null) ? UtilSys.fHomeDir : fFolder) );
                      jfc.setFileSelectionMode( JFileChooser.FILES_ONLY );
-                     jfc.setFileHidingEnabled( false );
                      jfc.setMultiSelectionEnabled( bMulti );
                      jfc.setAcceptAllFileFilterUsed( false );
                      jfc.setPreferredSize( new Dimension( 800, 800 ) );
@@ -1309,10 +1308,10 @@ public final class JTools
         if( file == null )
         {
             JFileChooser jfc = new JFileChooser();
-            jfc.setDialogTitle( "Save " + type + " file" );
-            jfc.setDialogType( JFileChooser.SAVE_DIALOG );
-            jfc.setCurrentDirectory( UtilSys.fHomeDir );
-            jfc.setPreferredSize( new Dimension( 800, 800 ) );
+                         jfc.setDialogTitle( "Save " + type + " file" );
+                         jfc.setDialogType( JFileChooser.SAVE_DIALOG );
+                         jfc.setCurrentDirectory( UtilSys.fHomeDir );
+                         jfc.setPreferredSize( new Dimension( 800, 800 ) );
 
             int option = jfc.showSaveDialog( getFocusedWindow() );
 
@@ -1334,6 +1333,7 @@ public final class JTools
             try
             {
                 UtilIO.newFileWriter()
+                      .setSanitizeName( true )
                       .setFile( file )
                       .replace( sContents );
             }

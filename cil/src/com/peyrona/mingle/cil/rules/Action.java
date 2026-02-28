@@ -198,10 +198,10 @@ final class Action implements IRule.IAction
 
         IXprEval xe = runtime.newXprEval().build( sXpr, (o) -> {}, runtime::getGroupMemberNames );
 
-        if( ! xe.getErrors().isEmpty() )
-            throw new MingleException( "Invalid expression: "+ sXpr +"\nErrors:\n"+ xe.getErrors() );
+        if( xe.getErrors().isEmpty() )
+            return xe;
 
-        return xe;
+        throw new MingleException( "Invalid expression: "+ sXpr +"\nErrors:\n"+ xe.getErrors() );
     }
 
     private boolean isTargetScriptOrRule()

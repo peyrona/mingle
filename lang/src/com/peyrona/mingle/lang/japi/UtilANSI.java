@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 /**
@@ -23,6 +35,7 @@ public final class UtilANSI
     private static final char    PREFIX = '\u001B';
     private static final String  RESET  = PREFIX +"[0m";
     private static final String  RED    = PREFIX +"[31m";
+    private static final String  GREEN  = PREFIX +"[32m";
     private static final String  YELLOW = PREFIX +"[33m";
     private static final String  PURPLE = PREFIX +"[35m";
     private static final String  CYAN   = PREFIX +"[36m";
@@ -146,6 +159,20 @@ public final class UtilANSI
     }
 
     /**
+     * Wraps string in cyan ANSI color codes.
+     *
+     * @param str string to color
+     * @return String wrapped in cyan ANSI codes on Unix systems, original string on Windows.
+     */
+    public static String toGreen( String str )
+    {
+        if( isUnix )
+            return GREEN + str + RESET;
+
+        return str;
+    }
+
+    /**
      * Prints ANSI clear screen command to stdout.
      * On Windows systems, does nothing.
      */
@@ -167,6 +194,18 @@ public final class UtilANSI
     public static void outRed( String str )
     {
         System.out.println( (isUnix ? toRed( str ) : str) );
+        System.out.flush();
+    }
+
+    /**
+     * Prints a green-colored string to stdout followed by a newline.
+     * On Windows systems, prints the string without color.
+     *
+     * @param str string to print in yellow
+     */
+    public static void outGreen( String str )
+    {
+        System.out.println( (isUnix ? toGreen( str ) : str) );
         System.out.flush();
     }
 

@@ -5,8 +5,19 @@
         <div class = "container">
             <div class="columns">
                 <div class="column">
+                    <div class="filed">
+                        <label class="label">Background color</label>
+                        <button id="btn-style-color-toggle" class="button is-light" onclick="dlgStyle._onColorToggle_()">
+                            <span class="icon">
+                                <i class="ti ti-check"></i>
+                            </span>
+                            <span>Set / Unset</span>
+                        </button>
+                    </div>
+                </div>
+                <div class="column">
                     <div class="field">
-                        <label class="label">Background from</label>
+                        <label class="label">Bg from bottom</label>
                         <div class="control">
                             <input class="input" type="color" name="color_from" onchange="dlgStyle.onBackgroundChanged()">
                         </div>
@@ -14,7 +25,7 @@
                 </div>
                 <div class="column">
                     <div class="field">
-                        <label class="label">Background to</label>
+                        <label class="label">Bg to top</label>
                         <div class="control">
                             <input class="input" type="color" name="color_to" onchange="dlgStyle.onBackgroundChanged()">
                         </div>
@@ -22,17 +33,11 @@
                 </div>
                 <div class="column">
                     <div class="field">
-                        <label class="label">Background degrees</label>
+                        <label class="label">Bg rotation degrees</label>
                         <div class="control">
                             <input class="input" type="number" name="color_degrees" min="0" max="359" value="0" onchange="dlgStyle.onBackgroundChanged()">
                         </div>
                     </div>
-                </div>
-                <div class="column">
-                    <label class="label" for="chk-no-color">&nbsp;Background color</label>
-                    <label class="checkbox">
-                        <input type="checkbox" id="chk-no-color" name="chk-no-color" onclick="dlgStyle.onBackgroundChanged()">&nbsp;&nbsp;Yes / No
-                    </label>
                 </div>
             </div>
 
@@ -492,18 +497,11 @@ var dlgStyle =
         $('#properties-style [name="color_to"     ]').val( oBg.getColorTo() );
         $('#properties-style [name="color_degress"]').val( oBg.getColorDegrees() );
 
-        $('#properties-style [name="chk-no-color"'  ).prop( 'checked', false );
+        let bHasColor = p_base.isNotEmpty( oBg.getColorFrom() ) ||
+                        p_base.isNotEmpty( oBg.getColorTo()   ) ||
+                        oBg.getColorDegrees();
 
-        if( oBg.getColorFrom() || oBg.getColorTo() || oBg.getColorDegrees() )
-        {
-            $('#properties-style [name="chk-no-color"').trigger('click');    // This invokes ::onBackgroundChanged()
-        }
-        else
-        {
-            $('#properties-style [name="color_from"]'   ).prop( 'disabled', true );
-            $('#properties-style [name="color_to"]'     ).prop( 'disabled', true );
-            $('#properties-style [name="color_degrees"]').prop( 'disabled', true );
-        }
+        this._setColorEnabled_( bHasColor );
 
         for( const sWhich of ['top','left','bottom','right'] )
         {
@@ -524,22 +522,33 @@ var dlgStyle =
 
     onBackgroundChanged : function()    // Clarity over efficiency
     {
-        let bBackColor = $('#properties-style [name="chk-no-color"]').is(':checked');
-
-        $('#properties-style [name="color_from"]'   ).prop( 'disabled', ! bBackColor );
-        $('#properties-style [name="color_to"]'     ).prop( 'disabled', ! bBackColor );
-        $('#properties-style [name="color_degrees"]').prop( 'disabled', ! bBackColor );
-
+        let bOn  = ! $('#properties-style [name="color_from"]').prop('disabled');
         let url  = $('#properties-style [name="back_image"   ]').val().trim();
         let mode = $('#properties-style [name="image_mode"   ]:checked').val();
-        let from = $('#properties-style [name="color_from"   ]').val().trim();
-        let to   = $('#properties-style [name="color_to"     ]').val().trim();
-        let flow = $('#properties-style [name="color_degrees"]').val();
-
-        if( ! bBackColor )
-            from = to = flow = null;
+        let from = bOn ? $('#properties-style [name="color_from"   ]').val().trim() : null;
+        let to   = bOn ? $('#properties-style [name="color_to"     ]').val().trim() : null;
+        let flow = bOn ? $('#properties-style [name="color_degrees"]').val()        : null;
 
         this.style.setBackground( url, mode, from, to, flow );
+    },
+
+    _onColorToggle_ : function()
+    {
+        let bEnabled = $('#properties-style [name="color_from"]').prop('disabled');
+
+        this._setColorEnabled_( bEnabled );
+        this.onBackgroundChanged();
+    },
+
+    _setColorEnabled_ : function( bEnabled )
+    {
+        $('#properties-style [name="color_from"]'   ).prop( 'disabled', ! bEnabled );
+        $('#properties-style [name="color_to"]'     ).prop( 'disabled', ! bEnabled );
+        $('#properties-style [name="color_degrees"]').prop( 'disabled', ! bEnabled );
+
+        $( '#btn-style-color-toggle' )
+            .toggleClass( 'is-light',   ! bEnabled )
+            .toggleClass( 'is-success',   bEnabled );
     },
 
     setBorder : function( sWhich )

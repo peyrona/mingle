@@ -10,16 +10,15 @@ package com.peyrona.mingle.lang.messages;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public class MsgReadDevice extends MsgAbstractOne
+public class MsgReadDevice extends Message
 {
     public MsgReadDevice( String device )
     {
-        super( device, true );
+        this( device, true );
     }
 
     public MsgReadDevice( String device, boolean isOwn )
     {
-        super( device, isOwn );
+        super( device, null, isOwn );
     }
-
 }

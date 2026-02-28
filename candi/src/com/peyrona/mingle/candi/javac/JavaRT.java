@@ -2,15 +2,10 @@
 package com.peyrona.mingle.candi.javac;
 
 import com.peyrona.mingle.candi.Prepared;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IController;
-import com.peyrona.mingle.lang.interfaces.commands.ICommand;
-import com.peyrona.mingle.lang.interfaces.commands.IDevice;
-import com.peyrona.mingle.lang.interfaces.commands.IDriver;
-import com.peyrona.mingle.lang.interfaces.commands.IRule;
-import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -64,22 +59,44 @@ public final class JavaRT implements ICandi.ILanguage
         if( code.contains( "public class " ) )
             prep.addError( "Do not declare a class, only methods are allowed. For elaborated Java code, create a JAR" );
 
-        if( ! code.startsWith( "public void " ) )
+        // Track whether each preamble wrapper is applied so we can subtract their line count
+        // from the compiler's reported lines to get user-code-relative positions.
+        // We check for the exact signature rather than startsWith() so that user code that
+        // begins with a Javadoc comment (/**) is handled correctly.
+        boolean methodWrapped = ! code.contains( "public void " + call + "(" );
+
+        if( methodWrapped )
             code = "public void "+ call +"( IRuntime rt ) throws Exception\n{\n"+ code +"\n}";
 
         if( ! code.contains( "public class " ) )    // Has to be here
             code = "public class "+ call +"\n{\n"+ code +"\n}";
 
-        code = createImports() + code;
+        final String imports = createImports();
+        code = imports + code;
+
+        // Lines added before the user code by createImports() + the class/method wrappers.
+        // createImports() produces exactly one '\n' per statement, so count them dynamically
+        // to stay in sync if the method is ever modified.
+        int importLines = 0;
+        for( int n = 0; n < imports.length(); n++ )
+            if( imports.charAt( n ) == '\n' ) importLines++;
+
+        // Lines added before the user code:
+        //   imports  → importLines  (7 import statements + 1 blank line = 8)
+        //   class {  → always 2 lines  ("public class NAME\n{\n")
+        //   method { → 2 lines only when the method wrapper was added
+        final int preambleLines = importLines + 2 + (methodWrapped ? 2 : 0);
 
         try
         {
             prep.setCode( imc.compile( call, code ) );
 
-            for( Pair<String,Integer> err : imc.getErrors() )
+            for( CodeError err : imc.getErrors() )
             {
-                int lincol[] = offset2LineCol( code, err.getValue() );
-                prep.addError( new CodeError( err.getKey(), lincol[0], lincol[1] ) );
+                // Shift compiler line (1-based, relative to generated source) to be
+                // 1-based relative to the user's embedded code block.
+                int userLine = (err.line() > 0) ? Math.max( 1, err.line() - preambleLines ) : 0;
+                prep.addError( new CodeError( err.message(), userLine, err.column() ) );
             }
 
             if( (prep.getCode() == null) && (prep.getErrors().length == 0) )
@@ -190,36 +207,18 @@ public final class JavaRT implements ICandi.ILanguage
     private static String createImports()
     {
         StringBuilder sb = new StringBuilder( 2 * 1024 );
+        String        ss = MingleException.class.getPackageName();
 
-        sb.append( "import " ).append( IController.class.getCanonicalName() ).append( ';' ).append( '\n' )
-          .append( "import " ).append( IRuntime.class.getCanonicalName()    ).append( ';' ).append( '\n' )
-          .append( "import " ).append( ICommand.class.getCanonicalName()    ).append( ';' ).append( '\n' )
-          .append( "import " ).append( IDevice.class.getCanonicalName()     ).append( ';' ).append( '\n' )
-          .append( "import " ).append( IDriver.class.getCanonicalName()     ).append( ';' ).append( '\n' )
-          .append( "import " ).append( IScript.class.getCanonicalName()     ).append( ';' ).append( '\n' )
-          .append( "import " ).append( IRule.class.getCanonicalName()       ).append( ';' ).append( '\n' )
+        sb.append( "import " ).append( ss ).append( ".interfaces.*;\n" )
+          .append( "import " ).append( ss ).append( ".interfaces.commands.*;\n" )
+          .append( "import " ).append( ss ).append( ".interfaces.exen.*;\n" )
+          .append( "import " ).append( ss ).append( ".interfaces.network.*;\n" )
+          .append( "import " ).append( ss ).append( ".japi.*;\n" )
+          .append( "import " ).append( ss ).append( ".messages.*;\n" )
+          .append( "import " ).append( ss ).append( ".xpreval.functions.*;\n" )
           .append( '\n' );
 
         return sb.toString();
-    }
-
-    private static int[] offset2LineCol( String code, int offset )
-    {
-        int line = 0;
-        int lastNewlineIndex = -1; // Tracks the index of the last newline
-
-        for( int n = 0; n < offset; n++ )
-        {
-            if( code.charAt( n ) == '\n' )
-            {
-                line++;
-                lastNewlineIndex = n;
-            }
-        }
-
-        int column = offset - lastNewlineIndex - 1;    // Column is the distance from the last newline to the offset
-
-        return new int[] {line, column};
     }
 
     //------------------------------------------------------------------------//

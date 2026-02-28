@@ -126,10 +126,10 @@ public final class SystemMonitor
                     break;
                 }
 
-                fUsed *= 100;
+                int nUsed = (int) (fUsed * 100);
 
-                if( ((String) get( KEY_MEASURE )).startsWith( "used" ) ) sendReaded(        fUsed );     // "used" and "used%"
-                else                                                     sendReaded( 100f - fUsed );
+                if( ((String) get( KEY_MEASURE )).startsWith( "used" ) ) sendReaded(       nUsed );     // "used" and "used%"
+                else                                                     sendReaded( 100 - nUsed );
 
                 break;
 
@@ -138,7 +138,7 @@ public final class SystemMonitor
                 long total = SystemMetrics.getJvmTotalMemory();
                 long used  = total - free;
 
-                send( free, used, total );
+                send( used, free, total );
                 break;
 
             case "disk":
@@ -146,7 +146,7 @@ public final class SystemMonitor
                 long total_ = UtilSys.fHomeDir.getTotalSpace();
                 long used_  = total_ - free_;
 
-                send( free_, used_, total_ );
+                send( used_, free_, total_ );
                 break;
         }
     }

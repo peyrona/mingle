@@ -3,7 +3,6 @@ package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.UtilReflect;
-import com.peyrona.mingle.lang.japi.UtilType;
 import java.beans.PropertyChangeListener;
 import java.beans.PropertyChangeSupport;
 import java.util.AbstractMap;
@@ -23,19 +22,6 @@ public abstract class ExtraTypeCollection<T>
     private volatile PropertyChangeSupport support;
 
     //------------------------------------------------------------------------//
-
-    /**
-     * Returns a JSON string representation that represents this instance.
-     *
-     * @return A JSON string representation.
-     */
-    @Override
-    public String toString()
-    {
-        return UtilType.toJson( this ).toString();
-    }
-
-    //------------------------------------------------------------------------//
     // PUBLIC ABSTRACT
 
     /**
@@ -51,8 +37,8 @@ public abstract class ExtraTypeCollection<T>
     public abstract T union( Object o );
 
     /**
-     * Takes an expression and returns a new list by applying the expression to each item in
-     * the initial iterable.
+     * Takes an expression and returns a new collection (list or pair) by applying
+     * the expression to each item in the initial iterable.
      *
      * @param expr To be applied to every item in the list.
      * @return The new list.
@@ -60,8 +46,8 @@ public abstract class ExtraTypeCollection<T>
     public abstract T map( Object expr );
 
     /**
-     * The expression passed must return a boolean value, which determines whether or not
-     * the processed element should belong to the resulting iterable.
+     * Takes an expression (that returns a boolean value) and returns a new collection
+     * (list or pair) containing those items for which the expression returned true.
      *
      * @param expr
      * @return

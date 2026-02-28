@@ -141,9 +141,7 @@ public final class SystemMetrics
     public static int getProcessors()
     {
         if( nCPUs == -1 )
-        {
             nCPUs = OSMXBean.getAvailableProcessors();
-        }
 
         return nCPUs;
     }
@@ -154,9 +152,9 @@ public final class SystemMetrics
      */
     public static float getCpuLoad()
     {
-        double v = (float) OSMXBean.getSystemCpuLoad();   // [0.0, 1.0] or negative if not available
+        float v = (float) OSMXBean.getSystemCpuLoad();       // [0.0, 1.0] or negative if not available
 
-        return (v < 0.0) ? Float.NaN : round( (float) v );
+        return (v < 0.0) ? Float.NaN : v;
     }
 
     /**
@@ -166,7 +164,9 @@ public final class SystemMetrics
      */
     public static float getSystemLoadAverage()
     {
-        return round( (float) OSMXBean.getSystemLoadAverage() );
+        float v = (float) OSMXBean.getSystemLoadAverage();   // [0.0, 1.0] or negative if not available
+
+        return (v < 0.0) ? Float.NaN : v;
     }
 
     /**
@@ -175,7 +175,9 @@ public final class SystemMetrics
      */
     public static float getJvmCpuLoad()
     {
-        return round( (float) OSMXBean.getProcessCpuLoad() );
+        float v = (float) OSMXBean.getProcessCpuLoad();      // [0.0, 1.0] or negative if not available
+
+        return (v < 0.0) ? Float.NaN : v;
     }
 
     /**
@@ -200,17 +202,14 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                if( mapRootsTotal == null )
+                Map<String,Long> map  = new HashMap<>();
+
+                for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
                 {
-                    Map<String,Long> map  = new HashMap<>();
-
-                    for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
-                    {
-                        map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
-                    }
-
-                    mapRootsTotal = Collections.unmodifiableMap( map );
+                    map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
                 }
+
+                mapRootsTotal = Collections.unmodifiableMap( map );
             }
         }
 
@@ -223,25 +222,17 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                if( mapRootsFree == null )
+                Map<String,Long> map  = new HashMap<>();
+
+                for( String fRoot : mapRootsTotal.keySet() )
                 {
-                    Map<String,Long> map  = new HashMap<>();
-
-                    for( String fRoot : mapRootsTotal.keySet() )
-                    {
-                        map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
-                    }
-
-                    mapRootsFree = map;
+                    map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
                 }
+
+                mapRootsFree = map;
             }
         }
 
         return mapRootsFree;
-    }
-
-    private static float round( float amount )
-    {
-        return (float) (Math.round( amount * 100f) / 100f);
     }
 }

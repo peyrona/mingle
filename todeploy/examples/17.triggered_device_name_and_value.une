@@ -19,7 +19,7 @@
 
 SCRIPT
 	ONSTART
-	LANGUAGE une
+	LANGUAGE Une
 	FROM {
             console = "Wait until randomly the three doors are open (their value is 'false')"
          }

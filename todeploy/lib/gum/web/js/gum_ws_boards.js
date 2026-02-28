@@ -349,6 +349,13 @@ var gum_ws_boards =
         if( ! ctx || ! ctx.socket )
             return;
 
+        // Queue the message if the socket is not yet open (e.g. during reconnection)
+        if( ! ctx.socket.isReady() )
+        {
+            ctx.socket.addOnOpen( () => this._sendMessage(xExEnAddr, oMsg) );
+            return;
+        }
+
         let parsedExEn = xExEnAddr;
 
         if( p_base.isString(xExEnAddr) )
@@ -584,9 +591,10 @@ class VirtualSocket
 
     // Mimic WebSocketWrap API
     addOnMessage(fn) { this.onMessageHandlers.push(fn); }
-    addOnOpen(fn) { /* Auto-opened in virtual mode */ }
-    addOnError(fn) { if( typeof fn === 'function' ) this.onErrorHandlers.push(fn); }
-    addLogger(fn) { /* Logs handled by Leader */ }
+    addOnOpen(fn)    { if( typeof fn === 'function' ) fn(); }   // Always open — call immediately
+    addOnError(fn)   { if( typeof fn === 'function' ) this.onErrorHandlers.push(fn); }
+    addLogger(fn)    { /* Logs handled by Leader */ }
+    isReady()        { return true; }   // BroadcastChannel is always available
 
     connect()    // Virtual connection is instant
     {

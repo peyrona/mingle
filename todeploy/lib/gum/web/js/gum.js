@@ -9,7 +9,7 @@ if( typeof gum === "undefined" )
 var gum =
 {
     _oBackGr_     : null,    // Background image and background gradient { background: { image: {...}, color: {...} }
-    _aoTarget_    : [],      // { exen: <oDef>, devs: [ <sDevName>, ... ] }     // Note: sorted by module dlgCfg
+    _aoTarget_    : [],      // { exen: <oDef>, devs: [], rules: [], scripts: [], drivers: [] }     // Note: sorted by module dlgCfg
     _layout_      : null,    // A reference to a Layout manager: Grid or Free
     _name_        : null,    // Dashboard name
     _password_    : "",      // Password to allow the dashboard to be edited
@@ -23,6 +23,12 @@ var gum =
             {
                 console.log('All scripts have been loaded.');
 
+                return gum._loadGadgetTemplates_();
+            } )
+            .then( function()
+            {
+                console.log('Gadget templates have been loaded.');
+
                 if( gum.isInDesignMode() )  return gum._loadDesignChunks_();
                 else                        return $.Deferred().resolve().promise();   // Return resolved promise to continue chain
             } )
@@ -32,8 +38,9 @@ var gum =
             } )
             .fail( function( jqxhr, settings, exception )
             {
-                console.error('Error during initialization:', exception);
-                p_app.alert( exception +'\nCan not continue. Press [Esc] to close.', "Error during initialization", window.close );
+                let msg = 'jqxhr: '+ jqxhr +'\nsettings: '+ settings +'\nexception:'+ exception;
+                console.error('Error during initialization:\n%s', msg);
+                p_app.alert( msg +'\nCan not continue.', "Error during initialization", window.close );
             } );
     },
 
@@ -144,6 +151,89 @@ var gum =
     },
 
     /**
+     * Returns a sorted array of unique rule names for the given ExEn.
+     *
+     * @param {Object|String} xExEn
+     * @returns {Array} Rule names.
+     */
+    getRuleNames4 : function( xExEn )
+    {
+        return this._getNames4_( xExEn, "rules" );
+    },
+
+    /**
+     * Returns a sorted array of unique script names for the given ExEn,
+     * excluding scripts that are owned by drivers (not directly invokable).
+     *
+     * @param {Object|String} xExEn
+     * @returns {Array} Invokable script names.
+     */
+    getScriptNames4 : function( xExEn )
+    {
+        if( p_base.isString( xExEn ) )
+            xExEn = JSON.parse( xExEn.replace( /\\"/g, '"' ) );
+
+        let oTarget = this.getTarget4( xExEn );
+
+        if( oTarget === null )
+            throw xExEn +": target not found";
+
+        // Collect script names owned by drivers (each driver has a "script" field)
+        let driverScripts = new Set(
+            (oTarget.drivers || []).map( (d) => d.script ).filter( Boolean )
+        );
+
+        let asNames = [];
+
+        (oTarget.scripts || []).forEach( function( o )
+        {
+            if( ! driverScripts.has( o.name ) )
+                asNames.push( o.name );
+        });
+
+        asNames = [ ...new Set( asNames ) ];
+        asNames.sort();
+
+        return asNames;
+    },
+
+    /**
+     * Internal helper to extract unique sorted names from a target's collection.
+     *
+     * @param {Object|String} xExEn
+     * @param {String} sField  One of "devs", "rules", "scripts".
+     * @returns {Array} Sorted unique names.
+     */
+    _getNames4_ : function( xExEn, sField )
+    {
+        if( p_base.isString( xExEn ) )
+            xExEn = JSON.parse( xExEn.replace( /\\"/g, '"' ) );
+
+        let oTarget = null;
+
+        for( let target of this._aoTarget_ )
+        {
+            if( p_base.jsonAreEquals( target.exen, xExEn ) )
+            {
+                oTarget = target;
+                break;
+            }
+        }
+
+        if( oTarget === null )
+            throw xExEn +": target not found";
+
+        let asNames = [];
+
+        (oTarget[sField] || []).forEach( (o) => asNames.push( o.name ) );
+
+        asNames = [ ...new Set( asNames ) ];
+        asNames.sort();
+
+        return asNames;
+    },
+
+    /**
      * Returns true if passed device name is managed by passed sExEn address. If no sExEn is
      * passed, then sDevice is searched through out all declared ExEns and instead of returning
      * a boolean, the address of the ExEn is returned.
@@ -188,8 +278,14 @@ var gum =
         let $lst4Devs  = $(oSelect4Devices).empty();
         let sExEnDef   = p_base.getFieldValue( $lst4ExEns );
 
-        if( p_base.isEmpty( sExEnDef ) )            // No option is selected
-            sExEnDef = $lst4ExEns[0].options[0];
+        if( p_base.isEmpty( sExEnDef ) )            // No option is selected: fall back to first option's value
+        {
+            let oOpt = $lst4ExEns[0].options[0];
+            sExEnDef = oOpt ? oOpt.value : null;
+        }
+
+        if( p_base.isEmpty( sExEnDef ) )            // Still empty (no ExEns configured, or "— none —" selected)
+            return;
 
         this.getDeviceNames4( sExEnDef )
             .forEach( (sDevName) => $lst4Devs.append( $("<option></option>").text( sDevName ) ) );
@@ -216,14 +312,15 @@ var gum =
             return;
 
         let $select = $('<select>' +
-                            '<option value=""      >Select gadget to add...</option>' +
-                            '<option value="chart" >Chart (time line)      </option>' +
-                            '<option value="check" >Check box              </option>' +
-                            '<option value="gauge" >Gauge (numerical)      </option>' +
-                            '<option value="pie"   >Pie/Doughnut chart     </option>' +
-                            '<option value="button">Push button            </option>' +
-                            '<option value="ssd"   >Seven Segments Display </option>' +
-                            '<option value="text"  >Text and/or Image      </option>' +
+                            '<option value=""         >Select gadget to add...</option>' +
+                            '<option value="button"   >Button or Button-Group </option>' +
+                            '<option value="chart"    >Chart (time line)      </option>' +
+                            '<option value="check"    >Check box              </option>' +
+                            '<option value="gauge"    >Gauge (numerical)      </option>' +
+                            '<option value="pie"      >Pie/Doughnut chart     </option>' +
+                            '<option value="ssd"      >Seven Segments Display </option>' +
+                            '<option value="scheduler">Scheduler              </option>' +
+                            '<option value="text"     >Text and/or Image      </option>' +
                         '</select>');
 
         $select.change( function()
@@ -237,7 +334,7 @@ var gum =
         const sHTMLBtns = '<i class="gum-mini-btn ti ti-player-play"   title="Preview (in new tab)"></i>'+
                           '<i class="gum-mini-btn ti ti-adjustments"   title="Configuration"></i>'+
                           '<i class="gum-mini-btn ti ti-device-floppy" title="Save"></i>'+
-                          '<i class="gum-mini-btn ti ti-help-circle"   title="Show help"></i>';
+                          '<i class="gum-mini-btn ti ti-info-circle"   title="Show help"></i>';
 
         const $toolbar = $('#gum-toolbar').empty()
                                           .css('color'           ,'#222222')
@@ -253,7 +350,7 @@ var gum =
         $toolbar.find('.ti-player-play'  ).on( 'click', gum._onPreview_ );
         $toolbar.find('.ti-adjustments'  ).on( 'click', gum._showCfgDlg_ );
         $toolbar.find('.ti-device-floppy').on( 'click', () => gum._save_() );
-        $toolbar.find('.ti-help-circle'  ).on( 'click', () => gum._layout_.showHelp() );
+        $toolbar.find('.ti-info-circle'  ).on( 'click', () => gum._layout_.showHelp() );
     },
 
     _onPreview_ : function()
@@ -272,7 +369,7 @@ var gum =
 
                                 // Get current design tab's ID to pass to preview window
                                 const designTabId = sessionStorage.getItem('gum_tab_id_design');
-                                const loc = gt.normalizeHtmlName( gum._name_ ) +'?design=false&parentTabId=' + designTabId;
+                                const loc = gum._name_ +'.html?design=false&parentTabId=' + designTabId;
                                 const use = gt.read( "_GUM_REUSE_WND_", false );
                                 const wnd = window.open( p_base.doURL( loc, true ), (use ? '_self' : '_blank') );
 
@@ -322,8 +419,12 @@ var gum =
                     let oTarget = gum.getTarget4( oExEn );     // To get its reference
 
                     for( let oDev of aoDevs )
-                        if( oDev.cmd === 'device' )
-                            oTarget.devs.push( oDev );
+                    {
+                        if( oDev.cmd === 'device' )       oTarget.devs.push( oDev );
+                        else if( oDev.cmd === 'rule' )    oTarget.rules.push( oDev );
+                        else if( oDev.cmd === 'script' )  oTarget.scripts.push( oDev );
+                        else if( oDev.cmd === 'driver' )  oTarget.drivers.push( oDev );
+                    }
 
                     if( fnOnDone && (++nDone === axExEn.length) )
                         fnOnDone();
@@ -332,21 +433,16 @@ var gum =
         for( let xExEn of axExEn )
         {                                                                          // '.replace(...)' removes extra '\'
             this._aoTarget_.push( { exen: (p_base.isString( xExEn ) ? JSON.parse( xExEn.replace( /\\"/g, '"' ) ) : xExEn),
-                                    devs: [] } );
+                                    devs: [], rules: [], scripts: [], drivers: [] } );
 
             gum_ws_boards.requestList( this._aoTarget_.at( -1 ).exen );   // at( -1 ) -> Get last item
         }
     },
 
-    _coder_ : function()
-    {
-        p_app.alert( "Not yet implemented: Dashboard HTML and JavaScript editor." );
-    },
-
     _save_ : function( fnOnOK = () => {} )
     {
-        if( ! gum.isInDesignMode() )
-            return;
+        if( ! gum.isInDesignMode() && ! gum.isUsingGridLayout() )   // Grid layout has to be saved even when in play mode
+            return;                                                 // because the user can re-arrange the cards (widgets).
 
         if( gum._isSaving_ )
             return;
@@ -364,8 +460,8 @@ var gum =
                       layout    : oLayout };
 
         let oData = {
-                      name: gt.normalizeHtmlName( gum._name_ ),    // FileName is needed by Server to give name to the HTML file.
-                      rest: oRest                                // Everything else in oConfig
+                      name: gum._name_,   // FileName is needed by Server to give name to the HTML file.
+                      rest: oRest         // Everything else in oConfig
                     };
 
         const sData = JSON.stringify( oData );   // POST at server side expects JSON
@@ -389,7 +485,7 @@ var gum =
                     success    : () => { gum._layout_.saved(); fnOnOK(); }    // Only on success can be executed this func
                 } ).always((xhr, status) => {
                                                 gum._isSaving_ = false;
-                                                $('#gum-toolbar').find('.ti-device-floppy').css('color', '');
+                                                setTimeout( () => { $('#gum-toolbar').find('.ti-device-floppy').css('color', ''); }, 500 );   // Floppy will be red for at least 1/2 sec
                                                 console.log('AJAX save() status:', status);
                                             } );
     },
@@ -416,9 +512,9 @@ var gum =
         if( name === "_template_" )
             name = "new dashboard";
 
-        document.title = "Gum ::: "+ name;
+        gum._name_ = name;
 
-        gum._name_ = gt.normalizeFileName( name );
+        document.title = "Gum ::: "+ name;
 
 // FIXME: --->
         // $(window).on('resize', function( event )    // Used on both: design and not design modes (better not to touch this function)
@@ -435,6 +531,7 @@ var gum =
 
         if( gum.isInDesignMode() )    // Design mode: generate unique dashboard ID
         {
+            $('body').addClass('gum-design');
             gum._setButtonBar_();
 
             dashboardId = sessionStorage.getItem('gum_tab_id_design');
@@ -464,9 +561,7 @@ var gum =
 
         gum_ws_boards.connect( () =>    // On successfully connected via WebSockets with the server
             {
-                gum.setBackground( oConfig.background );
-                gum.setDashboardPassword( oConfig.password );
-                gum._layout_ = (oConfig.layout.type === 'grid') ? grid.init() : free.init();    // A reference to the layout chossen by user (can not be changed after choosen)
+                gum._layout_ = (oConfig.layout.type === 'grid') ? grid.init() : free.init();    // A reference to the layout chosen by user (can not be changed after chosen)
 
                 if( p_base.isEmpty( oConfig.exens ) )
                 {
@@ -474,31 +569,88 @@ var gum =
                 }
                 else
                 {
-                    gum._updateExEns_( oConfig.exens,
-                                       () => gum._layout_.setContents( oConfig.layout.contents ) );
+                    gum.setBackground( oConfig.background );
+                    gum.setDashboardPassword( oConfig.password );
+                    gum._layout_.setContents( oConfig.layout.contents );    // Render saved layout immediately (does not depend on ExEn availability)
+                    gum._updateExEns_( oConfig.exens );                     // Device lists will populate asynchronously when ExEns respond
                 }
             },
             false );
     },
 
+    // Track which scripts have been loaded to avoid duplicates
+    _loadedScripts_ : new Set(),
+
+    // Helper to load a script only if not already loaded
+    _loadScriptOnce_ : function( url )
+    {
+        if( gum._loadedScripts_.has(url) )
+        {
+            console.log('[Gum] Skipping already loaded: ' + url);
+            return $.when();  // Return resolved promise
+        }
+
+        return $.getScript(url)
+            .done( function()
+            {
+                gum._loadedScripts_.add(url);
+                console.log('[Gum] Loaded: ' + url);
+            })
+            .fail( function( jqxhr, settings, exception )
+            {
+                console.error('[Gum] Failed to load: ' + url, exception);
+            });
+    },
+
     // Load all gadget's scripts from local HD
     _loadAllScripts_ : function()
     {
-        const aScripts = [  // 3rd party libs (do not change the order for chart.js and dependencies)
-                            "/gum/lib/chart_v4.4.1.min.js",
-                            "/gum/lib/date-fns_v4.1.0.min.js",
-                            "/gum/lib/chartjs-adapter-date-fns_v3.0.0.min.js",
-                            "/gum/lib/gauge.min.js",
-                            "/gum/lib/ssd.js" ];
+        const aThirdPartyLibs = [  // 3rd party libs (do not change the order for chart.js and dependencies)
+                                    "/gum/lib/chart_v4.4.1.min.js",
+                                    "/gum/lib/date-fns_v4.1.0.min.js",
+                                    "/gum/lib/chartjs-adapter-date-fns_v3.0.0.min.js",
+                                    "/gum/lib/gauge.min.js",
+                                    "/gum/lib/ssd.js" ];
 
-        // Start a "resolved" promise to begin the chain
-        let promiseChain = $.when();
+        // Start by loading gadgets dynamically from manifest
+        let promiseChain = $.getJSON('/gum/js/gadgets/gadgets.json')
+            .then( function( manifest )
+            {
+                console.log('[Gum] Loading gadgets from manifest...');
 
-        // Dynamically build the chain by iterating through the scripts
-        aScripts.forEach( function( scriptUrl )
-                        {
-                            promiseChain = promiseChain.then( function() { return $.getScript(scriptUrl); } );
-                        } );
+                // Load base gadget scripts first
+                let gadgetChain = $.when();
+                if( manifest.base && manifest.base.length > 0 )
+                {
+                    manifest.base.forEach( function( script )
+                    {
+                        gadgetChain = gadgetChain.then( function() {
+                            return gum._loadScriptOnce_('/gum/js/gadgets/' + script);
+                        });
+                    });
+                }
+
+                // Then load gadget implementations
+                if( manifest.gadgets && manifest.gadgets.length > 0 )
+                {
+                    manifest.gadgets.forEach( function( script )
+                    {
+                        gadgetChain = gadgetChain.then( function() {
+                            return gum._loadScriptOnce_('/gum/js/gadgets/' + script);
+                        });
+                    });
+                }
+
+                return gadgetChain;
+            });
+
+        // Then load third-party libraries
+        aThirdPartyLibs.forEach( function( scriptUrl )
+        {
+            promiseChain = promiseChain.then( function() {
+                return gum._loadScriptOnce_(scriptUrl);
+            });
+        } );
 
         return promiseChain;
     },
@@ -507,7 +659,7 @@ var gum =
     {
         const deferred      = $.Deferred();
         let   nLoadCounter  = 0;
-        const nChunksToLoad = 9;
+        const nChunksToLoad = 11;
 
         function onChunkLoaded()
         {
@@ -518,15 +670,34 @@ var gum =
             }
         }
 
-        p_app.append( "../../chunks/dialog_config.html"    , "div-dlg_options"   , onChunkLoaded );
-        p_app.append( "../../chunks/properties_style.html" , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_chart.html" , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_gauge.html" , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_pie.html"   , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_ssd.html"   , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_button.html", "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_check.html" , "div-dlg_properties", onChunkLoaded );
-        p_app.append( "../../chunks/properties_text.html"  , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/dialog_config.html"       , "div-dlg_options"   , onChunkLoaded );
+        p_app.append( "../../chunks/properties_style.html"    , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_chart.html"    , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_gauge.html"    , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_pie.html"      , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_ssd.html"      , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_button.html"   , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_check.html"    , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_text.html"     , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_scheduler.html", "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_code.html"     , "div-dlg_properties", onChunkLoaded );
+
+        return deferred.promise();
+    },
+
+    /**
+     * Loads the gadget HTML templates chunk. Templates are needed in both design and preview modes
+     * because gadgets use them to render their UI.
+     */
+    _loadGadgetTemplates_ : function()
+    {
+        const deferred = $.Deferred();
+
+        // Ensure the container exists (older saved dashboards may not have it)
+        if( ! document.getElementById('div-gadget-templates') )
+            $(document.body).append( '<div id="div-gadget-templates" style="display:none;"></div>' );
+
+        p_app.append( "../../chunks/gadget_templates.html", "div-gadget-templates", () => deferred.resolve() );
 
         return deferred.promise();
     }

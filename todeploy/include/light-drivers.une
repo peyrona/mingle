@@ -30,7 +30,7 @@
 DRIVER LednetWifi5ChDriver
     SCRIPT LednetWifi5ChController
     CONFIG
-        address AS string REQUIRED       # IP where the WiFi LED 5Ch attends. E.g.: "192.168.1.242"
+        ip AS string REQUIRED       # IP address where the WiFi LED 5Ch attends. E.g.: "192.168.1.242"
 
 
 #----------------------------------------------------------------------------------------------------------------------------------
@@ -41,11 +41,15 @@ DRIVER LednetWifi5ChDriver
 DRIVER ShellyRGBWPMDriver
     SCRIPT ShellyRGBWPMController
     CONFIG
-        address AS string REQUIRED   # IP address of Shelly device. E.g.: "192.168.7.220"
+        ip      AS string REQUIRED   # IP address of Shelly device. E.g.: "192.168.7.220"
         channel AS number            # Channel ID (usually 0 for RGBW, 0-3 for White). By default 0
         type    AS string            # Device type: "rgbw", "rgb" or "white". By default "rgbw"
 
-#----------------------------------------------------------------------------------------------------------------------------------
+#==================================================================================================================================
+# The rest of tis file contains the SCRIPTs needed by the DRIVERs declared above.
+#
+# Unless you are an experienced developer, you should simply ignore the rest of this file.
+# ===================================================================================================================================
 
 SCRIPT LednetWifi5ChController
    LANGUAGE java                                                                  # Which language was used to write the controller

@@ -320,12 +320,15 @@ public final class      Script
 
             for( ICandi.IError error : prepared.getErrors() )
             {
-                sb.append( "Error: "   ).append( error.message() ).append( '\n' )
-                  .append( "At lin:" ).append( error.line() ).append( ", col:" ).append( error.column() ).append( '\n' );
+                sb.append( "  - " ).append( error.message() ).append( '\n' )
+                  .append( "    At line " ).append( error.line() ).append( ", column " ).append( error.column() ).append( '\n' );
             }
 
-            getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Script '"+ name() +"' (using '"+ langName +"') is inoperative because it has errors.\n"+
-                                                                         "Source code compilation errors:\n"+ sb.toString() ) );
+            String source = isInline ? "inline code" : Arrays.toString( asFrom );
+
+            getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Script '"+ name() +"' (using '"+ langName +"') is inoperative because it has errors.\n" +
+                                                                         "Source: "+ source +"\n" +
+                                                                         "Compilation errors:\n"+ sb.toString() ) );
 
             prepared = null;
         }

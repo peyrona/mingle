@@ -892,6 +892,6 @@ public interface ISerialClient
      */
     static Set<String> getAvailablePorts()
     {
-        return SerialPort4NRJavaSerial.getAvailablePorts();
+        return LinuxSerialPortImpl.getAvailablePorts();
     }
 }

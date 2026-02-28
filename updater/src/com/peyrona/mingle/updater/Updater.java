@@ -42,9 +42,6 @@ public final class Updater
             System.exit( 0 );
         }
 
-        UtilSys.setLogger( "Updater", UtilSys.getConfig() )
-               .setLevel( ILogger.Level.ALL );
-
         boolean dryRun  = cli.hasOption( "dry" );
 
         updateIfNeeded( dryRun, () -> { return true; } );
@@ -77,12 +74,15 @@ public final class Updater
             return;
         }
 
+        UtilSys.setLogger( "Updater", UtilSys.getConfig() )
+               .setLevel( ILogger.Level.ALL );
+
         File tempRemoteCatalog = null;
 
         try
         {
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions" );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
+            System.out.println( "[INFO] Checking for needed updates by comparing catalog versions..." );
+            System.out.println( "[INFO] Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             // Get local catalog version
             File   localCatalogFile = new File( UtilSys.getEtcDir(), "catalog.json" );
@@ -97,11 +97,11 @@ public final class Updater
                     if( localCatalogContent != null && ! localCatalogContent.trim().isEmpty() )
                     {
                         localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
-                        UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
+                        System.out.println( "[INFO] Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
                     }
                     else
                     {
-                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Local catalog.json is empty" );
+                        System.out.println( "[INFO] Local catalog.json is empty" );
                     }
                 }
                 catch( IOException e )
@@ -111,7 +111,7 @@ public final class Updater
             }
             else
             {
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog.json not found" );
+                System.out.println( "[INFO] Local catalog.json not found" );
             }
 
             // Get remote catalog version
@@ -126,7 +126,7 @@ public final class Updater
                 if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
                 {
                     remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
+                    System.out.println( "[INFO] Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
                 }
                 else
                 {
@@ -141,11 +141,11 @@ public final class Updater
             }
             else if( Objects.equals( remoteVersion, localVersion ) )
             {
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Versions match (local: " + localVersion + "), no update needed" );
+                System.out.println( "[INFO] Versions match (local: " + localVersion + "), no update needed" );
             }
             else
             {
-                UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
+                System.out.println( "[INFO] Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
 
                 if( fnExcuteUpdate.get() )
                 {
@@ -154,7 +154,7 @@ public final class Updater
                         try
                         {
                             Files.copy( tempRemoteCatalog.toPath(), localCatalogFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING );
-                            UtilSys.getLogger().log( ILogger.Level.INFO, "Updated local catalog.json" );
+                            System.out.println( "[INFO] Updated local catalog.json" );
                         }
                         catch( Exception e )
                         {
@@ -199,13 +199,13 @@ public final class Updater
                 return false;
             }
 
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
+            System.out.println( "[INFO] Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            System.out.println( "[INFO] Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun );
             updater.checkAndUpdateFiles(catalogFile);
 
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            System.out.println( "[INFO] Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
 
             return true;
         }

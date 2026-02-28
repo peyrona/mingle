@@ -1,19 +1,37 @@
 
 package com.peyrona.mingle.controllers;
 
+import com.eclipsesource.json.JsonArray;
+import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
+import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.BufferedReader;
 import java.io.IOException;
-import java.io.InputStreamReader;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 /**
- * This Controller send device's value to: a Telegram-Bot.
+ * This Controller sends device's value to: a Telegram-Bot and receives text messages from the bot.
+ * <p>
+ * Supports both sending messages via {@link #write} and receiving messages via {@link #read}.
+ * Received messages are queued and returned in FIFO order. Only text messages are received;
+ * voice, photos, and other message types are ignored.
+ * <p>
+ * Incoming messages are retrieved using a continuous long-poll loop running on a dedicated
+ * daemon thread. The loop immediately re-issues a {@code getUpdates} request after each one
+ * completes, delivering new messages within approximately one second of arrival. A transient
+ * error causes a short back-off sleep before the next attempt; an {@link InterruptedException}
+ * terminates the loop cleanly.
  * <p>
  * See note at ControllerBase.
  *
@@ -24,10 +42,37 @@ import java.util.Map;
 public final class   Telegram
              extends ControllerBase
 {
-    private static final String KEY_CHAT  = "chat";
-    private static final String KEY_TOKEN = "token";
+    private static final String KEY_CHAT            = "chat";
+    private static final String KEY_TOKEN           = "token";
+    private static final String KEY_TIMEOUT         = "timeout";
+    private static final String TEMPLATE_TO_SEND    = "https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s";
+    // Square brackets and double-quotes are pre-encoded so that URI.create() never sees bare
+    // RFC-3986-invalid characters: [ → %5B, ] → %5D, " → %22.
+    // The literal percent signs are doubled (%% → %) so that String.format does not misinterpret
+    // the encoded sequences (e.g. %22m) as its own format specifiers.
+    private static final String TEMPLATE_TO_RECEIVE = "https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=%d&allowed_updates=%%5B%%22message%%22%%5D";
 
-    private String sLastSent = "";
+    private static final int DEFAULT_TIMEOUT = 30;
+    private static final int BACKOFF_MILLIS  = 5_000;  // back-off after a transient poll error
+
+    private static final java.net.http.HttpClient httpClient = java.net.http.HttpClient.newBuilder()
+                                                                            .followRedirects( java.net.http.HttpClient.Redirect.NORMAL )
+                                                                            .version( java.net.http.HttpClient.Version.HTTP_1_1 )        // ver 1.1 needed
+                                                                            .build();
+
+    /**
+     * Last message received from Telegram (used by {@link #read} as a fallback when the queue
+     * is empty, so that {@code read()} never accidentally returns an outgoing message).
+     */
+    private volatile String  sLastReceived = "";
+    /** Telegram update_id is a 64-bit integer; using {@code long} avoids overflow. */
+    private volatile long    lastUpdateId  = 0;
+    /** HTTP timeout shared by both send and poll requests. */
+    private final    Duration              httpTimeout  = Duration.ofSeconds( 30 );
+    private final    BlockingQueue<String> receivedMsgs = new LinkedBlockingQueue<>();
+
+    private volatile boolean running        = false;
+    private          Thread  longPollThread = null;
 
     //------------------------------------------------------------------------//
 
@@ -35,83 +80,270 @@ public final class   Telegram
     public void set( String deviceName, Map<String, Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
-        setListener( listener );   // Must be at begining: in case an error happens, Listener is needed
-        setValid( true );          // This controller is always valid
+        setListener( listener );   // Must be at beginning: in case an error happens, Listener is needed
         setDeviceConfig( deviceConf );         // Can be done because mapConfig values are not modified
+
+        Object oTimeout = get( KEY_TIMEOUT );
+        int timeout = (oTimeout != null) ? ((Number) oTimeout).intValue() : DEFAULT_TIMEOUT;
+
+        set( KEY_TIMEOUT, timeout );
+
+        setValid( true );          // This controller is always valid
     }
 
     @Override
     public void read()
     {
-        // isInvalid() --> Is not needed because this controller is always valid
+        if( isInvalid() )
+            return;
 
-        sendReaded( sLastSent );
+        String message;
+
+        if( isFaked() )
+        {
+            message = sLastReceived;
+        }
+        else
+        {
+            message = receivedMsgs.poll();
+
+            if( message != null )  sLastReceived = message;
+            else                   message = sLastReceived;
+        }
+
+        sendReaded( message );
     }
 
     @Override
     public void write( Object deviceValue )
     {
+        String msg = deviceValue.toString();
+
         if( isFaked() )  // || isInvalid() --> Is not needed because this controller is always valid
             return;
 
         UtilSys.executor( true )
                .execute( () ->  {
-                                    String msg = deviceValue.toString();
-
                                     try
                                     {
-                                        _sendIM_( (String) get( KEY_TOKEN ), (String) get( KEY_CHAT ), msg );
-                                        sLastSent = msg;
-                                        sendChanged( msg );
+                                        _sendIM_( msg );
+                                        // Intentionally NOT calling sendChanged here: outgoing messages
+                                        // must not re-trigger WHEN rules (that would cause a feedback loop).
                                     }
-                                    catch( IOException ioe )
+                                    catch( MingleException ioe )
                                     {
-                                        sLastSent = "";
                                         sendWriteError( msg, ioe );
                                     }
                                 } );
     }
 
+    @Override
+    public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        running = true;
+        longPollThread = new Thread( this::_longPollLoop_, "telegram-long-poll-" + getDeviceName() );
+        longPollThread.setDaemon( true );
+        longPollThread.start();
+
+        return isValid();
+    }
+
+    @Override
+    public void stop()
+    {
+        running = false;
+
+        if( longPollThread != null )
+        {
+            longPollThread.interrupt();
+
+            try
+            {
+                longPollThread.join( 3_000 );
+            }
+            catch( InterruptedException ie )
+            {
+                Thread.currentThread().interrupt();
+            }
+
+            longPollThread = null;
+        }
+
+        receivedMsgs.clear();
+        super.stop();
+    }
+
     //------------------------------------------------------------------------//
 
-    private void _sendIM_( String sToken, String sChat, String sMsg ) throws IOException
+    /**
+     * Continuously issues long-poll requests to the Telegram Bot API until the controller
+     * is stopped or the thread is interrupted.
+     * <p>
+     * Each call to {@link #_pollUpdates_()} blocks for up to {@code timeout} seconds (or
+     * until Telegram delivers at least one update). Immediately after it returns the loop
+     * re-issues the request, providing near-real-time message delivery. A transient error
+     * causes a {@value #BACKOFF_MILLIS} ms back-off before the next attempt to avoid
+     * hammering the API.
+     */
+    private void _longPollLoop_()
     {
-        URL url  = new URL( "https://api.telegram.org/bot" + sToken +
-                            "/sendMessage?chat_id=" + URLEncoder.encode( sChat, StandardCharsets.UTF_8 ) +
-                            "&text=" + URLEncoder.encode( sMsg, StandardCharsets.UTF_8 ) );
+        String token   = (String) get( KEY_TOKEN );
+        String chat    = (String) get( KEY_CHAT );
+        int    timeout = ((Number) get( KEY_TIMEOUT )).intValue();
 
-        HttpURLConnection conn = null;
+        while( running && ! Thread.currentThread().isInterrupted() )
+        {
+            URI uri = URI.create( String.format( TEMPLATE_TO_RECEIVE, token, lastUpdateId + 1, timeout ) );    // Has to be re-created each time (bacause: lastUpdateId + 1)
+
+            try
+            {
+                _pollUpdates_( uri, chat, timeout );
+            }
+            catch( InterruptedException ie )
+            {
+                Thread.currentThread().interrupt();
+                break;
+            }
+            catch( Exception exc )
+            {
+                sendReadError( exc );
+
+                try
+                {
+                    Thread.sleep( BACKOFF_MILLIS );
+                }
+                catch( InterruptedException ie )
+                {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
+            }
+        }
+    }
+
+    /**
+     * Sends a text message to a Telegram chat via the Bot API.
+     *
+     * @param message the text to send
+     * @throws MingleException if the API returns an error or the HTTP call fails
+     */
+    private void _sendIM_( String message )
+    {
+        if( message == null )
+            throw new MingleException( "Message must not be null" );
+
+        // Build URI with proper encoding
+        String botToken       = (String) get( KEY_TOKEN );
+        String chatId         = (String) get( KEY_CHAT  );
+        String encodedChatId  = URLEncoder.encode( chatId , StandardCharsets.UTF_8 );
+        String encodedMessage = URLEncoder.encode( message, StandardCharsets.UTF_8 );
+        URI    uri            = URI.create( String.format( TEMPLATE_TO_SEND, botToken, encodedChatId, encodedMessage ) );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                                         .uri( uri )
+                                         .timeout( httpTimeout )
+                                         .GET()
+                                         .build();
 
         try
         {
-            conn = (HttpURLConnection) url.openConnection();
-            conn.setRequestMethod( "GET" );
+            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
 
-            int code = conn.getResponseCode();
+            if( response.statusCode() < 200 || response.statusCode() >= 300 )
+                throw new MingleException( "HTTP " + response.statusCode() + ": " + response.body() );
+        }
+        catch( InterruptedException ie )
+        {
+            Thread.currentThread().interrupt();  // Restore interrupt status
+        }
+        catch( IOException ioe )
+        {
+            throw new MingleException( "I/O error while calling Telegram API", ioe );
+        }
+    }
 
-            if( code == HttpURLConnection.HTTP_OK )
+    /**
+     * Performs a single long-poll request to the Telegram Bot API ({@code getUpdates}).
+     * <p>
+     * Telegram holds the HTTP connection open for up to {@code timeout} seconds. All
+     * text messages that arrive for the configured chat are placed onto the
+     * {@link #receivedMsgs} queue and trigger a {@code sendChanged} notification.
+     * {@code lastUpdateId} is advanced so the next call retrieves only newer updates.
+     *
+     * @throws InterruptedException if the calling thread is interrupted while waiting
+     *         for the HTTP response (propagated to {@link #_longPollLoop_()} to allow
+     *         clean shutdown)
+     */
+    private void _pollUpdates_( URI uri, String targetChat, int timeout ) throws InterruptedException
+    {
+        HttpRequest request = HttpRequest.newBuilder()
+                                         .uri( uri )
+                                         .timeout( Duration.ofSeconds( timeout + 5 ) )
+                                         .GET()
+                                         .build();
+
+        try
+        {
+            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
+
+            if( response.statusCode() < 200 || response.statusCode() >= 300 )
+                return;
+
+            JsonValue jv = UtilJson.parse( response.body() );
+
+            if( jv == null || ! jv.isObject() )
+                return;
+
+            JsonObject responseObj = jv.asObject();
+
+            if( ! responseObj.get( "ok" ).asBoolean() )
+                return;
+
+            JsonArray results = responseObj.get( "result" ).asArray();
+
+            for( JsonValue updateValue : results )
             {
-                try( BufferedReader in = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) ) )
-                {
-                    String        inputLine;
-                    StringBuilder response = new StringBuilder();
+                JsonObject update   = updateValue.asObject();
+                long       updateId = update.get( "update_id" ).asLong();
 
-                    while( (inputLine = in.readLine()) != null )
-                        response.append( inputLine );
+                if( updateId <= lastUpdateId )
+                    continue;
 
-                    if( ! response.toString().startsWith( "{\"ok\":true" ) )
-                        throw new IOException( "Telegram did not return OK, but: "+ response.toString() );
-                }
-            }
-            else
-            {
-                throw new IOException( "GET request not worked. Response code = "+ code );
+                // Advance the offset for every update seen, so non-matching updates
+                // (wrong chat, no text, etc.) do not stall the long-poll loop.
+                lastUpdateId = updateId;
+
+                if( update.get( "message" ) == null )
+                    continue;
+
+                JsonObject message = update.get( "message" ).asObject();
+
+                if( message.get( "text" ) == null )
+                    continue;
+
+                JsonObject chat   = message.get( "chat" ).asObject();
+                String     chatId = String.valueOf( chat.get( "id" ).asLong() );
+
+                if( ! chatId.equals( targetChat ) )
+                    continue;
+
+                String text = message.get( "text" ).asString();
+                receivedMsgs.offer( text );
+                sLastReceived = text;
+
+                sendChanged( text );
             }
         }
-        finally
+        catch( InterruptedException ie )
         {
-            if( conn != null )
-                conn.disconnect();
+            throw ie;   // Propagate so _longPollLoop_ can shut down cleanly
+        }
+        catch( IOException ioe )
+        {
+            throw new MingleException( "I/O error while polling Telegram API", ioe );
         }
     }
 }

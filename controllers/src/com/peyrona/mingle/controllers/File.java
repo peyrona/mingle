@@ -18,12 +18,56 @@ import java.util.Map;
 import java.util.concurrent.ScheduledFuture;
 
 /**
+ * Mingle controller for file I/O operations.
+ * <p>
+ * This controller provides read/write access to both local files and remote files (via supported protocols).
+ * It supports periodic polling for reading file contents and can write values to local files with options
+ * for append or replace modes, automatic line feed insertion, and configurable character encoding.
+ * <p>
+ * Remote files are read-only; write operations are only supported for local files. The controller
+ * can automatically poll files at configurable intervals to detect changes, with minimum interval
+ * constraints to prevent excessive I/O operations (99ms for local files, 3000ms for remote files).
+ *
+ * <h3>Configuration Parameters:</h3>
+ * <table border="1">
+ * <tr><th>Parameter</th><th>Required</th><th>Default</th><th>Description</th></tr>
+ * <tr><td>file</td><td>Yes</td><td>-</td><td>File path or URI (e.g., "/var/log/app.log", "file:///tmp/data.txt")</td></tr>
+ * <tr><td>interval</td><td>No</td><td>-1</td><td>Polling interval in milliseconds. -1 = no polling, read on demand. Min: 99ms (local) / 3000ms (remote)</td></tr>
+ * <tr><td>append</td><td>No</td><td>true</td><td>If true, write operations append to file; if false, file content is replaced</td></tr>
+ * <tr><td>autofeed</td><td>No</td><td>true</td><td>If true, automatically adds line ending after each write operation</td></tr>
+ * <tr><td>charset</td><td>No</td><td>System default</td><td>Character encoding for reading/writing (e.g., "UTF-8", "ISO-8859-1")</td></tr>
+ * </table>
+ *
+ * <h3>Usage Examples:</h3>
+ * <pre>
+ * # Read local file periodically (every 5 seconds)
+ * DEVICE log_file
+ *     DRIVER FileDriver
+ *         CONFIG
+ *             file     AS "/var/log/application.log"
+ *             interval AS 5000
+ *             charset  AS "UTF-8"
+ *
+ * # Write values to a local file (append mode with line feed)
+ * DEVICE data_logger
+ *     DRIVER FileDriver
+ *         CONFIG
+ *             file     AS "/tmp/sensor_data.csv"
+ *             append   AS true
+ *             autofeed AS true
+ *
+ * # Read remote file (read-only, poll every 10 seconds)
+ * DEVICE remote_config
+ *     DRIVER FileDriver
+ *         CONFIG
+ *             file     AS "https://example.com/config/settings.json"
+ *             interval AS 10000
+ * </pre>
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-
 public final class File
        extends ControllerBase
 {
@@ -32,13 +76,13 @@ public final class File
     private static final String KEY_AUTO_FEED = "autofeed";
     private static final String KEY_CHARSET   = "charset";
 
-    private URI               uri  = null;
-    private boolean           bLocal;            // Local or Remote file
-    private java.io.File      file    = null;
-    private UtilIO.FileWriter writer  = null;
-    private ScheduledFuture   future  = null;
+    private boolean            bLocal;   // Local or Remote file
+    private URI                uri    = null;
+    private java.io.File       file   = null;
+    private UtilIO.FileWriter  writer = null;
+    private ScheduledFuture    future = null;
 
-    //------------------------------------------------------------------------//
+//------------------------------------------------------------------------//
 
     @Override
     public void set( String deviceName, Map<String, Object> deviceInit, IController.Listener listener )
@@ -97,9 +141,9 @@ public final class File
         {
             // Parse interval with proper Number handling
             Object oInterval = get( KEY_INTERVAL );
-            long   nInterval = (oInterval != null) ? ((Number) oInterval).longValue() : -1L;
+            long   nInterval = (oInterval != null) ? ((Number) oInterval).longValue() : 0L;
 
-            if( nInterval > -1L )
+            if( nInterval > 0L )
             {
                 nInterval = bLocal ? Math.max(   99L, nInterval )    // Min rate for Local  file
                                    : Math.max( 3000L, nInterval );   // Min rate for Remote file
@@ -123,7 +167,9 @@ public final class File
 
         long interval = (long) get( KEY_INTERVAL );
 
-        if( (future == null) && (interval > -1L) )
+        read();   // Initial value
+
+        if( (future == null) && (interval > 0L) )
         {
             future = UtilSys.executor( false )
                             .delay( interval )
@@ -188,6 +234,7 @@ public final class File
                 if( (writer == null) || (! file.exists()) )
                 {
                     writer = UtilIO.newFileWriter()
+                                   .setSanitizeName( true )
                                    .setFile( file )
                                    .setCharset( (Charset) get( KEY_CHARSET ) );
                 }

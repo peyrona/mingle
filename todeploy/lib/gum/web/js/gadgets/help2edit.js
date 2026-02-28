@@ -18,19 +18,16 @@ class GadgetEditorHelper
 
         $li.addClass('is-active');
 
-        let $dlg = $li.closest('div').parent();
-        let sTag = $li.children('a').first().text().toLowerCase();
+        let $dlg  = $li.closest('div').parent();
+        let nIdx  = $li.index();     // 0=Behavior, 1=Style, 2=Code
 
-        if( sTag === 'style' )
-        {
-            $dlg.children('div').eq(2).hide();
-            $dlg.children('div').eq(1).show();    // eq(1) is 2nd child (becasue it is zero based)
-        }
-        else
-        {
-            $dlg.children('div').eq(1).hide();    // eq(1) is 2nd child (becasue it is zero based)
-            $dlg.children('div').eq(2).show();
-        }
+        // Div order after appends: eq(0)=tabs, eq(1)=style, eq(2)=behavior, eq(3)=code
+        let aMap = [2, 1, 3];       // Tab index -> div eq() index
+
+        for( let n = 1; n <= 3; n++ )
+            $dlg.children('div').eq(n).hide();
+
+        $dlg.children('div').eq( aMap[nIdx] ).show();
     }
 
     //----------------------------------------------------------------------------//
@@ -60,6 +57,7 @@ class GadgetEditorHelper
                                     '<ul>'+
                                         '<li class="is-active" onclick="GadgetEditorHelper.selectTabInPropsEditDlg(this)"><a>Behavior</a></li>'+
                                         '<li                   onclick="GadgetEditorHelper.selectTabInPropsEditDlg(this)"><a>Style</a></li>'+
+                                        '<li                   onclick="GadgetEditorHelper.selectTabInPropsEditDlg(this)"><a>Code</a></li>'+
                                     '</ul>'+
                                 '</div>'+
                             '</div>');
@@ -67,17 +65,24 @@ class GadgetEditorHelper
 
     showDialog()
     {
-        let self = this;
+        let self    = this;
+        let oBounds = gt.read( 'gum_props_dlg_bounds' );
+        let nWidth  = oBounds ? oBounds.width  : p_app.getBestWidth(  "90%", 1200, 900 );
+        let nHeight = oBounds ? oBounds.height : p_app.getBestHeight( "80%",  980, 900 );
+        let oPos    = oBounds ? { my: 'left top', at: 'left+' + oBounds.left + ' top+' + oBounds.top, of: window }
+                              : { my: 'center',   at: 'center',                                        of: window };
 
         this.$dialog.append( $('#properties-style') )
                     .append( $('#'+this.divName).show() )
+                    .append( $('#properties-code') )
                     .dialog( {
                                  title    : 'Gadget Properties',
                                  modal    : true,
                                  autoOpen : true,
                                  resizable: true,
-                                 width    : p_app.getBestWidth(  "90%", 1150, 950 ),
-                                 height   : p_app.getBestHeight( "70%",  920, 750 ),
+                                 width    : nWidth,
+                                 height   : nHeight,
+                                 position : oPos,
                                  open     : function()
                                             {
                                                 self.$dialog.find('div[name="div-tabs"]').find('li:eq(0)').addClass(   'is-active');
@@ -87,17 +92,30 @@ class GadgetEditorHelper
                                                             {
                                                                 self._fillForm_();
                                                                 dlgStyle.setup( self.gadget );    // Set the values for the 'Style' tab in the gadget dialog
+                                                                dlgCode.setup( self.gadget );     // Set the values for the 'Code' tab in the gadget dialog
                                                             }, 500 );
                                             },
                                  beforeClose: function()
                                             {
-                                                self.fnOnEditEnd();  // Ensure edit end callback is always called before closing
-                                                return true;         // Allow the dialog to close
+                                                let $widget = self.$dialog.dialog( 'widget' );
+                                                let oOffset = $widget.offset();
+
+                                                gt.write( 'gum_props_dlg_bounds', {
+                                                    left  : Math.max( 0, Math.round( oOffset.left   ) ),
+                                                    top   : Math.max( 0, Math.round( oOffset.top    ) ),
+                                                    width : self.$dialog.dialog( 'option', 'width'  ),
+                                                    height: self.$dialog.dialog( 'option', 'height' )
+                                                } );
+
+                                                dlgCode.save();          // Persist code textarea back to gadget property
+                                                self.fnOnEditEnd();      // Ensure edit end callback is always called before closing
+                                                return true;             // Allow the dialog to close
                                             },
                                  close    : function()
                                             {                             // eq(0) is the div for tabs
                                                 self.$dialog.children('div').eq(1).hide();
                                                 self.$dialog.children('div').eq(2).hide();
+                                                self.$dialog.children('div').eq(3).hide();
                                                 self.fnOnEditEnd();
                                             }
                              } );
@@ -201,7 +219,15 @@ class GadgetEditorHelperMultiExEn extends GadgetEditorHelper
         super( sDivName, gadget, fnOnChange, fnOnEditEnd, sColname4Exen, sColname4Device );
     }
 
-    setColEditor( table, sColName )
+    /**
+     * Configures the inline editor for a column cell based on the action type.
+     *
+     * @param {TableEditor} table       The table editor instance.
+     * @param {String}      sColName    Column being edited ("exen" or "name").
+     * @param {String}      [sActionType="change"]  One of "change", "execute_rule", "execute_script".
+     * @returns {GadgetEditorHelperMultiExEn} this
+     */
+    setColEditor( table, sColName, sActionType = "change" )
     {
         let $list = $('<select></select>');
 
@@ -211,10 +237,14 @@ class GadgetEditorHelperMultiExEn extends GadgetEditorHelper
         }
         else
         {
-            let sExEn = table.getValue( table.getSelectedRowIndex(), this.sExEn );
+            let sExEn  = table.getValue( table.getSelectedRowIndex(), this.sExEn );
+            let asNames;
 
-            gum.getDeviceNames4( sExEn )
-                .forEach( (sDevName) => $list.append( $('<option>'+ sDevName +'</option>') ) );
+            if( sActionType === "execute_rule" )         asNames = gum.getRuleNames4( sExEn );
+            else if( sActionType === "execute_script" )  asNames = gum.getScriptNames4( sExEn );
+            else                                         asNames = gum.getDeviceNames4( sExEn );
+
+            asNames.forEach( (sName) => $list.append( $('<option>'+ sName +'</option>') ) );
         }
 
         // oColum is just a String: we can safely replace it (it is not yet a SELECT DOM object).

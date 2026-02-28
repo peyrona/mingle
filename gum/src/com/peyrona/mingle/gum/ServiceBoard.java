@@ -1,15 +1,17 @@
 
 package com.peyrona.mingle.gum;
 
-
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.OneToMany;
 import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
@@ -48,12 +50,12 @@ import javax.servlet.http.HttpServletResponse;
  */
 final class ServiceBoard extends ServiceBase
 {
-    private static final String sMarkStart = "// START MARK TO INSERT getConfig()";
-    private static final String sMarkEnd   = "// END MARK TO INSERT getConfig()";
-                                // Pwd   , Boards
-    private static final OneToMany<String,String> mapPwdBoard = new OneToMany<>();    // Internally, a 'OneToMany' is a: Map<K,List<V>>
+    private static final    String sMarkStart = "// START MARK TO INSERT getConfig()";
+    private static final    String sMarkEnd   = "// END MARK TO INSERT getConfig()";
 
-    private static       String sMasterPwd = null;    // There is only one for all users
+    private static volatile String                   sMasterPwd        = null;
+    private static final    OneToMany<String,String> mapPwd2Boards     = new OneToMany<>();      // key=Pwd, value=Boards[]. Internally, a 'OneToMany' is a: Map<K,List<V>>
+    private static final    HmacAuthenticator        hmacAuthenticator = new HmacAuthenticator();
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
@@ -69,12 +71,15 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doGet() throws IOException
     {
-        if( mapPwdBoard.isEmpty() )
+        if( ! validateRequest() )
+            return;
+
+        if( mapPwd2Boards.isEmpty() )
         {
-            synchronized( mapPwdBoard )
+            synchronized( mapPwd2Boards )
             {
-                if( mapPwdBoard.isEmpty() )
-                    initMap();
+                if( mapPwd2Boards.isEmpty() )
+                    initBoardsMap();
             }
         }
 
@@ -88,15 +93,15 @@ final class ServiceBoard extends ServiceBase
 
                 if( isMasterPwd( sPwd ) )
                 {
-                    for( List<String> lst : mapPwdBoard.values() )
+                    for( List<String> lst : mapPwd2Boards.values() )
                         lstBoards.addAll( lst );
                 }
-                else if( mapPwdBoard.containsKey( sPwd ) )
+                else if( mapPwd2Boards.containsKey( sPwd ) )
                 {
-                    lstBoards.addAll( mapPwdBoard.get( sPwd ) );     // Boards for passed password
+                    lstBoards.addAll( mapPwd2Boards.get( sPwd ) );     // Boards for passed password
 
                     if( UtilStr.isNotEmpty( sPwd ) )
-                        lstBoards.addAll( mapPwdBoard.get( "" ) );   // Add also boards with no password
+                        lstBoards.addAll( mapPwd2Boards.get( "" ) );   // Add also boards with no password
                 }
 
                 sendJSON( UtilJson.toJSON( lstBoards.toArray( String[]::new ) ).toString() );
@@ -112,11 +117,18 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPost() throws IOException    // UPDATE  (used to update master password and also to update dashboard contents)
     {
+        if( ! validateRequest() )
+            return;
+
         asJSON( (JsonObject jo) ->
                 {
                     UtilJson   uj = new UtilJson( jo );
-                    String     sPwdOld  = uj.getString( "pwd_old", null );
-                    String     sPwdNew  = uj.getString( "pwd_new", null );
+                    String     sPwdOld    = uj.getString( "pwd_old",    null );
+                    String     sPwdNew    = uj.getString( "pwd_new",    null );
+
+                    String     sSecretOld = uj.getString( "secret_old", null );  // To change HMAC shared secret
+                    String     sSecretNew = uj.getString( "secret_new", null );
+                    String     sMasterPwd = uj.getString( "master_pwd", null );  // Required to authorize a secret change
 
                     String     sName    = uj.getString( "name", null );      // file name comes already not empty, normalized and != "_template_"
                     JsonObject oRest    = uj.getObject( "rest", null );      // Everything else (board contents)
@@ -129,15 +141,16 @@ final class ServiceBoard extends ServiceBase
 
                     try
                     {
-                             if( sPwdOld  != null && sPwdNew  != null )  changeMasterPwd( sPwdOld, sPwdNew );
-                        else if( sName    != null && oRest    != null )  writeContents( getBoardFile( sName ), oRest );
-                        else if( sCurrent != null && sTarget  != null )  cloneBoard(  sCurrent, sTarget  );
-                        else if( sNameOld != null && sNameNew != null )  renameBoard( sNameOld, sNameNew );
-                        else                                             sendError("Invalid parameters", HttpServletResponse.SC_BAD_REQUEST );
+                             if( sPwdOld    != null && sPwdNew    != null )  changeMasterPwd(    sPwdOld,    sPwdNew    );
+                        else if( sSecretOld != null && sSecretNew != null )  changeSharedSecret( sMasterPwd, sSecretOld, sSecretNew );
+                        else if( sName      != null && oRest      != null )  writeContents( sName, oRest );
+                        else if( sCurrent   != null && sTarget    != null )  cloneBoard(  sCurrent, sTarget  );
+                        else if( sNameOld   != null && sNameNew   != null )  renameBoard( sNameOld, sNameNew );
+                        else                                                 sendError("Invalid parameters", HttpServletResponse.SC_BAD_REQUEST );
                     }
-                    catch( IOException ioe )
+                    catch( IOException exc )
                     {
-                        sendError( ioe );
+                        sendError( exc );
                     }
                 } );
     }
@@ -145,13 +158,16 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPut() throws IOException    // NEW  (used to create a new dashboard)
     {
+        if( ! validateRequest() )
+            return;
+
         String sBoardName  = asString( "name"   );
         String sLayoutType = asString( "layout" );
-        File   fBoardDir   = new File( Util.getBoardsDir(), sBoardName );    // The folder name is the same as board name (".html" is not part of the name)
-        File   fBoardImgs  = new File( fBoardDir, "images" );     // The folder inside the '[home]/etc/gum_user_files/dashboards' folder containing the images for this dashboard
+        File   fBoardDir   = getBoardFolder( sBoardName );      // The folder name is the same as board name (".html" is not part of the name)
+        File   fBoardImgs  = new File( fBoardDir, "images" );   // The folder inside the '[home]/etc/gum_user_files/dashboards' folder containing the images for this dashboard
         String sErrMsg     = "";
 
-        createIfNotExist( fBoardDir );     // The folder inside the '[home]/etc/gum_user_files/dashboards' folder
+        create( fBoardDir );     // The folder inside the '[home]/etc/gum_user_files/dashboards' folder
 
         if( ! UtilIO.mkdirs( fBoardImgs ) )
         {
@@ -165,15 +181,15 @@ final class ServiceBoard extends ServiceBase
             {
                 UtilIO.copy( fCommonImages, fBoardImgs );
 
-                File fBoard  = new File( fBoardDir, sBoardName +".html" );     // Board name is the folder's name
+                File fBoard  = getBoardFile( sBoardName );                        // Board name is the folder's name
                 File fTempla = new File( Util.getAppDir(), "_template_.html" );   // "_template_.html" file is one dir above boards folder
 
                 Files.copy( fTempla.toPath(), fBoard.toPath(), StandardCopyOption.REPLACE_EXISTING );
 
                 JsonObject jo = Json.parse( "{\"background\": null, \"exens\": [], \"layout\": {\"type\": \""+ sLayoutType +"\", \"contents\": null}}" ).asObject();
 
-                writeContents( fBoard, jo );
-                mapPwdBoard.put( "", fBoard.getName() );
+                writeContents( sBoardName, jo );
+                mapPwd2Boards.put( "", fBoard.getName() );   // "" -> Empty pwd
             }
             catch( IOException ioe )
             {
@@ -191,6 +207,9 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doDelete() throws IOException   // Client takes care that only users with master password can invoke this
     {
+        if( ! validateRequest() )
+            return;
+
         String name = asString( "name" );
 
         UtilIO.delete( getBoardFolder( name ) );   // Deletes the folder (containing 'board.html' and any other files/folders (like the images folder)
@@ -211,30 +230,57 @@ final class ServiceBoard extends ServiceBase
      */
     private boolean isMasterPwd( String pwd ) throws IOException
     {
-        if( (sMasterPwd == null) && getFile4MasterPwd().exists() )
-            sMasterPwd = UtilIO.getAsText( getFile4MasterPwd() );
+        if( sMasterPwd == null )
+            sMasterPwd = UtilSys.getConfig().get( "monitoring", "master_password", "" );
 
-        return sMasterPwd == null || sMasterPwd.equals( pwd ) || isFromLocalhost();
+        return sMasterPwd.equals( (pwd == null ? "" : pwd) ) || isFromLocalhost();
     }
 
-    private static void initMap() throws IOException
+    private boolean validateRequest() throws IOException
+    {
+        String result = hmacAuthenticator.validateRequest( request );
+
+        if( result != null )    // null == valid
+            sendError( result, HttpServletResponse.SC_UNAUTHORIZED );
+
+        return result == null;
+    }
+
+    private static void initBoardsMap() throws IOException
     {
         List<File> list = UtilIO.listFilesInTree( Util.getBoardsDir(),
                                                   (File f) ->
                                                   {
-                                                      return "html".equalsIgnoreCase( UtilIO.getExtension( f ) ) &&
+                                                      return UtilStr.endsWith( f.getName(), ".html" ) &&
                                                              f.getParentFile().getName().equals( UtilIO.getName( f ) );
                                                   } );
 
         for( File fBoard : list )
-            mapPwdBoard.put( getPassword( fBoard ), fBoard.getName() );
+        {
+            try
+            {
+                mapPwd2Boards.put( getPassword( fBoard ), fBoard.getName() );
+            }
+            catch( Exception ex )
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to read password from dashboard: " + fBoard.getName() + " — " + ex.getMessage() );
+                mapPwd2Boards.put( "", fBoard.getName() );    // Add it with empty password so it still appears in the list
+            }
+        }
     }
 
-    private void writeContents( File fBoard, JsonObject oContent ) throws IOException
+    private void writeContents( String sBoardName, JsonObject oContent ) throws IOException
     {
-        String sBoard   = UtilIO.getAsText( fBoard );
-        int    nStart   = sBoard.indexOf( sMarkStart ) + sMarkStart.length();
-        int    nEnd     = sBoard.indexOf( sMarkEnd   );
+        File   fBoard = getBoardFile( sBoardName );
+        String sBoard = UtilIO.getAsText( fBoard );
+        int    nIdx   = sBoard.indexOf( sMarkStart );
+        int    nEnd   = sBoard.indexOf( sMarkEnd   );
+
+        if( nIdx == -1 || nEnd == -1 )
+            throw new IOException( "Config markers not found in template file" );
+
+        int nStart = nIdx + sMarkStart.length();
+
         String sReplace = '\n'+
                           "            function getConfig()\n"+
                           "            {\n"+
@@ -244,28 +290,23 @@ final class ServiceBoard extends ServiceBase
 
         sBoard = sBoard.substring( 0, nStart ) + sReplace + sBoard.substring( nEnd );
 
-        UtilIO.newFileWriter()
-              .setFile( fBoard )
-              .replace( sBoard );
+        // Write directly to avoid UtilIO.FileWriter.setFile() overload.
+        Files.write( fBoard.toPath(), sBoard.getBytes( StandardCharsets.UTF_8 ) );
 
         // Every time a dashboard is saved, its password could be changed: it is needed
         // to check if this was the case, and if so, to update the map.
-
         String sName   = fBoard.getName();
-        String sKey    = mapPwdBoard.getKeyForValue( sName );
+        String sKey    = mapPwd2Boards.getKeyForValue( sName );
         String sNewPwd = oContent.getString( "password", null );
 
         if( ! Objects.equals( sKey, sNewPwd ) )    // Most part of the time, this 'if' resolves to false
-        {
-            if( sKey != null )
-                mapPwdBoard.remove( sKey, sName );
-
-            mapPwdBoard.put( sNewPwd, sName );
-        }
+            mapPwd2Boards.moveValue( sKey, sNewPwd, sName );
     }
 
     private static File getBoardFolder( String name ) throws IOException
     {
+        name = Util.sanitizeFileName( name );
+
         if( UtilStr.endsWith( name, ".html" ) )
             name = UtilStr.removeLast( name, 5 );
 
@@ -274,6 +315,8 @@ final class ServiceBoard extends ServiceBase
 
     private static File getBoardFile( String name ) throws IOException
     {
+        name = Util.sanitizeFileName( name );
+
         return new File( getBoardFolder( name ),
                          UtilIO.addExtension( name, ".html" ) );
     }
@@ -291,20 +334,38 @@ final class ServiceBoard extends ServiceBase
         return new UtilJson( sFunc ).getString( "password", "" );
     }
 
-    private static File getFile4MasterPwd() throws IOException
-    {
-        return new File( Util.getBoardsDir(), "master_password.txt" );
-    }
-
     private void changeMasterPwd( String sPwdOld, String sPwdNew ) throws IOException
     {
+        if( Objects.equals( sPwdOld, sPwdNew ) )
+            return;
+
         if( isMasterPwd( sPwdOld ) )
         {
-            UtilIO.newFileWriter()
-                  .setFile( getFile4MasterPwd() )
-                  .replace( sPwdNew );
+            File fConfig = new File( UtilSys.getConfig().getURI() );
 
-            sMasterPwd = sPwdNew;    // After successfully saved the file
+            if( fConfig.exists() )
+            {
+                String sContent = UtilIO.getAsText( fConfig );
+                String sEscaped = sPwdNew.replace( "\\", "\\\\" ).replace( "\"", "\\\"" );   // Escape any backslashes and quotes in the new password for JSON embedding
+                String sUpdated = sContent.replaceFirst( "(\"master_password\"\\s*:\\s*)(?:\"[^\"]*\"|null)", "$1\"" + sEscaped + "\"" );
+
+                if( sUpdated.equals( sContent ) )
+                {
+                    sendError( "'master_password' key not found in config file:\n" + fConfig.getPath(), HttpServletResponse.SC_EXPECTATION_FAILED );
+                    return;
+                }
+
+                UtilIO.newFileWriter()
+                      .setFile( fConfig )
+                      .replace( sUpdated );
+
+                sMasterPwd = sPwdNew;
+            }
+            else
+            {
+                sendError( "Config file not found or not accessible:\n" + fConfig.getPath(),
+                           HttpServletResponse.SC_EXPECTATION_FAILED );
+            }
         }
         else
         {
@@ -312,12 +373,78 @@ final class ServiceBoard extends ServiceBase
         }
     }
 
+    /**
+     * Updates the HMAC shared secret in config.json.
+     * <p>
+     * Only the master user (or localhost) may invoke this. The caller must supply both the current
+     * master password ({@code sMasterPwd}) and the current secret ({@code sSecretOld}) to prevent
+     * unauthorized changes. Because {@link HmacAuthenticator} reads the secret once at startup,
+     * the new value takes effect only after the server is restarted.
+     *
+     * @param sMasterPwd current master password (used to verify caller is master)
+     * @param sSecretOld current shared secret (empty string when HMAC is disabled)
+     * @param sSecretNew new shared secret (empty string to disable HMAC)
+     * @throws IOException if the config file cannot be read or written
+     */
+    private void changeSharedSecret( String sMasterPwd, String sSecretOld, String sSecretNew ) throws IOException
+    {
+        if( ! isFromLocalhost() && ! isFromIntranet() )
+        {
+            sendError( "Changing the shared secret is only allowed from localhost or the local network (192.168.*.*).",
+                       HttpServletResponse.SC_FORBIDDEN );
+            return;
+        }
+
+        if( Objects.equals( sSecretOld, sSecretNew ) )
+            return;
+
+        if( ! isMasterPwd( sMasterPwd ) )
+        {
+            sendError( "Master access required to change shared secret.", HttpServletResponse.SC_UNAUTHORIZED );
+            return;
+        }
+
+        File   fConfig   = new File( UtilSys.getConfig().getURI() );
+        String sContent  = UtilIO.getAsText( fConfig );
+
+        // Extract the current value so we can validate sSecretOld
+        java.util.regex.Matcher m = java.util.regex.Pattern
+                .compile( "\"shared_secret\"\\s*:\\s*(\"[^\"]*\"|null)" )
+                .matcher( sContent );
+
+        if( ! m.find() )
+        {
+            sendError( "'shared_secret' key not found in config file:\n" + fConfig.getPath(),
+                       HttpServletResponse.SC_EXPECTATION_FAILED );
+            return;
+        }
+
+        String sCurrentRaw = m.group( 1 );   // e.g. "mysecret"  or  null
+        String sCurrent    = sCurrentRaw.equals( "null" ) ? "" : sCurrentRaw.substring( 1, sCurrentRaw.length() - 1 );
+
+        if( ! sCurrent.equals( sSecretOld == null ? "" : sSecretOld ) )
+        {
+            sendError( "Invalid current shared secret.", HttpServletResponse.SC_UNAUTHORIZED );
+            return;
+        }
+
+        String sReplacement = UtilStr.isEmpty( sSecretNew ) ? "null"
+                                                            : "\"" + sSecretNew.replace( "\\", "\\\\" ).replace( "\"", "\\\"" ) + "\"";
+
+        String sUpdated = sContent.replaceFirst( "(\"shared_secret\"\\s*:\\s*)(?:\"[^\"]*\"|null)",
+                                                 "$1" + sReplacement );
+
+        UtilIO.newFileWriter()
+              .setFile( fConfig )
+              .replace( sUpdated );
+    }
+
     private void cloneBoard( String source, String target ) throws IOException
     {
         File fDirSource = getBoardFolder( source );
         File fDirTarget = getBoardFolder( target );
 
-        createIfNotExist( fDirTarget );
+        create( fDirTarget );
 
         File fileSource = getBoardFile( source );
         File fileTarget = getBoardFile( target );
@@ -328,7 +455,7 @@ final class ServiceBoard extends ServiceBase
                     new File( fDirTarget, fileTarget.getName() ).toPath(),
                     StandardCopyOption.REPLACE_EXISTING );
 
-        mapPwdBoard.put( mapPwdBoard.getKeyForValue( fileSource.getName() ),
+        mapPwd2Boards.put( mapPwd2Boards.getKeyForValue( fileSource.getName() ),
                          fileTarget.getName() );
     }
 
@@ -356,23 +483,25 @@ final class ServiceBoard extends ServiceBase
 
         String sKey = removeFileFromList( fBoardOld.getName() );
 
-        mapPwdBoard.put( sKey, sNameNew +".html" );
+        mapPwd2Boards.put( sKey, sNameNew +".html" );
     }
 
     private String removeFileFromList( String sFileName ) throws IOException
     {
-        String sKey = mapPwdBoard.getKeyForValue( sFileName );
+        sFileName = Util.sanitizeFileName( sFileName );
+
+        String sKey = mapPwd2Boards.getKeyForValue( sFileName );
 
         if( sKey == null )
             throw new IOException( "Key for value "+ sFileName +" is null" );
 
-        mapPwdBoard.remove( sKey, sFileName );
+        mapPwd2Boards.remove( sKey, sFileName );
 
         return sKey;
     }
 
     // It is done also at client side, but must be done here too (more than one user could invoke this ta the same time)
-    private synchronized void createIfNotExist( File file ) throws IOException
+    private synchronized void create( File file ) throws IOException
     {
         if( file.exists() )
             throw new IOException( '"'+ file.getName() +"\"\n already exists" );
@@ -380,4 +509,5 @@ final class ServiceBoard extends ServiceBase
         if( ! UtilIO.mkdirs( file ) )
             throw new IOException( "Error creating: "+ file );
     }
+
 }

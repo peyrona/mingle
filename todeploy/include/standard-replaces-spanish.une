@@ -1,5 +1,6 @@
 #-------------------------------------------------------------------------------
-# This file contains the standard (default) replaces for the Une language
+# This file contains the standard (default) replaces for the Une language.
+# These replaces are incomplete and exists only for teaching purposes.
 # ------------------------------------------------------------------------------
 # This file is part of the Mingle project.
 # This project is licensed under Apache 2.0 License
@@ -26,21 +27,7 @@ USE ES         AS ==
     COMO_MUCHO AS <=
     DISTINTO   AS !=
     NO_ES      AS !=
-    <>         AS !=
-#--------------------------------
 
-# Operadores booleanos ----------
-USE Y  AS &&
-    O  AS ||
-    XO AS |&
-    NO AS !
-#--------------------------------
-
-# Operadores sobre bits ---------
-USE BY  AS &
-    BO  AS |
-    BXO AS ><
-    BNO AS ~
 #--------------------------------
 
 # Guiones -----------------------
@@ -50,13 +37,6 @@ USE NATIVO     AS SCRIPT
     INVOCAR    AS CALL
     ALINICIO   AS ONSTART
     ALTERMINAR AS ONEND
-#--------------------------------
-
-# Controladores -----------------
-USE CONTROLADOR   AS DRIVER
-    CONFIGURACION AS CONFIGURATION
-    TIPO          AS AS
-    NECESARIO     AS REQUIRED
 #--------------------------------
 
 # Reglas ------------------------

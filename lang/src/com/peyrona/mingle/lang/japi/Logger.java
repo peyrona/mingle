@@ -353,6 +353,15 @@ public final class Logger implements ILogger
             else if( record.getLevel().equals( java.util.logging.Level.WARNING ) )  UtilANSI.outYellow( msg );
             else if( record.getLevel().equals( java.util.logging.Level.FINE    ) )  UtilANSI.outCyan(   msg );   // RULE     (changed in ::myLevel2javaLevel)
             else if( record.getLevel().equals( java.util.logging.Level.FINEST  ) )  UtilANSI.outPurple( msg );   // MESSAGE  (changed in ::myLevel2javaLevel)
+
+
+
+                 if( record.getLevel().equals( java.util.logging.Level.SEVERE  ) )  UtilANSI.outRed(    msg );
+            else if( record.getLevel().equals( java.util.logging.Level.WARNING ) )  UtilANSI.outYellow( msg );
+            else if( record.getLevel().equals( java.util.logging.Level.INFO    ) )  UtilANSI.outGreen(  msg );
+            else if( record.getLevel().equals( java.util.logging.Level.FINE    ) )  UtilANSI.outCyan(   msg );   // RULE     (changed in ::myLevel2javaLevel)
+            else if( record.getLevel().equals( java.util.logging.Level.FINEST  ) )  UtilANSI.outPurple( msg );   // MESSAGE  (changed in ::myLevel2javaLevel)
+            else                                                                    super.publish( record );
         }
     }
 

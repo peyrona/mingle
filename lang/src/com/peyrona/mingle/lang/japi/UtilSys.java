@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
@@ -160,8 +172,8 @@ public final class UtilSys
         synchronized( fHomeDir )
         {
             logger = new Logger().init( name.trim(), bDisk, b2Console )
-                             .setLevel( sLogLevel )
-                             .deleteOlderThan( (UtilSys.isDevEnv ? 21 : expire) );
+                                 .setLevel( sLogLevel )
+                                 .deleteOlderThan( (UtilSys.isDevEnv ? 21 : expire) );
         }
 
         return logger;
@@ -419,11 +431,7 @@ public final class UtilSys
      */
     public static boolean isUnix()
     {
-        String OS = getOS().toLowerCase();
-
-        return OS.contains( "nix" ) ||
-               OS.contains( "nux" ) ||
-               OS.contains( "aix" );
+        return UtilStr.contains( getOS(), "nix", "nux", "aix" );
     }
 
     /**
@@ -433,10 +441,7 @@ public final class UtilSys
      */
     public static boolean isSolaris()
     {
-        String OS = getOS().toLowerCase();
-
-        return OS.contains( "sunos" ) ||
-               OS.contains( "solaris" );
+        return UtilStr.contains( getOS(), "sunos", "solaris" );
     }
 
     /**
@@ -446,7 +451,7 @@ public final class UtilSys
      */
     public static boolean isLinux()
     {
-        return getOS().toLowerCase().contains( "linux" );
+        return UtilStr.contains( getOS(), "linux" );
     }
 
     /**
@@ -456,10 +461,7 @@ public final class UtilSys
      */
     public static boolean isHpUnix()
     {
-        String OS = getOS().toLowerCase();
-
-		return OS.contains( "hp-ux" ) ||
-               OS.contains( "hpux"  );
+		return UtilStr.contains( getOS(), "hp-ux", "hpux" );
     }
 
     /**
@@ -507,13 +509,13 @@ public final class UtilSys
             {
                 String cpuInfo = Files.readString( modelPath, StandardCharsets.UTF_8 );
 
-                if( cpuInfo.contains( "Raspberry Pi" ) ||
-                    cpuInfo.contains( "BCM2708" )      ||
-                    cpuInfo.contains( "BCM2709" )      ||
-                    cpuInfo.contains( "BCM2711" )      ||
-                    cpuInfo.contains( "BCM2835" )      ||
-                    cpuInfo.contains( "BCM2836" )      ||
-                    cpuInfo.contains( "BCM2837" ) )
+                if( UtilStr.contains( cpuInfo, "Raspberry Pi",
+                                               "BCM2708",
+                                               "BCM2709",
+                                               "BCM2711",
+                                               "BCM2835",
+                                               "BCM2836",
+                                               "BCM2837" ) )
                 {
                     return true;
                 }
@@ -931,9 +933,9 @@ public final class UtilSys
         }
 
         @Override
-        public boolean isLoggable( Level level )
+        public boolean isLoggable( Level l )
         {
-            return (level.weight >= this.level.weight);
+            return (l.weight >= level.weight);
         }
 
         @Override
@@ -952,13 +954,13 @@ public final class UtilSys
         @Override
         public boolean log( Level l, String msg )
         {
-            return log( level, null, msg );
+            return log( l, null, msg );
         }
 
         @Override
         public boolean log( Level l, Throwable th )
         {
-            return log( level, th, null );
+            return log( l, th, null );
         }
 
         @Override

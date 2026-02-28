@@ -73,6 +73,17 @@ abstract class ServiceBase
         }
     }
 
+    /**
+     * Returns true if the request originates from a 192.168.x.x (LAN) address.
+     *
+     * @return true if the remote address is within the 192.168.0.0/16 range.
+     */
+    protected boolean isFromIntranet()
+    {
+        String addr = request.getRemoteAddr();
+        return (addr != null) && addr.startsWith( "192.168." );
+    }
+
     // GET REQUEST PARAMETER
 
     protected boolean hasParam( String name )

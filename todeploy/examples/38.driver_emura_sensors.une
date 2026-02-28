@@ -10,6 +10,8 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
+USE EMURA_IP AS "192.168.7.246"
+
 DEVICE console
     DRIVER OutputDriver
 
@@ -17,8 +19,8 @@ DEVICE console
 DEVICE sensors
     DRIVER DaikinEmuraSensorsDriver
            CONFIG
-               address  SET "192.168.7.246"
-               interval SET 1m                             # 1 minute is the minimum accepted interval
+               address  SET EMURA_IP
+               interval SET 1m        # 1 minute is the minimum accepted interval
 
 
 WHEN sensors

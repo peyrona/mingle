@@ -1,0 +1,21 @@
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 5s
+
+
+DEVICE console
+	DRIVER OutputDriver
+
+
+WHEN clock
+THEN console = "Hello world"
+
+
+SCRIPT
+    ONSTART
+    LANGUAGE Une
+    FROM {
+             console = "Hello from SCRIPT"
+             console = 12*3
+         }

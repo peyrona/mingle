@@ -1,6 +1,8 @@
 
 package com.peyrona.mingle.lang;
 
+import com.peyrona.mingle.lang.japi.UtilColls;
+
 /**
  *
  * @author Francisco José Morero Peyrona
@@ -25,6 +27,11 @@ public class MingleException extends RuntimeException
     public MingleException( short msg )
     {
         super( asMSG[msg] );
+    }
+
+    public MingleException( short msg, Object... args )
+    {
+        super( asMSG[msg] +": "+ UtilColls.toString( args ) );
     }
 
     public MingleException( String message )

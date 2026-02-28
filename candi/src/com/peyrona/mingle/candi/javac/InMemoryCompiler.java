@@ -2,9 +2,8 @@
 package com.peyrona.mingle.candi.javac;
 
 import com.peyrona.mingle.candi.IntermediateCodeWriter;
-import com.peyrona.mingle.lang.japi.Pair;
-import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.lexer.CodeError;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.OutputStream;
@@ -89,17 +88,12 @@ final class InMemoryCompiler
 
         List<String> options = new ArrayList<>();     // Compilation options
 
-        try
-        {
-            options.add( "-classpath" );
-            options.add( UtilIO.expandPath( "{*home*}lib/lang.jar" ).get( 0 ).toString() );
-            options.add( "--release" );
-            options.add( sClassFileVersion );
-        }
-        catch( IOException ex )
-        {
-            // Nothing to do: it is too complex to report this error and it can not happen
-        }
+        // Reuse the running JVM's classpath: covers lang.jar and all its transitive
+        // dependencies (minimal-json, etc.) without any hardcoding.
+        options.add( "-classpath" );
+        options.add( System.getProperty( "java.class.path" ) );
+        options.add( "--release" );
+        options.add( sClassFileVersion );
 
         JavaMemFileManager fileManager = new JavaMemFileManager();
         JavaFileObject     javaStrObj  = new JavaStringObject( className, classCode );
@@ -125,18 +119,36 @@ final class InMemoryCompiler
         return abByteCode;
     }
 
-    List<Pair<String,Integer>> getErrors()
+    /**
+     * Returns a list of compilation errors. Each {@link CodeError} carries the line and column
+     * number as reported by the Java compiler ({@code getLineNumber()} / {@code getColumnNumber()},
+     * both 1-based), relative to the generated source that was passed to {@link #compile}.
+     * The caller is responsible for adjusting these numbers to the user's original source by
+     * subtracting any boilerplate preamble lines that were prepended before compilation.
+     */
+    List<CodeError> getErrors()
     {
-        List<Pair<String,Integer>> list = new ArrayList<>();
+        List<CodeError> list = new ArrayList<>();
 
         if( (! isCompiled) && diagnostics.getDiagnostics().isEmpty() )
         {
-            list.add( new Pair( "Source code not compiled", 0 ) );
+            list.add( new CodeError( "Source code not compiled", 0, 0 ) );
         }
         else
         {
             for( Diagnostic<? extends JavaFileObject> d : diagnostics.getDiagnostics() )
-                    list.add( new Pair( d.getMessage( Locale.ENGLISH ), (int) d.getPosition() ) );
+            {
+                if( d.getKind() != Diagnostic.Kind.ERROR )
+                    continue;
+
+                // getLineNumber()/getColumnNumber() are 1-based; NOPOS means unavailable.
+                long lineNum = d.getLineNumber();
+                long colNum  = d.getColumnNumber();
+
+                list.add( new CodeError( d.getMessage( Locale.ENGLISH ),
+                                         (lineNum == Diagnostic.NOPOS) ? 0 : (int) lineNum,
+                                         (colNum  == Diagnostic.NOPOS) ? 0 : (int) colNum  ) );
+            }
         }
 
         return list;

@@ -9,17 +9,16 @@
 #==================================================================================================================================
 
 WHEN weather
-THEN console SET "Encoded weather: "+ _NL_ + weather
+THEN console SET "Encoded weather: \n" + weather + "\n"
 
 WHEN weather
-THEN console SET newLine() + \
-                 "Temperature in:"+ newLine()                                          + \
-                 "   + 2 hrs: "+ weather:get("temperature"):get(1) + "ºC"+ newLine()   + \
-                 "   + 3 hrs: "+ weather:get("temperature"):get(2) + "ºC"+ newLine()   + \
-                 "   + 4 hrs: "+ weather:get("temperature"):get(3) + "ºC"+ newLine()   + \
-                 "Clouds in:"+ newLine()                                               + \
-                 "   + 2 hrs: "+ weather:get("clouds"):get(1):floor() + "%"+ newLine() + \
-                 "   + 3 hrs: "+ weather:get("clouds"):get(2):floor() + "%"+ newLine() + \
+THEN console SET "Temperature in:"                                             + \
+                 "   + 2 hrs: "+ weather:get("temperature"):get(1)    + "ºC\n" + \
+                 "   + 3 hrs: "+ weather:get("temperature"):get(2)    + "ºC\n" + \
+                 "   + 4 hrs: "+ weather:get("temperature"):get(3)    + "ºC\n" + \
+                 "Clouds in:\n"                                                + \
+                 "   + 2 hrs: "+ weather:get("clouds"):get(1):floor() + "%\n"  + \
+                 "   + 3 hrs: "+ weather:get("clouds"):get(2):floor() + "%\n"  + \
                  "   + 4 hrs: "+ weather:get("clouds"):get(3):floor() + "%"
 
 # ---------------------------------------------------------------------------------------------------------------------------------

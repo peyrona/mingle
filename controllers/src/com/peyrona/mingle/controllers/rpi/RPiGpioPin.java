@@ -286,10 +286,6 @@ public final class   RPiGpioPin
         if( ! UtilSys.isRaspberryPi() )
             failed( "faked-mode=false. Is this a Raspberry Pi compatible?" );
 
-        String sModel = getRuntime().getFromConfig( "common", "RPiNumberingModel", "BCM" );
-
-        isBCM = sModel.equalsIgnoreCase( "BCM" );    // By default (null) it is BCM
-
         try
         {
             WiringPi.setup( isBCM );

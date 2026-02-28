@@ -1,4 +1,16 @@
-
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
@@ -106,6 +118,8 @@ public final class UtilReflect
 
         sMethod = sMethod.trim();
 
+        Method fallback = null;
+
         for( Method method : clazz.getDeclaredMethods() )
         {
             if( (method.isVarArgs() || (nParams == method.getParameterCount()) )        // This 1st to speed up
@@ -117,8 +131,14 @@ public final class UtilReflect
 
                 if( Arrays.equals( aoParamTypes, method.getParameterTypes() ) )
                     return method;
+
+                if( fallback == null )
+                    fallback = method;
             }
         }
+
+        if( fallback != null )
+            return fallback;
 
         // Code arrives here when received class does not have the method: let check its superclass
 
@@ -219,7 +239,7 @@ public final class UtilReflect
         {
             clazz = Class.forName( sFullClassName, true, type.getClassLoader() );
         }
-        catch( ClassNotFoundException cnfe )    // Class not found - need to add JARs dynamically
+        catch( ClassNotFoundException | NoClassDefFoundError cnfe )    // Class (or its dependency) not found - need to add JARs dynamically
         {
             if( asURIs != null )
             {

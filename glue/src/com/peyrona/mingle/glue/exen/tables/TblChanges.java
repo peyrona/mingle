@@ -45,11 +45,19 @@ final class TblChanges
         {
             final Pattern pattern = Pattern.compile( sDevName );
 
-            model.setFilter( (ExEnComm ec) -> pattern.matcher( ec.getDeviceName() ).matches() );
+            model.setFilter( (ExEnComm ec) ->
+            {
+                String name = ec.getDeviceName();
+                return (name != null) && pattern.matcher( name ).matches();
+            });
         }
         else
         {
-            model.setFilter( (ExEnComm ec) -> UtilStr.contains( ec.getDeviceName(), sDevName ) );
+            model.setFilter( (ExEnComm ec) ->
+            {
+                String name = ec.getDeviceName();
+                return (name != null) && UtilStr.contains( name, sDevName );
+            });
         }
     }
 
@@ -127,8 +135,8 @@ final class TblChanges
             {
                 case 0 : return UtilSys.toLocalDate( msg.getWhen() );
                 case 1 : return UtilSys.toLocalTime( msg.getWhen() );
-                case 2 : return pair.getKey();
-                case 3 : return pair.getValue().toString();
+                case 2 : return (pair != null) ? pair.getKey()              : null;
+                case 3 : return (pair != null) ? pair.getValue().toString() : null;
                 default: return "null";
             }
         }

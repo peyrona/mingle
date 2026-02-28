@@ -5,7 +5,7 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.UtilColls;
-import com.peyrona.mingle.lang.lexer.Lexer;
+import com.peyrona.mingle.lang.xpreval.functions.ExtraType;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.xpreval.operators.StdXprOps;
 import java.util.ArrayList;
@@ -51,10 +51,10 @@ import java.util.function.Function;
  */
 public final class NAXE implements IXprEval
 {
-    private EvalByAST                 evaluator    = null;    // Is null only when the expression has errors
-    private List<ICandi.IError>       lstErrors    = null;
-    private String                    sOriginal    = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
-    private Function<String,String[]> fnGroupWise  = null;
+    private EvalByAST                 evaluator   = null;    // Is null only when the expression has errors
+    private List<ICandi.IError>       lstErrors   = null;
+    private String                    sOriginal   = "";      // Original expression as arrived here (with 'ALL', ANY' etc.)
+    private Function<String,String[]> fnGroupWise = null;
 
     //------------------------------------------------------------------------//
 
@@ -75,13 +75,9 @@ public final class NAXE implements IXprEval
         if( UtilColls.isNotEmpty( lstErrors ) )
             lstErrors.clear();
 
-        Lexer lexer = new Lexer( sOriginal );
-
-        addAll( lexer.getErrors() );
-
         if( getErrors().isEmpty() )
         {
-            XprPreProc preproc = new XprPreProc( lexer.getLexemes(), fnGroupWise );
+            XprPreProc preproc = new XprPreProc( sOriginal, fnGroupWise );
 
             addAll( preproc.getErrors() );
 
@@ -89,15 +85,20 @@ public final class NAXE implements IXprEval
             {
                 List<XprToken> lstInfix = preproc.getAsInfix();
 
-                // Even if expressions not having Futures can be evaluated by EvalByRPN, it is preferreded to
-                // use always EvalByAST beacuse it can make better optimizations (e.g. AST is lazy, RPN is not)
+                if( ! lstInfix.isEmpty() )
+                {
+                    // Even if expressions not having Futures can be evaluated by EvalByRPN, it is preferreded to
+                    // use always EvalByAST beacuse it can make better optimizations (e.g. AST is lazy, RPN is not)
 
-                evaluator = new EvalByAST( lstInfix, onSolved );
+                    evaluator = new EvalByAST( lstInfix, onSolved );
 
-                addAll( evaluator.getErrors() );
+                    addAll( evaluator.getErrors() );
 
-                if( ! getErrors().isEmpty() )
-                    evaluator = null;
+                    if( ! getErrors().isEmpty() )
+                        evaluator = null;
+                }
+                // else: non-empty expression that tokenized to nothing (e.g. escape chars outside strings).
+                // evaluator stays null, no errors — eval() returns null gracefully.
             }
         }
 
@@ -138,7 +139,7 @@ public final class NAXE implements IXprEval
             if( evaluator == null )
                 return null;
 
-            throw new MingleException( "Error evaluating:\n"+ sOriginal, exc );
+            throw new MingleException( "Error evaluating:\n"+ sOriginal +"\nVars: "+ UtilColls.toString( evaluator.getVars() ), exc );
         }
     }
 
@@ -207,6 +208,12 @@ public final class NAXE implements IXprEval
     }
 
     @Override
+    public ExtraType<?> newExtendedType( String sTypeName )
+    {
+        return StdXprFns.newExtendedType( sTypeName );
+    }
+
+    @Override
     public String[] getOperators()
     {
         return new StdXprOps().getAll();
@@ -227,7 +234,7 @@ public final class NAXE implements IXprEval
     @Override
     public String about()
     {
-        return "NAXE: MSP Expressions Evaluator v.1.2 (the default evaluator for the MSP)";
+        return "NAXE: MSP Expressions Evaluator v.1.3 (the default evaluator for the MSP)";
     }
 
     @Override
@@ -267,7 +274,7 @@ public final class NAXE implements IXprEval
     public String debug()
     {
         return "Received    : " + sOriginal +'\n'+
-               "Preprocessed: " + new XprPreProc( new Lexer( sOriginal ).getLexemes(), fnGroupWise ) +'\n'+
+               "Preprocessed: " + new XprPreProc( sOriginal, fnGroupWise ) +'\n'+
                "Binary-Tree :\n"+ evaluator.toString();
     }
 

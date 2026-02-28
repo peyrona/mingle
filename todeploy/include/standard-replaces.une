@@ -50,7 +50,8 @@ USE SET AS =
 #--------------------------------
 
 # Funcitons ---------------------
-USE _NL_ AS newLine()
+USE _NL_ AS "\n"   # NewLine -> UNIX: "\n", Windows:"\r\n" (it is OS dependent)
+
 #--------------------------------
 
 

@@ -1,12 +1,12 @@
-//
-// OJO: tengo un tableeditor.js en bookup q sólo lo uso para bookup, este ha
-// sido mejorado y utiliza Bulma en lugar de BootStrap.
+ //
+// NOTE: I have a tableeditor.js in bookup that I only use for bookup, this one
+// has been improved and uses Bulma instead of BootStrap.
 //
 // -----------------------------------------------------------------------------
 // A generic Table Editor.
 // This class depends only on JQuery.
 //
-// All parameters pased to this class's constructor are encapsulated in a JSON
+// All parameters passed to this class's constructor are encapsulated in a JSON
 // object: { key1 : value1, key2 : value2, ... }
 //
 // The data to be shown will be passed in an object as follows (see
@@ -15,10 +15,10 @@
 //
 // Every cell has an internal value (any JS valid data type can be used) that is
 // used for all operations and another visible value (normally the textual
-// representation of the internal value).
+// representation of internal value).
 //
-// Note: for those <select></select> editors, if selected <option> has the "value='...'", this value will be asigned to the cell's
-//       internal value and the option's text will be asigned to the cell's text. If option does not have the "value", then option's
+// Note: for those <select></select> editors, if selected <option> has the "value='...'", this value will be assigned to the cell's
+//       internal value and the option's text will be assigned to the cell's text. If option does not have the "value", then option's
 //       text will be used for both: cell's internal value and cell's shown text.
 //
 // ---------------------------------------------------------------------------------------------------------------------------------
@@ -38,6 +38,8 @@
 // onPrint       : Function to be invoked to print the table. It receives an instance of this class.
 //
 // onHelp        : Function to be invoked to show the help text. It receives an instance of this class.
+//
+// onInfo        : Function to be invoked to show the info text. It receives an instance of this class.
 //
 // onRowSelected : Function to be invoked after a row is selected (becomes highlighted). It receives: an instance of this class,
 //                 the old selected and the new selected row indexes. Both are the index that correspond to the internal
@@ -60,13 +62,13 @@
 //                 { "name": <colName>, "default": <defVal>, "minwidth": <nChars>, "minwidth": <nChars>, "editor": <html> },
 //                 Being:
 //                    * colName: the name of the key column as passed in the Data
-//                    * defVal : the defauls value for clone, append and when user editing leaves an invalid value
+//                    * defVal : the default value for clone, append and when user editing leaves an invalid value
 //                    * width  : editor's min and max widths in numbers of chars (unit 'ch': width of "0"): 'minwidth' & 'maxwidth'
 //                    * editor : the html needed to edit the cell value
 //                 Following are valid values for the editor property:
 //                    * null  -> column will be invisible, its values will not be cloned and it will be not editable.
 //                    * false -> column will be invisible, its values will be cloned but it will not be editable.
-//                    * true  -> column will be visible, its values will be cloned but it will not be editable.
+//                    * true  -> column will be visible, its values will be cloned but it will be not editable.
 //                    * HTML  -> to be inserted in the cell when it becomes editable: only "input" and "select" are allowed.
 //                 Columns that appear in the setData( data ), but not having a column definition, will be ignored. And columns
 //                 that have a definition but does not appear in the setData( data ), will exists only here (calculated column).
@@ -74,19 +76,40 @@
 //                 (does not have an editor) the table will be not editable and only the toolbar's print button will be shown.
 //
 // cellFormatter : A function that will receive an instance of this class as first argument, the name of the column as second
-//                 argument and current value as the third argument. Function (if exists) must return the value to be shown as
+//                 argument and current value as third argument. Function (if exists) must return the value to be shown as
 //                 cell's content (it can be pure text or HTML).
 //
 // onCellPreEdit : A function that will receive an instance of this class as first argument, the row index as second argument, the
 //                 the name of the column as third argument and the current value as the forth argument. Function (if exists) must
 //                 return a valid JS value. If the value is not null, the cell will become editable, its internal value will be
-//                 updated and its contents will be the value (previously formmated if the formated funciton exists). If null, the
+//                 updated and its contents will be the value (previously formatted if the formatter function exists). If null, the
 //                 cell will not be editable. Function is invoked before cell editing starts.
 //
 // onCellPostEdit: A function that will receive an instance of this class as first argument, the row index as second argument, the
 //                 the name of the column as third argument, the current value as the fourth argument and a boolean being true if
 //                 the value changed (is different) or did not changed during edition. Function (if exists) must return a value;
 //                 it will be used as cell's internal value. Function is invoked after cell editing ends.
+//
+// onError       : Function to be invoked when an error occurs. It receives an instance of this class and an error object with
+//                 code, message, timestamp, and details properties.
+//
+// enableKeyboardNav  : Boolean to enable/disable keyboard navigation. Default: true.
+//
+// enableTouchSupport : Boolean to enable/disable touch support for mobile devices. Default: true.
+//
+// enableVirtualScroll : Boolean to enable/disable virtual scrolling for large datasets. Default: false.
+//
+// rowHeight         : Height of each row in pixels (for virtual scrolling). Default: 35.
+//
+// debounceDelay    : Delay in milliseconds for debouncing resize events. Default: 100.
+//
+// unselectedRowInk   : Hex color code for unselected rows text. Default: "#000000".
+//
+// unselectedRowPaper : Hex color code for unselected rows background. Default: "#ffffff".
+//
+// selectedRowInk     : Hex color code for selected row text. Default: "#000000".
+//
+// selectedRowPaper   : Hex color code for selected row background. Default: "#cee3f6".
 // ---------------------------------------------------------------------------------------------------------------------------------
 
 /* global basico, p_base */
@@ -97,67 +120,371 @@ class TableEditor
 {
     constructor( parameters )
     {
-        if( ! parameters.hasOwnProperty( 'table' ) )
-            throw "Mandatory paramenter 'table' not found";
+        this._validateParameters_( parameters );
 
-        if( p_base.get( parameters.table ) === parameters.table )
-            throw "Table '"+ parameters.table +"' not found";
-
-        if( parameters.hasOwnProperty( 'toolbar' ) &&  p_base.get( parameters.toolbar ) === parameters.toolbar )
-            throw "ToolBar '"+ parameters.toolbar +"' not found";
-
-        let fnSave   = (parameters.hasOwnProperty('onSave'        ) ? parameters.onSave         : null);
-        let fnPrint  = (parameters.hasOwnProperty('onPrint'       ) ? parameters.onPrint        : null);
-        let fnHelp   = (parameters.hasOwnProperty('onHelp'        ) ? parameters.onHelp         : null);
-        let fnSelec  = (parameters.hasOwnProperty('onRowSelected' ) ? parameters.onRowSelected  : null);
-        let fnAppend = (parameters.hasOwnProperty('onRowAppended' ) ? parameters.onRowAppended  : null);
-        let fnClone  = (parameters.hasOwnProperty('onRowCloned'   ) ? parameters.onRowCloned    : null);
-        let fnDelRow = (parameters.hasOwnProperty('onDeleteRow'   ) ? parameters.onDeleteRow    : null);
-        let fnRowDel = (parameters.hasOwnProperty('onRowDeleted'  ) ? parameters.onRowDeleted   : null);
-        let fnCelFmt = (parameters.hasOwnProperty('cellFormatter' ) ? parameters.cellFormatter  : null);
-        let fnCelPre = (parameters.hasOwnProperty('onCellPreEdit' ) ? parameters.onCellPreEdit  : null);
-        let fnCelPos = (parameters.hasOwnProperty('onCellPostEdit') ? parameters.onCellPostEdit : null);
+        const styles = this._getStyles_( parameters );
+        const callbacks = this._getCallbacks_( parameters );
 
         this.table              = p_base.get( parameters.table );
         this.toolbar            = (parameters.hasOwnProperty( 'toolbar' ) ? p_base.get( parameters.toolbar ) : null);
         this.tbody              = (! this.table.tBodies || this.table.tBodies.length === 0) ? this.table.createTBody() : this.table.tBodies[0];
-        this.onSave             = (p_base.isFunction( fnSave   ) ? fnSave   : null);
-        this.onPrint            = (p_base.isFunction( fnPrint  ) ? fnPrint  : null);
-        this.onHelp             = (p_base.isFunction( fnHelp   ) ? fnHelp   : null);
-        this.onRowSelected      = (p_base.isFunction( fnSelec  ) ? fnSelec  : null);
-        this.onRowAppended      = (p_base.isFunction( fnAppend ) ? fnAppend : null);
-        this.onRowCloned        = (p_base.isFunction( fnClone  ) ? fnClone  : null);
-        this.onDeleteRow        = (p_base.isFunction( fnDelRow ) ? fnDelRow : null);
-        this.onRowDeleted       = (p_base.isFunction( fnRowDel ) ? fnRowDel : null);
-        this.cellFormatter      = (p_base.isFunction( fnCelFmt ) ? fnCelFmt : null);
-        this.cellPreValidator   = (p_base.isFunction( fnCelPre ) ? fnCelPre : null);
-        this.cellPostValidator  = (p_base.isFunction( fnCelPos ) ? fnCelPos : null);
+        this.onSave             = callbacks.onSave;
+        this.onPrint            = callbacks.onPrint;
+        this.onHelp             = callbacks.onHelp;
+        this.onInfo             = callbacks.onInfo;
+        this.onRowSelected      = callbacks.onRowSelected;
+        this.onRowAppended      = callbacks.onRowAppended;
+        this.onRowCloned        = callbacks.onRowCloned;
+        this.onDeleteRow        = callbacks.onDeleteRow;
+        this.onRowDeleted       = callbacks.onRowDeleted;
+        this.onRowMoved         = callbacks.onRowMoved;
+        this.cellFormatter      = callbacks.cellFormatter;
+        this.cellPreValidator   = callbacks.cellPreValidator;
+        this.cellPostValidator  = callbacks.cellPostValidator;
+        this.onError            = callbacks.onError;
         this.colDefinitions     = (parameters.hasOwnProperty( 'columns' ) ? parameters.columns : null);
         this.deletedRows        = [];
         this.selectedRowIndex   = -1;          // Absolute: this.tbody.rows[this_index]
         this.cellEditor         = null;        // Current cell editor (not null only meanwhile editing cell content)
-        this.unselectedRowInk   = "#000000";
-        this.unselectedRowPaper = "#ffffff";
-        this.selectedRowInk     = "#000000";
-        this.selectedRowPaper   = "#cee3f6";
-        this.isBtnAppendEnabled = true;
-        this.isBtnCloneEnabled  = true;
-        this.isBtnSaveEnabled   = true;
-        this.isBtnDeleteEnabled = true;
-        this.isBtnPrintEnabled  = (this.onPrint !== null);
-        this.isBtnHelpEnabled   = (this.onHelp  !== null);
+        this.unselectedRowInk   = styles.unselectedRowInk;
+        this.unselectedRowPaper = styles.unselectedRowPaper;
+        this.selectedRowInk     = styles.selectedRowInk;
+        this.selectedRowPaper   = styles.selectedRowPaper;
+        this.enableKeyboardNav  = (parameters.hasOwnProperty( 'enableKeyboardNav' ) ? parameters.enableKeyboardNav : true);
+        this.isBtnAppendEnabled   = true;
+        this.isBtnCloneEnabled    = true;
+        this.isBtnMoveUpEnabled   = true;
+        this.isBtnMoveDownEnabled = true;
+        this.isBtnSaveEnabled     = true;
+        this.isBtnDeleteEnabled   = true;
+        this.isBtnPrintEnabled    = (this.onPrint !== null);
+        this.isBtnHelpEnabled     = (this.onHelp  !== null);
+        this.isBtnInfoEnabled     = (this.onInfo  !== null);
         this.btnAppendId        = p_base.uuid();           //----------------------------------------------------------------
         this.btnCloneId         = p_base.uuid();           // All buttons (in the button bar) for each instance of this class
-        this.btnSaveId          = p_base.uuid();           // must have different element id (<button id="...">)
-        this.btnDeleteId        = p_base.uuid();           // In order for the functions to be able to refer them properly.
-        this.btnPrintId         = p_base.uuid();           // These variables store these ids.
-        this.btnHelpId          = p_base.uuid();           //----------------------------------------------------------------
+        this.btnMoveUpId        = p_base.uuid();           // must have different element id (<button id="...">)
+        this.btnMoveDownId      = p_base.uuid();           // In order for the functions to be able to refer them properly.
+        this.btnSaveId          = p_base.uuid();           // These variables store these ids.
+        this.btnDeleteId        = p_base.uuid();           //
+        this.btnPrintId         = p_base.uuid();           //
+        this.btnHelpId          = p_base.uuid();           //
+        this.btnInfoId          = p_base.uuid();           //----------------------------------------------------------------
 
         this.bucket = null;   // Multipurpose var. Used right now only by the cellEditor to save the value of the cell before start editing
+        this._eventHandlers    = [];  // Store event handlers for cleanup
+        this.enableTouchSupport = (parameters.hasOwnProperty( 'enableTouchSupport' ) ? parameters.enableTouchSupport : true);
+        this.enableVirtualScroll = (parameters.hasOwnProperty( 'enableVirtualScroll' ) ? parameters.enableVirtualScroll : false);
+        this.rowHeight = (parameters.hasOwnProperty( 'rowHeight' ) ? parameters.rowHeight : 35);
+        this.debounceDelay = (parameters.hasOwnProperty( 'debounceDelay' ) ? parameters.debounceDelay : 100);
+
+        this.selectedCell = null;  // Currently selected cell (for cell navigation)
+        this.allData = [];  // Complete dataset (for virtual scrolling)
+        this.visibleStart = 0;  // First visible row index (for virtual scrolling)
+        this.visibleEnd = 0;    // Last visible row index (for virtual scrolling)
+        this.resizeObserver = null;  // Resize observer for debouncing
+        this._debounceTimer = null;  // Debounce timer reference
 
         this._setClickEvent_( true )
             ._setToolbar_()
+            ._setupAccessibility_()
+            ._setupKeyboardNavigation_()
+            ._setupTouchSupport_()
+            ._setupVirtualScroll_()
+            ._setupResizeObserver_()
             ._refreshButtons_();
+    }
+
+    //----------------------------------------------------------------------------//
+
+    /**
+     * Centralized error handling with consistent error types and codes.
+     * @private
+     * @param {string} code - Error code for identification
+     * @param {string} message - Human-readable error message
+     * @param {*} details - Additional error details
+     * @throws {Error} Always throws an error
+     */
+    _error_( code, message, details = null )
+    {
+        const error = {
+            code: code,
+            message: message,
+            timestamp: new Date().toISOString(),
+            details: details
+        };
+
+        console.error( `[TableEditor ${code}] ${message}`, details || '' );
+
+        if( typeof this.onError === 'function' )
+        {
+            this.onError( this, error );
+        }
+
+        throw new Error( message );
+    }
+
+    /**
+     * Validates constructor parameters.
+     * @private
+     * @param {Object} parameters - Configuration parameters
+     * @throws {Error} If validation fails
+     */
+    _validateParameters_( parameters )
+    {
+        if( ! parameters || typeof parameters !== 'object' )
+        {
+            this._error_( 'INVALID_PARAMS', 'Parameters must be an object' );
+        }
+
+        if( ! parameters.hasOwnProperty( 'table' ) )
+        {
+            this._error_( 'MISSING_TABLE', 'Mandatory parameter "table" not found' );
+        }
+
+        const tableEl = p_base.get( parameters.table );
+        if( ! tableEl || tableEl === parameters.table )
+        {
+            this._error_( 'TABLE_NOT_FOUND', `Table '${parameters.table}' not found` );
+        }
+
+        if( parameters.hasOwnProperty( 'toolbar' ) )
+        {
+            const toolbarEl = p_base.get( parameters.toolbar );
+            if( toolbarEl && toolbarEl === parameters.toolbar )
+            {
+                this._error_( 'TOOLBAR_NOT_FOUND', `Toolbar '${parameters.toolbar}' not found` );
+            }
+        }
+
+        if( parameters.hasOwnProperty( 'columns' ) )
+        {
+            const columns = parameters.columns;
+            if( ! Array.isArray( columns ) )
+            {
+                this._error_( 'INVALID_COLUMNS', 'Columns parameter must be an array' );
+            }
+
+            for( let i = 0; i < columns.length; i++ )
+            {
+                if( ! columns[i].hasOwnProperty( 'name' ) || ! p_base.isString( columns[i].name ) )
+                {
+                    this._error_( 'INVALID_COLUMN', `Column at index ${i} must have a valid "name" property` );
+                }
+            }
+        }
+
+        return true;
+    }
+
+    /**
+     * Extracts and validates style parameters.
+     * @private
+     * @param {Object} parameters - Configuration parameters
+     * @returns {Object} Style configuration
+     */
+    _getStyles_( parameters )
+    {
+        return {
+            unselectedRowInk:   parameters.unselectedRowInk   || '#000000',
+            unselectedRowPaper: parameters.unselectedRowPaper || '#ffffff',
+            selectedRowInk:     parameters.selectedRowInk     || '#000000',
+            selectedRowPaper:   parameters.selectedRowPaper   || '#cee3f6'
+        };
+    }
+
+    /**
+     * Extracts and validates callback functions.
+     * @private
+     * @param {Object} parameters - Configuration parameters
+     * @returns {Object} Callback configuration
+     */
+    _getCallbacks_( parameters )
+    {
+        return {
+            onSave:           (parameters.hasOwnProperty( 'onSave'        ) && p_base.isFunction( parameters.onSave         ) ? parameters.onSave         : null),
+            onPrint:          (parameters.hasOwnProperty( 'onPrint'       ) && p_base.isFunction( parameters.onPrint        ) ? parameters.onPrint        : null),
+            onHelp:           (parameters.hasOwnProperty( 'onHelp'        ) && p_base.isFunction( parameters.onHelp         ) ? parameters.onHelp         : null),
+            onInfo:           (parameters.hasOwnProperty( 'onInfo'        ) && p_base.isFunction( parameters.onInfo         ) ? parameters.onInfo         : null),
+            onRowSelected:    (parameters.hasOwnProperty( 'onRowSelected' ) && p_base.isFunction( parameters.onRowSelected  ) ? parameters.onRowSelected  : null),
+            onRowAppended:    (parameters.hasOwnProperty( 'onRowAppended' ) && p_base.isFunction( parameters.onRowAppended  ) ? parameters.onRowAppended  : null),
+            onRowCloned:      (parameters.hasOwnProperty( 'onRowCloned'   ) && p_base.isFunction( parameters.onRowCloned    ) ? parameters.onRowCloned    : null),
+            onDeleteRow:      (parameters.hasOwnProperty( 'onDeleteRow'   ) && p_base.isFunction( parameters.onDeleteRow    ) ? parameters.onDeleteRow    : null),
+            onRowDeleted:     (parameters.hasOwnProperty( 'onRowDeleted'  ) && p_base.isFunction( parameters.onRowDeleted   ) ? parameters.onRowDeleted   : null),
+            cellFormatter:    (parameters.hasOwnProperty( 'cellFormatter' ) && p_base.isFunction( parameters.cellFormatter  ) ? parameters.cellFormatter  : null),
+            cellPreValidator: (parameters.hasOwnProperty( 'onCellPreEdit' ) && p_base.isFunction( parameters.onCellPreEdit  ) ? parameters.onCellPreEdit  : null),
+            cellPostValidator: (parameters.hasOwnProperty( 'onCellPostEdit') && p_base.isFunction( parameters.onCellPostEdit ) ? parameters.onCellPostEdit : null),
+            onError:          (parameters.hasOwnProperty( 'onError'        ) && p_base.isFunction( parameters.onError         ) ? parameters.onError         : null),
+            onRowMoved:       (parameters.hasOwnProperty( 'onRowMoved'     ) && p_base.isFunction( parameters.onRowMoved      ) ? parameters.onRowMoved      : null)
+        };
+    }
+
+    /**
+     * Sets up ARIA attributes for accessibility (WCAG 2.1 AA).
+     * @private
+     * @returns {TableEditor} this
+     */
+    _setupAccessibility_()
+    {
+        this.table.setAttribute( 'role', 'grid' );
+        this.table.setAttribute( 'aria-label', 'Editable data table' );
+
+        this.tbody.setAttribute( 'tabindex', '0' );
+        this.tbody.setAttribute( 'aria-live', 'polite' );
+
+        const rows = this.tbody.rows;
+        for( let i = 0; i < rows.length; i++ )
+        {
+            rows[i].setAttribute( 'role', 'row' );
+            rows[i].setAttribute( 'aria-rowindex', i + 1 );
+        }
+
+        return this;
+    }
+
+    /**
+     * Updates ARIA attributes when row is selected.
+     * @private
+     * @param {number} rowIndex - Index of selected row
+     */
+    _updateAriaSelection_( rowIndex )
+    {
+        const rows = this.tbody.rows;
+        for( let i = 0; i < rows.length; i++ )
+        {
+            rows[i].setAttribute( 'aria-selected', (i === rowIndex) ? 'true' : 'false' );
+        }
+    }
+
+    /**
+     * Sets up keyboard navigation for table.
+     * @private
+     * @returns {TableEditor} this
+     */
+    _setupKeyboardNavigation_()
+    {
+        if( ! this.enableKeyboardNav )
+        {
+            return this;
+        }
+
+        const self = this;
+
+        const keyHandler = function( event )
+        {
+            if( self.cellEditor !== null )
+            {
+                return;
+            }
+
+            if( self.selectedRowIndex < 0 )
+            {
+                return;
+            }
+
+            switch( event.key )
+            {
+                case 'ArrowUp':
+                    event.preventDefault();
+                    self._navigateRow_( -1 );
+                    break;
+                case 'ArrowDown':
+                    event.preventDefault();
+                    self._navigateRow_( 1 );
+                    break;
+                case 'Home':
+                    event.preventDefault();
+                    if( self.getBodyRowCount() > 0 )
+                    {
+                        self.selectRowAtIndex( 0 );
+                    }
+                    break;
+                case 'End':
+                    event.preventDefault();
+                    const rowCount = self.getBodyRowCount();
+                    if( rowCount > 0 )
+                    {
+                        self.selectRowAtIndex( rowCount - 1 );
+                    }
+                    break;
+            }
+        };
+
+        $(this.tbody).on( 'keydown', keyHandler );
+        this._eventHandlers.push( { element: this.tbody, event: 'keydown', handler: keyHandler } );
+
+        return this;
+    }
+
+    /**
+     * Navigates to previous or next row.
+     * @private
+     * @param {number} direction - Direction: -1 for up, 1 for down
+     */
+    _navigateRow_( direction )
+    {
+        const newIndex = this.selectedRowIndex + direction;
+        if( newIndex >= 0 && newIndex < this.getBodyRowCount() )
+        {
+            this.selectRowAtIndex( newIndex );
+        }
+    }
+
+    /**
+     * Properly cleans up all resources to prevent memory leaks.
+     * @returns {TableEditor} this
+     */
+    destroy()
+    {
+        $(this.tbody).off();
+        $(this.table).off();
+
+        if( this.toolbar !== null )
+        {
+            $(this.toolbar).off();
+        }
+
+        this._eventHandlers.forEach( handler =>
+        {
+            handler.element.removeEventListener( handler.event, handler.handler );
+        });
+        this._eventHandlers = [];
+
+        if( this.resizeObserver !== null )
+        {
+            this.resizeObserver.disconnect();
+            this.resizeObserver = null;
+        }
+
+        if( this._debounceTimer !== null )
+        {
+            clearTimeout( this._debounceTimer );
+            this._debounceTimer = null;
+        }
+
+        this.tbody = null;
+        this.table = null;
+        this.toolbar = null;
+        this.cellEditor = null;
+        this.colDefinitions = null;
+        this.deletedRows = null;
+        this.selectedCell = null;
+        this.allData = [];
+
+        this.onSave = null;
+        this.onPrint = null;
+        this.onHelp = null;
+        this.onInfo = null;
+        this.onRowSelected = null;
+        this.onRowAppended = null;
+        this.onRowCloned = null;
+        this.onDeleteRow = null;
+        this.onRowDeleted = null;
+        this.cellFormatter = null;
+        this.cellPreValidator = null;
+        this.cellPostValidator = null;
+        this.onError = null;
+
+        return this;
     }
 
     //----------------------------------------------------------------------------//
@@ -169,6 +496,106 @@ class TableEditor
     isEmpty()
     {
         return this.getBodyRowCount() === 0;
+    }
+
+    /**
+     * Gets currently selected cell.
+     * @public
+     * @returns {HTMLTableCellElement|null} The selected cell element or null if no cell is selected.
+     *
+     * @example
+     * const editor = new TableEditor({ table: '#myTable', columns: [...] });
+     * editor.selectCell(0, 'name');
+     * const selectedCell = editor.getSelectedCell();
+     */
+    getSelectedCell()
+    {
+        return this.selectedCell;
+    }
+
+    /**
+     * Selects a specific cell and highlights it.
+     * @public
+     * @param {number} rowIndex - Row index (0-based, relative to tbody).
+     * @param {number|string} colIndexOrName - Column index (0-based) or column name.
+     * @returns {TableEditor} Returns this for method chaining.
+     *
+     * @example
+     * const editor = new TableEditor({ table: '#myTable', columns: [...] });
+     * editor.selectCell(0, 'name'); // Selects cell at row 0, column named 'name'
+     * editor.selectCell(0, 2);     // Selects cell at row 0, column index 2
+     */
+    selectCell( rowIndex, colIndexOrName )
+    {
+        const cell = this.getCell( rowIndex, colIndexOrName );
+
+        if( ! cell )
+        {
+            return this;
+        }
+
+        this.selectedCell = cell;
+        this.selectRowAtIndex( rowIndex );
+
+        const cells = this.tbody.rows[rowIndex].cells;
+        for( let i = 0; i < cells.length; i++ )
+        {
+            $(cells[i]).css( 'background-color', '' );
+        }
+
+        $(cell).css( 'background-color', '#fffacd' ); // Light yellow highlight
+
+        return this;
+    }
+
+    /**
+     * Clears the deleted rows history.
+     * @public
+     * @returns {TableEditor} Returns this for method chaining.
+     *
+     * @example
+     * const editor = new TableEditor({ table: '#myTable', columns: [...] });
+     * editor.deleteRow(0);
+     * editor.clearDeletedRows(); // Clears the history of deleted rows
+     */
+    clearDeletedRows()
+    {
+        this.deletedRows = [];
+        return this;
+    }
+
+    /**
+     * Gets table statistics including row counts, columns, and other metrics.
+     * @public
+     * @returns {Object} Statistics object with properties:
+     *                totalRows - Total number of rows in table
+     *                editableRows - Number of non-empty rows
+     *                emptyRows - Number of empty rows
+     *                deletedRows - Number of deleted rows in history
+     *                totalColumns - Total number of column definitions
+     *                editableColumns - Number of columns with editors
+     *                selectedRowIndex - Index of currently selected row (-1 if none)
+     *
+     * @example
+     * const editor = new TableEditor({ table: '#myTable', columns: [...] });
+     * editor.setData([{ id: 1, name: 'Test' }]);
+     * const stats = editor.getStatistics();
+     * console.log(`Total rows: ${stats.totalRows}, Empty: ${stats.emptyRows}`);
+     */
+    getStatistics()
+    {
+        const data = this.getData( false );
+        const emptyRows = data.filter( (row, index) => this.isEmptyRow( index ) ).length;
+
+        return {
+            totalRows: data.length,
+            editableRows: data.length - emptyRows,
+            emptyRows: emptyRows,
+            deletedRows: this.deletedRows.length,
+            totalColumns: this.colDefinitions ? this.colDefinitions.length : 0,
+            editableColumns: this.colDefinitions ? this.colDefinitions.filter( col => col.editor ).length : 0,
+            selectedRowIndex: this.selectedRowIndex
+        };
     }
 
     /**
@@ -212,15 +639,33 @@ class TableEditor
     {
         this.clear();
 
+        this.allData = (! p_base.isEmpty( aData )) ? aData : [];
+
         if( (! p_base.isEmpty( aData )) &&
             (this.colDefinitions !== null) )
         {
-            for( let row = 0; row < aData.length; row++ )
+            if( this.enableVirtualScroll )
             {
-                this._addCells_( this.tbody.insertRow( -1 ), aData[row] );      // -1 == insert at end of tbody (append)
-            }
+                this.visibleRows = Math.ceil( this.table.clientHeight / this.rowHeight );
+                this.visibleStart = 0;
+                this.visibleEnd = Math.min( this.visibleRows, this.allData.length );
 
-            this.selectRowAtIndex( 0 );
+                for( let row = 0; row < this.visibleEnd; row++ )
+                {
+                    this._addCells_( this.tbody.insertRow( -1 ), this.allData[row] );
+                }
+
+                this.selectRowAtIndex( 0 );
+            }
+            else
+            {
+                for( let row = 0; row < aData.length; row++ )
+                {
+                    this._addCells_( this.tbody.insertRow( -1 ), aData[row] );      // -1 == insert at end of tbody (append)
+                }
+
+                this.selectRowAtIndex( 0 );
+            }
         }
 
         this._refreshButtons_();
@@ -230,7 +675,7 @@ class TableEditor
 
     /**
      * Returns non empty rows that were deleted (either by the user or
-     * progamatically) or an empty array if no row was deleted.
+     * programmatically) or an empty array if no row was deleted.
      * <p>
      * returned data has following structure:
      * [[row1-col1Name: row1-col1Value, row1-col2Name: row1-col2Value,..., row1-colNName: row1-colNValue],
@@ -270,9 +715,10 @@ class TableEditor
     {
         let data = {};       // Array of JSON objects to return
 
-        if( (nRow < 0) || (nRow >= this.getBodyRowCount() ) )
+        if( ! Number.isInteger(nRow) || nRow < 0 || nRow >= this.getBodyRowCount() )
         {
-            throw "Index out of bounds: "+ nRow;
+            console.warn("getRowData: Invalid row index " + nRow);
+            return {};
         }
 
         for( let nCol = 0; nCol < this.tbody.rows[nRow].cells.length; nCol++ )
@@ -286,7 +732,7 @@ class TableEditor
     }
 
     /**
-     * Appends a new empty row at the end of the table and evaluates
+     * Appends a new row at the end of the table and evaluates
      * this:onRowAppended function if not null.
      *
      * @returns this.
@@ -296,20 +742,26 @@ class TableEditor
         if( ! this.isEditable() )
             return this;
 
-        // Creating a def value for every col -------------------------
         let oData = {};
 
         for( let n = 0; n < this.colDefinitions.length; n++ )
         {
             let sColName = this.colDefinitions[n].name;
-
             oData[sColName] = this._getValue4KeyAtColumn_( sColName, "default", "" );
         }
-        //-------------------------------------------------------------
 
-        this._addCells_( this.tbody.insertRow( -1 ), oData );
+        if( this.enableVirtualScroll )
+        {
+            this.allData.push( oData );
+            this.visibleEnd = Math.min( this.visibleEnd + 1, this.allData.length );
+            this._addCells_( this.tbody.insertRow( -1 ), oData );
+        }
+        else
+        {
+            this._addCells_( this.tbody.insertRow( -1 ), oData );
+        }
 
-        if( this.getBodyRowCount() === 1 )   // 1st line just added
+        if( this.getBodyRowCount() === 1 )
             this.selectRowAtIndex( 0 );
 
         if( this.onRowAppended !== null )
@@ -328,7 +780,7 @@ class TableEditor
      */
     cloneRow()
     {
-        if( (this.getSelectedRowIndex() < 0)  ||  // Clone button is disabled when no row is selected, but this can be called programatically
+        if( (this.getSelectedRowIndex() < 0)  ||
             (! this.isEditable()) )
         {
             return this;
@@ -337,7 +789,6 @@ class TableEditor
         let oData = this.getRowData( this.getSelectedRowIndex() );
         let oRow  = this.tbody.insertRow( -1 );
 
-        // Now we have to set a def value for those cols which editor is null (false editor means clonable but no editable)
         for( let colName in oData )
         {
             if( this._getValue4KeyAtColumn_( colName, "editor", null ) === null )
@@ -346,12 +797,57 @@ class TableEditor
             }
         }
 
-        this._addCells_( oRow, oData );
+        if( this.enableVirtualScroll )
+        {
+            this.allData.push( oData );
+            this.visibleEnd = Math.min( this.visibleEnd + 1, this.allData.length );
+            this._addCells_( oRow, oData );
+        }
+        else
+        {
+            this._addCells_( oRow, oData );
+        }
 
         if( this.onRowCloned !== null )
-            this.onRowCloned( this, this.tbody.rows.length - 1 );
+            this.onRowCloned( this, (this.enableVirtualScroll ? this.allData.length - 1 : this.tbody.rows.length - 1) );
 
         this._refreshButtons_();
+
+        return this;
+    }
+
+    /**
+     * Moves the selected row one position up in the table.
+     * If the row is already the first one, nothing happens.
+     *
+     * @returns this
+     */
+    moveRowUp()
+    {
+        let nRow = this.getSelectedRowIndex();
+
+        if( nRow <= 0 || ! this.isEditable() )
+            return this;
+
+        this._swapRows_( nRow, nRow - 1 );
+
+        return this;
+    }
+
+    /**
+     * Moves the selected row one position down in the table.
+     * If the row is already the last one, nothing happens.
+     *
+     * @returns this
+     */
+    moveRowDown()
+    {
+        let nRow = this.getSelectedRowIndex();
+
+        if( nRow < 0 || nRow >= this.getBodyRowCount() - 1 || ! this.isEditable() )
+            return this;
+
+        this._swapRows_( nRow, nRow + 1 );
 
         return this;
     }
@@ -367,7 +863,7 @@ class TableEditor
     deleteRow( nRow = this.getSelectedRowIndex() )
     {
         if( (! this.isEditable()) ||
-            (nRow < 0) )    // Delete button is disabled when no row is selected, but this can be called programatically
+            (nRow < 0) )
         {
             return this;
         }
@@ -377,11 +873,16 @@ class TableEditor
             let result = this.onDeleteRow( this, nRow );
 
             if( p_base.isBoolean( result ) && (! result) )
-                return this;    // Returns only if the invoked function returned a boolean which value is false
+                return this;
         }
 
         if( ! this.isEmptyRow( nRow ) )
             this.deletedRows.push( this.getRowData( nRow ) );
+
+        if( this.enableVirtualScroll )
+        {
+            this.allData.splice( nRow, 1 );
+        }
 
         this.table.deleteRow( nRow + this.getHeadRowCount() );
 
@@ -403,6 +904,9 @@ class TableEditor
         $(this.tbody).empty();        // Do not invoke --> this.deleteRow( 0 );
 
         this.selectedRowIndex = -1;
+        this.allData = [];
+        this.visibleStart = 0;
+        this.visibleEnd = 0;
         this._refreshButtons_();
 
         return this;
@@ -416,12 +920,12 @@ class TableEditor
      */
     clean()
     {
-        let n1stRow = this.getHeadRowCount();
-
-        for( let nRow = n1stRow; nRow < this.tbody.rows.length; nRow++ )
+        for( let nRow = this.tbody.rows.length - 1; nRow >= 0; nRow-- )
         {
-            if( this.isEmptyRow( this.tbody.rows[nRow] ) )
-                this.table.deleteRow( nRow-- );    // row-- because current row was deleted
+            if( this.isEmptyRow( nRow ) )
+            {
+                this.table.deleteRow( nRow + this.getHeadRowCount() );
+            }
         }
 
         this._afterRowsDeleted_();
@@ -448,7 +952,7 @@ class TableEditor
 
     /**
      * If this.onPrint is not null, it will be invoked and if it returns false, then
-     * this funciton does nothing. Otherwise, navigator (web browser) print function
+     * this function does nothing. Otherwise, navigator (web browser) print function
      * (window.print()) will be invoked.
      *
      * @returns this
@@ -464,6 +968,19 @@ class TableEditor
             this.onPrint( this );
             btn.prop( 'disabled', (! this.isBtnPrintEnabled) );
         }
+
+        return this;
+    }
+
+    /**
+     * Executes this.onInfo if it is a function.
+     *
+     * @returns this
+     */
+    info()
+    {
+        if( this.onInfo !== null )
+            this.onInfo( this );
 
         return this;
     }
@@ -553,12 +1070,18 @@ class TableEditor
      */
     setColumns( colDefs )
     {
+        if( ! Array.isArray( colDefs ) )
+        {
+            throw "Invalid column definitions: must be an array";
+        }
+
         for( let n = 0; n < colDefs.length; n++ )
         {
             if( (! colDefs[n].hasOwnProperty( "name" ))  ||
-                (! p_base.isString( colDefs[n].name )) )
+                (! p_base.isString( colDefs[n].name )) ||
+                (colDefs[n].name.trim() === '') )
             {
-                throw "Invalid column definitions";
+                throw "Invalid column definition at index " + n + ": column name is required and must be a non-empty string";
             }
         }
 
@@ -585,9 +1108,14 @@ class TableEditor
                 {
                     let sEditor = this.colDefinitions[n].editor;
 
-                    if( (sEditor !== null) && (sEditor.startsWith( "<input" ) || sEditor.startsWith( "<select" )) )
+                    if( (sEditor !== null) && p_base.isString( sEditor ) )
                     {
-                        return true;     // Is editable because at least one column has an editor
+                        let sEditorLower = sEditor.trim().toLowerCase();
+
+                        if( sEditorLower.startsWith( "<input" ) || sEditorLower.startsWith( "<select" ) )
+                        {
+                            return true;     // Is editable because at least one column has an editor
+                        }
                     }
                 }
             }
@@ -605,18 +1133,27 @@ class TableEditor
      */
     isEmptyRow( row = this.getSelectedRowIndex() )
     {
+        if( row === null || row === undefined )
+        {
+            return true;
+        }
+
         if( p_base.isNumeric( row ) )
             row = this.getRow( Number.parseInt(row ) );
 
         if( ! row )
-            throw "Invalid row "+ row;
+            return true;
+
+        if( ! row.cells || row.cells.length === 0 )
+            return true;
 
         for( let nCol = 0; nCol < row.cells.length; nCol++ )
         {
             let value = this.getValue( row.cells[nCol] );
+            let colName = this._dataColName_( row.cells[nCol] );
 
             if( (value !== null)                                                 &&
-                (value !== this._getValue4KeyAtColumn_( "default", nCol, null )) &&
+                (value !== this._getValue4KeyAtColumn_( colName, "default", null )) &&
                 (! p_base.isEmpty( value )) )
             {
                 return false;
@@ -635,9 +1172,14 @@ class TableEditor
      */
     getRow( row = this.getSelectedRowIndex() )
     {
+        if( row === null || row === undefined )
+        {
+            return null;
+        }
+
         row = Number.parseInt( row );
 
-        if( (row < 0) || (row >= this.tbody.rows.length) )
+        if( Number.isNaN( row ) || (row < 0) || (row >= this.tbody.rows.length) )
         {
             return null;
         }
@@ -656,6 +1198,11 @@ class TableEditor
      */
     getCell( nRow, colIndexOrName = null )
     {
+        if( nRow === null || nRow === undefined )
+        {
+            return null;
+        }
+
         nRow = Number.parseInt( nRow );
 
         let tblRow  = this.getRow( nRow );
@@ -670,7 +1217,7 @@ class TableEditor
         {
             nColumn = colIndexOrName;
         }
-        else
+        else if( colIndexOrName !== null && colIndexOrName !== undefined )
         {
             for( let n = 0; n < tblRow.cells.length; n++ )
             {
@@ -719,8 +1266,8 @@ class TableEditor
     }
 
     /**
-     * Sets a new value for desigated row and col or cell.
-     * La fila tiene que ser absoluta: incluyendo las líneas de cabecera.
+     * Sets a new value for designated row and col or cell.
+     * The row must be absolute: including the header rows.
      * <p>
      * Arguments can be:
      * <ul>
@@ -736,18 +1283,18 @@ class TableEditor
         let oCell = null;
         let value = null;
 
-        if( arguments.length > 2 )             // It is assumed that args are: nRow and nCol | sColName and value
+        if( arguments.length > 2 )
         {
             oCell = this.getCell( arguments[0], arguments[1] );
             value = arguments[2];
         }
-        else                                   // It is assumed that args are: oCell and value
+        else
         {
             oCell = arguments[0];
             value = arguments[1];
         }
 
-        if( oCell !== null )
+        if( oCell !== null && oCell !== undefined )
         {
             this._dataValue_( oCell, value );
 
@@ -798,9 +1345,14 @@ class TableEditor
      */
     selectRowAtIndex( newIndex, bCountHead = false )
     {
+        if( p_base.isUndefined( newIndex ) || newIndex === null )
+        {
+            return this;
+        }
+
         newIndex = Number.parseInt( newIndex );
 
-        if( ! p_base.isNumeric( newIndex ) )
+        if( ! p_base.isNumeric( newIndex ) || Number.isNaN( newIndex ) )
         {
             return this;
         }
@@ -818,18 +1370,21 @@ class TableEditor
             return this;
         }
 
-        let oldIndex = this.selectedRowIndex;    // No puedo usar esto --> this.getSelectedRowIndex(); pq desde allí se llama a aquí
+        let oldIndex = this.selectedRowIndex;
 
         if( oldIndex !== -1 )
         {
             $(this.tbody.rows[oldIndex]).css( 'color'           , this.unselectedRowInk   );
             $(this.tbody.rows[oldIndex]).css( 'background-color', this.unselectedRowPaper );
+            $(this.tbody.rows[oldIndex]).removeClass( 'te-selected-row' );
         }
 
         $(this.tbody.rows[newIndex]).css( 'color'           , this.selectedRowInk   );
         $(this.tbody.rows[newIndex]).css( 'background-color', this.selectedRowPaper );
+        $(this.tbody.rows[newIndex]).addClass( 'te-selected-row' );
 
         this.selectedRowIndex = newIndex;
+        this._updateAriaSelection_( newIndex );
 
         if( this.onRowSelected !== null )
         {
@@ -856,7 +1411,7 @@ class TableEditor
      */
     getBodyRowCount()
     {
-        return (p_base.isUndefined( this.tbody.rows ) ? 0 : this.tbody.length);
+        return (p_base.isUndefined( this.tbody.rows ) ? 0 : this.tbody.rows.length);
     }
 
     /**
@@ -875,7 +1430,7 @@ class TableEditor
     }
 
     /**
-     * Sets ink and paper colors (in HEX format) for the unselecetd rows.
+     * Sets ink and paper colors (in HEX format) for unselected rows.
      *
      * @param {type} ink
      * @param {type} paper
@@ -900,16 +1455,24 @@ class TableEditor
         this.isBtnCloneEnabled  = bEnabled;
         this.isBtnSaveEnabled   = bEnabled;
         this.isBtnDeleteEnabled = bEnabled;
+        this.isBtnInfoEnabled   = bEnabled;
         this.isBtnPrintEnabled  = bEnabled;
         this.isBtnHelpEnabled   = bEnabled;
         this._refreshButtons_();
 
         // Buttons added by user
-        let aoButton = p_base.get( this.toolbar ).getElementsByTagName( "button" );
-
-        for( let n = 0; n < aoButton.length; n++ )
+        if( this.toolbar !== null )
         {
-            aoButton[n].disabled = ! bEnabled;
+            let toolbarElement = p_base.get( this.toolbar );
+            if( toolbarElement !== null )
+            {
+                let aoButton = toolbarElement.getElementsByTagName( "button" );
+
+                for( let n = 0; n < aoButton.length; n++ )
+                {
+                    aoButton[n].disabled = ! bEnabled;
+                }
+            }
         }
 
         this._setClickEvent_( bEnabled );
@@ -977,6 +1540,19 @@ class TableEditor
     setButtonPrintEnabled( bEnabled )
     {
         this.isBtnPrintEnabled = bEnabled;
+        this._refreshButtons_();
+
+        return this;
+    }
+
+    /**
+     * Set enable status for Info button.
+     * @param {type} bEnabled true or false
+     * @returns this
+     */
+    setButtonInfoEnabled( bEnabled )
+    {
+        this.isBtnInfoEnabled = bEnabled;
         this._refreshButtons_();
 
         return this;
@@ -1074,28 +1650,30 @@ class TableEditor
 
         editor = this._getValue4KeyAtColumn_( sColName, "editor", null );     // This is needed because PreValidator could change the editor
 
-        // If there is not an editor for this column, edit has to be aborted.
+        // If there is no editor for this column, edit has to be aborted.
         if( editor === null )
         {
             return;
         }
 
-        $(cell).html( editor );                             // Sustituyo el contenido de la celda por su editor
+        $(cell).html( editor );                             // Replace the content of the cell with its editor
 
-        if( $(cell).find('input').length > 0 )              // Ahora puedo mirar si es un 'input'
+        if( $(cell).find('input').length > 0 )              // Now check if it's an 'input'
         {
-            this.cellEditor = $(cell).find('input')[0];     // Cambio una string con texto HTML por el elemento HTML
+            this.cellEditor = $(cell).find('input')[0];     // Change a HTML text string for the HTML element
         }
-        else if( $(cell).find('select').length > 0 )        // Si no es un 'input', miro si es un 'select'
+        else if( $(cell).find('select').length > 0 )        // If not an 'input', check if it's a 'select'
         {
-            this.cellEditor = $(cell).find('select')[0];    // Cambio una string con texto HTML por el elemento HTML
+            this.cellEditor = $(cell).find('select')[0];    // Change a HTML text string for the HTML element
         }
-        else                                                // Si no es ni imput ni select, no puedo trabajar con el editor
+        else                                                // If neither input nor select, cannot work with the editor
         {
-            return this;                                    // No puedo trabajar con él: la celda se queda como estaba
+            return this;                                    // Cannot work with it: the cell remains as it was
         }
 
         this.bucket = val2edit;
+
+        $(cell).addClass( 'te-editing' );
 
         let nMinWidth = this._getValue4KeyAtColumn_( sColName, "minwidth", null );
         let nMaxWidth = this._getValue4KeyAtColumn_( sColName, "maxwidth", null );
@@ -1110,23 +1688,11 @@ class TableEditor
 
         let self = this;
 
-        if( p_base.isOfType( this.cellEditor, 'color' ) )                 // THIS IS ONLY FOR FIREFOX !!!!!!
-        {
-            this.cellEditor.addEventListener('change',
-                                             (evt) =>
-                                                {
-                                                    self._endEdition_( cell, evt );
-                                                },
-                                                false);     // Event func does not work when done via JQuery: $(cellEditor).on('change'...
-        }
-        else
-        {
-            $(this.cellEditor).on( 'blur', (evt) => self._endEdition_( cell, evt ) );
+        $(this.cellEditor).on( 'blur.te_tableeditor', (evt) => self._endEdition_( cell, evt ) );
 
-            if( $(this.cellEditor).is('select') || p_base.isOfType( this.cellEditor, 'date' ) )
-            {
-                $(this.cellEditor).on( 'change', function(evt){ $(evt.target).blur(); } );
-            }
+        if( $(this.cellEditor).is('select') || p_base.isOfType( this.cellEditor, 'date' ) || p_base.isOfType( this.cellEditor, 'color' ) )
+        {
+            $(this.cellEditor).on( 'change.te_tableeditor', function(evt){ $(evt.target).blur(); } );
         }
 
         $(this.cellEditor).on( 'keyup',
@@ -1135,11 +1701,11 @@ class TableEditor
                 event.preventDefault();
                 event.stopPropagation();
 
-                if( (event.keyCode === 13) || (event.keyCode === 27) )
+                if( (event.key === 'Enter') || (event.key === 'Escape') )
                 {
-                    if (event.keyCode === 27)
+                    if (event.key === 'Escape')
                     {
-                        self._setEditorValue_( self.cellEditor, sCellVal );    // Restore previous value
+                        self._setEditorValue_( self.cellEditor, sCellVal );
                     }
 
                     $(event.target).blur();
@@ -1151,7 +1717,7 @@ class TableEditor
     {
         let sColName = this._dataColName_( cell );
         let $editor  = $(evt.target);
-        let newVal   = p_base.getFieldValue( $editor );   // si la option no tiene el "value=", entonces devuelve {text}
+        let newVal   = p_base.getFieldValue( $editor );   // If the option does not have "value=", then returns {text}
         let bChanged = (this.bucket != newVal);           // It is OK !=
         this.bucket  = undefined;                         // Reset the value
 
@@ -1159,7 +1725,7 @@ class TableEditor
         {
             let text = $editor.find( "option:selected" ).text();
 
-            if( newVal !== text )           // newVal contiene el {value}
+            if( newVal !== text )           // newVal contains the {value}
             {
                 $(cell).text( text );
             }
@@ -1175,8 +1741,9 @@ class TableEditor
 
         this._dataValue_( cell, newVal );
         $(cell).html( (this.cellFormatter === null ? newVal : this.cellFormatter( this, sColName, newVal )) );
+        $(cell).removeClass( 'te-editing' );
         $(cell).css( 'background-color', '' );
-        $(event.target).off( 'blur.table_editor_myspace' );      // Removes the event handler
+        $(evt.target).off( 'blur.te_tableeditor change.te_tableeditor' );
         this._setClickEvent_( true );
         this.cellEditor = null;
     }
@@ -1246,6 +1813,45 @@ class TableEditor
     // INVOKED FROM OUTSIDE OF THIS CLASS.
 
     /**
+     * Swaps two adjacent rows in the table body and updates the selection.
+     *
+     * @private
+     * @param {number} nFrom Index of the row to move.
+     * @param {number} nTo   Index of the destination position.
+     */
+    _swapRows_( nFrom, nTo )
+    {
+        let rowFrom = this.tbody.rows[nFrom];
+        let rowTo   = this.tbody.rows[nTo];
+
+        if( ! rowFrom || ! rowTo )
+            return;
+
+        // DOM swap: insert the moved row before or after the target
+        if( nFrom < nTo )
+            this.tbody.insertBefore( rowTo, rowFrom );
+        else
+            this.tbody.insertBefore( rowFrom, rowTo );
+
+        // Virtual scrolling: swap in allData too
+        if( this.enableVirtualScroll && nFrom < this.allData.length && nTo < this.allData.length )
+        {
+            let tmp = this.allData[nFrom];
+            this.allData[nFrom] = this.allData[nTo];
+            this.allData[nTo]   = tmp;
+        }
+
+        // Update selection to follow the moved row
+        this.selectedRowIndex = -1;
+        this.selectRowAtIndex( nTo );
+
+        if( this.onRowMoved !== null )
+            this.onRowMoved( this, nFrom, nTo );
+
+        this._refreshButtons_();
+    }
+
+    /**
      * Updates the selected (highlighted) row and the internal selected row index.
      *
      * @returns Nothing
@@ -1259,11 +1865,11 @@ class TableEditor
         else
         {
             if( this.selectedRowIndex >= this.tbody.rows.length )
-            {
                 this.selectedRowIndex = this.tbody.rows.length - 1;
-            }
 
-            this.selectRowAtIndex( this.selectedRowIndex, true );
+            let indexToSelect = this.selectedRowIndex;
+            this.selectedRowIndex = -1;
+            this.selectRowAtIndex( indexToSelect, false );
         }
 
         this._refreshButtons_();
@@ -1276,20 +1882,40 @@ class TableEditor
      */
     _refreshButtons_()
     {
-        if( this.toolBar !== null )
+        if( this.toolbar !== null )
         {
             let editable = this.isEditable();
             let noRows   = this.getBodyRowCount() === 0;
 
-            $(p_base.get( this.btnAppendId )).prop( 'disabled', (! this.isBtnAppendEnabled) || (! editable));
-            $(p_base.get( this.btnCloneId  )).prop( 'disabled', (! this.isBtnCloneEnabled ) || (! editable) || noRows);
-            $(p_base.get( this.btnSaveId   )).prop( 'disabled', (! this.isBtnSaveEnabled  ) || (! editable) || (this.onSave === null) );
-            $(p_base.get( this.btnDeleteId )).prop( 'disabled', (! this.isBtnDeleteEnabled) || (! editable) || noRows );
-            $(p_base.get( this.btnHelpId   )).prop( 'disabled', (! this.isBtnHelpEnabled  ) || (this.onHelp  === null) );
-            $(p_base.get( this.btnPrintId  )).prop( 'disabled', (! this.isBtnPrintEnabled ) || (this.onPrint === null) || noRows );
+            this._setButtonDisabled_( this.btnAppendId,   (! this.isBtnAppendEnabled) || (! editable) );
+            this._setButtonDisabled_( this.btnCloneId,    (! this.isBtnCloneEnabled ) || (! editable) || noRows );
+            this._setButtonDisabled_( this.btnMoveUpId,   (! this.isBtnCloneEnabled ) || (! editable) || noRows );
+            this._setButtonDisabled_( this.btnMoveDownId, (! this.isBtnCloneEnabled ) || (! editable) || noRows );
+            this._setButtonDisabled_( this.btnDeleteId,   (! this.isBtnDeleteEnabled) || (! editable) || noRows );
+            this._setButtonDisabled_( this.btnSaveId,     (! this.isBtnSaveEnabled  ) || (! editable) || (this.onSave === null) );
+            this._setButtonDisabled_( this.btnHelpId,     (! this.isBtnHelpEnabled  ) || (this.onHelp  === null) );
+            this._setButtonDisabled_( this.btnInfoId,     (! this.isBtnInfoEnabled  ) || (this.onInfo  === null) );
+            this._setButtonDisabled_( this.btnPrintId,    (! this.isBtnPrintEnabled ) || (this.onPrint === null) || noRows );
         }
 
         return this;
+    }
+
+    /**
+     * Sets or removes the disabled attribute on a toolbar button element.
+     * Uses .attr() instead of .prop() because toolbar buttons are <i> elements,
+     * not form elements, so .prop('disabled') has no effect on them.
+     *
+     * @private
+     * @param {string} btnId - The button element ID.
+     * @param {boolean} isDisabled - Whether the button should be disabled.
+     */
+    _setButtonDisabled_( btnId, isDisabled )
+    {
+        let $btn = $(p_base.get( btnId ));
+
+        if( isDisabled )  $btn.attr( 'disabled', 'disabled' );
+        else              $btn.removeAttr( 'disabled' );
     }
 
     /**
@@ -1303,11 +1929,16 @@ class TableEditor
     {
         if( $(editor).is( 'input' ) )
         {
+            if( p_base.isOfType( editor, 'color' ) && ! /^#[0-9a-fA-F]{6}$/.test( cellValue ) )
+            {
+                cellValue = '#000000';
+            }
+
             $(editor).val( cellValue );
         }
         else
         {
-            $(editor).find( 'value' )
+            $(editor).find( 'option' )
                      .filter( function() { return $(this).text() === cellValue; } )
                      .prop( 'selected', true );
         }
@@ -1324,18 +1955,32 @@ class TableEditor
      */
     _addCells_( oRow, oData )
     {
+        oRow.setAttribute( 'role', 'row' );
+        oRow.setAttribute( 'aria-rowindex', Array.from( this.tbody.rows ).indexOf( oRow ) + 1 );
+
         for( let n = 0; n < this.colDefinitions.length; n++ )
         {
-            let cell  = oRow.insertCell( -1 );            // -1 == insert at end of row (append)
+            let cell  = oRow.insertCell( -1 );
             let name  = this.colDefinitions[n].name;
             let value = (p_base.isDefined( oData[name] ) ? oData[name] : this._getValue4KeyAtColumn_( name, "default", "" ));
             let text  = (this.cellFormatter === null ? value : this.cellFormatter( this, name, value ));
 
             cell.innerHTML = text;
 
-            if( ! this.colDefinitions[n].editor )          // null or false value for a column means: not-visible
+            let colEditor = this.colDefinitions[n].editor;
+
+            if( ! colEditor )
             {
                 $(cell).css( "display", "none" );
+            }
+            else if( p_base.isString( colEditor ) )
+            {
+                let edLower = colEditor.trim().toLowerCase();
+
+                if( edLower.startsWith( "<input" ) || edLower.startsWith( "<select" ) )
+                {
+                    $(cell).addClass( 'te-editable' );
+                }
             }
 
             this._dataColName_( cell, name  );
@@ -1373,26 +2018,34 @@ class TableEditor
      */
     _setToolbar_()
     {
-        $(this.toolbar).empty();    // Deletes all child elements
+        if( this.toolbar === null )
+        {
+            return this;
+        }
+
+        $(this.toolbar).empty();
 
         let toolbar = '';
 
         if( this.isEditable() )         // CARE: can not use use <button> because when a button has focus or is the default button and user press [Enter] its action is executed
         {
-            // NEXT: definir la class mini-btn de algun modo en este fichero
-            toolbar += '<i class="mini-btn ti ti-plus"  id="'+ this.btnAppendId +'" title="Appends a new row"></i>'+
-                       '<i class="mini-btn ti ti-copy"  id="'+ this.btnCloneId  +'" title="Clones highlighted row"></i>'+
-                       '<i class="mini-btn ti ti-device-floppy"  id="'+ this.btnSaveId   +'" title="Save current data"></i>'+
-                       '<i class="mini-btn ti ti-trash" id="'+ this.btnDeleteId +'" title="Deletes highlighted row"></i>';
+            toolbar += '<i class="mini-btn ti ti-plus"          id="'+ this.btnAppendId   +'" title="Appends a new row"></i>'+
+                       '<i class="mini-btn ti ti-copy"          id="'+ this.btnCloneId    +'" title="Clones highlighted row"></i>'+
+                       '<i class="mini-btn ti ti-arrow-up"      id="'+ this.btnMoveUpId   +'" title="Moves highlighted row up"></i>'+
+                       '<i class="mini-btn ti ti-arrow-down"    id="'+ this.btnMoveDownId +'" title="Moves highlighted row down"></i>'+
+                       '<i class="mini-btn ti ti-device-floppy" id="'+ this.btnSaveId     +'" title="Save current data"></i>'+
+                       '<i class="mini-btn ti ti-trash"         id="'+ this.btnDeleteId   +'" title="Deletes highlighted row"></i>';
         }
 
-        toolbar += '<i class="mini-btn ti ti-printer"           id="'+ this.btnPrintId +'" title="Prints current data"></i>'+
+        toolbar += '<i class="mini-btn ti ti-info-circle"       id="'+ this.btnInfoId  +'" title="Column information"></i>'+
+                   '<i class="mini-btn ti ti-printer"           id="'+ this.btnPrintId +'" title="Prints current data"></i>'+
                    '<i class="mini-btn ti ti-help-circle" id="'+ this.btnHelpId  +'" title="Shows help"></i>';
 
         $(this.toolbar).append( $('<div>'+ toolbar +'</div>') );
 
         // It is easier to hide than to check in all the code if it exists prior to use it
         if( this.onSave  === null )  $('#'+this.btnSaveId ).hide();
+        if( this.onInfo  === null )  $('#'+this.btnInfoId ).hide();
         if( this.onPrint === null )  $('#'+this.btnPrintId).hide();
         if( this.onHelp  === null )  $('#'+this.btnHelpId ).hide();
 
@@ -1400,12 +2053,15 @@ class TableEditor
 
         if( this.isEditable() )
         {
-            $(p_base.get( this.btnAppendId )).on( 'click', function() { self.appendRow(); } );
-            $(p_base.get( this.btnCloneId  )).on( 'click', function() { self.cloneRow();  } );
-            $(p_base.get( this.btnSaveId   )).on( 'click', function() { self.save();      } );
-            $(p_base.get( this.btnDeleteId )).on( 'click', function() { self.deleteRow(); } );
+            $(p_base.get( this.btnAppendId   )).on( 'click', function() { self.appendRow();  } );
+            $(p_base.get( this.btnCloneId    )).on( 'click', function() { self.cloneRow();   } );
+            $(p_base.get( this.btnMoveUpId   )).on( 'click', function() { self.moveRowUp();  } );
+            $(p_base.get( this.btnMoveDownId )).on( 'click', function() { self.moveRowDown();} );
+            $(p_base.get( this.btnSaveId     )).on( 'click', function() { self.save();       } );
+            $(p_base.get( this.btnDeleteId   )).on( 'click', function() { self.deleteRow();  } );
         }
 
+        $(p_base.get( this.btnInfoId  )).on( 'click', function() { self.info();  } );
         $(p_base.get( this.btnPrintId )).on( 'click', function() { self.print(); } );
         $(p_base.get( this.btnHelpId  )).on( 'click', function() { self.help();  } );
 
@@ -1416,19 +2072,19 @@ class TableEditor
     {
         if( p_base.isDefined( name ) )
         {
-            $(oCell).data( "te_colname", name );
+            $(oCell).data( "teColname", name );
         }
 
-        return $(oCell).data( "te_colname" );                 // Care: it is mandatory to use lower-case and to omit "data-" prefix
+        return $(oCell).data( "teColname" );
     }
 
     /**
-     * Si se pasa sólo un arg, devuelve el valor actual, si se pasan 2 args,
-     * actualiza el valor actual pero devuelve el valor anterior a ser cambiado.
+     * If only one arg is passed, returns the current value. If 2 args are passed,
+     * updates the current value but returns the previous value before change.
      *
-     * @param {type} oCell
-     * @param {type} value
-     * @returns {Object}
+     * @param {HTMLTableCellElement} oCell The cell element.
+     * @param {*} value Optional new value to set.
+     * @returns {*} The current (or previous, if updated) cell value.
      */
     _dataValue_( oCell, value )
     {
@@ -1453,12 +2109,27 @@ class TableEditor
         {
             let self = this;
 
-            $(this.table).on( 'click', 'tbody tr', function( event ) 
+            $(this.table).on( 'click', 'tbody tr', function( event )
             {
-                self.selectRowAtIndex( event.target.parentElement.rowIndex, true );
+                const cell = $( event.target ).closest( 'td' )[0];
+                const row  = $( event.target ).closest( 'tr' );
+
+                if( row.length > 0 )
+                {
+                    const clickedIndex = row[0].rowIndex - self.getHeadRowCount();
+
+                    if( clickedIndex === self.getSelectedRowIndex() && cell && $(cell).hasClass( 'te-editable' ) )
+                    {
+                        self.editCell( cell );
+                    }
+                    else
+                    {
+                        self.selectRowAtIndex( row[0].rowIndex, true );
+                    }
+                }
             } );
 
-            $(this.table).on( 'dblclick', 'tbody tr td', function( event ) 
+            $(this.table).on( 'dblclick', 'tbody tr td', function( event )
             {
                 self.editCell( event.target );
             } );
@@ -1468,6 +2139,225 @@ class TableEditor
             $(this.table).off( 'click'   , 'tbody tr' );
             $(this.table).off( 'dblclick', 'tbody tr td' );
         }
+
+        return this;
+    }
+
+    /**
+     * Sets up touch event support for mobile devices.
+     * @private
+     * @returns {TableEditor} this
+     */
+    _setupTouchSupport_()
+    {
+        if( ! this.enableTouchSupport )
+        {
+            return this;
+        }
+
+        const self = this;
+        let touchStartRow = -1;
+        let touchStartTime = 0;
+        let touchStartX = 0;
+        let touchStartY = 0;
+
+        const touchStartHandler = function( event )
+        {
+            const touch = event.touches[0];
+            const element = document.elementFromPoint( touch.clientX, touch.clientY );
+            const row = element ? element.closest('tr') : null;
+
+            if( row )
+            {
+                touchStartRow = Array.from( self.tbody.rows ).indexOf( row );
+                touchStartTime = Date.now();
+                touchStartX = touch.clientX;
+                touchStartY = touch.clientY;
+            }
+        };
+
+        const touchEndHandler = function( event )
+        {
+            const touch = event.changedTouches[0];
+            const element = document.elementFromPoint( touch.clientX, touch.clientY );
+            const row = element ? element.closest('tr') : null;
+
+            if( row && touchStartRow >= 0 )
+            {
+                const touchEndRow = Array.from( self.tbody.rows ).indexOf( row );
+                const touchDuration = Date.now() - touchStartTime;
+
+                const deltaX = Math.abs( touch.clientX - touchStartX );
+                const deltaY = Math.abs( touch.clientY - touchStartY );
+
+                if( touchStartRow === touchEndRow && touchDuration < 300 && deltaX < 10 && deltaY < 10 )
+                {
+                    event.preventDefault();
+                    self.selectRowAtIndex( touchEndRow );
+                }
+            }
+
+            touchStartRow = -1;
+        };
+
+        this.tbody.addEventListener( 'touchstart', touchStartHandler, { passive: true } );
+        this.tbody.addEventListener( 'touchend', touchEndHandler, { passive: false } );
+
+        this._eventHandlers.push( { element: this.tbody, event: 'touchstart', handler: touchStartHandler } );
+        this._eventHandlers.push( { element: this.tbody, event: 'touchend', handler: touchEndHandler } );
+
+        return this;
+    }
+
+    /**
+     * Sets up virtual scrolling for large datasets.
+     * @private
+     * @returns {TableEditor} this
+     */
+    _setupVirtualScroll_()
+    {
+        if( ! this.enableVirtualScroll )
+        {
+            return this;
+        }
+
+        this.visibleRows = Math.ceil( this.table.clientHeight / this.rowHeight );
+        this.visibleStart = 0;
+        this.visibleEnd = Math.min( this.visibleRows, this.allData.length );
+
+        const self = this;
+
+        const scrollHandler = function()
+        {
+            const scrollTop = self.tbody.scrollTop;
+            const newStartIndex = Math.floor( scrollTop / self.rowHeight );
+
+            if( newStartIndex !== self.visibleStart )
+            {
+                self.visibleStart = newStartIndex;
+                self.visibleEnd = Math.min( newStartIndex + self.visibleRows, self.allData.length );
+                self._renderVisibleRows_();
+            }
+        };
+
+        $(this.tbody).on( 'scroll', scrollHandler );
+        this._eventHandlers.push( { element: this.tbody, event: 'scroll', handler: scrollHandler } );
+
+        return this;
+    }
+
+    /**
+     * Renders visible rows for virtual scrolling.
+     * @private
+     */
+    _renderVisibleRows_()
+    {
+        $( this.tbody ).empty();
+
+        for( let i = this.visibleStart; i < this.visibleEnd; i++ )
+        {
+            if( i >= 0 && i < this.allData.length )
+            {
+                const newRow = this.tbody.insertRow( -1 );
+                this._addCells_( newRow, this.allData[i] );
+            }
+        }
+
+        this._updateAriaSelection_( this.selectedRowIndex );
+    }
+
+    /**
+     * Sets up resize observer with debouncing.
+     * @private
+     * @returns {TableEditor} this
+     */
+    _setupResizeObserver_()
+    {
+        const self = this;
+
+        const resizeHandler = function()
+        {
+            if( self._debounceTimer !== null )
+            {
+                clearTimeout( self._debounceTimer );
+            }
+
+            self._debounceTimer = setTimeout(() =>
+            {
+                self._recalculateLayout_();
+                self._debounceTimer = null;
+            }, self.debounceDelay );
+        };
+
+        if( typeof ResizeObserver !== 'undefined' )
+        {
+            this.resizeObserver = new ResizeObserver( resizeHandler );
+            this.resizeObserver.observe( this.table );
+        }
+        else
+        {
+            window.addEventListener( 'resize', resizeHandler );
+            this._eventHandlers.push( { element: window, event: 'resize', handler: resizeHandler } );
+        }
+
+        return this;
+    }
+
+    /**
+     * Recalculates table layout after resize.
+     * @private
+     */
+    _recalculateLayout_()
+    {
+        if( this.enableVirtualScroll )
+        {
+            this.visibleRows = Math.ceil( this.table.clientHeight / this.rowHeight );
+            this.visibleEnd = Math.min( this.visibleStart + this.visibleRows, this.allData.length );
+            this._renderVisibleRows_();
+        }
+    }
+
+    /**
+     * Batch updates multiple rows for better performance.
+     * @private
+     * @param {Array} updates - Array of update objects: { index: number, data: object }
+     */
+    _batchRowUpdate_( updates )
+    {
+        if( ! updates || updates.length === 0 )
+        {
+            return this;
+        }
+
+        updates.forEach( update =>
+        {
+            if( update.index >= 0 && update.index < this.getBodyRowCount() )
+            {
+                const row = this.tbody.rows[update.index];
+                if( ! row )
+                {
+                    return;
+                }
+
+                const newRow = row.cloneNode( true );
+
+                Object.keys( update.data ).forEach( key =>
+                {
+                    const cellIndex = this.colDefinitions.findIndex( col => col.name === key );
+                    if( cellIndex >= 0 )
+                    {
+                        const value = update.data[key];
+                        const text = (this.cellFormatter === null ? value : this.cellFormatter( this, key, value ));
+                        const cell = newRow.cells[cellIndex];
+
+                        cell.innerHTML = text;
+                        this._dataValue_( cell, value );
+                    }
+                });
+
+                this.tbody.replaceChild( newRow, row );
+            }
+        });
 
         return this;
     }

@@ -29,6 +29,7 @@
 
 USE SENSOR   AS DEVICE
     ACTUATOR AS DEVICE
+    EMURA_IP AS "192.168.7.246"
 
 DEVICE clock
     DRIVER ClockDriver
@@ -38,7 +39,7 @@ DEVICE clock
 SENSOR ac_kitchen_sensor
     DRIVER DaikinEmuraSensorsDriver
        CONFIG
-           address  SET "192.168.7.246"
+           ip       SET EMURA_IP
            interval SET 7m
 
 ACTUATOR ac_kitchen_ctrl
@@ -46,7 +47,7 @@ ACTUATOR ac_kitchen_ctrl
         value SET pair():put( "power", false )
     DRIVER DaikinEmuraControlDriver
         CONFIG
-            address SET "192.168.7.246"
+            ip SET EMURA_IP
 
 # -----------------------------------------------------------------------------------------------------------------
 # During Summer time, we allow a higher temperature for sleeping and restore previous temperature when not sleeping

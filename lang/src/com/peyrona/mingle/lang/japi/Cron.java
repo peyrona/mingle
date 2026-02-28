@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package com.peyrona.mingle.lang.japi;
 
 import com.peyrona.mingle.lang.MingleException;
@@ -10,7 +23,6 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.time.ZoneId;
-import java.time.ZoneOffset;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -510,7 +522,7 @@ public final class Cron
     {
         LocalDate dateNow = when.toLocalDate();
         long daysSinceStart = ChronoUnit.DAYS.between( startDate, dateNow );
-        
+
         // Ensure we handle cases where 'when' might be before startDate
         if( daysSinceStart < 0 )
         {
@@ -520,7 +532,7 @@ public final class Cron
         if( daysSinceStart % every == 0 )
         {
             LocalTime time = getNextTime( when.toLocalTime(), dateNow );
-            
+
             if( time != null )
             {
                 return updateTime( when, time );
@@ -530,7 +542,7 @@ public final class Cron
         // Calculate days to add to reach start of next interval
         long remainder = daysSinceStart % every;
         long daysToAdd = every - remainder;
-        
+
         return updateTime( when.plusDays( daysToAdd ), aLtTime[0] );
     }
 
@@ -587,14 +599,14 @@ public final class Cron
             if( isValidDayOfMonth( when ) )
             {
                 LocalTime time = getNextTime( when.toLocalTime(), dateNow );
-                
+
                 if( time != null )
                     return updateTime( when, time );
             }
 
             // Check remaining days in this month
             LocalDateTime nextInMonth = findNextDayInMonth( when ); // search from when + 1 day
-            
+
             if( nextInMonth != null )
                 return nextInMonth;
         }
@@ -623,7 +635,7 @@ public final class Cron
 
             // Find first valid day in this month
             LocalDateTime validDay = findFirstValidDayInMonth( candidate.toLocalDate() );
-            
+
             if( validDay != null )
                 return updateTime( validDay, aLtTime[0] );
 
@@ -640,7 +652,7 @@ public final class Cron
     private LocalDateTime findNextDayInMonth( LocalDateTime from )
     {
         LocalDateTime candidate = from.plusDays( 1 );
-        
+
         while( candidate.getMonth() == from.getMonth() )
         {
             if( isValidDayOfMonth( candidate ) )
@@ -649,7 +661,7 @@ public final class Cron
             }
             candidate = candidate.plusDays( 1 );
         }
-        
+
         return null;
     }
 
@@ -659,24 +671,24 @@ public final class Cron
     private LocalDateTime findFirstValidDayInMonth( LocalDate monthStart )
     {
         int lengthOfMonth = monthStart.lengthOfMonth();
-        
+
         for( int day = 1; day <= lengthOfMonth; day++ )
         {
             LocalDate candidate = monthStart.withDayOfMonth( day );
-            
+
             // Check if this day matches any of the configured days
             if( contains( aDoM, day ) )
             {
                 return candidate.atStartOfDay();
             }
-            
+
             // Check special case for "last day of month" (31)
             if( day == lengthOfMonth && contains( aDoM, LAST_DAY_MARKER ) )
             {
                 return candidate.atStartOfDay();
             }
         }
-        
+
         return null;
     }
 

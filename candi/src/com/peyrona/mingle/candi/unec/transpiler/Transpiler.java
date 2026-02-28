@@ -48,8 +48,8 @@ public final class Transpiler
 
     private final IConfig         config;
     private       Charset         charset;
-    private final List<TransUnit> tus = new ArrayList<>();
-    private final List<Path>      tempFiles = new ArrayList<>();     // Temp files for parameterized INCLUDEs
+    private final List<TransUnit> tus      = new ArrayList<>();
+    private final List<Path>      tmpFiles = new ArrayList<>();     // Temp files for parameterized INCLUDEs
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -73,6 +73,12 @@ public final class Transpiler
             tus.addAll( doChecks(
                                   doCommands(
                                               doIncludes( uri, new ArrayList<>() ) ) ) );    // Passing a List because doIncludes(...) is recursive
+
+            for( TransUnit tu : tus )
+            {
+                if( tu.hasErrors() )
+                    return this;
+            }
 
             if( IntermediateCodeWriter.isRequired() )
             {
@@ -98,6 +104,12 @@ public final class Transpiler
             cleanupTempFiles();
         }
 
+        return this;
+    }
+
+    public Transpiler execute( Runnable run )
+    {
+        run.run();
         return this;
     }
 
@@ -255,7 +267,7 @@ public final class Transpiler
 
         // 4. Write transformed content
         Files.writeString( tempFile, code, charset );
-        tempFiles.add( tempFile );
+        tmpFiles.add( tempFile );
 
         return tempFile.toUri();
     }
@@ -265,7 +277,7 @@ public final class Transpiler
      */
     private void cleanupTempFiles()
     {
-        for( Path tempFile : tempFiles )
+        for( Path tempFile : tmpFiles )
         {
             try
             {
@@ -277,6 +289,6 @@ public final class Transpiler
             }
         }
 
-        tempFiles.clear();
+        tmpFiles.clear();
     }
 }

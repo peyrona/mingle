@@ -1,0 +1,81 @@
+<!-- Gadget properties: custom JavaScript code executed on device value changes. -->
+
+<div id="properties-code" style="display:none;">
+    <form onsubmit="return false;">
+        <div class="container">
+            <div class="notification is-info is-light" style="position: relative;">
+                <i class="ti ti-circle-x" title="Close help"
+                   style="position: absolute; top: 8px; right: 10px; cursor: pointer; font-size: 20px; opacity: 0.6;"
+                   onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.6'"
+                   onclick="$(this).closest('.notification').slideUp(200)"></i>
+                <p class="mb-2"><strong>Custom JavaScript</strong></p>
+                <p>Write JavaScript code that runs each time this gadget receives a device value update.
+                   Three variables are available:</p>
+                <ul class="ml-4 mt-1">
+                    <li><code>action</code> &mdash; the action name (String)</li>
+                    <li><code>payload</code> &mdash; the message payload (Object with <code>.name</code>, <code>.value</code>, <code>.when</code>, &hellip;)</li>
+                    <li><code>gadget</code> &mdash; this gadget instance (<code>getContentArea()</code>, <code>getContainer()</code>, &hellip;)</li>
+                </ul>
+            </div>
+            <div class="field">
+                <label class="label">Code</label>
+                <div class="control">
+                    <textarea class="textarea" name="code_js" rows="16" spellcheck="false"
+                              placeholder="// Example: change background when value exceeds 50&#10;if( payload.value > 50 )&#10;    gadget.getContentArea().css('background-color', 'yellow');"
+                              style="font-family: monospace; font-size: 13px; tab-size: 4;"></textarea>
+                </div>
+            </div>
+        </div>
+    </form>
+</div>
+
+<script>
+"use strict";
+
+if( typeof dlgCode === "undefined" )
+{
+var dlgCode =
+{
+    gadget : null,
+
+    /**
+     * Loads the gadget's custom code into the textarea.
+     *
+     * @param {GumGadget} gadget The gadget being edited.
+     */
+    setup : function( gadget )
+    {
+        this.gadget = gadget;
+
+        $('#properties-code .notification').show();
+        $('#properties-code [name="code_js"]').val( gadget.code_js || '' );
+
+        // Allow Tab key to insert spaces instead of moving focus
+        $('#properties-code [name="code_js"]').off('keydown.codeTab')
+            .on('keydown.codeTab', function( e )
+            {
+                if( e.key === 'Tab' )
+                {
+                    e.preventDefault();
+
+                    let ta    = this;
+                    let start = ta.selectionStart;
+                    let end   = ta.selectionEnd;
+
+                    ta.value = ta.value.substring( 0, start ) + '    ' + ta.value.substring( end );
+                    ta.selectionStart = ta.selectionEnd = start + 4;
+                }
+            });
+    },
+
+    /**
+     * Writes the textarea value back to the gadget property.
+     */
+    save : function()
+    {
+        if( this.gadget )
+            this.gadget.code_js = $('#properties-code [name="code_js"]').val();
+    }
+};
+}
+</script>

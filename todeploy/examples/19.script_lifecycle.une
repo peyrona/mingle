@@ -47,8 +47,8 @@ SCRIPT
     ONSTART
     LANGUAGE Une
     FROM {
-            console = _NL_ + "[PHASE 2] ONSTART: All entities are ready!" + _NL_ + \
-                      "          The clock device exists and will start ticking." + _NL_
+            console = "\n[PHASE 2] ONSTART: All entities are ready!\n" + \
+                      "          The clock device exists and will start ticking.\n"
          }
 
 #-------------------------------------------------------------------
@@ -75,8 +75,8 @@ SCRIPT
     PRE ONSTOP
     LANGUAGE Une
     FROM {
-            console = _NL_ + "[PHASE 3] PRE ONSTOP: Shutting down gracefully..." + _NL_ + \
-                      "          Entities still work! Last clock value was: " + clock + _NL_
+            console = "\n[PHASE 3] PRE ONSTOP: Shutting down gracefully...\n" + \
+                      "          Entities still work! Last clock value was: " + clock + "\n"
          }
 
 #-------------------------------------------------------------------

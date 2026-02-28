@@ -101,22 +101,22 @@ final class ToolbarPanel extends javax.swing.JPanel
         Main.frame
             .getRootPane()
             .registerKeyboardAction( (ActionListener) -> onConnect2ExEn(),
-                                     KeyStroke.getKeyStroke( KeyEvent.VK_F2, 0 ),
-                                     JComponent.WHEN_IN_FOCUSED_WINDOW );
-        Main.frame
-            .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onRunStopExEn(),
-                                     KeyStroke.getKeyStroke( KeyEvent.VK_F3, 0 ),
-                                     JComponent.WHEN_IN_FOCUSED_WINDOW );
-        Main.frame
-            .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onOpenUneEditor(),
                                      KeyStroke.getKeyStroke( KeyEvent.VK_F4, 0 ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
             .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onRunStopGum(),
+            .registerKeyboardAction( (ActionListener) -> onRunStopExEn(),
                                      KeyStroke.getKeyStroke( KeyEvent.VK_F5, 0 ),
+                                     JComponent.WHEN_IN_FOCUSED_WINDOW );
+        Main.frame
+            .getRootPane()
+            .registerKeyboardAction( (ActionListener) -> onOpenUneEditor(),
+                                     KeyStroke.getKeyStroke( KeyEvent.VK_F2, 0 ),
+                                     JComponent.WHEN_IN_FOCUSED_WINDOW );
+        Main.frame
+            .getRootPane()
+            .registerKeyboardAction( (ActionListener) -> onRunStopGum(),
+                                     KeyStroke.getKeyStroke( KeyEvent.VK_F8, 0 ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
 
         // Tabs added or removed
@@ -151,12 +151,12 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     private void initComponents()
     {
-        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn already running [F2]" );
+        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn already running [F4]" );
         btnSave = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onSaveCurrentModel() ).setToolTip( "Save current model" );
         btnDel  = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onClearExEn()        ).setToolTip( "Empty current model: delete all rules and devices" );
-        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunStopExEn()      ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F3]" );
-        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenUneEditor()    ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F4]" );  // Editor is always enabled
-        btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()       ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F5]" );
+        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunStopExEn()      ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F5]" );
+        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenUneEditor()    ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F2]" );  // Editor is always enabled
+        btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()       ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F8]" );
         btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()             ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
     }
 

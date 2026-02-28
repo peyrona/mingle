@@ -179,7 +179,7 @@ final class Checker
                     {
                         if( ! oDrvConfItem.isSameType( oDvcDrvCfgValue ) )
                         {
-                            tuDeviceOwner.addError( new CodeError( '"'+ sDvcDrvCfgName +"\": invalid data type. Expected '"+ oDrvConfItem.type, oDvcDrvCfgValue ) );
+                            tuDeviceOwner.addError( new CodeError( '"'+ sDvcDrvCfgName +"\": invalid data type. Expected '"+ oDrvConfItem.type +'\'', oDvcDrvCfgValue ) );
                         }
                         else if( oDvcDrvCfgValue.isString() && oDvcDrvCfgValue.text().isEmpty() )
                         {
@@ -211,7 +211,7 @@ final class Checker
 
             if( oValid == Number.class || oValid == String.class || oValid == Boolean.class )
             {
-                tuDeviceOwner.addError( new CodeError( "\""+ oDvcInitValue +"\": invalid data type for property '"+ sDvcInitName +"'; expected '"+ oValid +"'",
+                tuDeviceOwner.addError( new CodeError( "\""+ oDvcInitValue +"\": invalid data type for property '"+ sDvcInitName +"'; expected '"+ oValid +'\'',
                                                        device.findInClause( "init", sDvcInitName ) ) );
             }
             else if( ! ((Boolean) oValid) )
@@ -392,33 +392,47 @@ final class Checker
 
             boolean bAuto = tu.autoInclude() && AutoInclude.init( xprEval );
 
-            // Check that device's driver names exitst as driver ( ¡clarity over efficiency! )
+            // Check that device's driver names exist as driver ( ¡clarity over efficiency! )
             for( ParseDevice pd : tu.getCommands( ParseDevice.class ) )
             {
                 if( pd.drvName != null )    // Although it is mandatory it could be null at this moment
                 {
                     boolean bFound = bAuto && AutoInclude.addDriver2Unit( pd.drvName, tu );
 
-                    if( bAuto && ! bFound && ! isForGrid )
+                    if( ! bFound && ! isForGrid )
                     {
-                        tu.addError( new CodeError( "DEVICE refers to a DRIVER named \""+ pd.drvName +"\", but there is no DRIVER with such name.",
-                                                    pd.findInClause( "driver", pd.drvName ) ) );
+                        // When not using auto-include, check across all explicitly included TransUnits
+                        if( ! bAuto )
+                            bFound = (findByName( pd.drvName, tus ) instanceof ParseDriver);
+
+                        if( ! bFound )
+                        {
+                            tu.addError( new CodeError( "DEVICE refers to a DRIVER named \""+ pd.drvName +"\", but there is no DRIVER with such name.",
+                                                        pd.findInClause( "driver", pd.drvName ) ) );
+                        }
                     }
                 }
             }
 
-            // Check that driver's script names exitst as script ( ¡clarity over efficiency! ).
-            // Scripts muct be checked after checking Drivers because some Drivers could be added and they need their Script.
+            // Check that driver's script names exist as script ( ¡clarity over efficiency! ).
+            // Scripts must be checked after checking Drivers because some Drivers could be added and they need their Script.
             for( ParseDriver pd : tu.getCommands( ParseDriver.class ) )
             {
                 if( pd.script != null  )    // Although it is mandatory it could be null at this moment
                 {
                     boolean bFound = bAuto && AutoInclude.addScript2Unit( pd.script, tu );
 
-                    if( bAuto && ! bFound && ! isForGrid )
+                    if( ! bFound && ! isForGrid )
                     {
-                        tu.addError( new CodeError( "DRIVER refers to a SCRIPT named \""+ pd.script +"\", but there is no SCRIPT with such name.",
-                                                    pd.findInClause( "script", pd.script ) ) );
+                        // When not using auto-include, check across all explicitly included TransUnits
+                        if( ! bAuto )
+                            bFound = (findByName( pd.script, tus ) instanceof ParseScript);
+
+                        if( ! bFound )
+                        {
+                            tu.addError( new CodeError( "DRIVER refers to a SCRIPT named \""+ pd.script +"\", but there is no SCRIPT with such name.",
+                                                        pd.findInClause( "script", pd.script ) ) );
+                        }
                     }
                 }
             }

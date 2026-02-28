@@ -2,6 +2,7 @@
 package com.peyrona.mingle.lang.interfaces;
 
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.xpreval.functions.ExtraType;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
@@ -167,6 +168,16 @@ public interface IXprEval
      * @return true if this Expression Evaluator can handle passed type of data.
      */
     boolean isExtendedDataType( Object oValue );
+
+    /**
+     * Creates a new empty instance of an extended data type given its name.
+     * Accepts both short names ("date", "time", "list", "pair") and
+     * fully-qualified class names.
+     *
+     * @param sTypeName The type name (short or fully-qualified).
+     * @return A new empty ExtraType instance, or {@code null} if the name is not recognized.
+     */
+    ExtraType<?> newExtendedType( String sTypeName );
 
     /**
      * Returns all operators managed by this Expressions Evaluator.

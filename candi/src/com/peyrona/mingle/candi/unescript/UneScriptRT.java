@@ -152,7 +152,17 @@ public class UneScriptRT implements ICandi.ILanguage
                     break;
 
                 case AssignBasicData:
-                    value = action.getValueToSet();
+                    Object raw = action.getValueToSet();
+                    if( raw instanceof String )    // String literals are stored as NAXE expressions, e.g. "\"text\""
+                    {
+                        if( xprEval == null )
+                            xprEval = runtime.newXprEval().build( raw.toString(), null, runtime::getGroupMemberNames );
+                        value = xprEval.getErrors().isEmpty() ? xprEval.eval() : raw;
+                    }
+                    else
+                    {
+                        value = raw;               // Numeric and boolean constants can be used directly
+                    }
                     break;
 
                 case AssignExpression:

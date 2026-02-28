@@ -64,6 +64,58 @@ public final class Lexeme implements ITokenable
         return new Lexeme().updateUsign( s );
     }
 
+    /**
+     * Builds a synthetic char-based Lexeme, copying line/column/offset from a source Lexeme.
+     *
+     * @param c      One of: '\n', '(', ')', ','
+     * @param source The Lexeme from which to copy location information.
+     * @return A new Lexeme with location preserved from {@code source}.
+     */
+    public static Lexeme build( char c, Lexeme source )
+    {
+        Lexeme lex = build( c );
+               lex.line   = source.line;
+               lex.column = source.column;
+               lex.offset = source.offset;
+
+        return lex;
+    }
+
+    /**
+     * Builds a synthetic string-based Lexeme, copying line/column/offset from a source Lexeme.
+     *
+     * @param s      The text for the new Lexeme.
+     * @param source The Lexeme from which to copy location information.
+     * @return A new Lexeme with location preserved from {@code source}.
+     */
+    public static Lexeme build( String s, Lexeme source )
+    {
+        Lexeme lex = build( s );
+               lex.line   = source.line;
+               lex.column = source.column;
+               lex.offset = source.offset;
+
+        return lex;
+    }
+
+    /**
+     * Builds a NAME lexeme with the given text.
+     * <p>
+     * Useful when the text needs to bypass Lexer tokenization rules
+     * (e.g., special characters that the Lexer wouldn't recognize).
+     *
+     * @param text The raw text for the NAME lexeme.
+     * @return A new Lexeme of type NAME.
+     */
+    public static Lexeme buildName( String text )
+    {
+        Lexeme lex = new Lexeme();
+               lex.text = text;
+               lex.type = TYPE_NAME;
+
+        return lex;
+    }
+
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
 
@@ -287,8 +339,11 @@ public final class Lexeme implements ITokenable
     public Lexeme clonar()
     {
         Lexeme lex = new Lexeme();
-               lex.text = text;
-               lex.type = type;
+               lex.text   = text;
+               lex.type   = type;
+               lex.line   = line;
+               lex.column = column;
+               lex.offset = offset;
 
         return lex;
     }

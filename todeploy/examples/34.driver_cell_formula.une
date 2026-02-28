@@ -34,10 +34,9 @@ DEVICE seconds
 DEVICE time_is
      DRIVER CellSetDriver
         CONFIG
-            value SET "= (seconds / 3600):floor():mod(60):format('00') +':'+ \
-                         (seconds /   60):floor():mod(60):format('00') +':'+ \
-                                  seconds:floor():mod(60):format('00')"
-            # Note the use of single quotes ('00') instead of double ("00") inside the formula
+            value SET "= (seconds / 3600):floor():mod(60):format(\"00\") +\":\"+ \
+                         (seconds /   60):floor():mod(60):format(\"00\") +\":\"+ \
+                                  seconds:floor():mod(60):format(\"00\")"
 
 WHEN time_is                 # This is always true
 THEN console SET "Uptime: " + time_is

@@ -49,6 +49,8 @@ import javax.servlet.http.HttpServletResponse;
  */
 final class ServiceFileMgr extends ServiceBase
 {
+    private static final HmacAuthenticator hmacAuthenticator = new HmacAuthenticator();
+
     private final File fRoot;
 
     //------------------------------------------------------------------------//
@@ -64,6 +66,9 @@ final class ServiceFileMgr extends ServiceBase
     @Override
     protected void doGet() throws IOException
     {
+        if( ! validateRequest() )
+            return;
+
         String sFile  = asString( "file", null );
 
         if( sFile != null )
@@ -91,6 +96,9 @@ final class ServiceFileMgr extends ServiceBase
     @Override    // PUT == APPEND
     protected void doPut() throws IOException
     {
+        if( ! validateRequest() )
+            return;
+
         String sFilePath = asString( "file", null );
 
         // Mode 2: Update existing file content (file path in query, content in body)
@@ -154,6 +162,9 @@ final class ServiceFileMgr extends ServiceBase
     @Override    // POST == UPDATE
     protected void doPost() throws IOException
     {
+        if( ! validateRequest() )
+            return;
+
         File fOld = resolveSecurePath( asString( "old", "" ) );
         File fNew = resolveSecurePath( asString( "new", "" ) );
 
@@ -171,6 +182,9 @@ final class ServiceFileMgr extends ServiceBase
     @Override
     protected void doDelete() throws IOException
     {
+        if( ! validateRequest() )
+            return;
+
         String[] asFileNames = asString( "paths", "" ).split( ";" );
 
         for( String sName : asFileNames )
@@ -181,6 +195,16 @@ final class ServiceFileMgr extends ServiceBase
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    private boolean validateRequest() throws IOException
+    {
+        String result = hmacAuthenticator.validateRequest( request );
+
+        if( result != null )    // null == valid
+            sendError( result, HttpServletResponse.SC_UNAUTHORIZED );
+
+        return result == null;
+    }
 
     private File resolveSecurePath( String relativePath ) throws IOException
     {

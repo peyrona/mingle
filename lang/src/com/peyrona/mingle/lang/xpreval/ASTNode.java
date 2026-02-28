@@ -574,6 +574,12 @@ final class ASTNode
             {
                 if( oWithInitVal == null )    // Not initialized yet
                 {
+                    if( Boolean.FALSE.equals( value ) )    // Condition is already false: WITHIN can never be satisfied
+                    {
+                        bResult = false;
+                        return Boolean.FALSE;
+                    }
+
                     oWithInitVal = value;
                 }
                 else
@@ -598,8 +604,9 @@ final class ASTNode
             }
             else
             {
-                if( oWithInitVal == null )  bResult = false;       // When the variable's value never arrived, WITHIN has to evaluate to false
-                else                        bResult = Objects.equals( value, oWithInitVal );   // The value never changed
+                if( oWithInitVal == null )       bResult = false;                             // When the variable's value never arrived, WITHIN has to evaluate to false
+                else if( value instanceof Boolean ) bResult = (Boolean) value;               // Boolean WITHIN: condition must be true now (if apply() was not cancelled, it has been true throughout)
+                else                             bResult = Objects.equals( value, oWithInitVal );   // Non-boolean WITHIN: the value never changed
             }
         }
 

@@ -3,14 +3,7 @@ package com.peyrona.mingle.lang.messages;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
-import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.japi.UtilJson;
-import com.peyrona.mingle.lang.japi.UtilReflect;
 import com.peyrona.mingle.lang.japi.UtilType;
-import java.io.IOException;
-import java.lang.reflect.Field;
-import java.lang.reflect.InvocationTargetException;
-import java.net.URISyntaxException;
 
 /**
  * This is the base class for all messages that are known by the ExEn.
@@ -29,72 +22,65 @@ public abstract class Message
     /**
      * Unix time stamp (in milliseconds).
      */
-    public final long when  = System.currentTimeMillis();
+    public final long   when = System.currentTimeMillis();
+
+    /**
+     * Device or command name associated with this message.
+     */
+    public final String name;
+
+    /**
+     * Value carried by this message, or {@code null} when not applicable
+     * (e.g. {@link MsgReadDevice}).
+     */
+    public final Object value;
+
+    /**
+     * {@code true} when the message is generated in this ExEn,
+     * {@code false} when it comes from another (via network).
+     */
+    public final boolean isOwn;
 
     //------------------------------------------------------------------------//
 
-    // NOTE: methods ::serialize() and ::deserialize(...) exist to be used by third parties.
-    //       As MSP is built using Eclipse Minimal JSON library, I do not need to use these
-    //       methods, but others (which use different libs) would need them.
-
-    public String serialize()             // Only needed here (not needed in subclasses)
-    {
-        return toJSON().toString();
-    }
-
-    public static Object deserialize( String sJSON )
-    {
-        try
-        {
-            UtilJson json   = new UtilJson( sJSON );
-            String   sClass = Message.class.getName();
-                     sClass = sClass.substring( 0, sClass.lastIndexOf( '.' ) + 1 ) + json.getString( sCLASS, null );     // Never is null
-            Class<?> clazz  = Class.forName( sClass );
-            String   name   = json.getString( sNAME , null );    // Never is null
-            String   value  = json.getString( sVALUE, null );    // Can be null
-            Object   oValue = value == null ? null : UtilJson.toUneType( Json.parse( value ) );
-
-            return (oValue == null) ? UtilReflect.newInstance( clazz, name )
-                                    : UtilReflect.newInstance( clazz, name, oValue );
-        }
-        catch( ClassNotFoundException | InstantiationException   | NoSuchMethodException     | IllegalAccessException   |
-               URISyntaxException     | IllegalArgumentException | InvocationTargetException | IOException exc )
-        {
-            throw new MingleException( exc );    // this should to happen
-        }
-    }
-
+    /**
+     * Returns the JSON object that represents this Message instance.
+     *
+     * @return The JSON object that represents this Message instance.
+     */
     public JsonObject toJSON()
     {
-        try
-        {
-            JsonObject jo = Json.object()
-                                .add( sCLASS, getClass().getSimpleName() )    // getSimpleName() to save payload
-                                .add( sWHEN , when )
-                                .add( sNAME , (String) UtilReflect.getField( getClass(), "name" ).get( this ) );
+        JsonObject jo = Json.object()
+                            .add( sWHEN, when )
+                            .add( sNAME, name );
 
-            Field field = UtilReflect.getField( getClass(), "value" );
+        if( value != null )
+            jo.add( sVALUE, UtilType.toJson( value ) );
 
-            if( field != null )
-                jo.add( sVALUE, UtilType.toJson( field.get( this ) ) );
-
-            return jo;
-        }
-        catch( IllegalArgumentException | IllegalAccessException exc )
-        {
-            throw new MingleException( exc );    // this should to happen
-        }
+        return jo;
     }
 
     @Override
-    public String toString()              // Only needed here (not needed in subclasses)
+    public String toString()    // Only needed here (not needed in subclasses)
     {
         return toJSON().toString();
     }
 
     //------------------------------------------------------------------------//
+    // PROTECTED SCOPE
 
-    protected Message()
+    /**
+     * Creates a new message with the given device/command name, value and origin.
+     *
+     * @param name  Device or command name.
+     * @param value Value carried by this message, or {@code null} when not applicable.
+     * @param isOwn {@code true} when the message is generated in this ExEn,
+     *              {@code false} when it comes from another (via network).
+     */
+    protected Message( String name, Object value, boolean isOwn )
     {
+        this.name  = name;
+        this.value = value;
+        this.isOwn = isOwn;
     }
 }

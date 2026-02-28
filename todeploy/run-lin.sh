@@ -99,7 +99,7 @@ find_java()
 
 download_java()
 {
-    log "INFO" "Attempting to download and install Adoptium JDK 11..."
+    log "INFO" "Attempting to download and install Adoptium JDK 17..."
 
     # --- Detect Architecture ---
     local ARCH
@@ -110,26 +110,26 @@ download_java()
     if [ "$ARCH" = "x86_64" ]; then
         log "INFO" "Detected AMD64 (x64) architecture."
         JDK_ARCH="x64"
-        TARGET_DIR="jdk.11.linux.x64"
+        TARGET_DIR="jdk.17.linux.x64"
     elif [ "$ARCH" = "i686" ] || [ "$ARCH" = "i386" ]; then
         log "INFO" "Detected AMD32 (x86) architecture."
         JDK_ARCH="x86"
-        TARGET_DIR="jdk.11.linux.x86"
+        TARGET_DIR="jdk.17.linux.x86"
     elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
         log "INFO" "Detected ARM64 architecture."
         JDK_ARCH="aarch64"
-        TARGET_DIR="jdk.11.linux.aarch64"
+        TARGET_DIR="jdk.17.linux.aarch64"
     elif [ "$ARCH" = "armv7l" ] || [ "$ARCH" = "armv6l" ]; then
         log "INFO" "Detected ARM32 architecture."
         JDK_ARCH="arm"
-        TARGET_DIR="jdk.11.linux.arm"
+        TARGET_DIR="jdk.17.linux.arm"
     else
         die "Unsupported architecture for automatic download: $ARCH"
     fi
 
     # --- Variables ---
-    local JDK_URL="https://api.adoptium.net/v3/binary/latest/11/ga/linux/$JDK_ARCH/jdk/hotspot/normal/eclipse"
-    local DOWNLOAD_FILE="jdk-11-linux.tar.gz"
+    local JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/$JDK_ARCH/jdk/hotspot/normal/eclipse"
+    local DOWNLOAD_FILE="jdk-17-linux.tar.gz"
 
     # --- 1. Download JDK ---
     log "INFO" "Downloading from $JDK_URL..."
@@ -159,7 +159,7 @@ download_java()
     log "INFO" "Cleaning up $DOWNLOAD_FILE..."
     rm "$DOWNLOAD_FILE"
 
-    log "INFO" "✅ JDK 11 is ready in ./$TARGET_DIR"
+    log "INFO" "✅ JDK 17 is ready in ./$TARGET_DIR"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -202,11 +202,6 @@ main()
 
     if [ ! -f "lib/menu.jar" ]; then
         die "The application file 'menu.jar' was not found."
-    fi
-
-    if [ $# -eq 0 ]; then    # No parameters provided
-        echo "Press any key to continue..."
-        read -r -s -n 1
     fi
 
     # All arguments passed to this script will be forwarded to the application.

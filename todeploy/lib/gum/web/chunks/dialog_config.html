@@ -1,11 +1,11 @@
 <label class="label">Dashboard name: <span name="span_name"></span></label>
 
 <div class="field">
-    <label class="label">Password to allow regular users to execute this dashboard</label>
+    <label class="label">Password for regular users</label>
     <p class="control is-expanded">
         <input class="input" name="pwd_to_edit" type="text" placeholder="Can be empty" onchange="dlgCfg._onBoardPasswordChanged_(this)">
     </p>
-    <p class="help">It is needed to access this dashboard (to edit master is needed).</p>
+    <p class="help">Needed to execute this dashboard (but to edit it, master is needed).</p>
 </div>
 
 <div class="field gum-is-grid">
@@ -59,7 +59,12 @@
 
 <br>
 
-<label class="label">Background color&nbsp;&nbsp;<span class="is-size-7">(From bottom to top of screen)</span></label>
+<label class="label">
+    <span name="btn_color_toggle" title="Enable/Disable background color" style="cursor:pointer;" onclick="dlgCfg._onColorToggle_()">
+        <i class="gum-mini-btn ti ti-check"></i>
+    </span>
+    &nbsp;Background color&nbsp;&nbsp;<span class="is-size-7">(From bottom to top of screen)</span>
+</label>
 
 <div class="field is-horizontal">
     <div class="field-body">
@@ -92,20 +97,36 @@
 
 <div class="field">
     <label class="label">Connect with following ExEn(s)</label>
-    <div class="field has-addons">
-        <p class="control is-expanded">
-            <input class="input" name="exen-cfg" type="text" value='{"host": "localhost", "port": 55880, "ssl": false}'>
-        </p>
-        <p class="control">
-            <a class="button is-primary" onclick="dlgCfg._onAddExEn_()">
-                <span class="icon"><i class="ti ti-plus"></i></span>
-            </a>
-        </p>
-        <p class="control">
-            <a class="button is-danger" onclick="dlgCfg._onDelExEn_()">
-                <span class="icon"><i class="ti ti-minus"></i></span>
-            </a>
-        </p>
+
+    <div class="field is-horizontal">
+        <div class="field-body is-align-items-center">
+            <div class="field is-narrow">
+                <div class="control">
+                    <input class="input" name="exen-host" type="text" value="localhost" placeholder="Host" style="width: 18ch;">
+                </div>
+            </div>
+            <div class="field is-narrow">
+                <div class="control">
+                    <input class="input" name="exen-port" type="number" min="1" max="65535" value="55880" placeholder="Port" style="width: 12ch;">
+                </div>
+            </div>
+            <div class="field">
+                <label class="checkbox">
+                    <input type="checkbox" name="exen-ssl">
+                    &nbsp;SSL
+                </label>
+            </div>
+            <div class="field is-narrow ml-auto">
+                <div class="control has-addons">
+                    <a class="button is-primary" onclick="dlgCfg._onAddExEn_()">
+                        <span class="icon"><i class="ti ti-plus"></i></span>
+                    </a>
+                    <a class="button is-danger" onclick="dlgCfg._onDelExEn_()">
+                        <span class="icon"><i class="ti ti-minus"></i></span>
+                    </a>
+                </div>
+            </div>
+        </div>
     </div>
 </div>
 
@@ -140,6 +161,10 @@ var dlgCfg =
             $('#div-dlg_options [name="color_from"]').val(   oBg.getColorFrom() || '#F8FBFC' );
             $('#div-dlg_options [name="color_to"  ]').val(   oBg.getColorTo()   || '#F8FBFC' );
             $('#div-dlg_options [name="color_deg" ]').val(   oBg.getColorDegrees()  );
+
+            let bHasColor = p_base.isNotEmpty( oBg.getColorFrom() );
+
+            this._setColorEnabled_( bHasColor );
         }
 
         $('#div-dlg_options [name="board_name"]' ).val( gum.getDashboardName() );
@@ -157,9 +182,10 @@ var dlgCfg =
     {
         let url  = $('#div-dlg_options [name="back_image"]').val().trim();
         let mode = $('#div-dlg_options [name="image_mode"]:checked').val();
-        let from = $('#div-dlg_options [name="color_from"]').val().trim();
-        let to   = $('#div-dlg_options [name="color_to"  ]').val().trim();
-        let flow = $('#div-dlg_options [name="color_deg" ]').val();
+        let bOn  = ! $('#div-dlg_options [name="color_from"]').prop('disabled');
+        let from = bOn ? $('#div-dlg_options [name="color_from"]').val().trim() : null;
+        let to   = bOn ? $('#div-dlg_options [name="color_to"  ]').val().trim() : null;
+        let flow = bOn ? $('#div-dlg_options [name="color_deg" ]').val()        : null;
 
         return new Background()
                   .setImageURL(     url )
@@ -197,36 +223,80 @@ var dlgCfg =
         gum.setBackground( this.getBackground() );
     },
 
+    _onColorToggle_ : function()
+    {
+        let bEnabled = $('#div-dlg_options [name="color_from"]').prop('disabled');
+
+        this._setColorEnabled_( bEnabled );
+        this._onBackgroundChanged_();
+    },
+
+    _setColorEnabled_ : function( bEnabled )
+    {
+        $('#div-dlg_options [name="color_from"]').prop( 'disabled', ! bEnabled );
+        $('#div-dlg_options [name="color_to"  ]').prop( 'disabled', ! bEnabled );
+        $('#div-dlg_options [name="color_deg" ]').prop( 'disabled', ! bEnabled );
+
+        let $icon = $('#div-dlg_options [name="btn_color_toggle"] i');
+
+        if( bEnabled )
+            $icon.css( 'opacity', '1' );
+        else
+            $icon.css( 'opacity', '0.3' );
+    },
+
     _onSelectChanged_ : function( select )
     {
-        let $input = $('#div-dlg_options').find('[name="exen-cfg"]');
-
         if( select.length < 0 )
-            $input.val( null );
+        {
+            $('#div-dlg_options [name="exen-host"]').val('localhost');
+            $('#div-dlg_options [name="exen-port"]').val(55880);
+            $('#div-dlg_options [name="exen-ssl"]').prop('checked', false);
+        }
         else
-            $input.val( select.options[select.selectedIndex].text );    // Better to use 'text' over using 'value' (when setting a JS object to value at least Chrome does not handle it properly)
+        {
+            let oExEn = JSON.parse( select.options[select.selectedIndex].text );
+            $('#div-dlg_options [name="exen-host"]').val( oExEn.host || 'localhost' );
+            $('#div-dlg_options [name="exen-port"]').val( oExEn.port || 55880 );
+            $('#div-dlg_options [name="exen-ssl"]').prop('checked', oExEn.ssl || false );
+        }
     },
 
     _onAddExEn_ : function()
     {
-        let $input = $('#div-dlg_options').find('[name="exen-cfg"]' );
-        let sText  = $input.val().trim();
+        let $host = $('#div-dlg_options [name="exen-host"]');
+        let $port = $('#div-dlg_options [name="exen-port"]');
+        let $ssl  = $('#div-dlg_options [name="exen-ssl"]');
 
-        if( p_base.isEmpty( sText ) )
-            return;
+        $host.removeClass('is-danger');
+        $port.removeClass('is-danger');
 
-        if( ! this._isValidJSON_( sText ) )
+        let sHost = $host.val().trim();
+        if( p_base.isEmpty( sHost ) )
         {
-            p_app.alert( "Invalid JSON object" );
+            $host.addClass('is-danger');
             return;
         }
 
-        sText = JSON.stringify( JSON.parse( sText ) );     // Formats properly
+        let nPort = parseInt( $port.val() );
+        if( isNaN( nPort ) || nPort < 1 || nPort > 65535 )
+        {
+            $port.addClass('is-danger');
+            return;
+        }
 
-        if( this._getExEn_( sText ) !== null )   // Duplicated
+        let oExEn = {
+            host: sHost,
+            port: nPort,
+            ssl: $ssl.prop('checked')
+        };
+
+        let sText = JSON.stringify( oExEn );
+
+        if( this._getExEn_( sText ) !== null )
             return;
 
-        let $select = $('#div-dlg_options').find('[name="lst-exen"]' );
+        let $select = $('#div-dlg_options').find('[name="lst-exen"]');
 
         $select.append( $("<option></option>").val( sText ).text( sText ) );
         $select.find('option:last').prop('selected', true);
@@ -249,22 +319,9 @@ var dlgCfg =
     _getExEn_ : function( sText )
     {
         let $select = $('#div-dlg_options').find('[name="lst-exen"]' );
-        let $option = $select.find("option:contains('"+ sText +"')");       // Do not exchange quotes (" and ') (they must be like this)
+        let $option = $select.find("option:contains('"+ sText +"')");
 
         return ($option.length > 0 ? $option : null);
-    },
-
-    _isValidJSON_( str )
-    {
-        try
-        {
-            JSON.parse( str );
-            return true;
-        }
-        catch( error )
-        {
-            return false;
-        }
     }
 };
 }

@@ -93,7 +93,7 @@ final class GridManager
 
         lstServers = (bErrors || setTmpSrv.isEmpty() ) ? null : setTmpSrv;
         lstClients = (bErrors || setTmpCli.isEmpty() ) ? null : setTmpCli;
-        supplier   = (lstServers == null)              ? null : listenerSupplier;   // Used to create listeners for the Servers
+        supplier   = isDeaf()                          ? null : listenerSupplier;   // Used to create listeners for the Servers
     }
 
     //------------------------------------------------------------------------//
@@ -102,7 +102,7 @@ final class GridManager
     @Override
     public String toString()
     {
-        String sMuteInfo = isMute()  ? "true  (Only sends to ExEns that initiated a connection)."
+        String sMuteInfo = isMute()  ? "true  (Only sends to those that initiated a connection)."
                                      : "false (Sends messages to all defined nodes (ExEns)).";
 
         String sDeafInfo = (isDeaf() ? "true  (Does not attend"
@@ -311,7 +311,7 @@ final class GridManager
 
             if( ! NetworkConfig.isServerNetwork( sNetName ) )
             {
-                log( Level.SEVERE, "Grid node with host 'localhost' must reference a server network, not '"+ sNetName +"'" );
+                log( Level.SEVERE, "Grid node with host '"+ sHost +"' must reference a server network: '"+ sNetName +"' is not." );
                 return false;
             }
 

@@ -35,7 +35,6 @@ final class Pin implements IPin
 
     private final int     nWhich;
     private final boolean isInput;
-    private final int     nDebounce;
     private final boolean bInvert;
     private final boolean isButton;                                   // Considers this input as being a push-button and launches button events: "pressed", "released", "clicked" and "doubleclicked"
     private final WiringPi.PinCallback callback;                      // Callback reference (kept to avoid GC)
@@ -74,7 +73,6 @@ final class Pin implements IPin
         // This constructor does not need to check the consistency of the parameters because it is done at RPiGpioPin class
 
         this.isInput   = isInput;
-        this.nDebounce = ((nDebounce < 0) ? 0 : nDebounce);
         this.nWhich    = createNativePin( isBCM, nWhich, nPull, isInput );
         this.bInvert   = isInverted;
         this.isButton  = isButton;
@@ -86,8 +84,7 @@ final class Pin implements IPin
         {
             cb = createCallback( callback );
 
-            // Use WiringPi 3.x API with built-in debounce (convert ms to microseconds)
-            long debounceUs = this.nDebounce * 1000L;
+            long debounceUs = (nDebounce < 0) ? 0 : (nDebounce * 1000L);      // Use WiringPi 3.x API with built-in debounce (convert ms to microseconds)
             int  nErrCode   = WiringPi.setCallBack( nWhich, WiringPi.INT_EDGE_BOTH, cb, debounceUs );
 
             if( nErrCode != 0 )
@@ -125,7 +122,7 @@ final class Pin implements IPin
     {
         // As bButton is only for Sensors, it has no sense to consider it in this method
 
-            if( isInput )
+        if( isInput )
             throw new MingleException( "Pin "+ nWhich +" is for input: can not write." );
 
         if( bInvert )

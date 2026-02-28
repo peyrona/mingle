@@ -66,7 +66,7 @@ public abstract class      ControllerBase
             return false;
 
         if( rt == null )
-            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+            throw new MingleException( MingleException.INVALID_ARGUMENTS, rt );
 
         synchronized( this )
         {
@@ -146,7 +146,7 @@ public abstract class      ControllerBase
 
         // HD can be writable but the user can avoid to write in it via 'config.json' file
         if( getRuntime() == null )
-            throw new MingleException( MingleException.INVALID_ARGUMENTS );
+            throw new MingleException( MingleException.INVALID_ARGUMENTS, getRuntime() );
 
         String  sUseDisk = "write_disk";
         boolean bAllowed = getRuntime().getFromConfig( "exen", sUseDisk, true );
