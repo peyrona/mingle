@@ -29,14 +29,16 @@
 
  **How to install Mingle?**
 
-> * Linux:
-       bash (curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh)
->
-> * Mac:
-       bash (curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh)
->
-> * Windows:
-       irm https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1 | iex
+Copy and paste the command for your operating system into your terminal:
+
+* **Linux**
+  curl \-fsSL \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh) | bash
+
+* **macOS**
+  curl \-fsSL \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh) | bash
+
+* **Windows (PowerShell)**
+  irm \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1) | iex
 
  **What is the easiest way to start?**
 
