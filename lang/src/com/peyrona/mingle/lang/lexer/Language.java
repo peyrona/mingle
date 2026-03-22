@@ -32,13 +32,14 @@ public final class Language
            static final char LINE_CONTINUES  = '\\';    // Line continuation is '\'
 
     public static final String[] CMD_WORDS = UtilColls.sort( new String[]
-                                                             { "INCLUDE", "USE"   , "AS"  ,
-                                                               "SCRIPT" , "FROM"  , "CALL", "LANGUAGE", "ONSTART", "ONSTOP", "PRE",
-                                                               "DRIVER" , "CONFIG", "REQUIRED",
-                                                               "DEVICE" , "INIT"  ,
-                                                               "RULE"   , "WHEN"  , "THEN", "IF",
-                                                               "AFTER"  , "WITHIN", "ANY" , "ALL",
-                                                               "BY"     , "FOR"   , "ONERROR" } );   // These are reserved for future use
+                                                             { "INCLUDE" , "USE"   , "AS"  ,
+                                                               "SCRIPT"  , "FROM"  , "CALL", "LANGUAGE", "ONSTART", "ONSTOP", "PRE",
+                                                               "DRIVER"  , "CONFIG", "REQUIRED",
+                                                               "DEVICE"  , "INIT"  ,
+                                                               "RULE"    , "WHEN"  , "THEN", "IF",
+                                                               "AFTER"   , "WITHIN", "ANY" , "ALL",
+                                                               "BY"      , "FOR"   , "ONERROR",
+                                                               "LIBRARY" } );   // LIBRARY: declares an external function collection callable in expressions
 
     private static final String sOPERATORS = "+-*/%^=!><&|~:,";    // ':' is send-op and ',' is function arguments separator
 

@@ -77,7 +77,6 @@ final class EvalByAST
     private final    MyExecutor          executor;                               // Used for both AFTER and WITHIN.
     private final    ASTNode             root;                                   // The root node of the AST
     private final    boolean             isBoolean;
-    private final    boolean             hasChangedDeviceFn;
     private final    boolean             hasWithin;                              // hasAfter is not really needed
     private volatile boolean             hasAllVars;
     private final    int                 nHashCode;
@@ -105,7 +104,7 @@ final class EvalByAST
 
             for( XprToken xt : lstInfix )
             {
-                if( xt.isType( XprToken.VARIABLE ) )
+                if( xt.isType( XprToken.VARIABLE ) && ! StdXprFns.isLibraryNamespace( xt.text() ) )
                     mapVars.put( xt.text(), null );
             }
 
@@ -142,27 +141,12 @@ final class EvalByAST
             }
         }
 
-        boolean bHasChgDevFn = false;
-
-        if( lstErrors.isEmpty() )
-        {
-            for( XprToken token : lstInfix )
-            {
-                if( token.isType( XprToken.FUNCTION ) && token.isText( "getTriggeredBy" ) )
-                {
-                    bHasChgDevFn = true;
-                    break;
-                }
-            }
-        }
-
         String sToString = (root == null) ? "" : toString( root );
 
         executor           = exec;
         isBoolean          = _isBool_();
         hasAllVars         = mapVars.isEmpty();    // Some expressions does not have variables
         hasWithin          = bWithin;
-        hasChangedDeviceFn = bHasChgDevFn;
         nHashCode          = 37 * 3 + sToString.hashCode();
 
 //System.out.println( "Original: " + XprUtils.toString( lstInfix ) );
@@ -193,11 +177,8 @@ final class EvalByAST
                (executor.getActiveCount() > 0);
     }
 
-    boolean set( String name, Object value )
+    synchronized boolean set( String name, Object value )
     {
-        if( hasChangedDeviceFn )                        // If true, then the expression has a call to getChangedDevice() as part of it.
-            StdXprFns.setTriggeredBy( name, value );    // In this case, even if the expression has no vars, we have to call this func because
-                                                        // Action::trigger(...) calls here to set the device name & value that triggered the rule.
         if( ! mapVars.containsKey( name ) )
             return false;
 
@@ -852,7 +833,7 @@ final class EvalByAST
                 case XprToken.VARIABLE:
                     stack.add( new ASTNode().token( token ) );
 
-                    if( token.isType( XprToken.VARIABLE ) )
+                    if( token.isType( XprToken.VARIABLE ) && ! StdXprFns.isLibraryNamespace( token.text() ) )
                         mapVars.put( token.text(), null );
                     break;
 
@@ -1188,7 +1169,15 @@ final class EvalByAST
             {
                 Thread.sleep( node.delay() );
 
-                node.expired( mapVars, hasAllVars );
+                // Synchronized on EvalByAST.this to be mutually exclusive with set() and eval().
+                // This prevents the race between Future.expired() (called by node.expired()) and
+                // Future.apply() (called during eval()), and ensures consistent reads of hasAllVars
+                // and mapVars. The lock is reentrant, so the subsequent eval() call is safe.
+                synchronized( EvalByAST.this )
+                {
+                    node.expired( mapVars, hasAllVars );
+                }
+
                 EvalByAST.this.eval();
             }
             catch( InterruptedException ie )

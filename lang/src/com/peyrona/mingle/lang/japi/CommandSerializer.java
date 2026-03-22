@@ -148,6 +148,28 @@ public final class CommandSerializer
      * @param callName
      * @return
      */
+    /**
+     * Returns the JSON representation of a Library command defined by passed arguments.
+     * <p>
+     * This method makes no checks: garbage-in-garbage-out.
+     *
+     * @param name     The library name (used to match the class in the JAR).
+     * @param language The programming language (e.g. "java", "python", "javascript").
+     * @param from     Array of file URIs pointing to the library source or JAR.
+     * @param config   Optional configuration key-value pairs delivered to init(Map).
+     * @return JSON string representation of the LIBRARY command.
+     */
+    public static String Library( String name, String language, String[] from, Map<String,Object> config )
+    {
+        return Json.object()
+                   .add( ICmdKeys.CMD_CMD          , ICmdKeys.CMD_LIBRARY )
+                   .add( ICmdKeys.CMD_NAME         , name )
+                   .add( ICmdKeys.LIBRARY_LANGUAGE , language )
+                   .add( ICmdKeys.LIBRARY_FROM     , UtilJson.toJSON( from ) )
+                   .add( ICmdKeys.LIBRARY_CONFIG   , map2Json( config ) )
+                   .toString();
+    }
+
     public static String Script( String name, String language, boolean onStart, boolean onStop,
                                  boolean preStart, boolean preStop, boolean inline, String[] from, String callName )
     {

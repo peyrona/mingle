@@ -17,16 +17,16 @@ DEVICE {*_NAME_*}_isDown
             value = FALSE
 
 
-WHEN clock
-THEN {*_NAME_*}_counter SET IIF( isReachable( _IP_, 2s ), 0, {*_NAME_*}_counter + 1 )
+WHEN clock                       # port == 22, timeout == 2s
+THEN {*_NAME_*}_counter SET IIF( isReachable( _IP_, 22, 2s ), 0, {*_NAME_*}_counter + 1 )
 
 
 WHEN {*_NAME_*}_counter >= 3
-THEN console            SET "SERVER {*_NAME_*} (IP = {*_IP_*}) IS DOWN"
+THEN console            SET "Machine {*_NAME_*} (IP = {*_IP_*}) is down"
      {*_NAME_*}_isDown  SET TRUE
      {*_NAME_*}_counter SET 0
 
 
-WHEN clock AND {*_NAME_*}_isDown AND isReachable( _IP_, 2s )
+WHEN clock AND {*_NAME_*}_isDown AND isReachable( _IP_, 22, 2s )
 THEN {*_NAME_*}_isDown SET FALSE
      console           SET "{*_NAME_*} (IP = {*_IP_*}) is back"

@@ -22,12 +22,17 @@ import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.IOException;
 import java.io.PrintWriter;
+import java.net.URI;
 import java.net.URISyntaxException;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.Consumer;
+import java.util.regex.Pattern;
 import javax.swing.Action;
 import javax.swing.JSplitPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextAreaEditorKit;
 
 /**
@@ -35,12 +40,14 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextAreaEditorKit;
  */
 public final class UneEditorUnit extends JSplitPane
 {
-    private static final AtomicInteger nSocketPort = new AtomicInteger( 20000 );   // High enough port number to no conflict with System ports
+    private static final AtomicInteger nSocketPort  = new AtomicInteger( 20000 );   // High enough port number to no conflict with System ports
+    private static final Pattern       SCRIPT_KW    = Pattern.compile( "^\\s*(SCRIPT|LIBRARY)\\b", Pattern.CASE_INSENSITIVE | Pattern.MULTILINE );
 
-    private File    fCode     = null;
-    private boolean isFolded  = false;
-    private Process procExEn  = null;
-    private boolean is1stTime = true;
+    private File    fCode            = null;
+    private long    fileLastModified = 0L;
+    private boolean isFolded         = false;
+    private Process procExEn         = null;
+    private boolean is1stTime        = true;
 
     //------------------------------------------------------------------------//
 
@@ -106,7 +113,8 @@ public final class UneEditorUnit extends JSplitPane
 
     public UneEditorUnit setFile( File file )
     {
-        this.fCode = file;
+        this.fCode            = file;
+        this.fileLastModified = (file != null) ? file.lastModified() : 0L;
 
         getEditor().setStyle( ((file == null) ? "une" : UtilIO.getExtension( file )) );
 
@@ -278,7 +286,22 @@ public final class UneEditorUnit extends JSplitPane
         return this;
     }
 
-    public boolean transpile( boolean isForGrid )
+    /**
+     * Transpiles the Une source in this editor.
+     * <p>
+     * If the source contains at least one {@code SCRIPT} command an indeterminate progress
+     * bar is shown (via {@link JTools#showWaitFrame}) while {@link TranspilerTask} runs on a
+     * background thread, keeping the UI responsive. For sources without any {@code SCRIPT}
+     * command the transpilation is so fast (&lt;½ s) that the progress indicator would only
+     * flash, so it is skipped and the call runs synchronously.
+     * <p>
+     * The {@code onDone} callback — if non-null — is always invoked on the EDT once
+     * transpilation finishes, receiving {@code true} on success or {@code false} on error.
+     *
+     * @param isForGrid whether to transpile in grid mode.
+     * @param onDone    optional EDT callback receiving the success flag; may be {@code null}.
+     */
+    public void transpile( boolean isForGrid, Consumer<Boolean> onDone )
     {
         if( isForGrid && ! UtilSys.getConfig().isModule( "grid" ) )
         {
@@ -291,28 +314,88 @@ public final class UneEditorUnit extends JSplitPane
 
         setDividerLocation( 0.65d );
         stop();
-        System.setProperty( "grid", (isForGrid  ? "true" : "false") );
+        System.setProperty( "grid", (isForGrid ? "true" : "false") );
         getConsole().clear();
         getConsole().appendln( "Mingle Standard Platform Traspiler\n" );
 
         if( isNeededToSave() )
             save();
 
-        try
+        if( fCode == null )
         {
-            return TranspilerTask.execute( UtilSys.getConfig(), null, new Consoler( getConsole() ), fCode.toURI() );
-        }
-        catch( IOException | URISyntaxException ioe )
-        {
-            JTools.error( ioe );
-        }
-        catch( Exception exc )
-        {
-            exc.printStackTrace( System.err );
-            getConsole().appendln( "Internal error: transpilation aborted", UtilANSI.nRED );
+            if( onDone != null ) onDone.accept( false );
+            return;
         }
 
-        return false;
+        final URI      uri      = fCode.toURI();
+        final Consoler consoler = new Consoler( getConsole() );
+
+        if( SCRIPT_KW.matcher( getText() ).find() )
+        {
+            JTools.showWaitFrame( "Transpiling..." );
+
+            new SwingWorker<Boolean,Void>()
+            {
+                @Override
+                protected Boolean doInBackground() throws Exception
+                {
+                    return TranspilerTask.execute( UtilSys.getConfig(), null, consoler, uri );
+                }
+
+                @Override
+                protected void done()
+                {
+                    JTools.hideWaitFrame();
+
+                    boolean result = false;
+
+                    try
+                    {
+                        result = get();
+                    }
+                    catch( ExecutionException ex )
+                    {
+                        Throwable cause = ex.getCause();
+
+                        if( cause instanceof IOException || cause instanceof URISyntaxException )
+                            JTools.error( (Exception) cause );
+                        else
+                        {
+                            cause.printStackTrace( System.err );
+                            getConsole().appendln( "Internal error: transpilation aborted", UtilANSI.nRED );
+                        }
+                    }
+                    catch( InterruptedException ex )
+                    {
+                        Thread.currentThread().interrupt();
+                    }
+
+                    if( onDone != null )
+                        onDone.accept( result );
+                }
+            }.execute();
+        }
+        else
+        {
+            boolean result = false;
+
+            try
+            {
+                result = TranspilerTask.execute( UtilSys.getConfig(), null, consoler, uri );
+            }
+            catch( IOException | URISyntaxException ioe )
+            {
+                JTools.error( ioe );
+            }
+            catch( Exception exc )
+            {
+                exc.printStackTrace( System.err );
+                getConsole().appendln( "Internal error: transpilation aborted", UtilANSI.nRED );
+            }
+
+            if( onDone != null )
+                onDone.accept( result );
+        }
     }
 
     public boolean isRunning()
@@ -376,7 +459,45 @@ public final class UneEditorUnit extends JSplitPane
 
         getEditor().saved();
 
+        if( fCode != null )
+            fileLastModified = fCode.lastModified();
+
         return this;
+    }
+
+    /**
+     * Returns {@code true} if the file on disk has a different {@code lastModified}
+     * timestamp than when it was last loaded or saved by this editor unit.
+     *
+     * @return {@code true} if an external change is detected.
+     */
+    public boolean hasExternalChanges()
+    {
+        return (fCode != null) && fCode.exists() && (fCode.lastModified() != fileLastModified);
+    }
+
+    /**
+     * Reloads the file content from disk, replacing whatever is in the editor.
+     * Resets the change flag and the stored {@code lastModified} timestamp.
+     *
+     * @throws IOException if the file cannot be read.
+     */
+    public void reloadFromDisk() throws IOException
+    {
+        String content = UtilIO.getAsText( fCode );
+
+        getEditor().setText( content );   // setText() already resets isChanged and sOriginalText
+        fileLastModified = fCode.lastModified();
+    }
+
+    /**
+     * Updates the stored {@code lastModified} timestamp to the current on-disk value
+     * without reloading the content. Prevents re-prompting for the same external modification.
+     */
+    public void snapshotLastModified()
+    {
+        if( fCode != null )
+            fileLastModified = fCode.lastModified();
     }
 
     //------------------------------------------------------------------------//
@@ -453,13 +574,13 @@ public final class UneEditorUnit extends JSplitPane
         @Override
         public void print( String s )
         {
-            console.append( s );
+            SwingUtilities.invokeLater( () -> console.append( s ) );
         }
 
         @Override
         public void println( String s )
         {
-            console.appendln( s );
+            SwingUtilities.invokeLater( () -> console.appendln( s ) );
         }
     }
 }

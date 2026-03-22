@@ -304,13 +304,28 @@ class GumButton extends GumGadget
      *
      * Resets and re-registers on every `show()` call to stay in sync with
      * the current button definitions.
+     *
+     * To prevent a stale `readed` response from overriding a fresher `changed` event
+     * (non-deterministic coloring on page load), two measures are applied:
+     *   1. `requestValue` is sent only once per unique (exen, device) pair.
+     *   2. Each callback compares timestamps: if a `changed` arrived *after* the read
+     *      request was sent, the `readed` response is stale and is discarded.
+     *
+     * The timestamp approach is required because all N button callbacks for the same
+     * device fire synchronously for the same event. A boolean flag mutated by the first
+     * callback would cause the remaining N-1 to see inconsistent state. With timestamps,
+     * `changed` callbacks only write `lastChangedAt` and `readed` callbacks only read
+     * it — every callback observes the same consistent snapshot.
      */
     _updateStateListeners_()
     {
         this._resetListeners();
 
-        const $area = this.getContentArea();
-        const mode  = this.mode;
+        const $area         = this.getContentArea();
+        const mode          = this.mode;
+        const toRequest     = new Map();   // key → [exen, device] — deduplicated requestValue set
+        const lastChangedAt = {};          // key → Date.now() of the last 'changed' received
+        const requestSentAt = {};          // key → Date.now() when requestValue was sent
 
         for( let i = 0; i < this.buttons.length; i++ )
         {
@@ -320,8 +335,24 @@ class GumButton extends GumGadget
             // State reflection: highlight button when device value matches state_value
             if( p_base.isNotEmpty( btnDef.state_device ) && p_base.isNotEmpty( btnDef.state_exen ) )
             {
+                const stateKey = JSON.stringify( btnDef.state_exen ) + ':' + btnDef.state_device;
+
+                if( !(stateKey in lastChangedAt) )
+                    lastChangedAt[stateKey] = 0;
+
                 const fnState = function( action, payload )
                 {
+                    if( action === 'changed' )
+                    {
+                        // Record when this change arrived so we can detect stale reads
+                        lastChangedAt[stateKey] = Date.now();
+                    }
+                    else if( action === 'readed' )
+                    {
+                        // Skip if a 'changed' arrived after the request was sent — the readed is stale
+                        if( lastChangedAt[stateKey] > (requestSentAt[stateKey] || 0) ) return;
+                    }
+
                     const $btn = $area.find( '[data-btn-idx="'+ idx +'"]' );
                     if( $btn.length === 0 ) return;
 
@@ -340,14 +371,28 @@ class GumButton extends GumGadget
                     }
                 };
 
-                this._addListener( btnDef.state_exen, btnDef.state_device, fnState );
+                const uid = gum_ws_boards.addListener( btnDef.state_exen, btnDef.state_device, fnState );
+                this.aListenerIds.push( uid );
+
+                if( ! toRequest.has( stateKey ) )
+                    toRequest.set( stateKey, [ btnDef.state_exen, btnDef.state_device ] );
             }
 
             // Conditional enable/disable: enable button only when device value matches cond_value
             if( p_base.isNotEmpty( btnDef.cond_device ) && p_base.isNotEmpty( btnDef.cond_exen ) )
             {
+                const condKey = JSON.stringify( btnDef.cond_exen ) + ':' + btnDef.cond_device;
+
+                if( !(condKey in lastChangedAt) )
+                    lastChangedAt[condKey] = 0;
+
                 const fnCond = function( action, payload )
                 {
+                    if( action === 'changed' )
+                        lastChangedAt[condKey] = Date.now();
+                    else if( action === 'readed' )
+                        if( lastChangedAt[condKey] > (requestSentAt[condKey] || 0) ) return;
+
                     const $btn    = $area.find( '[data-btn-idx="'+ idx +'"]' );
                     if( $btn.length === 0 ) return;
 
@@ -355,8 +400,19 @@ class GumButton extends GumGadget
                     $btn.prop( 'disabled', ! enabled );
                 };
 
-                this._addListener( btnDef.cond_exen, btnDef.cond_device, fnCond );
+                const uid = gum_ws_boards.addListener( btnDef.cond_exen, btnDef.cond_device, fnCond );
+                this.aListenerIds.push( uid );
+
+                if( ! toRequest.has( condKey ) )
+                    toRequest.set( condKey, [ btnDef.cond_exen, btnDef.cond_device ] );
             }
+        }
+
+        // Send one requestValue per unique (exen, device) — record send time for stale detection
+        for( const [ key, [ exen, device ] ] of toRequest.entries() )
+        {
+            requestSentAt[key] = Date.now();
+            gum_ws_boards.requestValue( exen, device );
         }
     }
 

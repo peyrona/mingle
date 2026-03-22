@@ -278,10 +278,20 @@ final class ASTNode
                 {
                     if( hasAllVars )
                     {
-                        Object   leftValue = left.eval( vars, hasAllVars );
-                        Object[] aoArgs    = right.toArrayAndPrepare( leftValue, vars, hasAllVars );
+                        if( StdXprFns.isLibraryNamespace( left.token.text() ) )
+                        {
+                            // Library call: LibName:fn(args) — left is a namespace, not a value
+                            Object[] aoArgs = right.toArray( vars, hasAllVars );
 
-                        return StdXprFns.invoke( right.token.text(), aoArgs );
+                            return StdXprFns.invokeLibrary( left.token.text(), right.token.text(), aoArgs );
+                        }
+                        else
+                        {
+                            Object   leftValue = left.eval( vars, hasAllVars );
+                            Object[] aoArgs    = right.toArrayAndPrepare( leftValue, vars, hasAllVars );
+
+                            return StdXprFns.invoke( right.token.text(), aoArgs );
+                        }
                     }
                 }
                 else if( token.isText( sOP_LOGIC_AND ) )      // Lazy operator AND  (AKA Short-Circuit Evaluation)

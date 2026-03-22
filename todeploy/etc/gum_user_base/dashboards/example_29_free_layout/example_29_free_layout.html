@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+        <title>Gum ::: dashboard</title>
+
+        <!-- JQuery ============================= -->
+        <link   href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/themes/base/jquery-ui.css" rel="stylesheet">
+        <script src ="https://ajax.googleapis.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+        <script src ="https://ajax.googleapis.com/ajax/libs/jqueryui/1.13.2/jquery-ui.min.js"></script>
+
+        <!-- Gum ================================ -->
+        <link href="/gum/gum.css" rel="stylesheet">  <!-- Tabler icons and Bulma, are inside CSS -->
+    </head>
+    <body>
+        <!-- Used only when in design mode (for Grid and for Free layouts) -->
+        <div id="gum-toolbar" class="gum-toolbar is-pulled-right">
+        </div>
+
+        <!-- Used for the general Dashboard configuration (HTML name, Background, ExEns, etc) -->
+        <div id="div-dlg_options" style="display:none;">
+        </div>
+
+        <!-- Used for the every Gadget Dashboard configuration (gadget's properties) -->
+        <div id="div-dlg_properties">
+        </div>
+
+        <!-- Container for gadget HTML templates (loaded at startup, <template> elements are inert) -->
+        <div id="div-gadget-templates" style="display:none;">
+        </div>
+
+        <!-- NOTE: Gadget scripts are loaded dynamically by gum.js from gadgets/gadgets.json -->
+        <!-- Do NOT add static <script> tags for gadgets here - they will cause duplicate loading -->
+        <script src="/gum/js/p_polyfill.js"   ></script>    <!-- ¡ Do not change the order ! -->
+        <script src="/gum/js/p_base.js"       ></script>
+        <script src="/gum/js/p_app.js"        ></script>
+        <script src="/gum/js/p_ws-wrap.js"    ></script>
+        <script src="/gum/js/p_tableditor.js" ></script>
+        <script src="/gum/js/gum_ws_boards.js"></script>    <!-- From here down, all were created just for Gum -->
+        <script src="/gum/js/gum_tools.js"    ></script>
+        <script src="/gum/js/free.js"                         ></script>
+        <script src="/gum/lib/gridstack_v7.2.3.all.js"       ></script>
+        <script src="/gum/js/grid.js"                        ></script>
+        <script src="/gum/js/gum.js"          ></script>
+        <script>
+            $(document).ready( () => gum.run( getConfig() ) );    // Do not move this block
+
+            // START MARK TO INSERT getConfig()
+            function getConfig()
+            {
+                return {"background":{"image":{"url":"","mode":"cover"},"color":{"from":"#144557","to":"#e5f9ff","degrees":0}},"password":"","exens":[{"host":"localhost","port":55880,"ssl":false}],"layout":{"type":"free","contents":{"bodysize":{"width":"2046.670","height":"1263.000"},"gadgets":[{"class":"chart","width":813,"height":395,"x":16,"y":86,"z":100,"devices":[{"exen":"{\"host\":\"localhost\",\"port\":55880,\"ssl\":false}","name":"cpu","accessor":null,"label":null,"color":"#eef21c"},{"exen":"{\"host\":\"localhost\",\"port\":55880,\"ssl\":false}","name":"ram","accessor":null,"label":null,"color":"#255bda"}],"x_title":null,"y_title":null,"lbl_clr":null,"time_zone":null,"ts_round":"millis","db_jars":null,"db_jdbc":null,"db_url":null,"db_user":null,"db_pwd":null,"db_tables":[],"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"},"background":{"image":{"url":"","mode":"cover"},"color":{"from":"#725f2c","to":"#fefcec","degrees":0}}},"code_js":""},{"class":"gauge","width":268,"height":270,"x":584,"y":646,"z":100,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"temperature_outside","accessor":null,"min":-10,"max":45,"angle_span":4.2,"zone_thick":12,"zones":[{"start":-10,"end":5,"color":"#48c1fe"},{"start":5,"end":17,"color":"#fffa5c"},{"start":17,"end":29,"color":"#5be651"},{"start":29,"end":45,"color":"#e71328"}],"ticks":true,"ticks_pos":"-10,0,17,35,45","ticks_color":null,"needle_color":null,"bg_color":null,"label":"Outside ºC","label_color":null,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"code_js":""},{"class":"check","width":132,"height":150,"x":36,"y":503,"z":100,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":null,"accessor":null,"icon_on":"alarm_on.png","icon_off":"alarm_off.png","actuable":false,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"card_title":"Check-Box","code_js":""},{"class":"pie","width":346,"height":301,"x":25,"y":633,"z":100,"slices":[],"show_lgnd":true,"lgnd_pos":"right","lbl_clr":"#000000","doughnut":false},{"class":"radial","width":191,"height":151,"x":299,"y":525,"z":100,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"temperature_bedroom","accessor":null,"min":14,"max":32,"label":"Bedroom","unit_suffix":"ºC","thickness":16,"colorStart":"#00d2b8","colorEnd":"#9400d3","colorMidpoint":50,"trackColor":"#334155","textColor":"#f8fafc","labelColor":"#94a3b8","style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"code_js":"","card_title":"Radial Arc Gauge","card_title_location":"south"},{"class":"ssd","width":218,"height":32,"x":604,"y":558,"z":100,"exen":"{\\\"host\\\":\\\"localhost\\\",\\\"port\\\":55880,\\\"ssl\\\":false}","device":"voltage","accessor":null,"color":"orange","integers":3,"decimals":0,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"card_title":"","card_title_align":"left","code_js":""},{"class":"button","width":null,"height":null,"x":135,"y":908,"z":100,"buttons":[{"text":"Movie-time ON","icon":"","color":"is-primary","enabled":true,"devices":[],"toggle":false,"value_off":"","confirm":false,"confirm_msg":"","cooldown":0,"shortcut":"","state_exen":null,"state_device":"","state_value":"","cond_exen":null,"cond_device":"","cond_value":""},{"text":"Movie-time OFF","icon":"","color":"is-warning","enabled":true,"devices":[],"toggle":false,"value_off":"","confirm":false,"confirm_msg":"","cooldown":0,"shortcut":"","state_exen":null,"state_device":"","state_value":"","cond_exen":null,"cond_device":"","cond_value":""},{"text":"Sleep ON","icon":"","color":"is-info","enabled":true,"devices":[],"toggle":false,"value_off":"","confirm":false,"confirm_msg":"","cooldown":0,"shortcut":"","state_exen":null,"state_device":"","state_value":"","cond_exen":null,"cond_device":"","cond_value":""},{"text":"Sleep OFF","icon":"","color":"is-warning","enabled":true,"devices":[],"toggle":false,"value_off":"","confirm":false,"confirm_msg":"","cooldown":0,"shortcut":"","state_exen":null,"state_device":"","state_value":"","cond_exen":null,"cond_device":"","cond_value":""}],"size":"is-normal","orientation":"horizontal","mode":"toolbar","style":{"border-top-style":"Solid","border-top-width":{"width":"4","unit":"px"},"border-top-color":"#5770ea","padding-top":{"width":"1","unit":"rem"},"border-left-style":"Dotted","border-left-width":{"width":"4","unit":"px"},"border-left-color":"#000000","padding-left":{"width":"1","unit":"rem"},"border-bottom-style":"Dashed","border-bottom-width":{"width":"7","unit":"px"},"border-bottom-color":"#7de316","padding-bottom":{"width":"1","unit":"rem"},"border-right-style":"Double","border-right-width":{"width":"9","unit":"px"},"border-right-color":"#e411b6","padding-right":{"width":"1","unit":"rem"}},"code_js":""},{"class":"text","width":797,"height":74,"x":21,"y":10,"z":100,"exen":null,"device":null,"accessor":null,"label":"Grid Layout Dashboard Example<br><span style='font-size:0.85rem;'>Example #29 has to be running to see this dashboard in action</span>","align":"center","rows":1,"keep":0,"size":100,"color":null,"bold":false,"italic":false,"underline":false,"style":{"border-top-style":"None","border-top-width":{"width":0,"unit":"px"},"border-top-color":"#000000","padding-top":{"width":0,"unit":"px"},"border-left-style":"None","border-left-width":{"width":0,"unit":"px"},"border-left-color":"#000000","padding-left":{"width":0,"unit":"px"},"border-bottom-style":"None","border-bottom-width":{"width":0,"unit":"px"},"border-bottom-color":"#000000","padding-bottom":{"width":0,"unit":"px"},"border-right-style":"None","border-right-width":{"width":0,"unit":"px"},"border-right-color":"#000000","padding-right":{"width":0,"unit":"px"}},"code_js":""}]}}};
+            }
+           // END MARK TO INSERT getConfig()
+        </script>
+    </body>
+</html>

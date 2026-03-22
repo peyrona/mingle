@@ -142,10 +142,6 @@ public class Device
         {
             getRuntime().log( ILogger.Level.WARNING, me );
         }
-        catch( NullPointerException npe )        // Thrown by Objects.requireNonNull(...)
-        {
-            getRuntime().log( ILogger.Level.WARNING, "Can not assign null to device '"+ name() +'\'' );
-        }
 
         return false;
     }

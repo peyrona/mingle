@@ -18,6 +18,7 @@ DRIVER TelegramDriver                  # This DRIVER sends values to a Telegram 
         chat    AS string REQUIRED     # The target chat ID
         token   AS string REQUIRED     # Chat's token
         timeout AS number
+        receive AS boolean             # true to allow receviving messages from Telegram bot. By default, false.
 
 # --------------------------------------------------------------------------------------------------------------------------------
 # This driver invokes the Open-Meteo weather web service retrieveing weather information.
@@ -33,7 +34,7 @@ DRIVER TelegramDriver                  # This DRIVER sends values to a Telegram 
 #                 longitude = 12.34
 #                 interval  = 3
 #
-# Te retrive the forecast for 4 hours, starting 3 hours ahead of each invocation and invoking the service ever 2 hours and using
+# To retrive the forecast for 4 hours, starting 3 hours ahead of each invocation and invoking the service ever 2 hours and using
 # imperial system do as follows:
 #
 #     DEVICE weather_now

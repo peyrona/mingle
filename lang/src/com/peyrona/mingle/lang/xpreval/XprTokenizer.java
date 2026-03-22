@@ -150,7 +150,16 @@ public final class XprTokenizer
                 boolean isNextOpenParen = (UtilColls.getAt( lstLexemes, n+1 ) != null) &&            // This lex isType not the last one in the List
                                           (UtilColls.getAt( lstLexemes, n+1 ).isOpenParenthesis() );
 
-                boolean isAnyFunc = StdXprFns.isExtendedType( lex.text()     )         ||
+                // Also accept function names that follow a registered library namespace (e.g. MathUtils:clamp)
+                Lexeme prevPrev = UtilColls.getAt( lstLexemes, n-2 );
+                Lexeme prev     = UtilColls.getAt( lstLexemes, n-1 );
+
+                boolean isPrecededByLibraryCall = (n >= 2)
+                    && prev     != null && prev.text().equals( String.valueOf( Language.SEND_OP ) )
+                    && prevPrev != null && StdXprFns.isLibraryNamespace( prevPrev.text() );
+
+                boolean isAnyFunc = isPrecededByLibraryCall                          ||
+                                    StdXprFns.isExtendedType( lex.text()     )       ||
                                     StdXprFns.getMethod(      lex.text(), -1 ) != null ||
                                     StdXprFns.getFunction(    lex.text(), -1 ) != null;
 

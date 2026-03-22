@@ -247,10 +247,7 @@ public final class SocketClient
 
                     if( message == null )    // 'message' is null when thread is interrupted or when the communication channel is closed
                     {
-                        if( ! Thread.interrupted() && ! isConnected() && ! isStopping.get() )
-                            sendError( new MingleException( "Server was closed cleanly" ) );
-
-                        break;
+                        break;   // Server closed the connection; disconnect() below will handle cleanup and notify listeners via onDisconnected
                     }
                     else
                     {

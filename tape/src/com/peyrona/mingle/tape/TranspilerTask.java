@@ -86,14 +86,14 @@ public final class TranspilerTask
      */
     public static boolean execute( IConfig config, Charset charset, PrintWriter console, URI uri ) throws URISyntaxException, IOException
     {
-        int         nFiles     = 0;
-        int         nCommands  = 0;
-        int         nErrors    = 0;
-        Transpiler  transpiler = new Transpiler( config );
-        Chronometer chrono     = new Chronometer();
-        File        fOut       = getOutFile( uri );
-        PrintWriter pwOut      = null;
-        ProgressIndicator progress = new ProgressIndicator();
+        int               nFiles     = 0;
+        int               nCommands  = 0;
+        int               nErrors    = 0;
+        Transpiler        transpiler = new Transpiler( config );
+        Chronometer       chrono     = new Chronometer();
+        File              fOut       = getOutFile( uri );
+        PrintWriter       pwOut      = null;
+        ProgressIndicator progress   = new ProgressIndicator( console );
 
         try
         {

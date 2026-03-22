@@ -2,7 +2,9 @@
 package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
@@ -19,13 +21,16 @@ import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.NetworkInterface;
 import java.net.SocketException;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
+import java.util.Enumeration;
 import javax.servlet.MultipartConfigElement;
 import javax.servlet.ServletException;
 import javax.servlet.http.HttpServlet;
@@ -116,20 +121,31 @@ final class HttpServer
         contexts.addHandler( createGumHandler( timeout ) );          // /gum              - WITH AUTH FILTER
         contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout       - WITH AUTH FILTER
 
+        // Reverse-proxy handlers — optional, driven by "monitoring.proxies" in config.json
+        JsonArray proxies = UtilSys.getConfig().get( "monitoring", "proxies", Json.array() );
+
+        for( JsonValue entry : proxies )
+        {
+            JsonObject proxy  = entry.asObject();
+            String     path   = proxy.getString( "path",   null );
+            String     target = proxy.getString( "target", null );
+
+            if( UtilStr.isNotEmpty( path ) && UtilStr.isNotEmpty( target ) )
+                contexts.addHandler( createProxyHandler( path, target, timeout ) );
+        }
+
         // Set the Root Handler (NO SessionHandler wrapper, NO AuthWrapper!)
         server.setHandler( contexts );
         server.setErrorHandler( new CustomErrorHandler() );
 
         // Show GUM configuration
-        String sServer = "http://" + host + ':' + httpPort + "/gum/";
+        String sServer = "http://" + resolveDisplayHost( host ) + ':' + httpPort + "/gum/";
 
-        String sMsg = "Dashboards editor and player + File Manager + HTTP/S Server for static content.\n\n" +
-                      "Dashboards manager : " + sServer + "index.html\n" +
+        String sMsg = "Dashboards manager : " + sServer + "index.html\n" +
                       "Dashboard's folder : " + Util.getBoardsDir().getCanonicalPath() + "/\n" +
                       "Serving files from : " + Util.getServedFilesDir().getCanonicalPath() + "/\n" +
                       "    * at context   : " + sServer + "user-files/\n" +
-                      "    * UI manager   : " + sServer + "file_mgr/index.html\n"+
-                      "Note: 'localhost' can be used when running locally.\n";
+                      "    * UI manager   : " + sServer + "file_mgr/index.html\n";
 
         if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
             logger.say( "HTTPS services available at port " + httpsPort + '\n' );
@@ -404,8 +420,126 @@ final class HttpServer
         return context;
     }
 
+    /**
+     * Creates a reverse-proxy context handler that forwards all requests under
+     * {@code contextPath} to the given {@code target} base URL.
+     *
+     * @param contextPath Local context path (e.g. {@code /gum/proxy/rpi}).
+     * @param target      Base URL of the downstream server (e.g. {@code http://192.168.7.9:8080}).
+     * @param timeout     Session timeout in seconds; {@code 0} means no expiry.
+     * @return A configured {@link ContextHandler} ready to be added to the server.
+     */
+    private ContextHandler createProxyHandler( String contextPath, String target, int timeout )
+    {
+        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
+                              context.setContextPath( contextPath );
+
+        // Configure session management
+        SessionHandler sessionHandler = new SessionHandler();
+                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+
+        context.setSessionHandler( sessionHandler );
+
+        // Add authentication filter (proxied targets are protected the same way as other Gum routes)
+        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
+
+        // Add the proxy servlet
+        context.addServlet( new ServletHolder( new ProxyServlet( target, contextPath ) ), "/*" );
+
+        return context;
+    }
+
     //------------------------------------------------------------------------//
     // PRIVATE STATIC METHODS
+
+    /**
+     * Resolves the host address to display in startup messages.
+     * <p>
+     * When the server binds to {@code 0.0.0.0} (all interfaces), that address is meaningless
+     * to the user. This method iterates network interfaces directly so it can filter virtual
+     * and container interfaces (docker, veth, virbr, br-) and prefer common LAN ranges
+     * ({@code 192.168.x.x} first, then {@code 10.x.x.x}, then {@code 172.16–31.x.x}).
+     * Falls back to {@code localhost} if no suitable address is found.
+     *
+     * @param bindHost The host address the server is bound to.
+     * @return A human-friendly host string suitable for display in URLs.
+     */
+    private static String resolveDisplayHost( String bindHost )
+    {
+        if( !"0.0.0.0".equals( bindHost ) )
+            return bindHost;
+
+        String best      = null;
+        int    bestScore = Integer.MAX_VALUE;
+
+        try
+        {
+            Enumeration<NetworkInterface> ifaces = NetworkInterface.getNetworkInterfaces();
+
+            if( ifaces != null )
+            {
+                while( ifaces.hasMoreElements() )
+                {
+                    NetworkInterface iface = ifaces.nextElement();
+                    String           name  = iface.getName().toLowerCase();
+
+                    if( name.startsWith( "docker" ) || name.startsWith( "veth" ) ||
+                        name.startsWith( "virbr"  ) || name.startsWith( "br-"  ) )
+                        continue;
+
+                    Enumeration<InetAddress> addrs = iface.getInetAddresses();
+
+                    while( addrs.hasMoreElements() )
+                    {
+                        InetAddress addr = addrs.nextElement();
+
+                        if( addr.isLoopbackAddress() || !(addr instanceof Inet4Address) )
+                            continue;
+
+                        if( !addr.isSiteLocalAddress() )
+                            continue;
+
+                        int score = scoreAddress( addr );
+
+                        if( score < bestScore )
+                        {
+                            best      = addr.getHostAddress();
+                            bestScore = score;
+                        }
+                    }
+                }
+            }
+        }
+        catch( SocketException ignored )
+        {
+            // Fall through to default
+        }
+
+        return (best != null) ? best : "localhost";
+    }
+
+    /**
+     * Returns a priority score for a LAN IPv4 address (lower = preferred).
+     * <ul>
+     *   <li>1 – {@code 192.168.x.x} (most common home/office LAN)</li>
+     *   <li>2 – {@code 10.x.x.x}</li>
+     *   <li>3 – {@code 172.16–31.x.x} or other site-local</li>
+     * </ul>
+     *
+     * @param addr A site-local IPv4 address.
+     * @return Priority score.
+     */
+    private static int scoreAddress( InetAddress addr )
+    {
+        byte[] b      = addr.getAddress();
+        int    first  = b[0] & 0xFF;
+        int    second = b[1] & 0xFF;
+
+        if( first == 192 && second == 168 )  return 1;
+        if( first == 10 )                    return 2;
+        return 3;
+    }
 
     private static SslContextFactory.Server createSslContextFactory( String keystorePath, String keystorePassword )
             throws Exception
@@ -832,6 +966,11 @@ final class HttpServer
                 {
                     isAllowed = true;
                 }
+                else if( session != null && Boolean.TRUE.equals( session.getAttribute( "authenticated" ) ) )
+                {
+                    // Session was authenticated by HmacAuthenticator (used by external clients)
+                    isAllowed = true;
+                }
                 else if( isPublicPath( target ) )
                 {
                     isAllowed = true;
@@ -842,12 +981,17 @@ final class HttpServer
                     {
                         session = httpRequest.getSession( true );
                         session.setAttribute( KEY_USER_ID, "user_local" );
+                        session.setAttribute( "authenticated", Boolean.TRUE );  // Trusted by IP scope — also covers HmacAuthenticator fast-path
                         isAllowed = true;
                     }
                     catch( IllegalStateException e )
                     {
                         logger.log( ILogger.Level.WARNING, "Session creation failed: " + e.getMessage() );
                     }
+                }
+                else if( isHmacEnabled() )
+                {                          // HMAC is configured: let the request reach HmacAuthenticator for validation
+                    isAllowed = true;
                 }
 
                 if( isAllowed )
@@ -956,6 +1100,13 @@ final class HttpServer
             return false;
         }
 
+        private boolean isHmacEnabled()
+        {
+            String secret = UtilSys.getConfig().get( "monitoring", "shared_secret", "" );
+
+            return UtilStr.isNotEmpty( secret );
+        }
+
         private void sendUnauthorizedResponse( HttpServletResponse response, String message )
                 throws IOException
         {
@@ -1025,6 +1176,9 @@ final class HttpServer
 
             // Determine log level based on status code
             Level logLevel = (status != null && status == 404) ? Level.WARNING : Level.SEVERE;
+
+            if( logLevel == Level.WARNING && target == null )
+                return;
 
             logger.log( logLevel, "=== ERROR HANDLER TRIGGERED ===\n"+
                                   "Target:  "+ target  +'\n'+

@@ -1,10 +1,15 @@
 package com.peyrona.mingle.glue;
 
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
-import com.peyrona.mingle.glue.exen.exen.Pnl4ExEn;
+import com.peyrona.mingle.glue.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTabbedPane;
+import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
+import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.AlphaComposite;
 import java.awt.BorderLayout;
 import java.awt.Component;
@@ -15,10 +20,16 @@ import java.awt.RenderingHints;
 import java.awt.event.ActionEvent;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.util.ArrayList;
+import java.util.List;
 import javax.swing.JButton;
 import javax.swing.JFrame;
 import javax.swing.JTabbedPane;
 import javax.swing.SwingUtilities;
+import javax.swing.SwingWorker;
 import javax.swing.border.EmptyBorder;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
@@ -39,6 +50,7 @@ public final class AllExEnsTabPane extends GTabbedPane
     private int   lastHeight = -1;
 
     //------------------------------------------------------------------------//
+
     AllExEnsTabPane()
     {
         setOpaque( true );
@@ -63,8 +75,21 @@ public final class AllExEnsTabPane extends GTabbedPane
 
                                             if( tabIndex >= 0 )
                                             {
-                                                getFocused().disconnect();
-                                                removeTabAt( tabIndex );
+                                                Component comp = getComponentAt( tabIndex );
+                                                removeTabAt( tabIndex );                        // Remove tab from UI immediately (EDT safe)
+
+                                                if( comp instanceof Pnl4ExEn )
+                                                {
+                                                    new SwingWorker<Void, Void>()
+                                                    {
+                                                        @Override
+                                                        protected Void doInBackground()
+                                                        {
+                                                            ((Pnl4ExEn) comp).disconnect();     // Network teardown off the EDT
+                                                            return null;
+                                                        }
+                                                    }.execute();
+                                                }
                                             }
                                         } );
 
@@ -86,12 +111,32 @@ public final class AllExEnsTabPane extends GTabbedPane
     }
 
     /**
-     * Removes all commands from highlighted ExEn sending as many requests as commands to the Exen.
+     * Add all commands contained in passed model file to the exiting commands in target ExEn.
+     *
+     * @param fModel A *.model file.
      */
-    void clear()
+    void load( File fModel )
     {
         if( getSelectedIndex() > -1 )
-            getFocused().clear();
+        {
+            try
+            {
+                String         sModelJSON = new String( Files.readAllBytes( fModel.toPath() ), StandardCharsets.UTF_8 );
+                List<ICommand> lstCmds    = new ArrayList<>();
+                ICmdEncDecLib  builder    = UtilSys.getConfig().newCILBuilder();
+                JsonObject     joModel    = Json.parse( sModelJSON ).asObject();
+
+                joModel.get( "commands" )
+                       .asArray()
+                       .forEach( jv -> lstCmds.add( builder.build( jv.toString() ) ) );
+
+                getFocused().add( lstCmds.toArray( ICommand[]::new ) );
+            }
+            catch( IOException exc )
+            {
+                JTools.error( "Could not read model file: " + exc.getMessage() );
+            }
+        }
     }
 
     /**
@@ -106,6 +151,15 @@ public final class AllExEnsTabPane extends GTabbedPane
             if( UtilStr.isEmpty( sUne ) )  JTools.info( "The editor is empty: nothing to save" );
             else                           saveUneSourceCode( sUne );
         }
+    }
+
+    /**
+     * Removes all commands from highlighted ExEn sending as many requests as commands to the Exen.
+     */
+    void clear()
+    {
+        if( getSelectedIndex() > -1 )
+            getFocused().clear();
     }
 
     /**
@@ -125,6 +179,7 @@ public final class AllExEnsTabPane extends GTabbedPane
 
     //------------------------------------------------------------------------//
     // PROTECTED
+
     @Override
     protected void paintComponent(Graphics g)
     {
@@ -164,6 +219,7 @@ public final class AllExEnsTabPane extends GTabbedPane
 
     //------------------------------------------------------------------------//
     // PRIVATE
+
     private Pnl4ExEn getFocused()
     {
         Component selected = getSelectedComponent();
@@ -175,8 +231,8 @@ public final class AllExEnsTabPane extends GTabbedPane
         UneEditorUnit pnlEditor = new UneEditorUnit( sCode );
 
         JButton btnSave = new JButton( "Save to file " );
-        btnSave.setIcon( IconFontSwing.buildIcon( FontAwesome.FLOPPY_O, 16, JTools.getIconColor() ) );
-        btnSave.addActionListener( (ActionEvent evt) -> fUne = JTools.fileSaver( JTools.FileType.Une, fUne, pnlEditor.getText() ) );
+                btnSave.setIcon( IconFontSwing.buildIcon( FontAwesome.FLOPPY_O, 16, JTools.getIconColor() ) );
+                btnSave.addActionListener( (ActionEvent evt) -> fUne = JTools.fileSaver( JTools.FileType.Une, fUne, pnlEditor.getText() ) );
 
         new GFrame()
                 .title( "An opportunity to review the script prior to save it" )
@@ -190,6 +246,7 @@ public final class AllExEnsTabPane extends GTabbedPane
 
     //------------------------------------------------------------------------//
     // PRIVATE STATIC SCOPE (related with background image)
+
     /**
      * Creates a transparent version of the image at the specified path.
      *

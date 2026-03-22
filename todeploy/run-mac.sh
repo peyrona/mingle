@@ -6,8 +6,10 @@ set -euo pipefail
 # Mingle start script for macOS systems (version 13 Ventura and above)
 #
 # This script:
-# 1. Checks for Java, downloads it if not present
-# 2. Runs the 'menu' application JAR.
+# 1. Checks if Mingle is needed to be installed
+# 2. Checks if is running on a RPi, if so, invokes another script to install WiringPi lib.
+# 3. Checks for Java, downloads it if not present
+# 4. Runs the 'menu' application JAR
 # ---------------------------------------------------------------------------------------------
 
 # Global variables
@@ -34,6 +36,63 @@ die()
 {
     log "ERROR" "$*"
     exit 1
+}
+
+# ---------------------------------------------------------------------------------------------
+# Bootstrap: Download and Install
+# Called when the script is piped from a one-liner (app files not yet present).
+# Existing files are never replaced.
+# ---------------------------------------------------------------------------------------------
+
+bootstrap_app()
+{
+    # If lib/menu.jar already exists here, no download needed
+    if [[ -f "lib/menu.jar" ]]; then
+        log "INFO" "Mingle already present in current directory."
+        exec bash ./run-mac.sh "$@"
+    fi
+
+    local install_dir current_dir_name
+    current_dir_name="$(basename "$(pwd)")"
+
+    if [[ "$current_dir_name" == "mingle" ]]; then
+        install_dir="$(pwd)"
+        log "INFO" "Already inside a 'mingle' directory. Installing here: '$install_dir'..."
+    else
+        install_dir="$(pwd)/mingle"
+        log "INFO" "Bootstrapping Mingle into '$install_dir'..."
+    fi
+
+    command -v unzip >/dev/null 2>&1 || \
+        die "'unzip' is required but not found. Please install it (e.g.: brew install unzip)"
+
+    mkdir -p "$install_dir" || die "Failed to create directory '$install_dir'"
+
+    log "INFO" "Fetching latest release info from GitHub..."
+
+    local api_response zip_url
+    api_response=$(curl -fsSL "https://api.github.com/repos/peyrona/mingle/releases/latest") || \
+        die "Failed to fetch release info from GitHub."
+
+    zip_url=$(echo "$api_response" | grep '"browser_download_url"' | grep '\.zip"' | head -1 | cut -d'"' -f4 || true)
+
+    [[ -n "$zip_url" ]] || die "Could not determine the latest release download URL."
+
+    local zip_file="$install_dir/_download.zip"
+    log "INFO" "Downloading $zip_url..."
+    curl -L --progress-bar -o "$zip_file" "$zip_url" || {
+        rm -f "$zip_file"
+        die "Download failed."
+    }
+
+    log "INFO" "Extracting (existing files will not be replaced)..."
+    unzip -n "$zip_file" -d "$install_dir" || die "Extraction failed."
+    rm "$zip_file"
+
+    log "INFO" "Bootstrap complete. Starting Mingle..."
+    cd "$install_dir" || die "Failed to change to '$install_dir'"
+
+    exec bash ./run-mac.sh "$@"
 }
 
 init_environment()
@@ -102,7 +161,7 @@ find_java()
 
 download_java()
 {
-    log "INFO" "Attempting to download and install Adoptium JDK 11..."
+    log "INFO" "Attempting to download and install Adoptium JDK 17..."
 
     # --- Detect Architecture ---
     local ARCH
@@ -113,18 +172,18 @@ download_java()
     if [ "$ARCH" = "x86_64" ]; then
         log "INFO" "Detected Intel (x64) architecture."
         JDK_ARCH="x64"
-        TARGET_DIR="jdk.11.mac.x64"
+        TARGET_DIR="jdk.17.mac.x64"
     elif [ "$ARCH" = "arm64" ]; then
         log "INFO" "Detected Apple Silicon (arm64) architecture."
         JDK_ARCH="aarch64"
-        TARGET_DIR="jdk.11.mac.aarch64"
+        TARGET_DIR="jdk.17.mac.aarch64"
     else
         die "Unsupported architecture for automatic download: $ARCH"
     fi
 
     # --- Variables ---
-    local JDK_URL="https://api.adoptium.net/v3/binary/latest/11/ga/mac/$JDK_ARCH/jdk/hotspot/normal/eclipse"
-    local DOWNLOAD_FILE="jdk-11-mac.tar.gz"
+    local JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/mac/$JDK_ARCH/jdk/hotspot/normal/eclipse"
+    local DOWNLOAD_FILE="jdk-17-mac.tar.gz"
 
     # --- 1. Download JDK ---
     log "INFO" "Downloading from $JDK_URL..."
@@ -154,7 +213,7 @@ download_java()
     log "INFO" "Cleaning up $DOWNLOAD_FILE..."
     rm "$DOWNLOAD_FILE"
 
-    log "INFO" "JDK 11 is ready in ./$TARGET_DIR"
+    log "INFO" "JDK 17 is ready in ./$TARGET_DIR"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -163,6 +222,12 @@ download_java()
 
 main()
 {
+    # Bootstrap: if running from a pipe (one-liner install), download and install first.
+    local src="${BASH_SOURCE[0]:-}"
+    if [[ -z "$src" ]] || [[ "$src" == /dev/fd/* ]] || [[ "$src" == /proc/* ]]; then
+        bootstrap_app "$@"
+    fi
+
     clear
 
     [[ "$(uname)" == "Darwin" ]] || die "This script is intended for macOS systems."

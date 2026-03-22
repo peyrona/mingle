@@ -6,6 +6,7 @@ import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -33,6 +34,11 @@ import java.util.concurrent.LinkedBlockingQueue;
  * error causes a short back-off sleep before the next attempt; an {@link InterruptedException}
  * terminates the loop cleanly.
  * <p>
+ * <b>Important:</b> Telegram only allows one active {@code getUpdates} connection per bot token
+ * at a time. The long-poll thread is therefore only started when {@code receive} is explicitly
+ * set to {@code true} in the driver CONFIG. Instances that only send messages must omit
+ * {@code receive} (or set it to {@code false}) to avoid conflicting with the receiving instance.
+ * <p>
  * See note at ControllerBase.
  *
  * @author Francisco José Morero Peyrona
@@ -42,15 +48,19 @@ import java.util.concurrent.LinkedBlockingQueue;
 public final class   Telegram
              extends ControllerBase
 {
-    private static final String KEY_CHAT            = "chat";
-    private static final String KEY_TOKEN           = "token";
-    private static final String KEY_TIMEOUT         = "timeout";
-    private static final String TEMPLATE_TO_SEND    = "https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s";
+    private static final String KEY_CHAT    = "chat";
+    private static final String KEY_TOKEN   = "token";
+    private static final String KEY_TIMEOUT = "timeout";
+    private static final String KEY_RECEIVE = "receive";    // if false (default), no long-poll thread is started
+
+    private static final String TEMPLATE_TO_SEND       = "https://api.telegram.org/bot%s/sendMessage?chat_id=%s&text=%s";
+    private static final String TEMPLATE_DELETE_WBHOOK = "https://api.telegram.org/bot%s/deleteWebhook";
+
     // Square brackets and double-quotes are pre-encoded so that URI.create() never sees bare
     // RFC-3986-invalid characters: [ → %5B, ] → %5D, " → %22.
     // The literal percent signs are doubled (%% → %) so that String.format does not misinterpret
     // the encoded sequences (e.g. %22m) as its own format specifiers.
-    private static final String TEMPLATE_TO_RECEIVE = "https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=%d&allowed_updates=%%5B%%22message%%22%%5D";
+    private static final String TEMPLATE_TO_RECEIVE    = "https://api.telegram.org/bot%s/getUpdates?offset=%d&timeout=%d&allowed_updates=%%5B%%22message%%22%%5D";
 
     private static final int DEFAULT_TIMEOUT = 30;
     private static final int BACKOFF_MILLIS  = 5_000;  // back-off after a transient poll error
@@ -80,15 +90,62 @@ public final class   Telegram
     public void set( String deviceName, Map<String, Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );
-        setListener( listener );   // Must be at beginning: in case an error happens, Listener is needed
-        setDeviceConfig( deviceConf );         // Can be done because mapConfig values are not modified
+        setListener( listener );         // Must be at beginning: in case an error happens, Listener is needed
+        setDeviceConfig( deviceConf );   // Can be done because mapConfig values are not modified
 
         Object oTimeout = get( KEY_TIMEOUT );
+
         int timeout = (oTimeout != null) ? ((Number) oTimeout).intValue() : DEFAULT_TIMEOUT;
 
         set( KEY_TIMEOUT, timeout );
 
         setValid( true );          // This controller is always valid
+    }
+
+    @Override
+    public boolean start( IRuntime rt )
+    {
+        if( isInvalid() || (! super.start( rt )) )
+            return false;
+
+        boolean receive = Boolean.TRUE.equals( get( KEY_RECEIVE ) );
+
+        if( receive )
+        {
+            _deleteWebhook_();   // Telegram forbids getUpdates while a webhook is active
+
+            running = true;
+            longPollThread = new Thread( this::_longPollLoop_, "telegram-long-poll-" + getDeviceName() );
+            longPollThread.setDaemon( true );
+            longPollThread.start();
+        }
+
+        return isValid();
+    }
+
+    @Override
+    public void stop()
+    {
+        running = false;
+
+        if( longPollThread != null )
+        {
+            longPollThread.interrupt();
+
+            try
+            {
+                longPollThread.join( 3_000 );
+            }
+            catch( InterruptedException ie )
+            {
+                Thread.currentThread().interrupt();
+            }
+
+            longPollThread = null;
+        }
+
+        receivedMsgs.clear();
+        super.stop();
     }
 
     @Override
@@ -137,46 +194,43 @@ public final class   Telegram
                                 } );
     }
 
-    @Override
-    public boolean start( IRuntime rt )
-    {
-        if( isInvalid() || (! super.start( rt )) )
-            return false;
-
-        running = true;
-        longPollThread = new Thread( this::_longPollLoop_, "telegram-long-poll-" + getDeviceName() );
-        longPollThread.setDaemon( true );
-        longPollThread.start();
-
-        return isValid();
-    }
-
-    @Override
-    public void stop()
-    {
-        running = false;
-
-        if( longPollThread != null )
-        {
-            longPollThread.interrupt();
-
-            try
-            {
-                longPollThread.join( 3_000 );
-            }
-            catch( InterruptedException ie )
-            {
-                Thread.currentThread().interrupt();
-            }
-
-            longPollThread = null;
-        }
-
-        receivedMsgs.clear();
-        super.stop();
-    }
-
     //------------------------------------------------------------------------//
+
+    /**
+     * Calls the Telegram Bot API {@code deleteWebhook} endpoint to remove any active webhook
+     * before starting the long-poll loop. Telegram rejects {@code getUpdates} with HTTP 409
+     * when a webhook is registered, so this must be called once during {@link #start}.
+     * <p>
+     * Failures are logged as warnings rather than errors so that startup is not aborted
+     * (the 409 in the poll loop will make the problem visible anyway).
+     */
+    private void _deleteWebhook_()
+    {
+        String token = (String) get( KEY_TOKEN );
+        URI    uri   = URI.create( String.format( TEMPLATE_DELETE_WBHOOK, token ) );
+
+        HttpRequest request = HttpRequest.newBuilder()
+                                         .uri( uri )
+                                         .timeout( httpTimeout )
+                                         .GET()
+                                         .build();
+
+        try
+        {
+            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
+
+            if( response.statusCode() < 200 || response.statusCode() >= 300 )
+                sendGenericError( ILogger.Level.WARNING, "deleteWebhook returned HTTP "+ response.statusCode() +": "+ response.body() );
+        }
+        catch( InterruptedException ie )
+        {
+            Thread.currentThread().interrupt();
+        }
+        catch( IOException ioe )
+        {
+            sendGenericError( ILogger.Level.WARNING, "Could not delete Telegram webhook: "+ ioe.getMessage() );
+        }
+    }
 
     /**
      * Continuously issues long-poll requests to the Telegram Bot API until the controller
@@ -290,7 +344,7 @@ public final class   Telegram
             HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
 
             if( response.statusCode() < 200 || response.statusCode() >= 300 )
-                return;
+                throw new MingleException( "HTTP "+ response.statusCode() +": "+ response.body() );
 
             JsonValue jv = UtilJson.parse( response.body() );
 

@@ -7,6 +7,7 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Core logic for checking and updating files from GitHub repository.
@@ -18,9 +19,10 @@ import java.util.List;
  */
 public class GitHubFileUpdater
 {
-    private final File baseDir;
+    private final File          baseDir;
     private final BackupManager backupMgr;
-    private final boolean dryRun;
+    private final boolean       dryRun;
+    private final AtomicBoolean abortRequested;
     private       int filesChecked = 0;
     private       int filesUpdated = 0;
     private       int filesWouldUpdate = 0;
@@ -31,19 +33,33 @@ public class GitHubFileUpdater
     /**
      * Creates a GitHubFileUpdater for the specified base directory.
      *
-     * @param baseDir Base directory to check and update files
-     * @param dryRun  If true, simulate updates without modifying files
+     * @param baseDir        Base directory to check and update files
+     * @param dryRun         If true, simulate updates without modifying files
+     * @param abortRequested Shared flag; when set to {@code true} the update loop stops after
+     *                       the current file finishes. May be {@code null} (abort disabled).
      */
-    public GitHubFileUpdater( File baseDir, boolean dryRun )
+    public GitHubFileUpdater( File baseDir, boolean dryRun, AtomicBoolean abortRequested )
     {
         if( baseDir == null )
         {
             throw new IllegalArgumentException( "Base directory cannot be null" );
         }
 
-        this.baseDir   = baseDir;
-        this.dryRun    = dryRun;
-        this.backupMgr = dryRun ? null : new BackupManager();
+        this.baseDir        = baseDir;
+        this.dryRun         = dryRun;
+        this.backupMgr      = dryRun ? null : new BackupManager();
+        this.abortRequested = (abortRequested != null) ? abortRequested : new AtomicBoolean( false );
+    }
+
+    /**
+     * Creates a GitHubFileUpdater for the specified base directory (abort disabled).
+     *
+     * @param baseDir Base directory to check and update files
+     * @param dryRun  If true, simulate updates without modifying files
+     */
+    public GitHubFileUpdater( File baseDir, boolean dryRun )
+    {
+        this( baseDir, dryRun, null );
     }
 
     /**
@@ -129,6 +145,12 @@ public class GitHubFileUpdater
 
         for( FileDiscoveryStrategy.FileEntry entry : fileEntries )
         {
+            if( abortRequested.get() )
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Update aborted by request" );
+                break;
+            }
+
             processFile( entry, comparator, performUpdates );
         }
     }
@@ -294,9 +316,12 @@ public class GitHubFileUpdater
             backupMgr.cleanup();
 
         // Log summary
-        String summary = dryRun
-            ? String.format( "DRY-RUN completed: %d files checked, %d files would be updated, %d errors", filesChecked, filesWouldUpdate, errors )
-            : String.format( "Process completed: %d files checked, %d files updated, %d errors", filesChecked, filesUpdated, errors );
+        boolean aborted = abortRequested.get();
+        String  summary = dryRun
+            ? String.format( "DRY-RUN %s: %d files checked, %d files would be updated, %d errors",
+                             aborted ? "aborted" : "completed", filesChecked, filesWouldUpdate, errors )
+            : String.format( "Process %s: %d files checked, %d files updated, %d errors",
+                             aborted ? "aborted" : "completed", filesChecked, filesUpdated, errors );
 
         UtilSys.getLogger().log( ILogger.Level.INFO, summary );
 

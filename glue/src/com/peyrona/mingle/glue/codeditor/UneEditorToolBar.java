@@ -223,7 +223,7 @@ final class UneEditorToolBar extends JToolBar
 
         row1.add( new JLabel( "Templates" ) );
         cmbTemplate = new javax.swing.JComboBox<>();
-        cmbTemplate.setModel( new DefaultComboBoxModel<>( new String[] { "Device", "Driver", "Include", "Rule", "Script", "Use", "Comment" } ) );
+        cmbTemplate.setModel( new DefaultComboBoxModel<>( new String[] { "Device", "Driver", "Include", "Library", "Rule", "Script", "Use", "Comment" } ) );
         cmbTemplate.setToolTipText("Inserts a command template at caret position");
         row1.add( cmbTemplate );
 

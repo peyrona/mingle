@@ -1,0 +1,91 @@
+#==================================================================================================================================
+# This example shows how to use the LIBRARY command to expose an R module as a callable function collection.
+#
+# For R libraries, the FROM clause points to the .r file. All top-level functions
+# defined in the module become callable in WHEN/THEN/CONFIG expressions using the colon operator:
+#
+#     LibraryName:functionName( args )
+#
+# If the module defines a top-level "init( config )" function, it is called once after loading,
+# receiving the CONFIG values declared in the LIBRARY command.
+#
+# NOTE: R library support requires invokeFunction() to be implemented in FastRRT.
+#       See ICandi.ILanguage for the contract.
+#
+# IMPORTANT! THIS EXAMPLE CANNOT BE EXECUTED because 'stats.r' does not exist.
+#            It illustrates the syntax and intended use.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+# --- Example R module content (stats.r) ---
+#
+# init <- function( config ) {
+#   # Optional: receives CONFIG values as a named list
+# }
+#
+# normalize <- function( value, min_val, max_val ) {
+#   ( value - min_val ) / ( max_val - min_val )
+# }
+#
+# in_range <- function( value, min_val, max_val ) {
+#   value >= min_val && value <= max_val
+# }
+#
+# round_to <- function( value, decimals ) {
+#   round( value, decimals )
+# }
+
+
+# --- Declare the library ---
+
+LIBRARY Stats
+   LANGUAGE R
+   FROM     "file://{*home.lib*}stats.r"
+   CONFIG
+      min_val = 0           # Passed to Stats.init(config) after the module is loaded
+      max_val = 100
+
+
+# --- Devices ---
+
+DEVICE sensor
+   DRIVER CellSetDriver
+      CONFIG
+         value = 50.0
+
+DEVICE display
+   DRIVER OutputDriver     # Actuator: shows the normalized sensor reading
+
+
+# --- Rules using the library ---
+
+# Normalize the sensor reading to a 0–1 range before displaying it.
+
+WHEN sensor AND Stats:in_range( sensor, 0, 100 )
+THEN display = Stats:normalize( sensor, 0, 100 )
+
+
+# Round the normalized value to 4 decimal places for a cleaner display.
+
+WHEN sensor AND Stats:in_range( sensor, 0, 100 )
+THEN display = Stats:round_to( Stats:normalize( sensor, 0, 100 ), 4 )
+
+
+# -------------------------------------------------------------------
+# This code periodically updates the 'sensor' device
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+WHEN clock
+THEN sensor = rand( 0, 100 )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

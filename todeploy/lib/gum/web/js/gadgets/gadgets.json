@@ -10,6 +10,7 @@
         "check.js",
         "gauge.js",
         "pie.js",
+        "radial.js",
         "ssd.js",
         "text.js",
         "scheduler.js"

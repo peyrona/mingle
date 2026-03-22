@@ -10,6 +10,7 @@ import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Dispatcher;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilStr;
+import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -63,6 +64,8 @@ public final class      Rule
 
         Consumer<Object[]> consumer = (change) ->
             {
+                StdXprFns.setTriggeredBy( (String) change[0], change[1] );    // Must be set before eval: THEN actions may call getTriggeredBy()
+
                 IXprEval xpr = ((_if_ != null && _if_.isFuturing()) ? _if_ : when);
 
                 xpr.eval( (String) change[0],    // Device name

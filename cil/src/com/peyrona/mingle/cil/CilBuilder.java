@@ -7,6 +7,8 @@ import com.peyrona.mingle.cil.devices.Device;
 import com.peyrona.mingle.cil.devices.DeviceBuilder;
 import com.peyrona.mingle.cil.drivers.Driver;
 import com.peyrona.mingle.cil.drivers.DriverBuilder;
+import com.peyrona.mingle.cil.libraries.Library;
+import com.peyrona.mingle.cil.libraries.LibraryBuilder;
 import com.peyrona.mingle.cil.rules.Rule;
 import com.peyrona.mingle.cil.rules.RuleBuilder;
 import com.peyrona.mingle.cil.scripts.Script;
@@ -16,6 +18,7 @@ import com.peyrona.mingle.lang.interfaces.commands.ICmdKeys;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
+import com.peyrona.mingle.lang.interfaces.commands.ILibrary;
 import com.peyrona.mingle.lang.interfaces.commands.IRule;
 import com.peyrona.mingle.lang.interfaces.commands.IScript;
 
@@ -40,10 +43,11 @@ public class CilBuilder implements ICmdEncDecLib
 
         switch( cmd )
         {
-            case ICmdKeys.CMD_DEVICE : return DeviceBuilder.build( jo );
-            case ICmdKeys.CMD_SCRIPT : return ScriptBuilder.build( jo );
-            case ICmdKeys.CMD_DRIVER : return DriverBuilder.build( jo );
-            case ICmdKeys.CMD_RULE   : return RuleBuilder.build(   jo );
+            case ICmdKeys.CMD_DEVICE  : return DeviceBuilder.build(  jo );
+            case ICmdKeys.CMD_SCRIPT  : return ScriptBuilder.build(  jo );
+            case ICmdKeys.CMD_DRIVER  : return DriverBuilder.build(  jo );
+            case ICmdKeys.CMD_RULE    : return RuleBuilder.build(    jo );
+            case ICmdKeys.CMD_LIBRARY : return LibraryBuilder.build( jo );
         }
 
         return null;    // Could be INCLUDE or USE
@@ -52,10 +56,11 @@ public class CilBuilder implements ICmdEncDecLib
     @Override
     public String unbuild( ICommand cmd )
     {
-             if( cmd instanceof IScript ) return ScriptBuilder.unbuild( (Script) cmd );
-        else if( cmd instanceof IDriver ) return DriverBuilder.unbuild( (Driver) cmd );
-        else if( cmd instanceof IDevice ) return DeviceBuilder.unbuild( (Device) cmd );
-        else if( cmd instanceof IRule   ) return RuleBuilder.unbuild(   (Rule)   cmd );
+             if( cmd instanceof IScript  ) return ScriptBuilder.unbuild(  (Script)  cmd );
+        else if( cmd instanceof ILibrary ) return LibraryBuilder.unbuild( (Library) cmd );
+        else if( cmd instanceof IDriver  ) return DriverBuilder.unbuild(  (Driver)  cmd );
+        else if( cmd instanceof IDevice  ) return DeviceBuilder.unbuild(  (Device)  cmd );
+        else if( cmd instanceof IRule    ) return RuleBuilder.unbuild(    (Rule)    cmd );
 
         return null;    // Could be INCLUDE or USE
     }

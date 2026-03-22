@@ -31,10 +31,14 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Consumer;
 import javax.swing.JButton;
 import javax.swing.JEditorPane;
 import javax.swing.JFrame;
@@ -52,9 +56,11 @@ import javax.swing.filechooser.FileNameExtensionFilter;
  */
 public final class UneMultiEditorPanel extends JPanel
 {
-    private final UneEditorToolBar toolBar     = new UneEditorToolBar();
-    private final GTabbedPane      tabbedPane  = new GTabbedPane();
-    private final AtomicReference<ScheduledFuture> futureSave = new AtomicReference<>();
+    private final UneEditorToolBar toolBar        = new UneEditorToolBar();
+    private final GTabbedPane      tabbedPane     = new GTabbedPane();
+    private final AtomicReference<ScheduledFuture> futureSave    = new AtomicReference<>();
+    private final AtomicReference<ScheduledFuture> futureWatch   = new AtomicReference<>();
+    private final Set<File>                        pendingDialogs = Collections.synchronizedSet( new HashSet<>() );
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -82,7 +88,7 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.btnReplAll.addActionListener( (e) -> onReplace( true ) );
         toolBar.btnComment.addActionListener( (e) -> onToogleRem()  );
         toolBar.btnFolding.addActionListener( (e) -> { UneEditorUnit unit = getFocusedUnit(); if(unit != null) unit.toggleFolding(); } );
-        toolBar.btnTranspi.addActionListener( (e) -> onTranspile()  );
+        toolBar.btnTranspi.addActionListener( (e) -> onTranspile( null ) );
 
         // --------------------------------------------------------------------
 
@@ -148,7 +154,7 @@ public final class UneMultiEditorPanel extends JPanel
                                     JFrame parent = JTools.getParent( this, JFrame.class );
 
                                     if( parent == null )
-                                        throw new MingleException( "This should not happen" );
+                                        throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
 
                                     // Copy, Paste, Undo, Redo and SelectAll already have their shortcuts (done by RSyntaxTextArea)
 
@@ -160,7 +166,7 @@ public final class UneMultiEditorPanel extends JPanel
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_S     , true , true , evt -> onSave( null )   );  // Ctrl+Shift+S
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_R     , true , false, evt -> onRun()          );
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_I     , true , false, evt -> onToogleRem()    );
-                                    JTools.setShortCut( getRootPane(), KeyEvent.VK_T     , true , false, evt -> onTranspile()    );
+                                    JTools.setShortCut( getRootPane(), KeyEvent.VK_T     , true , false, evt -> onTranspile( null ) );
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_F4    , true , false, evt -> close( -1   )    );
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_F     , true , true , evt -> onCopyFilePath() );
                                     JTools.setShortCut( getRootPane(), KeyEvent.VK_F     , true , false, evt -> toolBar.txtSearch.requestFocus() );
@@ -179,6 +185,7 @@ public final class UneMultiEditorPanel extends JPanel
         SwingUtilities.invokeLater( () ->
                                     {
                                         autoSaveStateChanged();
+                                        startFileWatcher();
                                         toolBar.chk4Grid.setSelected( UtilSys.getConfig().get( null, "grid", false ) );
                                         toolBar.chkFaked.setSelected( UtilSys.getConfig().get( "exen", "faked_drivers", false ) );
                                         toolBar.setLogLevel( UtilSys.getLogger().getLevel() );
@@ -189,7 +196,7 @@ public final class UneMultiEditorPanel extends JPanel
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
 
-    public boolean isAnyScriptUnsaved()
+    public boolean isAnyFileUnsaved()
     {
         for( int n = 0; n < tabbedPane.getTabCount(); n++ )
         {
@@ -198,6 +205,35 @@ public final class UneMultiEditorPanel extends JPanel
         }
 
         return false;
+    }
+
+    public void closeAll( final Window window )
+    {
+        saveOpenedFilesList();
+        cleanup();
+
+        while( tabbedPane.getTabCount() > 0 )
+            close( 0 );
+
+        window.dispose();
+    }
+
+    //------------------------------------------------------------------------//
+    // PACKAGE SCOPE
+
+    File getLastUsedDir()
+    {
+        String lastDirPath = SettingsManager.getLastUsedDir();
+        return new File( lastDirPath );
+    }
+
+    void setLastUsedDir( File fNewLastDir )
+    {
+        if( fNewLastDir == null )
+            return;
+
+        fNewLastDir = fNewLastDir.isDirectory() ? fNewLastDir : fNewLastDir.getParentFile();
+        SettingsManager.setLastUsedDir( fNewLastDir.getAbsolutePath() );
     }
 
     //------------------------------------------------------------------------//
@@ -276,14 +312,17 @@ public final class UneMultiEditorPanel extends JPanel
                                         bAll );
     }
 
-    private boolean onTranspile()
+    private void onTranspile( Consumer<Boolean> onDone )
     {
         if( getFocusedUnit() == null )
-            return true;               // Nothing to transpile
+        {
+            if( onDone != null ) onDone.accept( true );
+            return;
+        }
 
-        onSave( null );                // Save all modified files before transpiling
+        onSave( null );    // Save all modified files before transpiling
 
-        return getFocusedUnit().transpile( toolBar.chk4Grid.isSelected() );
+        getFocusedUnit().transpile( toolBar.chk4Grid.isSelected(), onDone );
     }
 
     private void onRun()               // Same button is used to run and stop
@@ -297,8 +336,13 @@ public final class UneMultiEditorPanel extends JPanel
         }
         else
         {
-            if( onTranspile() )     // isEmpty() == no errors
+            final UneEditorUnit unit = getFocusedUnit();
+
+            onTranspile( success ->
             {
+                if( ! success )
+                    return;
+
                 GTip.show( "This option runs the script in focused editor inside a tailored ExEn\n\n"+
                            "In this ExEn:\n"+
                            "    a) Only plain old Sockets can be used.\n"+
@@ -308,9 +352,9 @@ public final class UneMultiEditorPanel extends JPanel
                 if( toolBar.chkFaked.isSelected() )
                     GTip.show( "Take into consideration that you are using 'Fake-drivers'" );
 
-                if( getFocusedUnit().run( toolBar.chkFaked.isSelected(), toolBar.getLogLevel() ) )
+                if( unit.run( toolBar.chkFaked.isSelected(), toolBar.getLogLevel() ) )
                     toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
-            }
+            } );
         }
     }
 
@@ -406,6 +450,70 @@ public final class UneMultiEditorPanel extends JPanel
         }
     }
 
+    /**
+     * Starts a background task that polls open files every 3 seconds for
+     * external modifications and prompts the user to reload if any are found.
+     */
+    private void startFileWatcher()
+    {
+        futureWatch.set( UtilSys.executor( false )
+                                .delay( 3 * UtilUnit.SECOND )
+                                .rate(  3 * UtilUnit.SECOND )
+                                .execute( this::checkExternalChanges ) );
+    }
+
+    /**
+     * Checks all open editor tabs for external file modifications.
+     * When a change is detected for a file not already being prompted,
+     * shows a dialog on the EDT asking the user whether to reload.
+     */
+    private void checkExternalChanges()
+    {
+        for( UneEditorUnit unit : getAllEditors() )
+        {
+            if( ! unit.hasExternalChanges() )
+                continue;
+
+            File file = unit.getFile();
+
+            if( ! pendingDialogs.add( file ) )    // Already prompting for this file
+                continue;
+
+            SwingUtilities.invokeLater( () ->
+            {
+                try
+                {
+                    boolean reload = JTools.confirm(
+                        "\"" + file.getName() + "\" has been modified externally.\n" +
+                        "Do you want to reload it from disk?",
+                        UneMultiEditorPanel.this );
+
+                    if( reload )
+                    {
+                        try
+                        {
+                            unit.reloadFromDisk();
+                            updateAllTabTitles();
+                            toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
+                        }
+                        catch( IOException ioe )
+                        {
+                            JTools.error( ioe, UneMultiEditorPanel.this );
+                        }
+                    }
+                    else
+                    {
+                        unit.snapshotLastModified();
+                    }
+                }
+                finally
+                {
+                    pendingDialogs.remove( file );
+                }
+            } );
+        }
+    }
+
     private void onInsertCmdTemplate()
     {
         if( getFocusedUnit() == null )
@@ -490,17 +598,6 @@ public final class UneMultiEditorPanel extends JPanel
         toolBar.updateButtons( getFocusedUnit(), getAllEditors() );
     }
 
-    public void closeAll( final Window window )
-    {
-        saveOpenedFilesList();
-        cleanup();
-
-        while( tabbedPane.getTabCount() > 0 )
-            close( 0 );
-
-        window.dispose();
-    }
-
     /**
      * Cleanup method to prevent memory leaks by removing listeners and canceling tasks.
      */
@@ -515,31 +612,14 @@ public final class UneMultiEditorPanel extends JPanel
             futureSave.set( null );
         }
 
-        // Remove listeners from all editor units
-        for( UneEditorUnit unit : getAllEditors() )
+        // Cancel file watcher task
+        ScheduledFuture currentWatch = futureWatch.get();
+
+        if( currentWatch != null )
         {
-            if( unit != null )
-            {
-                // Remove document and caret listeners to prevent memory leaks
-                // Note: RSyntaxTextArea doesn't provide direct access to remove listeners,
-                // but the units will be garbage collected when the panel is disposed
-            }
+            currentWatch.cancel( false );
+            futureWatch.set( null );
         }
-    }
-
-    File getLastUsedDir()
-    {
-        String lastDirPath = SettingsManager.getLastUsedDir();
-        return new File( lastDirPath );
-    }
-
-    void setLastUsedDir( File fNewLastDir )
-    {
-        if( fNewLastDir == null )
-            return;
-
-        fNewLastDir = fNewLastDir.isDirectory() ? fNewLastDir : fNewLastDir.getParentFile();
-        SettingsManager.setLastUsedDir( fNewLastDir.getAbsolutePath() );
     }
 
     private boolean isOpen( File file )

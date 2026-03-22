@@ -318,6 +318,7 @@ var gum =
                             '<option value="check"    >Check box              </option>' +
                             '<option value="gauge"    >Gauge (numerical)      </option>' +
                             '<option value="pie"      >Pie/Doughnut chart     </option>' +
+                            '<option value="radial"   >Radial arc gauge       </option>' +
                             '<option value="ssd"      >Seven Segments Display </option>' +
                             '<option value="scheduler">Scheduler              </option>' +
                             '<option value="text"     >Text and/or Image      </option>' +
@@ -609,7 +610,6 @@ var gum =
                                     "/gum/lib/chart_v4.4.1.min.js",
                                     "/gum/lib/date-fns_v4.1.0.min.js",
                                     "/gum/lib/chartjs-adapter-date-fns_v3.0.0.min.js",
-                                    "/gum/lib/gauge.min.js",
                                     "/gum/lib/ssd.js" ];
 
         // Start by loading gadgets dynamically from manifest
@@ -675,6 +675,7 @@ var gum =
         p_app.append( "../../chunks/properties_chart.html"    , "div-dlg_properties", onChunkLoaded );
         p_app.append( "../../chunks/properties_gauge.html"    , "div-dlg_properties", onChunkLoaded );
         p_app.append( "../../chunks/properties_pie.html"      , "div-dlg_properties", onChunkLoaded );
+        p_app.append( "../../chunks/properties_radial.html"   , "div-dlg_properties", onChunkLoaded );
         p_app.append( "../../chunks/properties_ssd.html"      , "div-dlg_properties", onChunkLoaded );
         p_app.append( "../../chunks/properties_button.html"   , "div-dlg_properties", onChunkLoaded );
         p_app.append( "../../chunks/properties_check.html"    , "div-dlg_properties", onChunkLoaded );

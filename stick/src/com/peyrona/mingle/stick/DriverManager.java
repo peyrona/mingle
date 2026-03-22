@@ -82,8 +82,9 @@ final class   DriverManager
 
         if( driver == null )
         {
-            runtime.log(ILogger.Level.SEVERE, new MingleException( err( device, false ) ) );
-            return false;
+            // Driver may have been already removed by cascade when its last sibling device was
+            // removed. That is not an error: if the device is gone from the runtime, we are done.
+            return runtime.get( device.name() ) == null;
         }
 
         driver.remove( device );

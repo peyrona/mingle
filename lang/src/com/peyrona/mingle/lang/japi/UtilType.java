@@ -283,6 +283,10 @@ public final class UtilType
             return text;
 
         String str = text.trim();
+
+        if( str.isEmpty() )    // e.g.: text contains only escape chars like '\n', '\t', '\r'
+            return text;
+
         char   ch0 = str.charAt( 0 );
 
         // Following is done to save CPU

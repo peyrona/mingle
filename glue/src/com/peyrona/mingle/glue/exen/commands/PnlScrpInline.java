@@ -1,0 +1,301 @@
+
+package com.peyrona.mingle.glue.exen.commands;
+
+import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonValue;
+import com.peyrona.mingle.candi.unec.parser.ParseScript;
+import com.peyrona.mingle.glue.JTools;
+import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
+import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
+import com.peyrona.mingle.lang.interfaces.commands.ICmdKeys;
+import com.peyrona.mingle.lang.interfaces.commands.IScript;
+import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilJson;
+import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.japi.UtilType;
+import com.peyrona.mingle.lang.lexer.Lexer;
+
+/**
+ *
+ * @author Francisco José Morero Peyrona
+ *
+ * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
+ */
+final class PnlScrpInline extends PnlCmdBase
+{
+    private final UneEditorPane code = UneEditorUnit.newEditor( "" ).setRows( 5 ).hideLineNumbers();
+
+    //------------------------------------------------------------------------//
+
+    PnlScrpInline( IScript script, PnlAllCmdsSelector.CommandWise cmdWise )
+    {
+        super( cmdWise );
+
+        initComponents();
+        initExtra();
+
+        if( script != null )
+        {
+            try
+            {
+                UtilJson json   = new UtilJson( cmdCodec.unbuild( script ) );
+                boolean  bInli  = json.getBoolean( ICmdKeys.SCRIPT_INLINE   );
+                String   sCall  = json.getString(  ICmdKeys.SCRIPT_CALL     );
+                String   sLang  = json.getString(  ICmdKeys.SCRIPT_LANGUAGE );
+                String[] asFrom = UtilType.convertArray( UtilJson.toArray( json.getArray( ICmdKeys.SCRIPT_FROM ) ), String.class );
+
+                txtName.setText( script.name() );
+                cmbLanguage.setSelectedIndex( JTools.getIndexForItem( cmbLanguage.getModel(), item -> item.toString().equalsIgnoreCase( sLang ) ) );
+                txtCall.setText( sCall );
+                radGroupFrom.setSelected( (bInli ? radCode : radURI).getModel(), true );
+
+                     if( json.getBoolean( ICmdKeys.SCRIPT_PRESTART ) )  cmbWhen.setSelectedIndex( 1 );
+                else if( json.getBoolean( ICmdKeys.SCRIPT_ONSTART  ) )  cmbWhen.setSelectedIndex( 2 );
+                else if( json.getBoolean( ICmdKeys.SCRIPT_PRESTOP  ) )  cmbWhen.setSelectedIndex( 3 );
+                else if( json.getBoolean( ICmdKeys.SCRIPT_ONSTOP   ) )  cmbWhen.setSelectedIndex( 4 );
+                else                                                    cmbWhen.setSelectedIndex( 0 );
+
+                if( bInli )
+                    code.setText( asFrom[0] );
+                else
+                    txtURI.setText( UtilColls.toString( asFrom ) );
+            }
+            catch( Exception ioe )
+            {
+                JTools.error(ioe, PnlScrpInline.this );
+            }
+        }
+    }
+
+    //------------------------------------------------------------------------//
+
+    private void initExtra()
+    {
+        sp4CodeEditor.setViewportView( code );
+
+        PnlCmdBase.setJTextIsUneName( txtName );
+        PnlCmdBase.setJTextIsUneName( txtCall );
+
+        // Fills combobox with available languages ----------------------------
+        cmbLanguage.removeAllItems();
+
+        JsonValue value = Json.parse( UtilSys.getConfig().get( "exen", "languages", "" ) );
+
+        for( JsonValue jv : value.asArray() )
+            cmbLanguage.addItem( jv.asObject().get( "name" ).asString() );
+
+        // --------------------------------------------------------------------
+
+        radGroupFrom.add( radURI  );
+        radGroupFrom.add( radCode );
+
+        // Set initial FROM mode state (radURI is selected by default in initComponents,
+        // but the ChangeListener was not yet attached when that happened)
+        txtURI.setEnabled( true );
+        txtURI.setEditable( true );
+        code.setEnabled( false );
+        code.setEditable( false );
+    }
+
+    //------------------------------------------------------------------------//
+
+    @Override
+    protected String getSourceCode()
+    {
+        String sFrom;
+        String sCall = txtCall.getText().trim();
+
+        if( radURI.isSelected() )
+            sFrom= '"'+ txtURI.getText().trim() +'"';
+        else
+            sFrom = "{\n"+ code.getText().trim() +"\n}";
+
+        String sWhen = "";
+
+        if( cmbWhen.getSelectedIndex() > 0 )
+            sWhen = "\n\t"+ cmbWhen.getSelectedItem().toString().toUpperCase();
+
+        return "SCRIPT "  + txtName.getText().trim() +
+               "\n\tLANGUAGE "+ cmbLanguage.getSelectedItem() +
+               (sCall.isEmpty() ? "" : "\n\tCALL \""+ sCall +'"') +
+               sWhen +
+               "\n\tFROM "+ sFrom;
+    }
+
+    @Override
+    protected String getTranspiled()
+    {
+        String      src   = getSourceCode();
+        Lexer       lexer = new Lexer( src );
+        ParseScript tscrp = new ParseScript( lexer.getLexemes() );
+
+        return showErrors( src, lexer, tscrp) ? null : tscrp.serialize();
+    }
+
+    //------------------------------------------------------------------------//
+
+    /**
+     * This method is called from within the constructor to initialize the form.
+     * WARNING: Do NOT modify this code. The content of this method is always
+     * regenerated by the Form Editor.
+     */
+    @SuppressWarnings("unchecked")
+    // <editor-fold defaultstate="collapsed" desc="Generated Code">//GEN-BEGIN:initComponents
+    private void initComponents()
+    {
+
+        radGroupFrom = new javax.swing.ButtonGroup();
+        jPanel1 = new javax.swing.JPanel();
+        radURI = new javax.swing.JRadioButton();
+        txtURI = new javax.swing.JTextField();
+        radCode = new javax.swing.JRadioButton();
+        sp4CodeEditor = new javax.swing.JScrollPane();
+        jLabel1 = new javax.swing.JLabel();
+        cmbLanguage = new javax.swing.JComboBox<>();
+        jLabel2 = new javax.swing.JLabel();
+        txtName = new javax.swing.JTextField();
+        jLabel4 = new javax.swing.JLabel();
+        txtCall = new javax.swing.JTextField();
+        cmbWhen = new javax.swing.JComboBox<>();
+        jLabel3 = new javax.swing.JLabel();
+
+        jPanel1.setBorder(javax.swing.BorderFactory.createTitledBorder(" FROM "));
+
+        radURI.setSelected(true);
+        radURI.setText("URI   (comma separated when more than one)");
+        radURI.addChangeListener(new javax.swing.event.ChangeListener()
+        {
+            public void stateChanged(javax.swing.event.ChangeEvent evt)
+            {
+                onAnyRadioInFromGroupChanged(evt);
+            }
+        });
+
+        radCode.setText("Code");
+        radCode.addChangeListener(new javax.swing.event.ChangeListener()
+        {
+            public void stateChanged(javax.swing.event.ChangeEvent evt)
+            {
+                onAnyRadioInFromGroupChanged(evt);
+            }
+        });
+
+        javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
+        jPanel1.setLayout(jPanel1Layout);
+        jPanel1Layout.setHorizontalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
+                    .addComponent(sp4CodeEditor)
+                    .addComponent(txtURI, javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(javax.swing.GroupLayout.Alignment.LEADING, jPanel1Layout.createSequentialGroup()
+                        .addGroup(jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(radCode)
+                            .addComponent(radURI))
+                        .addGap(0, 0, Short.MAX_VALUE)))
+                .addContainerGap())
+        );
+        jPanel1Layout.setVerticalGroup(
+            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(jPanel1Layout.createSequentialGroup()
+                .addContainerGap()
+                .addComponent(radURI)
+                .addGap(12, 12, 12)
+                .addComponent(txtURI, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addGap(18, 18, 18)
+                .addComponent(radCode)
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
+                .addComponent(sp4CodeEditor, javax.swing.GroupLayout.DEFAULT_SIZE, 181, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+
+        jLabel1.setText("LANGUAGE");
+
+        cmbLanguage.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Java", "Javascript", "Python", "Une" }));
+
+        jLabel2.setText("Name");
+
+        txtName.setColumns(24);
+        txtName.setName("ControlName"); // NOI18N
+
+        jLabel4.setText("CALL to");
+
+        cmbWhen.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "None", "Pre OnStart", "OnStart", "Pre OnStop", "OnStop" }));
+
+        jLabel3.setText("When");
+
+        javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
+        this.setLayout(layout);
+        layout.setHorizontalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(layout.createSequentialGroup()
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addComponent(jLabel4)
+                            .addComponent(jLabel2))
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                            .addGroup(layout.createSequentialGroup()
+                                .addComponent(txtName, javax.swing.GroupLayout.PREFERRED_SIZE, 252, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(18, 18, 18)
+                                .addComponent(jLabel1)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(cmbLanguage, javax.swing.GroupLayout.PREFERRED_SIZE, 139, javax.swing.GroupLayout.PREFERRED_SIZE)
+                                .addGap(18, 18, 18)
+                                .addComponent(jLabel3)
+                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                                .addComponent(cmbWhen, 0, 126, Short.MAX_VALUE))
+                            .addComponent(txtCall))))
+                .addContainerGap())
+        );
+        layout.setVerticalGroup(
+            layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(layout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jLabel1)
+                        .addComponent(cmbLanguage, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(cmbWhen, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(jLabel3))
+                    .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                        .addComponent(jLabel2)
+                        .addComponent(txtName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)))
+                .addGap(18, 18, 18)
+                .addGroup(layout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(txtCall, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(jLabel4))
+                .addGap(18, 18, 18)
+                .addComponent(jPanel1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addContainerGap())
+        );
+    }// </editor-fold>//GEN-END:initComponents
+
+    private void onAnyRadioInFromGroupChanged(javax.swing.event.ChangeEvent evt) {//GEN-FIRST:event_onAnyRadioInFromGroupChanged
+        txtURI.setEnabled( radURI.isSelected() );
+        txtURI.setEditable( radURI.isSelected() );
+        code.setEnabled( radCode.isSelected() );
+        code.setEditable( radCode.isSelected() );
+    }//GEN-LAST:event_onAnyRadioInFromGroupChanged
+
+    // Variables declaration - do not modify//GEN-BEGIN:variables
+    private javax.swing.JComboBox<String> cmbLanguage;
+    private javax.swing.JComboBox<String> cmbWhen;
+    private javax.swing.JLabel jLabel1;
+    private javax.swing.JLabel jLabel2;
+    private javax.swing.JLabel jLabel3;
+    private javax.swing.JLabel jLabel4;
+    private javax.swing.JPanel jPanel1;
+    private javax.swing.JRadioButton radCode;
+    private javax.swing.ButtonGroup radGroupFrom;
+    private javax.swing.JRadioButton radURI;
+    private javax.swing.JScrollPane sp4CodeEditor;
+    private javax.swing.JTextField txtCall;
+    private javax.swing.JTextField txtName;
+    private javax.swing.JTextField txtURI;
+    // End of variables declaration//GEN-END:variables
+}

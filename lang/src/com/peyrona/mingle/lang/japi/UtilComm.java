@@ -621,13 +621,7 @@ public class UtilComm
                 InetAddress address = ee.nextElement();
 
                 if( address.isSiteLocalAddress() || isUniqueLocalAddress( address ) )
-                {
                     locals.add( address );
-//                    System.out.println( address +" --> isAnyLocalAddress="+ address.isAnyLocalAddress() +", "
-//                                                +"isLinkLocalAddress="+ address.isLinkLocalAddress()    +", "
-//                                                +"isLoopbackAddress=" + address.isLoopbackAddress()     +", "
-//                                                +"isSiteLocalAddress="+ address.isSiteLocalAddress() );
-                }
             }
         }
 

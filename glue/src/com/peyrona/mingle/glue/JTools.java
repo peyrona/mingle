@@ -92,6 +92,41 @@ public final class JTools
     private static Color  iconClr = null;    // Can not init it here because the L&F perhaps is not initialized yet
 
     //------------------------------------------------------------------------//
+
+    public static void setLaF()
+    {
+        if( SettingsManager.isDarkMode() )  com.formdev.flatlaf.FlatDarculaLaf.setup();
+        else                                com.formdev.flatlaf.FlatLightLaf.setup();
+
+        iconClr = null;
+    }
+
+    public static boolean setLaF( boolean isDark )
+    {
+        if( isDark == SettingsManager.isDarkMode() )
+            return false;
+
+        iconClr = null;    // This is cheap and can save troubles
+
+        try
+        {
+            SettingsManager.setDarkLightMode( isDark );
+
+            if( isDark )  com.formdev.flatlaf.FlatDarculaLaf.setup();
+            else          com.formdev.flatlaf.FlatLightLaf.setup();
+
+            com.formdev.flatlaf.FlatLaf.updateUI();
+
+            return true;
+        }
+        catch( Exception ex )
+        {
+            // Using the default L&F
+            return false;
+        }
+    }
+
+    //------------------------------------------------------------------------//
     // ABOUT SHOWING MESSAGES
 
     /**
@@ -718,17 +753,21 @@ public final class JTools
 
     public static void setIconImages( Window wnd, String imgName )
     {
-        BufferedImage bi = getImage( imgName );
+        UtilSys.executor( true )
+               .execute( () ->
+                        {
+                             BufferedImage bi = getImage( imgName );
 
-        if( bi != null )
-        {
-            List<Image> icons = new ArrayList<>();
-                        icons.add( resizeImage( bi, 256, 256 ) );    // Large version - might be used for taskbar/alt-tab
-                        icons.add( resizeImage( bi,  64,  64 ) );    // Medium version
-                        icons.add( resizeImage( bi,  32,  32 ) );    // Small version - might be used for window title bar
+                             if( bi != null )
+                             {
+                                 List<Image> icons = new ArrayList<>();
+                                             icons.add( resizeImage( bi, 256, 256 ) );    // Large version - might be used for taskbar/alt-tab
+                                             icons.add( resizeImage( bi,  64,  64 ) );    // Medium version
+                                             icons.add( resizeImage( bi,  32,  32 ) );    // Small version - might be used for window title bar
 
-            wnd.setIconImages( icons );
-        }
+                                 SwingUtilities.invokeLater( () -> wnd.setIconImages( icons ) );
+                             }
+                        } );
     }
 
     /**
@@ -872,43 +911,6 @@ public final class JTools
         root.registerKeyboardAction( listener,
                                      KeyStroke.getKeyStroke( key, ctrl ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
-    }
-
-    /**
-     * Checks if a text component is configured for UNE name input.
-     * <p>
-     * Determines if the text component has been marked as containing an UNE name
-     * by checking for a specific client property. Used for input validation and
-     * key filtering to ensure only valid UNE name characters are entered.
-     * </p>
-     *
-     * @param txt the text component to check; should not be null
-     * @return true if the component is configured for UNE name input, false otherwise
-     * @see #setJTextIsUneName(JTextField)
-     */
-    public static boolean isJTextUneName( JTextComponent txt )
-    {
-        Object val = txt.getClientProperty( "_THIS_TEXT_COMPONENT_CONTAINS_AN_UNE_NAME_" );
-
-        return (val instanceof Boolean) && ((Boolean) val);
-    }
-
-    /**
-     * Marks a JTextField as being used for UNE name input.
-     * <p>
-     * Sets a client property on the text field to indicate it should accept
-     * only valid UNE name characters. This enables input filtering and validation
-     * specific to UNE naming conventions.
-     * </p>
-     *
-     * @param txt the text field to mark for UNE name input; should not be null
-     * @return the same JTextField instance for method chaining
-     * @see #isJTextUneName(JTextComponent)
-     */
-    public static JTextField setJTextIsUneName( JTextField txt )
-    {
-        txt.putClientProperty( "_THIS_TEXT_COMPONENT_CONTAINS_AN_UNE_NAME_", true );
-        return txt;
     }
 
     /**
@@ -1215,30 +1217,6 @@ public final class JTools
         }
     }
 
-    //------------------------------------------------------------------------//
-
-    /**
-     * Extracts time unit character from a formatted combo box selection.
-     * <p>
-     * Parses the selected item to extract the unit character from the
-     * second-to-last position. Expected format: "Unit Name  (u)" where 'u'
-     * is the unit character. Returns empty string for first item (index 0).
-     * </p>
-     *
-     * @param cmbUnits combo box containing time unit selections; should not be null
-     * @return unit character (e.g., "s", "m", "h") or empty string
-     */
-    public static String getTimeUnitFromComboBox(JComboBox<String> cmbUnits)
-    {
-        String sItem = cmbUnits.getSelectedItem().toString();
-        String sUnit = "";
-        if( cmbUnits.getSelectedIndex() > 0 )
-        {
-            char cUnit = sUnit.charAt( sItem.length() - 2 ); // e.g.: "Seconds  (s)"
-            sUnit = Character.valueOf( cUnit ).toString();
-        }
-        return sUnit;
-    }
 
     //------------------------------------------------------------------------//
     // ABOUT FILE MANAGAMENT

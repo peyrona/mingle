@@ -35,8 +35,50 @@
       "allow_native_code"      : true,     # Allow executing code in other languages, besides Une (drivers are an exception). By default true.
       "languages"              : [ {"name": "Une"       , "class": "com.peyrona.mingle.candi.unescript.UneScriptRT", "uris": ["file://{*home.lib*}candi.jar"] },
                                    {"name": "Java"      , "class": "com.peyrona.mingle.candi.javac.JavaRT"         , "uris": ["file://{*home.lib*}candi.jar"] },
-                                   {"name": "JavaScript", "class": "com.peyrona.mingle.candi.javascript.NashornRT" , "uris": ["file://{*home.lib*}candi.jar"] },
-                                   {"name": "Python"    , "class": "com.peyrona.mingle.candi.python.JythonRT"      , "uris": ["file://{*home.lib*}candi.jar","file://{*home.lib*}jython-standalone-2.7.2.jar"] } ]
+                                   {"name": "JavaScript", "class": "com.peyrona.mingle.candi.graalvm.GraalJsRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}graal-sdk-23.0.11.jar",
+                                             "file://{*home.lib*}truffle-api-23.0.11.jar",
+                                             "file://{*home.lib*}js-23.0.11.jar",
+                                             "file://{*home.lib*}regex-23.0.11.jar",
+                                             "file://{*home.lib*}icu4j-72.1.jar"],
+                                    "download": [{"local" : "file://{*home.lib*}icu4j-72.1.jar",
+                                                  "remote": "https://repo1.maven.org/maven2/com/ibm/icu/icu4j/72.1/icu4j-72.1.jar"}] },
+                                   {"name": "Python"    , "class": "com.peyrona.mingle.candi.graalvm.GraalPyRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}graal-sdk-23.0.11.jar",
+                                             "file://{*home.lib*}truffle-api-23.0.11.jar",
+                                             "file://{*home.lib*}graalpython-23.0.11.jar"],
+                                    "download": [{"local" : "file://{*home.lib*}graalpython-23.0.11.jar",
+                                                  "remote": "https://repo1.maven.org/maven2/org/graalvm/tools/graalpython/23.0.11/graalpython-23.0.11.jar"}] },
+                                   {"name": "Ruby"      , "class": "com.peyrona.mingle.candi.graalvm.GraalRubyRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}graal-sdk-23.0.11.jar",
+                                             "file://{*home.lib*}truffle-api-23.0.11.jar",
+                                             "file://{*home.lib*}ruby-23.0.11.jar"],
+                                    "download": [{"local" : "file://{*home.lib*}ruby-23.0.11.jar",
+                                                  "remote": "https://repo1.maven.org/maven2/org/graalvm/ruby/ruby/23.0.11/ruby-23.0.11.jar"}] },
+                                   {"name": "R"         , "class": "com.peyrona.mingle.candi.graalvm.GraalRRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}graal-sdk-23.0.11.jar",
+                                             "file://{*home.lib*}truffle-api-23.0.11.jar",
+                                             "file://{*home.lib*}r-23.0.11.jar"],
+                                    "download": [{"local" : "file://{*home.lib*}r-23.0.11.jar",
+                                                  "remote": "https://repo1.maven.org/maven2/org/graalvm/r/r/23.0.11/r-23.0.11.jar"}] },
+                                   # Native shared libraries (.so / .dll / .dylib) via JNA.
+                                   # "C", "Rust", and "Native" are aliases for the same runtime.
+                                   # jna-5.14.0.jar (~1.5 MB) is downloaded automatically on first use.
+                                   {"name": "C"         , "class": "com.peyrona.mingle.candi.jna.NativeRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}jna-5.14.0.jar"],
+                                    "download": [{"local" : "file://{*home.lib*}jna-5.14.0.jar",
+                                                  "remote": "https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar"}] },
+                                   {"name": "Rust"      , "class": "com.peyrona.mingle.candi.jna.NativeRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}jna-5.14.0.jar"] },
+                                   {"name": "Native"    , "class": "com.peyrona.mingle.candi.jna.NativeRT",
+                                    "uris": ["file://{*home.lib*}candi.jar",
+                                             "file://{*home.lib*}jna-5.14.0.jar"] } ]
     },
 
     # Monitoring (HTTP Server and ExEn Bridge) module.
@@ -50,7 +92,10 @@
       "user_base"      : null,                   # Folder for Dashboards and static content (served via HTTP/S). By default "{*home*}/etc/gum_user_base"
       "shared_secret"  : null,                   # HMAC shared secret for API authentication. If null, authentication is disabled.
       "hmac_tolerance" : 60,                     # Accept timestamps within ±N seconds. Default: 60
-      "master_password": null                    # To access dahsboards as admin (new, del, etc) and to access file manger. To allow all users: null
+      "master_password": null,                   # To access dahsboards as admin (new, del, etc) and to access file manger. To allow all users: null
+      "proxies"        : []                      # Reverse-proxy routes. Each entry: { "path": "/gum/proxy/rpi", "target": "http://192.168.7.9:8080" }
+                                                 # "path"   - context path on this server (must be unique and start with /gum/proxy/)
+                                                 # "target" - base URL of the downstream server to forward requests to
      #"ssl": { "port": null,                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
      #         "path": "{*home*}keystore.jks",   # Path to "keystore.jks" file (can not be null)
      #         "pwd" : "adminadmin" },           # Password for the "keystore.jks" file (can not be null)
@@ -248,27 +293,40 @@
                       {
                         "name"       : "WebSocket Client",
                         "description": "WebSocket connection for real-time web communication",
-                        "init"       : { "host"    : null,                                   # By default: "ws://localhost:55882/"
-                                         "headers" : null },                                 # By default, null
+                        "init"       : { "host"    : null,
+                                         "port"    : 55882,
+                                         "ssl"     : false,
+                                         "timeout" : 30 },
                         "builder"    : "com.peyrona.mingle.network.websocket.WebSocketClient",
                         "uris"       : ["file://{*home.lib*}network.jar", "file://{*home.lib*}gum/*.jar"],
                         "ui"         :
                                        [
                                           {
-                                            "key": "url",
-                                            "type": "url",
-                                            "label": "WebSocket URL",
+                                            "key": "host",
+                                            "type": "string",
+                                            "label": "Host",
                                             "tooltip": "",
-                                            "default": "ws://localhost:55882/",
+                                            "default": "localhost",
                                             "required": true,
-                                            "validation": {"pattern": "^wss?://.+"}
+                                            "validation": {"pattern": "^[a-zA-Z0-9.-]+$"}
                                           },
                                           {
-                                            "key": "headers",
-                                            "type": "keyvalue",
-                                            "label": "Custom Headers",
+                                            "key": "port",
+                                            "type": "integer",
+                                            "label": "Port",
                                             "tooltip": "",
-                                            "required": false
+                                            "default": 55882,
+                                            "required": true,
+                                            "validation": {"min": 1024, "max": 65535}
+                                          },
+                                          {
+                                            "key": "timeout",
+                                            "type": "integer",
+                                            "label": "Timeout (seconds)",
+                                            "tooltip": "",
+                                            "default": 30,
+                                            "required": false,
+                                            "validation": {"min": 1, "max": 300}
                                           }
                                         ]
                         }

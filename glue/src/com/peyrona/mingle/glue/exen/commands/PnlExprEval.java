@@ -5,7 +5,7 @@ import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Main;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
-import com.peyrona.mingle.glue.exen.exen.Pnl4ExEn;
+import com.peyrona.mingle.glue.exen.Pnl4ExEn;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
@@ -16,6 +16,7 @@ import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.xpreval.XprTokenizer;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.event.KeyEvent;
 import java.util.ArrayList;
 import java.util.List;
@@ -99,7 +100,7 @@ final class PnlExprEval extends javax.swing.JPanel
         else
         {
             lblResult.setForeground( Color.red.darker() );
-            lblResult.getFont().deriveFont( lblResult.getFont().getSize() - 2.0f );
+            lblResult.setFont( lblResult.getFont().deriveFont( lblResult.getFont().getSize() - 2.0f ) );
             lblResult.setText( sError );
         }
     }
@@ -109,7 +110,7 @@ final class PnlExprEval extends javax.swing.JPanel
         StringBuilder sb = new StringBuilder( 2048 );
 
         for( ICandi.IError error : lstErrors )
-            sb.append( error.message() ).append( error ).append( '\n' );
+            sb.append( error.message() ).append( " (line " ).append( error.line() ).append( ", col " ).append( error.column() ).append( ")\n" );
 
         showError( UtilStr.removeLast( sb, 1 ).toString() );
     }
@@ -203,12 +204,21 @@ final class PnlExprEval extends javax.swing.JPanel
             return;
         }
 
+        Component selectedTab = Main.frame.getExEnsTabPane().getSelectedComponent();
+
+        if( ! (selectedTab instanceof Pnl4ExEn) )
+        {
+            showError( "No ExEn is currently active" );
+            return;
+        }
+
+        final List<IDevice> lstAllDevices = ((Pnl4ExEn) selectedTab).getDevices();
+
         Function<String,String[]> fnGroupWise = (groupName) ->
                                                 {
-                                                    List<String>  list2Ret   = new ArrayList<>();
-                                                    List<IDevice> lstDevices = ((Pnl4ExEn) Main.frame.getExEnsTabPane().getSelectedComponent()).getDevices();
+                                                    List<String> list2Ret = new ArrayList<>();
 
-                                                    for( IDevice device : lstDevices )
+                                                    for( IDevice device : lstAllDevices )
                                                     {
                                                         if( device.isMemberOfGroup( groupName ) )    // groupName comes in lower case: fine
                                                             list2Ret.add( device.name() );

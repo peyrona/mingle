@@ -52,9 +52,7 @@ public class ExEnComm
                                 /** After successfully processed an Add request, an ExEn broadcasts this command */                                          Added,
                                 /** After successfully processed a Remove request, an ExEn broadcasts this command */                                        Removed,
                                                                                                                                                            // Other messages
-                                /** Used by ExEn to report an internal error occurred in ExEn (this is not a real request)*/                                 Error,
-                                /** Used by ExEn to report an internal error occurred in ExEn when adding commands (this is not a real request)*/            ErrorAdding,
-                                /** Used by ExEn to report an internal error occurred in ExEn when deleting commands (this is not a real request) */         ErrorDeleting
+                                /** Used by ExEn to report an internal error occurred in ExEn (this is not a real request)*/                                 Error
                                };
 
     //------------------------------------------------------------------------//
@@ -114,8 +112,8 @@ public class ExEnComm
      */
     public ExEnComm( Request verb, String sJSON )
     {
-        this.request = verb;
-        this.payload = (sJSON == null ? null : Json.parse( sJSON ));
+        request = verb;
+        payload = (sJSON == null ? null : Json.parse( sJSON ));
     }
 
     /**
@@ -126,8 +124,8 @@ public class ExEnComm
      */
     public ExEnComm( Request verb, ICommand cmd )
     {
-        this.request = verb;
-        this.payload = Json.parse( getCIL().unbuild( cmd ) );
+        request = verb;
+        payload = Json.parse( getCIL().unbuild( cmd ) );
     }
 
     /**
@@ -140,8 +138,8 @@ public class ExEnComm
     {
         JsonArray ja = Json.array();
 
-        this.request = verb;
-        this.payload = ja;
+        request = verb;
+        payload = ja;
 
         for( ICommand cmd : aCmds )
             ja.add( Json.parse( getCIL().unbuild( cmd ) ) );
@@ -319,14 +317,10 @@ public class ExEnComm
         {
             synchronized( this )
             {
-                builder = this.pclBuilder;
-
-                if( builder == null )
-                    this.pclBuilder = builder = UtilSys.getConfig().newCILBuilder();
+                this.pclBuilder = builder = UtilSys.getConfig().newCILBuilder();
             }
         }
 
         return builder;
     }
-
 }

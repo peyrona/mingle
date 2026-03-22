@@ -230,6 +230,11 @@ final class XprToken implements ITokenable
 //        return true;
 //    }
 
+    // NOTE: This lazy initialization has a benign data race. The 'value' field is not volatile,
+    // so concurrent calls from different threads may each compute and write the value independently.
+    // This is safe in practice because: (1) the computed result is always the same for a given
+    // text+type (deterministic), and (2) Boolean, Float, and String are all immutable types.
+    // Making 'value' volatile would fix the formal JMM violation but is not strictly necessary.
     Object value()
     {
         if( value == null )

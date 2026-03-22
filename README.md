@@ -29,9 +29,9 @@
 
  **How to install Mingle?**
 
-> 1. Create a folder named 'mingle' (or any other name).
-> 2. Download lastest release (mingle.n.n.n.zip) into the created folder.
-> 3. Unzip the dowloaded file.
+> * Linux  : bash <(curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh)
+> * Mac    : bash <(curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh)
+> * Windows: irm https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1 | iex
 
  **What is the easiest way to start?**
 

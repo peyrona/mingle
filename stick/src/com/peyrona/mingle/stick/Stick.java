@@ -14,15 +14,12 @@ import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
+import com.peyrona.mingle.lang.interfaces.commands.ILibrary;
 import com.peyrona.mingle.lang.interfaces.commands.IRule;
 import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IEventBus;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import com.peyrona.mingle.lang.interfaces.network.INetClient;
-import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.lang.japi.Config;
-import com.peyrona.mingle.lang.japi.ExEnComm;
-import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
@@ -65,15 +62,16 @@ import java.util.Map;
 public final class Stick
              implements IRuntime
 {
-    private final    IConfig       config;     // Can not be sat as UtilSys.setConfig(...) because each instance of Stick can have its own instance of IConfig
-    private final    IEventBus     eventBus;
-    private final    GridManager   gridMgr;
-    private final    ScriptManager srptMgr;
-    private final    DriverManager drvrMgr;
-    private final    DeviceManager deviMgr;
-    private final    RuleManager   ruleMgr;
-    private volatile boolean       keepRun = true;
-    private volatile boolean       bExited = false;
+    private final    IConfig        config;     // Can not be sat as UtilSys.setConfig(...) because each instance of Stick can have its own instance of IConfig
+    private final    IEventBus      eventBus;
+    private final    GridManager    gridMgr;
+    private final    LibraryManager librMgr;
+    private final    ScriptManager  srptMgr;
+    private final    DriverManager  drvrMgr;
+    private final    DeviceManager  deviMgr;
+    private final    RuleManager    ruleMgr;
+    private volatile boolean        keepRun = true;
+    private volatile boolean        bExited = false;
 
     //----------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -108,8 +106,7 @@ public final class Stick
 
         this.config = config;
 
-        // These are also nedded here (besides Main.java) because this class
-        // can be instatiated directly (without passing it by Main.java)
+        // These are also needed here (besides Main.java) because this class can be instatiated directly (without passing it by Main.java)
 
         UtilSys.setConfig( config );
         UtilSys.setLogger( "stick", config );
@@ -121,45 +118,16 @@ public final class Stick
         // After Logger is initialized, the rest of modules can be initialized too
 
         eventBus = new EventBus( config.get( "exen", "bus_capacity", 2048 ) );
-        srptMgr  = new ScriptManager( this );
-        drvrMgr  = new DriverManager( this );
-        deviMgr  = new DeviceManager( this );
-        ruleMgr  = new RuleManager(   this );
-        gridMgr  = initGridManager();
+        librMgr  = new LibraryManager( this );   // Instantiated first: libraries must load before scripts run
+        srptMgr  = new ScriptManager(  this );
+        drvrMgr  = new DriverManager(  this );
+        deviMgr  = new DeviceManager(  this );
+        ruleMgr  = new RuleManager(    this );
+        gridMgr  = GridManager.create( config, this, this::failed );
 
         // Loads transpiled code (if any) and adds commands to their managers
 
-        if( UtilStr.isNotEmpty( sModelJSON ) )
-        {
-            try
-            {
-                List<ICommand> lstCmds = new ArrayList<>();
-                ICmdEncDecLib  builder = this.config.newCILBuilder();
-                JsonObject     joModel = Json.parse( sModelJSON ).asObject();
-                String         version = joModel.getString( "code-version", "unknown" );
-
-                if( ! version.equals( "1.0" ) )
-                    failed( null, "Invalid transpiled code version: "+ version );
-
-                joModel.get( "commands" )
-                       .asArray()
-                       .forEach( (JsonValue jv) -> lstCmds.add( builder.build( jv.toString() ) ) );
-
-                if( lstCmds.isEmpty() )
-                {
-                    log( ILogger.Level.WARNING, "There are no commands in script: this is valid, but strange." );
-                }
-                else
-                {
-                    for( ICommand cmd : sortByType( lstCmds, false ) )
-                        add( cmd );
-                }
-            }
-            catch( ParseException exc )
-            {
-                failed( exc, null );
-            }
-        }
+        addModel( sModelJSON );
 
         // By using a hook we maximize the possibilities the finalization code will be
         // invoked: even if INTERRUPT signal (Ctrl-C) is used, the JVM will invoke this hook.
@@ -197,10 +165,12 @@ public final class Stick
         else
             sModelName = sModelName.trim();
 
+        librMgr.start();    // Libraries must be available before any script runs (including PRE ONSTART)
+
         srptMgr.runPreStartScripts();
 
         srptMgr.start();   // Prepares scripts; ONSTART are executed (as it is done by posting an msg into the bus, entites will exist when it will be executed)
-        gridMgr_start();   // GridManager instance is needed before creating the Commands because Rule (perhaps also others) use ::isGridNode()
+        GridManager.start( gridMgr, this, deviMgr, ruleMgr, srptMgr, this::failed, this::runVoidThread );   // GridManager instance is needed before creating the Commands because Rule (perhaps also others) use ::isGridNode()
         drvrMgr.start();   // Drivers has to be inited before devices because devices ask for their values to drivers
         deviMgr.start();   // After starting every device, it requests its value and generates a Device Changes message
         ruleMgr.start();
@@ -265,7 +235,7 @@ public final class Stick
 
             if( deviMgr.named( sDownDevice ) != null )
             {
-                UtilSys.executor( true )
+                UtilSys.executor( false )
                        .delay( nDownTime )
                        .rate( nDownTime )
                        .execute( () -> checkDowntimedDevices( sDownDevice ) );
@@ -293,11 +263,11 @@ public final class Stick
     @Override
     public ICommand[] all( String... asClass )
     {
-        int mask;   // Bitmask: 1=device, 2=driver, 4=script, 8=rule
+        int mask;   // Bitmask: 1=device, 2=driver, 4=script, 8=rule, 16=library
 
         if( asClass == null || asClass.length == 0 )
         {
-            mask = 1 | 2 | 4 | 8;   // all
+            mask = 1 | 2 | 4 | 8 | 16;   // all
         }
         else
         {
@@ -307,7 +277,7 @@ public final class Stick
             {
                 m |= classMask( s );
 
-                if( m == (1 | 2 | 4 | 8) )
+                if( m == (1 | 2 | 4 | 8 | 16) )
                     break;                 // early exit if everything requested
             }
 
@@ -317,19 +287,21 @@ public final class Stick
         // Fast-path when only one bit is set
         if( Integer.bitCount( mask ) == 1 )
         {
-            if( (mask & 1) != 0 ) return deviMgr.getAll().toArray( ICommand[]::new );
-            if( (mask & 2) != 0 ) return drvrMgr.getAll().toArray( ICommand[]::new );
-            if( (mask & 4) != 0 ) return srptMgr.getAll().toArray( ICommand[]::new );
-         /* else */               return ruleMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  1) != 0 ) return deviMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  2) != 0 ) return drvrMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  4) != 0 ) return srptMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  8) != 0 ) return ruleMgr.getAll().toArray( ICommand[]::new );
+         /* else */                return librMgr.getAll().toArray( ICommand[]::new );
         }
 
         // Generic case
         List<ICommand> list = new ArrayList<>( 128 );
 
-        if( (mask & 1) != 0 )  list.addAll( deviMgr.getAll() );
-        if( (mask & 2) != 0 )  list.addAll( drvrMgr.getAll() );
-        if( (mask & 4) != 0 )  list.addAll( srptMgr.getAll() );
-        if( (mask & 8) != 0 )  list.addAll( ruleMgr.getAll() );
+        if( (mask &  1) != 0 )  list.addAll( deviMgr.getAll() );
+        if( (mask &  2) != 0 )  list.addAll( drvrMgr.getAll() );
+        if( (mask &  4) != 0 )  list.addAll( srptMgr.getAll() );
+        if( (mask &  8) != 0 )  list.addAll( ruleMgr.getAll() );
+        if( (mask & 16) != 0 )  list.addAll( librMgr.getAll() );
 
         return list.toArray( ICommand[]::new );
     }
@@ -346,72 +318,129 @@ public final class Stick
         cmd = deviMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = ruleMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = srptMgr.named( sName );  if( cmd != null ) return cmd;
-        cmd = drvrMgr.named( sName );  return cmd;                   // Either the command or null
+        cmd = drvrMgr.named( sName );  if( cmd != null ) return cmd;
+        cmd = librMgr.named( sName );
+
+        return cmd;   // Either the command or null
     }
 
     @Override
-    public void add( ICommand command )
+    public void addModel( String sModelJSON )
     {
-        if( command == null )
+        if( UtilStr.isNotEmpty( sModelJSON ) )
         {
-            log( ILogger.Level.SEVERE, "Invalid command 'null'" );
-            return;
+            try
+            {
+                List<ICommand> lstCmds = new ArrayList<>();
+                ICmdEncDecLib  builder = this.config.newCILBuilder();
+                JsonObject     joModel = Json.parse( sModelJSON ).asObject();
+                String         version = joModel.getString( "code-version", "unknown" );
+
+                if( ! version.equals( "1.0" ) )
+                    failed( null, "Invalid transpiled code version: "+ version );
+
+                joModel.get( "commands" )
+                       .asArray()
+                       .forEach( (JsonValue jv) -> lstCmds.add( builder.build( jv.toString() ) ) );
+
+                if( lstCmds.isEmpty() )
+                {
+                    log( ILogger.Level.WARNING, "There are no commands in script: this is valid, but strange." );
+                }
+                else
+                {
+                    for( ICommand cmd : sortByType( lstCmds, false ) )
+                        add( cmd );
+                }
+            }
+            catch( ParseException exc )
+            {
+                failed( exc, null );
+            }
         }
-
-        if( command instanceof IDriver )  { drvrMgr.add( (IDriver) command ); return; }
-        if( command instanceof IScript )  { srptMgr.add( (IScript) command ); return; }
-        if( command instanceof IRule   )  { ruleMgr.add( (IRule  ) command ); return; }
-
-        eventBus.pause();
-
-        IDevice device = (IDevice) command;
-
-        if( drvrMgr.add( device ) )
-            deviMgr.add( device );
-
-        eventBus.resume();
-
-        // When a new Device is added on the fly, all its dependencies must exist previously: Device's Driver and Script.
-
-        // srptMgr.clean( drvrMgr.clean() ) is not invoked here because prior to add a Device, its Driver and Script
-        // must exist, or a not OK is returned by DriverManager::add( IDevice )
-
-        // Next time ::remove(...) will be invoked, all unneeded Drivers and Scripts will be removed.
     }
 
     @Override
-    public boolean remove( ICommand command )
+    public void add( ICommand... commands )
     {
-        if( command == null )
+        List<ICommand> list = new ArrayList<>( commands.length );
+
+        for( ICommand command : commands )
         {
-            log( ILogger.Level.SEVERE, "Removing 'null'" );
-            return false;
+            if( command == null )  log( ILogger.Level.SEVERE, "Invalid command 'null'" );
+            else                   list.add( command );
         }
 
-        eventBus.pause();
-
-        boolean bOK;
-
-             if( command instanceof IDriver )  bOK = drvrMgr.remove( (IDriver) command );
-        else if( command instanceof IScript )  bOK = srptMgr.remove( (IScript) command );
-        else if( command instanceof IRule   )  bOK = ruleMgr.remove( (IRule  ) command );
-        else
+        for( ICommand command : sortByType( list, false ) )
         {
+            if( command instanceof ILibrary )  { librMgr.add( (ILibrary) command ); continue; }
+            if( command instanceof IDriver  )  { drvrMgr.add( (IDriver)  command ); continue; }
+            if( command instanceof IScript  )  { srptMgr.add( (IScript)  command ); continue; }
+            if( command instanceof IRule    )  { ruleMgr.add( (IRule)    command ); continue; }
+
+            eventBus.pause();
+
             IDevice device = (IDevice) command;
 
-            bOK = deviMgr.remove( device ) &&
-                  drvrMgr.remove( device );     // This method removes the driver if it is not needed anymore (has no more devices)
-        }
+            if( drvrMgr.add( device ) )
+                deviMgr.add( device );
 
-        if( bOK )
+            eventBus.resume();
+
+            // When adding multiple commands, sortByType() ensures prerequisites come first
+            // (Script before Driver, Driver before Device), so no orphan cleanup is needed.
+
+            // drvrMgr.clean() / srptMgr.clean() are intentionally NOT called here:
+            // a Driver just added may have no devices yet (they may arrive in a later add() call).
+            // Calling clean() at this point would incorrectly remove a newly-added Driver.
+
+            // Any orphan left by a partially-failed add() will be swept by the next remove() call.
+        }
+    }
+
+    @Override
+    public boolean remove( ICommand... commands )
+    {
+        boolean allOK = true;
+
+        List<ICommand> list = new ArrayList<>( commands.length );
+
+        for( ICommand command : commands )
         {
-            drvrMgr.clean();
-            srptMgr.clean();
+            if( command == null )  { log( ILogger.Level.SEVERE, "Removing 'null'" ); allOK = false; }
+            else                   list.add( command );
         }
 
-        eventBus.resume();
+        for( ICommand command : sortByType( list, true ) )
+        {
+            eventBus.pause();
 
-        return bOK;
+            boolean bOK;
+
+                 if( command instanceof ILibrary )  bOK = librMgr.remove( (ILibrary) command );
+            else if( command instanceof IDriver  )  bOK = drvrMgr.remove( (IDriver)  command );
+            else if( command instanceof IScript  )  bOK = srptMgr.remove( (IScript)  command );
+            else if( command instanceof IRule    )  bOK = ruleMgr.remove( (IRule)    command );
+            else
+            {
+                IDevice device = (IDevice) command;
+
+                bOK = deviMgr.remove( device ) &&
+                      drvrMgr.remove( device );     // This method removes the driver if it is not needed anymore (has no more devices)
+            }
+
+            if( bOK )
+            {
+                drvrMgr.clean();
+                srptMgr.clean();
+            }
+
+            eventBus.resume();
+
+            allOK &= bOK;
+        }
+
+        return allOK;
     }
 
     @Override
@@ -512,6 +541,12 @@ public final class Stick
     @Override
     public IRuntime exit( int millis )
     {
+        return exit( millis, 0, null );
+    }
+
+    @Override
+    public IRuntime exit( int millis, int exitCode, Object reason )
+    {
         synchronized( this )
         {
             if( bExited )       // To avoid more than one call to ::exit(...)
@@ -519,6 +554,9 @@ public final class Stick
 
             bExited = true;
         }
+
+        if( reason != null )
+            say( UtilStr.toString( reason ) );
 
         // Using this does not work (I do not know why) -->
         //      UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );
@@ -535,14 +573,12 @@ public final class Stick
         }
         finally
         {
-            System.exit( 0 );   // NEXT: --> Do not call 'System.exit( 0 )' to allow to run more than one instace of Stick in same JVM
+            System.exit( exitCode );   // NEXT: --> Do not call 'System.exit( 0 )' to allow to run more than one instace of Stick in same JVM
         }
 
         return this;
-    }
 
-    //------------------------------------------------------------------------//
-    // PACKAGE SCOPE
+    }
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
@@ -588,9 +624,7 @@ public final class Stick
 
         msg += "\nCan not continue. Check logs.\n\n"+ UtilStr.toString( exc );
 
-        log( ILogger.Level.SEVERE, msg );
-
-        exit( 0 );    // ::stop() is always invoked by a System hook
+        exit( 0, 1, msg );    // ::stop() is always invoked by a System hook
     }
 
     // There is a hook that invokes this method on JMV exiting
@@ -655,10 +689,11 @@ public final class Stick
 
     private Integer getPrecedence( ICommand cmd )
     {
-             if( cmd instanceof IScript )  return 0;    // Highest precedence
-        else if( cmd instanceof IDriver )  return 1;
-        else if( cmd instanceof IDevice )  return 2;
-                                           return 3;    // Lowest precedence (IRule)
+             if( cmd instanceof ILibrary )  return 0;    // Highest precedence: functions must be available before scripts
+        else if( cmd instanceof IScript  )  return 1;
+        else if( cmd instanceof IDriver  )  return 2;
+        else if( cmd instanceof IDevice  )  return 3;
+                                            return 4;    // Lowest precedence (IRule)
     }
 
     /**
@@ -694,7 +729,7 @@ public final class Stick
         voidTh.start();
     }
 
-    private static int classMask( String s )
+    private static int classMask( String s )    // s --> Class Name (Device, Script, Rule, Library)
     {
         if( s == null )
             return 0;
@@ -754,90 +789,15 @@ public final class Stick
                     return 8;
 
                 break;
+
+            case 'l':
+                if( len == 7 && s.regionMatches( true, start, "library", 0, 7 ) )
+                    return 16;
+
+                break;
         }
 
         return 0;
-    }
-
-    private GridManager initGridManager()
-    {
-        GridManager tmp = null;
-
-        if( config.isModule( "grid" ) )
-        {
-            tmp = new GridManager( this, () -> new ServerListener() );
-
-            if( ! tmp.isValid() )
-            {
-                String msg = "Invalid \"grid\" configuration.";
-
-                if( tmp.isMute() && tmp.isDeaf() )
-                    msg = "Node is 'mute' and is 'deaf': therefore as node-grid it is useless.\n" + msg;
-
-                failed( null, msg );   // exit to OS
-            }
-        }
-        else
-        {
-            System.setProperty( "_GridManager_toString_Message_",
-                                "Grid information:\n    This ExEn does not belong to a Grid.\n" );
-        }
-
-        return tmp;
-    }
-
-    private void gridMgr_start()
-    {
-        if( isGridNode() )
-        {
-            // If this is a Grid Node (and it is valid), devices in other nodes (referenced in this Stick) have to be identified.
-            // Such devices can be only in Rule's WHEN and IF clauses.
-
-            for( ICommand cmd : all( "rules" ) )
-            {
-                IXprEval eval4When = newXprEval().build( ((IRule) cmd).getWhen(), (r) -> {}, this::getGroupMemberNames );
-
-                for( String sName : eval4When.getVars().keySet() )
-                {
-                    if( deviMgr.named( sName ) == null )          // If device manager does not have a device with this name,
-                        deviMgr.createRemoteDevice( sName );      // it is because that device exists in another ExEn.
-                }
-
-                if( ((IRule) cmd).getIf() != null )
-                {
-                    IXprEval eval4If = newXprEval().build( ((IRule) cmd).getIf(), (r) -> {}, this::getGroupMemberNames );
-
-                    for( String sName : eval4If.getVars().keySet() )
-                    {
-                        if( deviMgr.named( sName ) == null )      // If device manager does not have a device with this name,
-                            deviMgr.createRemoteDevice( sName );  // it is because that device exists in another ExEn.
-                    }
-                }
-            }
-
-            // After external devices are indentified, the grid can be started
-
-            try
-            {
-                gridMgr.start();
-                System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
-            }
-            catch( MingleException me )
-            {
-                failed( null, "One or more communications ports are already in use" );
-            }
-            catch( Exception exc )
-            {
-                failed( exc, "It looks like there is another ExEn running using same config" );
-            }
-        }
-        else
-        {
-            if( deviMgr.isEmpty() && ruleMgr.isEmpty() && srptMgr.isEmpty() )
-                failed( null, "Useless ExEn: no Devices, no Rules, no Scripts and no communications" );
-
-            runVoidThread();    // Java neededs at least one non-daemon thread to not exit (NetworkManager provides a Thread when it is not empty)
-        }
     }
 
     //----------------------------------------------------------------------------//
@@ -998,231 +958,20 @@ public final class Stick
                 driver = drvrMgr.first( drv -> drv.has( name ) );
 
                 if( driver != null )
+                {
                     driver4device.put( name, driver );
-                else
+                }
+                else if( deviMgr.named( name ) != null )    // Only an error if the device still exists (1)
+                {
                     log( ILogger.Level.SEVERE, "No driver for device '"+ name +"'\nCheck Stick log file." );
+                }
             }
 
             return driver;
-        }
-    }
 
-    //----------------------------------------------------------------------------//
-    // INNER CLASS (to be used by the Grid Manager).
-    // This is passed to the Grid Manager to process incoming messages from other
-    // tools (ExEns, Gum, etc).
-    //---------------------------------------------------------------------------//
-
-    /**
-     * Processes incoming requests (v.g. from other ExEn or external tool (an IDE)).
-     * Here are all commands (requests) that an ExEn can receive.
-     * This class is used by NetworkManager and GridManager.
-     * <pre>
-     * Note 1: NetworkManager uses all ExEnComm.Request types, GridManager does not
-     *         uses: List, Add, Remove, neither Exit. But is simpler to use only
-     *         one one class for both: NetworkManager and GridManager.
-     *
-     * Note 2: An ExEn sends only messages produced by itself, therefore an ExEn
-     *         can not resend messages received from another ExEn or tool (like
-     *         Glue or Gum).
-     *
-     * Note 3: devices in different ExEns can have same name (makes things easier
-     *         for developers).
-     * </pre>
-     */
-    private final class ServerListener implements INetServer.IListener
-    {
-        private final boolean isInfoLoggable = isLoggable( ILogger.Level.INFO );
-
-        //------------------------------------------------------------------------//
-
-        @Override
-        public void onConnected( INetServer origin, INetClient client )
-        {
-            if( isInfoLoggable )
-                log( ILogger.Level.INFO, "Server Connected client: "+ origin );
-        }
-
-        @Override
-        public void onDisconnected( INetServer origin, INetClient client )
-        {
-            if( isInfoLoggable )
-                log( ILogger.Level.INFO, "Server Disconnected client: "+ origin );
-        }
-
-        @Override
-        public void onError( INetServer origin, INetClient client, Exception exc )
-        {
-            log( ILogger.Level.SEVERE, exc );
-
-            if( client != null )
-                client.send( ExEnComm.asError( "Error in connection:"+ exc.getMessage() ).toString() );
-        }
-
-        @Override
-        public void onMessage( INetServer origin, INetClient client, String message )
-        {
-            UtilSys.executor( true )
-                   .name( getClass().getSimpleName() +":onMessage:"+ message )
-                   .execute( () -> processMsg( origin, client, message ) );
-        }
-
-        //------------------------------------------------------------------------//
-
-        private void processMsg( INetServer origin, INetClient client, String message )
-        {
-            if( isInfoLoggable )
-                log( ILogger.Level.INFO, "Arrived message ["+ message +"] received from ["+ origin +"] to ["+ client +']' );
-
-            try
-            {
-                ExEnComm in = ExEnComm.fromJSON( message );
-
-                switch( in.request )
-                {
-                    case List:
-                        client.send( new ExEnComm( ExEnComm.Request.Listed, all( (String[]) null ) ).toString() );
-                        break;
-
-                    case Add:      // Another ExEn or tool is informing that a device was added in a remote ExEn
-                        _add_( in );
-                        break;
-
-                    case Remove:   // Another ExEn or tool is informing that a device was removed from a remote ExEn
-                        _remove_( in );
-                        break;
-
-                    case Read:       // Another ExEn or tool is requesting to read a device's value (JSON -> { "Read": sDeviceName })
-                        if( in.getDeviceName() != null )                            // When the request is malformed, this is null
-                        {
-                            IDevice device = deviMgr.named( in.getDeviceName() );
-
-                            if( device != null )                                          // If this device belongs to this ExEn.
-                                bus().post( new MsgReadDevice( device.name(), false ) );  // Following the ExEn logic, a message is posted into the Bus, the Driver will
-                        }                                                                 // receive it and it will read current Device's value posting back a 'Readed' msg.
-                        break;
-
-                    case Readed:     // Another ExEn or tool is informing that a driver is reporting a new value
-                    case Changed:    // Another ExEn or tool is informing that a device (hosted by that ExEn) changed its state
-                    case Change:     // Another ExEn or tool is requesting to change an Actuators state that does not belong to that ExEn (it could be that Actuator belongs to this ExEn)
-                    case Execute:    // Another ExEn or tool is requesting to trigger a Rule or a Script (it could or not resides in this ExEn)
-                        _postRequest_( in, client );
-                        break;
-
-                    case Error:
-                    case ErrorAdding:
-                    case ErrorDeleting:
-                        _error_( in, client );
-                        break;
-
-                    case Exit:
-                        exit( 0 );
-                        break;
-
-                    default:
-                        throw new MingleException( "Unknown request: "+ message );
-                }
-            }
-            catch( NullPointerException | IllegalArgumentException | ParseException | MingleException exc )
-            {
-                log( ILogger.Level.WARNING, exc );
-                client.send( ExEnComm.asError( "Error processing:\n"+ message +'\n'+ exc.getMessage() ).toString() );
-            }
-        }
-
-        private void _add_( ExEnComm comm )
-        {
-            List<ICommand> lst = sortByType( comm.getCommands(), false );
-
-            for( ICommand cmd : lst )
-                Stick.this.add( cmd );
-        }
-
-        private void _remove_( ExEnComm comm )
-        {
-            List<ICommand> lst = sortByType( comm.getCommands(), true );
-
-            for( ICommand cmd : lst )
-                Stick.this.remove( cmd );
-        }
-
-        private void _postRequest_( ExEnComm comm, INetClient origin )
-        {
-            ExEnComm.Request    request = comm.request;
-            Pair<String,Object> pair    = comm.getChange();
-
-            if( pair == null )
-            {
-                origin.send( ExEnComm.asError( "Invalid payload for request: "+ request ).toString() );
-                return;
-            }
-
-            String name  = pair.getKey();
-            Object value = pair.getValue();
-
-            switch( request )
-            {
-                case Readed:    // Another ExEn is reporting a new value for a device (it could be that a RULE in this ExEn uses this device).
-                    // This message will be used only if the device exists in this ExEn: so it could produce (delta) a change in
-                    // the device, otherwise this message is useless.
-                    // This is not needed --> sDevice = sDevice.trim().toLowerCase(); (transpiler does it).
-
-                    if( deviMgr.named( name ) != null )
-                        bus().post( new MsgDeviceReaded( name, value, false ) );
-
-                    break;
-
-                case Changed:   // A device hosted in another ExEn changed (it could be that a RULE in this ExEn uses this device).
-                    // This always returns null --> deviMgr.named( sDevice ) because the device is hosted in another ExEn.
-                    // We could ask the rules if any rule uses the device and if none, do not send the message to the bus,
-                    // but it is faster and simpler to directly send the message to the bus: if no rule uses it, it will not be used.
-                    // This is not needed --> sDevice = sDevice.trim().toLowerCase();  (transpiler does it).
-
-                    IDevice device = deviMgr.named( name );
-
-                    if( device != null )
-                        bus().post( new MsgDeviceChanged( name, value, false ) );
-
-                    break;
-
-                case Change:    // Something (another ExEn or a tool) is requesting to change an Actuator's state (it could resides in this ExEn).
-                                //  (JSON -> { "Change": { sDeviceName : deviceValue })
-                    if( deviMgr.named( name ) != null )        // If null, this ExEn does not have this Actuator: no error has to be reported because another ExEn could have it.
-                        bus().post( new MsgChangeActuator( name, value, false ) );
-
-                    break;
-
-                case Execute:   // Something (another ExEn or a tool) is requesting to execute a Rule or a Script (it could or not resides in this ExEn).
-                                //  (JSON -> { "Execute": ruleName })
-                    if( ruleMgr.named( name ) != null ||    // It is null when the rule is not in this ExEn (or there was a problem creating the rule)
-                        srptMgr.named( name ) != null )     // It is null when the script is not in this ExEn (or there was a problem creating the script)
-                    {
-                        bus().post( new MsgExecute( name, false, false ) );
-                    }
-
-                    break;
-            }
-
-            // There is no need to broadcast, because if the msgs posted into the bus finally affect a
-            // device, this device's change will be reported as usual (IEventBus.Listener<MsgDeviceChanged>)
-            // (see at beining of this file how these changes are reported).
-        }
-
-        private void _error_( ExEnComm comm, INetClient origin )
-        {
-            switch( comm.request )
-            {
-                case Error:
-                    log( ILogger.Level.SEVERE, "Error at ExEn "+ origin.toString() +": "+ comm.getErrorMsg() );
-                    break;
-
-                case ErrorAdding:
-                case ErrorDeleting:
-                    String sAction = (comm.request == ExEnComm.Request.ErrorAdding) ? "add" : "delete";
-
-                    log( ILogger.Level.SEVERE, "Error at ExEn "+ origin.toString() +", can not "+ sAction +" following: "+ comm.getCommands().toString() );
-                    break;
-            }
+            // (1) When eventBus.resume() is called after each removal step, in-flight MsgReadDevice
+            //     messages for already-removed devices are flushed. The handler logs SEVERE because
+            //     the driver is gone — but the device is simply gone too.
         }
     }
 }

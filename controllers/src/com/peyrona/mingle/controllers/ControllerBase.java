@@ -8,8 +8,8 @@ import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
-import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * This is the base class for controllers written in Java language.
@@ -30,12 +30,12 @@ import java.util.Map;
 public abstract class      ControllerBase
                 implements IController
 {
-    private static Boolean              isFaked   = null;    // 'faked_drivers' flag is global, not per Controller
-    private        IRuntime             runtime   = null;
-    private        String               devName   = null;    // device name
-    private        boolean              bValid    = false;
-    private        IController.Listener listener  = null;
-    private        Map<String,Object>   mapConfig = null;
+    private static   Boolean              isFaked   = null;    // 'faked_drivers' flag is global, not per Controller
+    private          IRuntime             runtime   = null;
+    private          String               devName   = null;    // device name
+    private          boolean              bValid    = false;
+    private          IController.Listener listener  = null;
+    private volatile Map<String,Object>   mapConfig = null;
 
     //------------------------------------------------------------------------//
     // PROTECTED CONSTRUCTOR
@@ -80,10 +80,8 @@ public abstract class      ControllerBase
     @Override
     public void stop()
     {
-        if( isInvalid() )
-            return;
-
         bValid   = false;
+        runtime  = null;
         listener = null;
     }
 
@@ -304,15 +302,20 @@ public abstract class      ControllerBase
 
     private Map<String,Object> getDevConf()
     {
-        if( mapConfig == null )
+        Map<String,Object> map = this.mapConfig;
+
+        if( map == null )
         {
             synchronized( this )
             {
-                mapConfig = new HashMap<>();
+                map = this.mapConfig;
+
+                if( map == null )
+                    this.mapConfig = map = new ConcurrentHashMap<>();
             }
         }
 
-        return mapConfig;
+        return map;
     }
 
     private void sendError( ILogger.Level level, String msg, Exception exc )

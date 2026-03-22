@@ -43,7 +43,7 @@ public final class   SunFreeTTS
         setDeviceName( deviceName );
         setListener( listener );     // Must be at begining: in case an error happens, Listener is needed
 
-        Locale locale = new Locale( (String) mapConfig.getOrDefault( KEY_LOCALE, Locale.US.toString() ) );
+        Locale locale = Locale.forLanguageTag( (String) mapConfig.getOrDefault( KEY_LOCALE, Locale.US.toLanguageTag() ) );
 
         // NEXT: allow other languages and locales and make sy not static final (one instance per DEVICE is needed)
         locale = Locale.US;

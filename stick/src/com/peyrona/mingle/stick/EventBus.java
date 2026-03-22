@@ -293,10 +293,9 @@ public class EventBus implements IEventBus
             catch( Throwable exc )
             {
                 // Catch Throwable to handle Errors (e.g. NoClassDefFound) as well as Exceptions.
-                // Remove faulty listener to prevent repeated failures.
-                listeners.remove( listener );
-
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Removed faulty listener " + listener.getClass().getName() + " due to: " + exc.toString() );
+                // Do NOT remove the listener: a transient failure (e.g. AssertionError for a single
+                // null-value message) must not permanently silence a core runtime listener.
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Error in listener " + listener.getClass().getName() + ": " + exc.toString() );
             }
         } );
     }

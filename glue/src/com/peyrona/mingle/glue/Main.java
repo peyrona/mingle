@@ -16,10 +16,9 @@ import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.time.LocalDate;
+import java.util.concurrent.atomic.AtomicBoolean;
 import javax.swing.JFrame;
 import javax.swing.SwingUtilities;
-import javax.swing.UIManager;
-import javax.swing.UnsupportedLookAndFeelException;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -42,12 +41,25 @@ public class Main
      */
     public static void main( String[] as ) throws IOException
     {
+        //------------------------------------------------------------------------//
+        // By using a hook we maximize the possibilities the finalization code will be
+        // invoked: even if INTERRUPT signal (Ctrl-C) is used, the JVM will invoke this hook.
+        // Even when System.exit(...) is used, the JVM will invoke this hook.
+
+        Runtime.getRuntime()
+               .addShutdownHook( new Thread( () -> frame.close( true ) ) );
+
+        //------------------------------------------------------------------------//
+        // SETUP
+
         UtilCLI cli = new UtilCLI( as );
 
         UtilSys.setConfig( new Config().load( cli.getValue( "config", null ) )     // If defined, use this config file (instead of the default one)
                                        .setCliArgs( as ) );
 
         UtilSys.setLogger( "glue", UtilSys.getConfig() );
+
+        JTools.setLaF();
 
         //------------------------------------------------------------------------//
         // START GUI
@@ -58,9 +70,6 @@ public class Main
 
             SwingUtilities.invokeLater(() ->
                 {
-                    try { UIManager.setLookAndFeel( UIManager.getSystemLookAndFeelClassName() ); }
-                    catch( ClassNotFoundException | IllegalAccessException | InstantiationException | UnsupportedLookAndFeelException ex )  { UtilSys.getLogger().log( ILogger.Level.WARNING, ex ); }
-
                     frame.showIt();
 
                     System.out.println( "Glue started." );
@@ -75,10 +84,19 @@ public class Main
                                "By default, configuration is read from: {*home*}config.json\n"+
                                "It can be changed at command line by passing: -config=<URI>" );
 
+
                     if( shouldCheckForUpdates() )
                     {
-                        Updater.updateIfNeeded( UtilSys.isDevEnv,
-                                                () -> { return JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ); } );
+                        new javax.swing.SwingWorker<Void, Void>()
+                        {
+                            @Override
+                            protected Void doInBackground()
+                            {
+                                Updater.updateIfNeeded( UtilSys.isDevEnv,
+                                                        () -> JTools.confirm( "There is a new MSP version available.\nDo you want to update now?" ) );
+                                return null;
+                            }
+                        }.execute();
                     }
                 } );
         }
@@ -90,7 +108,7 @@ public class Main
 
     public static void exit()
     {
-        frame.close();
+        frame.close( false );
     }
 
     //------------------------------------------------------------------------//
@@ -120,6 +138,7 @@ public class Main
     {
         private AllExEnsTabPane tabExEn;
         private ToolbarPanel    toolBar;
+        private AtomicBoolean   isExiting = new AtomicBoolean( false );
 
         //------------------------------------------------------------------------//
 
@@ -152,7 +171,7 @@ public class Main
                 @Override
                 public void windowClosing( WindowEvent we )
                 {
-                    close();
+                    close( false );
                 }
             } );
 
@@ -169,28 +188,52 @@ public class Main
             setVisible( true );
         }
 
-        private void close()
+        private void close( boolean bForce )
         {
+            if( isExiting.getAndSet( true ) )
+                return;
+
             try
             {
                 if( Updater.isWorking() )
                 {
-                    JTools.alert( "Glue cannot be closed because MSP is being updated\n"+
-                                  "and could end in a state that would make the whole MSP unusable.\n"+
-                                  "Wait for acouple of minutes and try again." );
-                    return;
+                    if( bForce )
+                    {
+                        Updater.abort();
+                    }
+                    else
+                    {
+                        JTools.alert( "Glue cannot be closed because MSP is being updated\n"+
+                                      "and could end in a state that would make the whole MSP unusable.\n"+
+                                      "Wait for a couple of minutes and try again." );
+                        isExiting.set( false );
+                        return;
+                    }
                 }
 
-                SwingUtilities.invokeLater( () -> JTools.showWaitFrame( "Exiting..." ) );
-
-                if( ! toolBar.close() )    // This allows user to close ExEn and Gum the user started.
+                if( bForce )
                 {
-                    SwingUtilities.invokeLater( () -> JTools.hideWaitFrame() );
-                    return;
+                    toolBar.close( true );    // Will forcebly close the ExEn and Gum that the user started.
+                }
+                else
+                {
+                    if( ! toolBar.isUserFeedbackNeeded() )
+                        SwingUtilities.invokeLater( () -> JTools.showWaitFrame( "Exiting..." ) );
+
+                    if( ! toolBar.close( false ) )    // false -> allows user to close ExEn and Gum the user started.
+                    {
+                        SwingUtilities.invokeLater( () -> JTools.hideWaitFrame() );
+                        isExiting.set( false );
+                        return;
+                    }
+
+                    if( toolBar.isUserFeedbackNeeded() )
+                        SwingUtilities.invokeLater( () -> JTools.showWaitFrame( "Exiting..." ) );
+
+                    tabExEn.close();    // This is invoked only when not force. When force, the close will not be clean (graceful), but neither will harm.
                 }
 
-                tabExEn.close();
-
+                // Delete JSON temporal files created by transpilation and execution processes
                 URI uri = UtilIO.expandPath( "{*home.tmp*}" ).get( 0 );
                 UtilIO.delete( new File( uri ), (f) -> UtilIO.hasExtension( f, "json" ), false );
 

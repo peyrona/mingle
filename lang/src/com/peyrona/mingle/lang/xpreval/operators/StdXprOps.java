@@ -512,7 +512,7 @@ public final class StdXprOps
             else
             {
                 for( int n = 0; n < args.length; n++ )
-                    newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (sse this class doc)
+                    newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (see this class doc)
             }
         }
         catch( MingleException me )

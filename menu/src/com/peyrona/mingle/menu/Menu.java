@@ -29,7 +29,8 @@ import java.util.List;
 final class Menu
 {
     private final Orchestrator orchestrator = new Orchestrator();
-    private       boolean      running     = true;
+    private final String       host         = getHostName();
+    private       boolean      running      = true;
 
     //------------------------------------------------------------------------//
 
@@ -850,27 +851,9 @@ final class Menu
 
     private void showMainMenu()
     {
-        String sHost;
-
-        try
-        {
-            sHost = InetAddress.getLocalHost().getHostName();
-        }
-        catch( IOException ioe )
-        {
-            try
-            {
-                sHost = InetAddress.getLocalHost().getHostAddress();
-            }
-            catch( UnknownHostException ex )
-            {
-                sHost = "unknown";
-            }
-        }
-
-        sHost = "::: Mingle Menu ("+  sHost +"):::";
-        sHost = (sHost.length() > 22) ? sHost.substring( 0, 21 ) : sHost;
-        sHost = UtilStr.leftPad( sHost, ' ', 48 - (sHost.length() / 2) );
+        String sHost = "Mingle @"+  host;
+               sHost = (sHost.length() > 46) ? sHost.substring( 0, 46 ) : sHost;
+               sHost = UtilStr.leftPad( sHost, ' ', (48 + sHost.length()) / 2 );
 
         UtilUI.clearScreen();
         System.out.println( "================================================" );
@@ -951,5 +934,28 @@ final class Menu
         }
 
         return bSuccess;
+    }
+
+    private static String getHostName()
+    {
+        String sHost;
+
+        try
+        {
+            sHost = InetAddress.getLocalHost().getHostName();
+        }
+        catch( IOException ioe )
+        {
+            try
+            {
+                sHost = InetAddress.getLocalHost().getHostAddress();
+            }
+            catch( UnknownHostException ex )
+            {
+                sHost = "unknown-host";
+            }
+        }
+
+        return sHost;
     }
 }

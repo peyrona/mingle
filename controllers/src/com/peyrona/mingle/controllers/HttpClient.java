@@ -7,6 +7,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.xpreval.functions.ExtraTypeCollection;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.net.URI;
 import java.net.http.HttpRequest;
@@ -26,9 +27,10 @@ import java.util.concurrent.ScheduledFuture;
  * <table border="1">
  * <tr><th>Parameter</th><th>Required</th><th>Default</th><th>Description</th></tr>
  * <tr><td>uri</td><td>Yes</td><td>-</td><td>Target URL (e.g., "https://api.example.com/data")</td></tr>
- * <tr><td>interval</td><td>No</td><td>0</td><td>Polling interval in seconds. 0 = no polling (read once). Min: 1s if &gt; 0</td></tr>
+ * <tr><td>interval</td><td>No</td><td>0</td><td>Polling interval in seconds. 0 = no polling (read once on start). Min: 1s if &gt; 0</td></tr>
  * <tr><td>timeout</td><td>No</td><td>30</td><td>Request timeout in seconds (1-300)</td></tr>
  * <tr><td>headers</td><td>No</td><td>-</td><td>Custom headers as "name:value;name2:value2" string</td></tr>
+ * <tr><td>read_on_start</td><td>No</td><td>true</td><td>Whether to perform an initial GET when the device starts. Set to false for write-only endpoints (e.g., POST-only APIs)</td></tr>
  * </table>
  *
  * <h3>Usage Examples:</h3>
@@ -94,15 +96,15 @@ import java.util.concurrent.ScheduledFuture;
 public final class HttpClient extends ControllerBase
 {
     // Configuration keys
-    private static final String KEY_URI     = "uri";
-    private static final String KEY_TIME    = "interval";
-    private static final String KEY_TIMEOUT = "timeout";
-    private static final String KEY_HEADERS = "headers";
+    private static final String KEY_URI           = "uri";
+    private static final String KEY_INTERVAL      = "interval";
+    private static final String KEY_TIMEOUT       = "timeout";        // 1_000 >= x <= 300_000  millis
+    private static final String KEY_HEADERS       = "headers";
+    private static final String KEY_READ_ON_START = "read_on_start";  // boolean, default true
 
     // Default values
     private static final int DEFAULT_TIMEOUT_SECS = 30;
     private static final int MIN_TIMEOUT_SECS     = 1;
-    private static final int MAX_TIMEOUT_SECS     = 300;
     private static final int MIN_INTERVAL_SECS    = 1;
 
     // Shared HTTP client (thread-safe, reusable)
@@ -115,7 +117,8 @@ public final class HttpClient extends ControllerBase
     private final Object lock = new Object();
     private ScheduledFuture<?> pollingTimer = null;
     private Duration requestTimeout = Duration.ofSeconds( DEFAULT_TIMEOUT_SECS );
-    private String[] customHeaders = null;
+    private String[] customHeaders  = null;
+    private boolean  readOnStart    = true;
 
     //------------------------------------------------------------------------//
     // IController IMPLEMENTATION
@@ -128,41 +131,32 @@ public final class HttpClient extends ControllerBase
         setListener( listener );     // Must be at beginning: in case an error happens, Listener is needed
         setDeviceConfig( deviceConf );   // Store raw config first, validated values will be stored at the end
 
-        // Parse and validate URI (required)
-        Object oUri = get( KEY_URI );
-
-        if( oUri == null || UtilStr.isEmpty( oUri.toString() ) )
-        {
-            sendIsInvalid( "URI is required (e.g., 'https://api.example.com/data')" );
-            return;
-        }
-
-        URI uri;
+        URI uri;   // Will always exist beacuse it is marked as REQUIRED by DRIVER command
         try
         {
-            uri = new URI( oUri.toString().trim() );
+            uri = new URI( get( KEY_URI ).toString().trim() );
 
             // Validate scheme
             String scheme = uri.getScheme();
             if( scheme == null || (!scheme.equalsIgnoreCase( "http" ) && !scheme.equalsIgnoreCase( "https" )) )
             {
-                sendIsInvalid( "URI must use http:// or https:// scheme: " + oUri );
+                sendIsInvalid( "URI must use http:// or https:// scheme: " + uri );
                 return;
             }
         }
         catch( Exception ex )
         {
-            sendIsInvalid( "Invalid URI format: " + oUri + " (" + ex.getMessage() + ")" );
+            sendIsInvalid( "Invalid URI format: " + get( KEY_URI ) + " (" + ex.getMessage() + ")" );
             return;
         }
 
         // Parse interval (optional, default 0 = no polling)
-        int nInterval = 0;
-        Object oInterval = get( KEY_TIME );
+        int    nInterval = 0;
+        Object oInterval = get( KEY_INTERVAL );
 
         if( oInterval != null )
         {
-            nInterval = ((Number) oInterval).intValue();
+            nInterval = (int) (((Number) oInterval).longValue() / 1000);
 
             if( nInterval < 0 )
             {
@@ -170,47 +164,37 @@ public final class HttpClient extends ControllerBase
             }
             else if( nInterval > 0 && nInterval < MIN_INTERVAL_SECS )
             {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Interval " + nInterval + "s is too low. Adjusted to minimum: " + MIN_INTERVAL_SECS + "s" );
+                sendGenericError( ILogger.Level.WARNING, "Interval " + nInterval + "s is too low. Adjusted to minimum: " + MIN_INTERVAL_SECS + "s" );
                 nInterval = MIN_INTERVAL_SECS;
             }
         }
 
         // Parse timeout (optional, default 30s)
-        int nTimeout = DEFAULT_TIMEOUT_SECS;
+        int    nTimeout = DEFAULT_TIMEOUT_SECS;
         Object oTimeout = get( KEY_TIMEOUT );
 
         if( oTimeout != null )
         {
-            nTimeout = ((Number) oTimeout).intValue();
+            nTimeout = (int) (((Number) oTimeout).longValue() / 1000);
 
             if( nTimeout < MIN_TIMEOUT_SECS )
             {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Timeout " + nTimeout + "s is too low. Adjusted to minimum: " + MIN_TIMEOUT_SECS + "s" );
+                sendGenericError( ILogger.Level.WARNING, "Timeout " + nTimeout + "s is too low. Adjusted to minimum: " + MIN_TIMEOUT_SECS + "s" );
                 nTimeout = MIN_TIMEOUT_SECS;
-            }
-            else if( nTimeout > MAX_TIMEOUT_SECS )
-            {
-                sendGenericError( ILogger.Level.WARNING,
-                    "Timeout " + nTimeout + "s is too high. Adjusted to maximum: " + MAX_TIMEOUT_SECS + "s" );
-                nTimeout = MAX_TIMEOUT_SECS;
             }
         }
 
         requestTimeout = Duration.ofSeconds( nTimeout );
 
         // Parse custom headers (optional)
-        Object oHeaders = get( KEY_HEADERS );
+        customHeaders = parseHeaders( get( KEY_HEADERS ) );
 
-        if( oHeaders != null && !UtilStr.isEmpty( oHeaders.toString() ) )
-        {
-            customHeaders = parseHeaders( oHeaders.toString() );
-        }
+        // Parse read_on_start (optional, default true)
+        readOnStart = Boolean.parseBoolean( get( KEY_READ_ON_START, true ).toString() );
 
         // Store validated configuration (overwrites raw values with validated ones)
         set( KEY_URI, uri );
-        set( KEY_TIME, nInterval * 1000 );     // Store in milliseconds
+        set( KEY_INTERVAL, nInterval * 1000 );     // Store in milliseconds
         set( KEY_TIMEOUT, nTimeout );
 
         setValid( true );
@@ -224,7 +208,7 @@ public final class HttpClient extends ControllerBase
 
         synchronized( lock )
         {
-            int intervalMs = (int) get( KEY_TIME );
+            int intervalMs = (int) get( KEY_INTERVAL );
 
             if( intervalMs >= 1000 )
             {
@@ -237,9 +221,9 @@ public final class HttpClient extends ControllerBase
 
                 sendGenericError( ILogger.Level.INFO, "HTTP polling started: " + get( KEY_URI ) + " every " + (intervalMs / 1000) + "s" );
             }
-            else
+            else if( readOnStart )
             {
-                // Single read on start
+                // Single read on start (skipped when read_on_start=false, e.g. POST-only endpoints)
                 read();
             }
         }
@@ -268,13 +252,16 @@ public final class HttpClient extends ControllerBase
         if( isFaked() || isInvalid() )
             return;
 
+        if( ! readOnStart && pollingTimer == null )
+            return;
+
         try
         {
             HttpRequest.Builder builder = HttpRequest.newBuilder()
                     .uri( (URI) get( KEY_URI ) )
                     .timeout( requestTimeout )
                     .GET()
-                    .header( "Accept", "application/json, text/plain, */*" )
+                    .header( "Accept"    , "application/json, text/plain, */*" )
                     .header( "User-Agent", "Mingle-HttpClient/1.0" );
 
             // Add custom headers
@@ -306,10 +293,9 @@ public final class HttpClient extends ControllerBase
         }
 
         // Value must be a pair containing at least "method"
-        if( !(newValue instanceof pair) )
+        if( ! (newValue instanceof pair) )
         {
-            sendWriteError( newValue, new MingleException(
-                "Value must be a pair with 'method' key. Example: pair():put(\"method\", \"POST\"):put(\"body\", \"data\")" ) );
+            sendWriteError( newValue, new MingleException( "Value must be a pair with 'method' key. Example: pair():put(\"method\", \"POST\"):put(\"body\", \"data\")" ) );
             return;
         }
 
@@ -328,16 +314,22 @@ public final class HttpClient extends ControllerBase
      */
     private void executeWrite( pair data )
     {
-        String rawMethod = (String) data.get( "method" );
-        String body      = (String) data.get( "body" );
+        Object rawMethod = data.get( "method" );
+        Object oBody     = data.get( "body"   );
 
-        if( UtilStr.isEmpty( rawMethod ) )
+        if( UtilStr.isEmpty( rawMethod ) )    // get(...) returns "" when key is not found
         {
-            sendWriteError( data, new MingleException( "Missing 'method' key in pair" ) );
+            sendWriteError( data, new MingleException( "Missing 'method' key in received 'pair'" ) );
             return;
         }
 
-        final String method = rawMethod.trim().toUpperCase();
+        if( ! (rawMethod instanceof String) )
+        {
+            sendWriteError( data, new MingleException( "Missing 'method' value is not a string but: "+ rawMethod ) );
+            return;
+        }
+
+        final String method = rawMethod.toString().trim().toUpperCase();
 
         try
         {
@@ -346,10 +338,14 @@ public final class HttpClient extends ControllerBase
                                                      .timeout( requestTimeout )
                                                      .header( "User-Agent", "Mingle-HttpClient/1.0" );
 
-            // Add custom headers
+            String body;
+
+                 if( oBody == null )                         body = "";
+            else if( oBody instanceof ExtraTypeCollection )  body = ((ExtraTypeCollection) oBody).toJson();   // list/pair → JSON
+            else                                             body = oBody.toString();                         // String, Number, Boolean, Date, Time
+
             addCustomHeaders( builder );
 
-            // Build request based on method
             switch( method )
             {
                 case "POST":
@@ -413,9 +409,7 @@ public final class HttpClient extends ControllerBase
 
         // For HEAD/OPTIONS or empty responses, return status info
         if( body == null || body.isEmpty() )
-        {
             return "status=" + response.statusCode();
-        }
 
         return body;
     }
@@ -431,15 +425,10 @@ public final class HttpClient extends ControllerBase
         String message = ex.getMessage();
 
         if( message == null || message.isEmpty() )
-        {
             message = ex.getClass().getSimpleName();
-        }
 
-        // Unwrap CompletionException if needed
-        if( ex.getCause() != null )
-        {
+        if( ex.getCause() != null )               // Unwrap CompletionException if needed
             message = ex.getCause().getMessage();
-        }
 
         sendGenericError( ILogger.Level.SEVERE, "HTTP " + method + " failed: " + message );
     }
@@ -452,14 +441,19 @@ public final class HttpClient extends ControllerBase
      * @param headerStr Header configuration string
      * @return Array of header strings for HttpRequest.headers()
      */
-    private String[] parseHeaders( String headerStr )
+    private String[] parseHeaders( Object header )
     {
-        if( UtilStr.isEmpty( headerStr ) )
+        if( header == null )
             return null;
 
-        String[] pairs = headerStr.split( ";" );
+        String headerStr = header.toString();
+
+        if( headerStr.isBlank() )
+            return null;
+
+        String[] pairs  = headerStr.split( ";" );
         String[] result = new String[pairs.length * 2];
-        int idx = 0;
+        int      idx    = 0;
 
         for( String pair : pairs )
         {
@@ -492,9 +486,9 @@ public final class HttpClient extends ControllerBase
     {
         if( customHeaders != null )
         {
-            for( int i = 0; i < customHeaders.length - 1; i += 2 )
+            for( int n = 0; n < customHeaders.length - 1; n += 2 )
             {
-                builder.header( customHeaders[i], customHeaders[i + 1] );
+                builder.header( customHeaders[n], customHeaders[n + 1] );
             }
         }
     }

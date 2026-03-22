@@ -53,20 +53,30 @@ var p_app =
     {
         if( xhr.status === 401 )  // 401 --> Unauthorized: session expired
         {
+            let msg;
+
             try
             {
                 let response = JSON.parse( xhr.responseText );
 
                 if( response.redirectTo )
+                {
                     window.location.href = response.redirectTo;
+                    return;
+                }
+
+                // JSON 401 without a redirect: show whatever the server reported
+                msg = "<br>Server response: " + (response.error || "Unauthorized") +
+                      "<br>Status: 401 - " + xhr.statusText;
             }
             catch( _ )
             {
-                // Response is plain text (e.g. a server-side error message), display it normally
-                let msg = "<br>Server response: " + (xhr.responseText || "Unauthorized") +
-                          "<br>Status: 401 - " + xhr.statusText;
-                this.alert( msg, String( title ), fnOnClosed );
+                // Response is plain text (e.g. "Missing authentication parameters")
+                msg = "<br>Server response: " + (xhr.responseText || "Unauthorized") +
+                      "<br>Status: 401 - " + xhr.statusText;
             }
+
+            this.alert( msg, String( title ), fnOnClosed );
         }
         else
         {

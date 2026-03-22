@@ -9,7 +9,6 @@ import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.lexer.Lexeme;
-import com.peyrona.mingle.lang.lexer.Lexer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -133,12 +132,7 @@ public final class ParseDevice extends ParseBase
             Pair<String,Lexeme> pair = parseLine( sClause, lstOneOpt );
 
                 if( pair != null )
-                {
-                    if( map2Ret.containsKey( pair.getKey() ) )
-                        addError( "Duplicated name in \""+ sClause +"\" clause: \""+ lstOneOpt.get(0).text() +'"', lstOneOpt.get(0) );
-                    else
-                        map2Ret.put( pair.getKey(), pair.getValue() );
-                }
+                    putNoDuplicate( map2Ret, pair, sClause, lstOneOpt.get(0) );
         }
 
         return map2Ret;
@@ -181,32 +175,8 @@ public final class ParseDevice extends ParseBase
         // 3rd token can be the last one or the first of a list that should be a transpiler-time resolvable expression (e.g.: (-15 * (5 + 2) < 0).
         // The Expressions Evaluator can evaluate both: a single Lexeme literal or a list of lexemes representing an expression.
 
-        List<Lexeme> lstLex  = line.subList( 2, line.size() );
-        String       sExpr   = Lexer.toCode( lstLex );
+        List<Lexeme> lstLex = line.subList( 2, line.size() );
 
-        xprEval.build( sExpr );
-
-        if( ! xprEval.getErrors().isEmpty() )
-            addErrors( UnecTools.updateErrorLine( lstLex.get(0).line(), xprEval.getErrors() ) );
-
-        if( getErrors().isEmpty() )
-        {
-            if( ! xprEval.getVars().isEmpty() )
-                addError( '"'+ Lexer.toCode( lstLex ) +"\" expression with variables not allowed here.", line.get(2) );
-
-            try
-            {
-                Object oResult = xprEval.eval();
-
-                if( oResult != null )
-                    return new Pair( key, line.get(2).updateUsign( oResult ) );
-            }
-            catch( Exception exc )
-            {
-                addError( "Invalid expression:\n"+ Lexer.toCode( lstLex ) +"\nCause: "+ UtilStr.toStringBrief( exc ), line.get(2) );
-            }
-        }
-
-        return null;    // It is an invalid expression
+        return evalConfigExpr( xprEval, key, lstLex );
     }
 }

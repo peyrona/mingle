@@ -63,7 +63,7 @@ public final class MCP
     private static final String KEY_CONTEXT     = "context";     // A device name
 
     // Default values
-    private static final int    DEFAULT_TIMEOUT     = 60;
+    private static final int    DEFAULT_TIMEOUT     = 60;   // In secs
     private static final int    DEFAULT_MAX_TOKENS  = 1024;
     private static final float  DEFAULT_TEMPERATURE = 0.7f;
 
@@ -83,7 +83,7 @@ public final class MCP
             // Optional parameters with defaults
 
             Object oTimeout = get( KEY_TIMEOUT );
-            int timeout = (oTimeout != null) ? ((Number) oTimeout).intValue() : DEFAULT_TIMEOUT;
+            int timeout = (oTimeout != null) ? (int) (((Number) oTimeout).longValue() / 1000) : DEFAULT_TIMEOUT;
 
             Object oMaxTokens = get( KEY_MAX_TOKENS );
             int maxTokens = (oMaxTokens != null) ? ((Number) oMaxTokens).intValue() : DEFAULT_MAX_TOKENS;
@@ -288,7 +288,6 @@ public final class MCP
                                          .build();
 
         httpClient.sendAsync( request, HttpResponse.BodyHandlers.ofString() )
-                  .thenApply( HttpResponse::body )
                   .thenAccept( this::handleResponse )
                   .exceptionally( ex ->
                                     {
@@ -299,12 +298,34 @@ public final class MCP
 
     /**
      * Handles the response from the LLM API.
-     * Extracts the content from OpenAI-compatible response format.
+     * Checks HTTP status code first, then detects JSON-level API errors,
+     * and finally extracts the content from OpenAI-compatible response format.
      */
-    private void handleResponse( String responseBody )
+    private void handleResponse( HttpResponse<String> response )
     {
+        int    statusCode   = response.statusCode();
+        String responseBody = response.body();
+
+        if( statusCode < 200 || statusCode >= 300 )
+        {
+            sendGenericError( ILogger.Level.WARNING,
+                              "LLM API HTTP error " + statusCode + ": " + responseBody );
+            return;
+        }
+
         try
         {
+            // Check for JSON-level API error (e.g. {"error": {"code":"...", "message":"..."}})
+            JsonObject root  = Json.parse( responseBody ).asObject();
+            JsonValue  error = root.get( "error" );
+
+            if( error != null )
+            {
+                sendGenericError( ILogger.Level.WARNING,
+                                  "LLM API error: " + error + "\nRaw: " + responseBody );
+                return;
+            }
+
             // Parse response - looking for content in OpenAI format:
             // {"choices":[{"message":{"content":"..."}}]}
             String content = extractContent( responseBody );
@@ -319,13 +340,6 @@ public final class MCP
         {
             sendGenericError( ILogger.Level.WARNING,
                               "Error parsing LLM response: " + exc.getMessage() + "\nRaw: " + responseBody );
-
-            // Still send the raw response
-            pair result = new pair();
-                 result.put( "raw", responseBody );
-                 result.put( "error", exc.getMessage() );
-
-            sendChanged( result );
         }
     }
 

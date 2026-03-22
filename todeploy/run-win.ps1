@@ -5,8 +5,10 @@
 
 .DESCRIPTION
     This script:
-    1. Checks for Java, downloads it if not present
-    2. Runs the 'menu' application JAR.
+      1. Checks if Mingle is needed to be installed
+      2. Checks if is running on a RPi, if so, invokes another script to install WiringPi lib.
+      3. Checks for Java, downloads it if not present
+      4. Runs the 'menu' application JAR
 
 .NOTES
     Run with: powershell -ExecutionPolicy Bypass -File run-win.ps1
@@ -126,7 +128,7 @@ function Find-Java {
 }
 
 function Install-Java {
-    Write-Log -Level "INFO" -Message "Attempting to download and install Adoptium JDK 11..."
+    Write-Log -Level "INFO" -Message "Attempting to download and install Adoptium JDK 17..."
 
     # --- Detect Architecture ---
     $arch = $env:PROCESSOR_ARCHITECTURE
@@ -137,17 +139,17 @@ function Install-Java {
         "AMD64" {
             Write-Log -Level "INFO" -Message "Detected AMD64 (x64) architecture."
             $jdkArch = "x64"
-            $targetDir = "jdk.11.win.x64"
+            $targetDir = "jdk.17.win.x64"
         }
         "x86" {
             Write-Log -Level "INFO" -Message "Detected x86 (32-bit) architecture."
             $jdkArch = "x86"
-            $targetDir = "jdk.11.win.x86"
+            $targetDir = "jdk.17.win.x86"
         }
         "ARM64" {
             Write-Log -Level "INFO" -Message "Detected ARM64 architecture."
             $jdkArch = "aarch64"
-            $targetDir = "jdk.11.win.aarch64"
+            $targetDir = "jdk.17.win.aarch64"
         }
         default {
             Exit-WithError -Message "Unsupported architecture for automatic download: $arch"
@@ -155,8 +157,8 @@ function Install-Java {
     }
 
     # --- Variables ---
-    $jdkUrl = "https://api.adoptium.net/v3/binary/latest/11/ga/windows/$jdkArch/jdk/hotspot/normal/eclipse"
-    $downloadFile = "jdk-11-win.zip"
+    $jdkUrl = "https://api.adoptium.net/v3/binary/latest/17/ga/windows/$jdkArch/jdk/hotspot/normal/eclipse"
+    $downloadFile = "jdk-17-win.zip"
 
     # --- 1. Download JDK ---
     Write-Log -Level "INFO" -Message "Downloading from $jdkUrl..."
@@ -221,7 +223,134 @@ function Install-Java {
     Write-Log -Level "INFO" -Message "Cleaning up $downloadFile..."
     Remove-Item -Path $downloadFile -Force
 
-    Write-Log -Level "INFO" -Message "JDK 11 is ready in .\$targetDir"
+    Write-Log -Level "INFO" -Message "JDK 17 is ready in .\$targetDir"
+}
+
+# ---------------------------------------------------------------------------------------------
+# Bootstrap: Download and Install
+# Called when the script is piped from a one-liner (app files not yet present).
+# Existing files are never replaced.
+# ---------------------------------------------------------------------------------------------
+
+function Expand-ZipNoOverwrite {
+    <#
+    .SYNOPSIS
+        Extracts a ZIP archive, skipping files that already exist at the destination.
+    #>
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$ZipPath,
+
+        [Parameter(Mandatory = $true)]
+        [string]$DestPath
+    )
+
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    $zip = [System.IO.Compression.ZipFile]::OpenRead($ZipPath)
+
+    try {
+        foreach ($entry in $zip.Entries) {
+            # Directory entries have names ending with '/'
+            if ($entry.FullName.EndsWith('/') -or $entry.FullName.EndsWith('\')) {
+                $dirPath = Join-Path $DestPath $entry.FullName
+                New-Item -ItemType Directory -Path $dirPath -Force | Out-Null
+                continue
+            }
+
+            $destFile = Join-Path $DestPath $entry.FullName
+
+            # Skip if file already exists (no-overwrite behavior)
+            if (Test-Path -Path $destFile -PathType Leaf) {
+                continue
+            }
+
+            # Ensure parent directory exists
+            $destDir = Split-Path $destFile -Parent
+            if (-not (Test-Path -Path $destDir)) {
+                New-Item -ItemType Directory -Path $destDir -Force | Out-Null
+            }
+
+            [System.IO.Compression.ZipFileExtensions]::ExtractToFile($entry, $destFile)
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
+}
+
+function Bootstrap-App {
+    param(
+        [string[]]$Arguments
+    )
+
+    $currentDir = (Get-Location).Path
+
+    # If lib\menu.jar already exists here, no download needed
+    $existingJar = Join-Path $currentDir "lib\menu.jar"
+    if (Test-Path -Path $existingJar -PathType Leaf) {
+        Write-Log -Level "INFO" -Message "Mingle already present in current directory."
+        $scriptPath = Join-Path $currentDir "run-win.ps1"
+        & powershell -ExecutionPolicy Bypass -File $scriptPath @Arguments
+        exit $LASTEXITCODE
+    }
+
+    $currentDirName = Split-Path $currentDir -Leaf
+
+    if ($currentDirName -eq "mingle") {
+        $installDir = $currentDir
+        Write-Log -Level "INFO" -Message "Already inside a 'mingle' directory. Installing here: '$installDir'..."
+    }
+    else {
+        $installDir = Join-Path $currentDir "mingle"
+        Write-Log -Level "INFO" -Message "Bootstrapping Mingle into '$installDir'..."
+    }
+
+    # Create install directory if needed
+    if (-not (Test-Path -Path $installDir -PathType Container)) {
+        New-Item -Path $installDir -ItemType Directory -Force | Out-Null
+    }
+
+    # Fetch latest release ZIP URL from GitHub API
+    Write-Log -Level "INFO" -Message "Fetching latest release info from GitHub..."
+
+    [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+
+    try {
+        $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/peyrona/mingle/releases/latest" -UseBasicParsing
+        $zipAsset    = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
+        $zipUrl      = $zipAsset.browser_download_url
+    }
+    catch {
+        Exit-WithError -Message "Failed to fetch release info from GitHub. Error: $_"
+    }
+
+    if ([string]::IsNullOrEmpty($zipUrl)) {
+        Exit-WithError -Message "Could not determine the latest release download URL."
+    }
+
+    # Download the ZIP
+    $zipFile = Join-Path $installDir "_download.zip"
+    Write-Log -Level "INFO" -Message "Downloading $zipUrl..."
+
+    try {
+        $ProgressPreference = 'Continue'
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
+    }
+    catch {
+        if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
+        Exit-WithError -Message "Download failed. Error: $_"
+    }
+
+    # Extract without overwriting existing files
+    Write-Log -Level "INFO" -Message "Extracting (existing files will not be replaced)..."
+    Expand-ZipNoOverwrite -ZipPath $zipFile -DestPath $installDir
+    Remove-Item $zipFile -Force
+
+    Write-Log -Level "INFO" -Message "Bootstrap complete. Starting Mingle..."
+
+    $scriptPath = Join-Path $installDir "run-win.ps1"
+    & powershell -ExecutionPolicy Bypass -File $scriptPath @Arguments
+    exit $LASTEXITCODE
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -232,6 +361,14 @@ function Main {
     param(
         [string[]]$Arguments
     )
+
+    # Bootstrap: if running from a pipe (one-liner install), download and install first.
+    # $PSScriptRoot is empty when the script is executed via iex/piped input.
+    $menuJar = if ($PSScriptRoot) { Join-Path $PSScriptRoot "lib\menu.jar" } else { "lib\menu.jar" }
+    if (-not (Test-Path -Path $menuJar -PathType Leaf)) {
+        Bootstrap-App -Arguments $Arguments
+        return
+    }
 
     Clear-Host
 

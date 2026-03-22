@@ -1,0 +1,286 @@
+<!-- Radial arc gauge -->
+
+<div id="properties-radial" style="display:none;">
+    <form onsubmit="return false;">
+        <div class="container">
+
+            <div class="box" id="grid-fields">
+                <div class="columns">
+                    <div class="column">
+                        <div class="field">
+                            <label class="label">Gadget title (optional)</label>
+                            <div class="control">
+                                <input class="input" name="card_title" type="text" placeholder="Can be empty, plain text or HTML" onchange="dlgRadial.geh.changed(this)">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <label class="label">Title location</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_location" value="north" onchange="dlgRadial.geh.changed(this)" checked>
+                                North
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="center" onchange="dlgRadial.geh.changed(this)">
+                                Middle
+                              </label>
+                              <label class="radio">
+                                <input type="radio" name="card_title_location" value="south" onchange="dlgRadial.geh.changed(this)">
+                                South
+                              </label>
+                        </div>
+                    </div>
+                    <div class="column is-narrow">
+                        <label class="label">Title alignment</label>
+                        <div class="field">
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="left" onchange="dlgRadial.geh.changed(this)">
+                                Left
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="center" onchange="dlgRadial.geh.changed(this)" checked>
+                                Center
+                            </label>
+                            <label class="radio">
+                                <input type="radio" name="card_title_align" value="right" onchange="dlgRadial.geh.changed(this)">
+                                Right
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Target ExEn</label>
+                        <div class="control is-expanded">
+                            <div class="select is-fullwidth">
+                                <select name="exen" onchange="dlgRadial.geh.changed(this)">
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Device (number, list or pair)</label>
+                        <div class="control is-expanded">
+                            <div class="select is-fullwidth">
+                                <select name="device" onchange="dlgRadial.geh.changed(this)">
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-2">
+                    <div class="field">
+                        <label class="label">Key / Index</label>
+                        <div class="control">
+                            <input class="input" type="text" name="accessor"
+                                   placeholder="" disabled
+                                   onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Min value</label>
+                        <div class="control">
+                            <input class="input" type="number" name="min" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Max value</label>
+                        <div class="control">
+                            <input class="input" type="number" name="max" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Label</label>
+                        <div class="control">
+                            <input class="input" type="text" name="label" placeholder="Optional label below value" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column is-2">
+                    <div class="field">
+                        <label class="label">Unit suffix</label>
+                        <div class="control">
+                            <input class="input" type="text" name="unit_suffix" placeholder="e.g. %, °C" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Color split: <span id="radial-midpoint-val">50</span>%</label>
+                        <div class="control">
+                            <input type="range" name="colorMidpoint" min="10" max="90" step="1"
+                                   style="width:100%; margin-top:0.4em;"
+                                   oninput="document.getElementById('radial-midpoint-val').textContent=this.value; dlgRadial.geh.changed(this);">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column is-2">
+                    <div class="field">
+                        <label class="label">Thickness</label>
+                        <div class="control">
+                            <input class="input" type="number" name="thickness" min="4" max="48" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Arc start color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="colorStart" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Arc end color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="colorEnd" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Track color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="trackColor" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Value color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="textColor" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Label color</label>
+                        <div class="control">
+                            <input class="input" type="color" name="labelColor" onchange="dlgRadial.geh.changed(this)">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="columns">
+                <div class="column">
+                    <div class="field">
+                        <label class="label">Arc Start/End color presets</label>
+                        <div class="control" style="display:flex; gap:1.4em; flex-wrap:wrap; align-items:center;">
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#ff8c00" data-end="#cc0000" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#ff8c00,#cc0000);"></span>
+                                Flame
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#00c8ff" data-end="#004dcc" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#00c8ff,#004dcc);"></span>
+                                Ocean
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#7ec850" data-end="#1a6e1a" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#7ec850,#1a6e1a);"></span>
+                                Forest
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#ffd700" data-end="#ff4500" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#ffd700,#ff4500);"></span>
+                                Gold
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#00d2b8" data-end="#9400d3" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#00d2b8,#9400d3);"></span>
+                                Aurora
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#f5c842" data-end="#a0391a" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#f5c842,#a0391a);"></span>
+                                Desert
+                            </label>
+                            <label class="radio" style="display:flex; align-items:center; gap:5px;">
+                                <input type="radio" name="color_preset" data-start="#ff3cac" data-end="#560bad" onchange="dlgRadial.applyPreset(this)">
+                                <span style="display:inline-block;width:38px;height:10px;border-radius:3px;background:linear-gradient(to right,#ff3cac,#560bad);"></span>
+                                Candy
+                            </label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </form>
+</div>
+
+<script>
+if( typeof dlgRadial === "undefined" )
+{
+var dlgRadial =
+{
+    geh : null,
+
+    setup : function( gadget, fnOnChanged, fnOnEditEnd )
+    {
+        this.geh = new GadgetEditorHelperSingleExEn( "properties-radial", gadget, fnOnChanged, fnOnEditEnd );
+
+        // Sync the slider display label with the gadget's persisted value
+        $( '#radial-midpoint-val' ).text( gadget.colorMidpoint || 50 );
+
+        let $acc = $( '#properties-radial [name="accessor"]' );
+
+        if( gadget._devValueType_ === "list" )
+        {
+            $acc.prop( 'disabled', false ).attr( 'placeholder', '1-based index' ).attr( 'type', 'number' ).attr( 'min', '1' );
+        }
+        else if( gadget._devValueType_ === "pair" )
+        {
+            $acc.prop( 'disabled', false ).attr( 'placeholder', 'Key name' ).attr( 'type', 'text' );
+        }
+        else if( gadget._devValueType_ === "scalar" )
+        {
+            $acc.prop( 'disabled', true ).attr( 'placeholder', 'N/A' ).val( '' );
+        }
+        else    // null — value type not yet detected
+        {
+            $acc.prop( 'disabled', false ).attr( 'placeholder', 'Key or index' ).attr( 'type', 'text' );
+        }
+
+        return this;
+    },
+
+    show()
+    {
+        this.geh.showDialog();
+    },
+
+    applyPreset : function( radio )
+    {
+        let start = radio.getAttribute( 'data-start' );
+        let end   = radio.getAttribute( 'data-end'   );
+        let $form = $( '#properties-radial' );
+
+        $form.find( '[name="colorStart"]' ).val( start ).trigger( 'change' );
+        $form.find( '[name="colorEnd"]'   ).val( end   ).trigger( 'change' );
+    }
+};
+}
+</script>

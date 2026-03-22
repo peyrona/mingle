@@ -5,7 +5,6 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.japi.Chronometer;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
-import java.util.Objects;
 
 /**
  *
@@ -44,12 +43,10 @@ class DeviceValue
      */
     boolean set( Object newValue )
     {
-        Objects.requireNonNull( newValue );   // Here can not use assert: it is needed to be always checked.
+        notified.reset();               // Value can be updated or not, but as physical device is working, the chronometer has to be reseted
 
-        notified.reset();                     // Value can be updated or not, but as physical device is working, the chronometer has to be reseted
-
-        if( isEnough( newValue ) )            // Most part of times delta will be null (and be null means that any value is significant (enough)).
-        {                                     // (I tried different approaches, and to accept any value as a changed when delta == null is the best)
+        if( isEnough( newValue ) )      // Most part of times delta will be null (and be null means that any value is significant (enough)).
+        {                               // (I tried different approaches, and to accept any value as a changed when delta == null is the best)
             value = newValue;
             return true;
         }
@@ -83,7 +80,13 @@ class DeviceValue
 
     boolean isEnough( Object newValue )
     {
+        if( newValue == null )     // Although null is not a valid Une value, a wrong implemented piece could send null values: so better to check.
+            return false;
+
         if( delta == null )
+            return true;
+
+        if( value == null )
             return true;
 
         if( (newValue instanceof Number) && (value instanceof Number) )
@@ -93,10 +96,12 @@ class DeviceValue
 
             return (Math.abs( fNew - fOld ) >= delta);
         }
-        else if( ! bErrSent )
+
+        if( ! bErrSent )
         {
             bErrSent = true;
-            throw new MingleException( "Can not apply Delta to a '"+ value.getClass().getSimpleName() +"'\nDelta is ignored." );
+            String valueTypeName = (value == null) ? "null" : value.getClass().getSimpleName();
+            throw new MingleException( "Can not apply Delta to a '"+ valueTypeName +"'\nDelta is ignored." );
         }
 
         return true;

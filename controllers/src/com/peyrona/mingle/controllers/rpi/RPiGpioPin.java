@@ -284,7 +284,7 @@ public final class   RPiGpioPin
             return;
 
         if( ! UtilSys.isRaspberryPi() )
-            failed( "faked-mode=false. Is this a Raspberry Pi compatible?" );
+            getRuntime().exit( 0, 1, "faked-mode=false. Is this a Raspberry Pi compatible?" );
 
         try
         {
@@ -292,7 +292,7 @@ public final class   RPiGpioPin
         }
         catch( MingleException me )
         {
-            failed( me.getMessage() +"\nBetter not to continue." );
+            getRuntime().exit( 0, 1, me );
         }
     }
 
@@ -304,15 +304,5 @@ public final class   RPiGpioPin
             return bDefault;
 
         return ! oValue.toString().equalsIgnoreCase( sValue );
-    }
-
-    private void failed( String msg )
-    {
-        System.err.println( msg );
-
-        if( UtilSys.getLogger() != null )
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, msg );
-
-        getRuntime().exit( 1 );
     }
 }

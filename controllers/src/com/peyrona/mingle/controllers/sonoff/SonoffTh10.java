@@ -34,11 +34,7 @@ import java.util.concurrent.ThreadLocalRandom;
  *   <li>{@code interval}: Polling interval in seconds (optional, default: 60, minimum: 1)</li>
  * </ul>
  * <p>
- * Read returns a pair with:
- * <ul>
- *   <li>{@code "value"}: float — temperature reading</li>
- *   <li>{@code "unit"}:  string — temperature unit ("C" or "F")</li>
- * </ul>
+ * Read returns a current value in Celsius.
  * <p>
  * This controller is read-only; {@link #write(Object)} always reports not writable.
  *
@@ -76,13 +72,13 @@ public final class SonoffTh10
                 return;
             }
 
-            long lInterval = deviceInit.containsKey( KEY_INTERVAL ) ? ((Number) deviceInit.get( KEY_INTERVAL )).longValue()
+            long nInterval = deviceInit.containsKey( KEY_INTERVAL ) ? ((Number) deviceInit.get( KEY_INTERVAL )).longValue()
                                                                     : DEFAULT_INTERVAL;
 
-            if( lInterval > Integer.MAX_VALUE )
-                sendIsInvalid( "Interval is abover max: "+ lInterval +" > "+ Integer.MAX_VALUE );
+            if( nInterval > Integer.MAX_VALUE )
+                sendIsInvalid( "Interval is above max: "+ nInterval +" > "+ Integer.MAX_VALUE );
 
-            setBetween( KEY_INTERVAL, 1, (int) lInterval, Integer.MAX_VALUE );
+            setBetween( KEY_INTERVAL, 1, (int) nInterval, Integer.MAX_VALUE );
             setValid( true );
         }
         catch( Exception exc )
@@ -295,7 +291,7 @@ public final class SonoffTh10
         if( timer != null )
             timer.cancel( false );
 
-        int base       = ((Number) get( KEY_INTERVAL )).intValue() * 1000;
+        int base       = ((Number) get( KEY_INTERVAL )).intValue();
         int multiplier = (failureCount == 0) ? 1 : Math.min( 1 << failureCount, MAX_BACKOFF );
         int interval   = base * multiplier;
 

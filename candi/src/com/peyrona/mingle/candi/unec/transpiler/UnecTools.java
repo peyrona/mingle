@@ -163,6 +163,12 @@ public final class UnecTools
         map.put("include",
                 "INCLUDE \"<URI> [*|**]\" [USE <name> [, ...] AS <literal> [, ...]]");
 
+        map.put("libray",
+                "LIBRARY <name>\n" +
+                "\t LANGUAGE { jvm | js | python | ...}\n" +
+                "\t FROM “<URI>” [; ...]\n" +
+                "\t[CONFIG name = {<literal> | <expression>}  [; ...]]");
+
         map.put("rule",
                 "[RULE <name>]\n" +
                 "WHEN <device-name> | [ANY | ALL] | <group>} <RelationalOp> <expression>\n" +

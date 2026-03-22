@@ -9,6 +9,7 @@
 #==================================================================================================================================
 
 USE LIMIT AS 20    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number LIMIT
+    TIME_ AS 10s   # The same
 
 
 DEVICE CPU
@@ -45,7 +46,7 @@ DEVICE console
 # This RULE is triggered if at least one of the 'metric' value is above 80% throughout the time of 20 seconds (all the time).
 
 WHEN ANY metric ABOVE LIMIT
-THEN console SET "One or more metrics were above {*LIMIT*}% throughout the last 20 seconds"
-IF ANY metric ABOVE LIMIT WITHIN 10s
+THEN console SET "One or more metrics were above {*LIMIT*}% throughout the last {*TIME_*}"
+IF ANY metric ABOVE LIMIT WITHIN TIME_
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

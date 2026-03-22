@@ -34,8 +34,6 @@ import javax.swing.JFrame;
  */
 public final class WndBoundsPersist
 {
-    private static final Object FILE_LOCK = new Object();
-
     //------------------------------------------------------------------------//
     // Public interface
     //------------------------------------------------------------------------//
@@ -55,17 +53,19 @@ public final class WndBoundsPersist
     }
 
     /**
-     * Handles window bounds restoration/persistence during pack().
-     * This method should be called from the window's pack() method.
+     * Applies saved window bounds if available, otherwise packs and centers the window.
+     * Should be called from setVisible(true) BEFORE super.setVisible(b) is called.
+     * When saved bounds are found, pack() is deliberately skipped — Swing's internal
+     * validate() on first paint handles the single layout pass needed.
      *
-     * @param window The window to handle bounds for
+     * @param window The window to apply bounds to
      */
-    public static void handlePack( Window window )
+    public static void applyBoundsOrPack( Window window )
     {
         String     wndKey = getWindowKey( window );
         JsonObject bounds = SettingsManager.getWindowBounds( wndKey );
 
-        if( bounds != null )   // Window exists: use saved bounds
+        if( bounds != null )
         {
             int x      = bounds.getInt( "x"     , -1 );
             int y      = bounds.getInt( "y"     , -1 );
@@ -79,7 +79,8 @@ public final class WndBoundsPersist
             }
         }
 
-        // Window doesn't exist: let default size and coordinates (do NOT save bounds)
+        // No saved bounds: pack to preferred size and center
+        window.pack();
         window.setLocationRelativeTo( Main.frame );
     }
 

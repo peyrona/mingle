@@ -21,7 +21,7 @@ SCRIPT
 	ONSTART
 	LANGUAGE Une
 	FROM {
-            console = "Wait until randomly the three doors are open (their value is 'false')"
+            console = "Wait until randomly the three doors are open (in other words, their value is 'false')"
          }
 
 

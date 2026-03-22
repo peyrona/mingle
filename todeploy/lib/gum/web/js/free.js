@@ -92,6 +92,9 @@ var free =
 
     addGadget : function( gadget )     // Used when in design mode
     {
+        if( ! this._bodySize_ )
+            this._bodySize_ = p_app.getBodySize();   // Initialise reference size for fresh (unsaved) dashboards
+
         this._aGadgets_.push( gadget );
 
         // Do not change code secuence
@@ -295,6 +298,8 @@ var free =
             free._aGadgetsSelected_ = [];
             free._gadgetFocus_ = null;
 
+            free._isChanged_ = true;
+
             if( free._aGadgets_.length > 0 )
             {
                 free._setFocused_( free._aGadgets_[0] );
@@ -304,8 +309,6 @@ var free =
                 free._showGadgetInfo_(); // this will clear the info panel
             }
         });
-
-        this._isChanged_ = true;
 
         return this;
     },
@@ -379,6 +382,9 @@ var free =
         const $gadWnd = (eventOrGadget instanceof GumGadget) ? eventOrGadget.getContainer().parent() : this._getGadgetWnd_( eventOrGadget );
         const gadget  = this._getGadget_( $gadWnd );
 
+        if( gadget === null )
+            return this;
+
         if( ! isShift )
         {
             this._aGadgetsSelected_ = [];
@@ -437,7 +443,7 @@ var free =
 
         if( isOngoing )
         {
-            let originalDraggedPos = $(ui.helper).data('originalPosition');
+            let originalDraggedPos = $gadWnd.data('originalPosition');
             let dx = ui.offset.left - originalDraggedPos.left;
             let dy = ui.offset.top - originalDraggedPos.top;
 
@@ -457,13 +463,14 @@ var free =
         }
         else // stop
         {
-             for( const g of this._aGadgetsSelected_ )
+            for( const g of this._aGadgetsSelected_ )
             {
                 const $w = g.getContainer().parent();
                 g.x = parseInt( $w.offset().left );
                 g.y = parseInt( $w.offset().top );
                 $w.removeData('originalPosition');
             }
+            this._bodySize_ = p_app.getBodySize();   // Sync reference size to current window so next resize scales correctly
             this._isChanged_ = true;
         }
 
@@ -590,8 +597,8 @@ var free =
         }
         else
         {
-            let width  = gadget.width  ? gadget.width  : gadget.getContainer().parent().width();    // Some gadtes like buttons,
-            let height = gadget.height ? gadget.height : gadget.getContainer().parent().height();   // do not have width and height defined
+            let width  = (gadget.width  != null) ? gadget.width  : gadget.getContainer().parent().width();    // Some gadgets like buttons,
+            let height = (gadget.height != null) ? gadget.height : gadget.getContainer().parent().height();   // do not have width and height defined
 
             $('#free_focused_wnd_info').text(   "x=" + parseInt( gadget.x ) +
                                               ", y=" + parseInt( gadget.y ) +
@@ -611,10 +618,10 @@ var free =
     _getGadgetWnd_ : function( evt )
     {
         if( ! gum.isInDesignMode() )
-            throw "Error: this function is only used when in design mode";
+            throw new Error( "This function is only used when in design mode" );
 
         if( evt === null || evt.currentTarget === null )
-            throw "Error: no event or currentTarget found";
+            throw new Error( "No event or currentTarget found" );
 
         let $div = $(evt.currentTarget).closest('.gum-moveable');   // The focused whole window DIV (the one containing the TitleBar and the Gadget) where another DIV is inserted to contain the gadget.
 
@@ -623,7 +630,7 @@ var free =
             $div = $(evt.target).closest('.gum-moveable');
 
             if( (! $div) || ($div.length === 0) )
-                throw "Error: no class 'gum-moveable' found";
+                throw new Error( "No class 'gum-moveable' found" );
         }
 
         return $div;
@@ -632,10 +639,10 @@ var free =
     _getGadget_ : function( $gadWnd )
     {
         if( ! gum.isInDesignMode() )
-            throw "Error: this function is only used when in design mode";
+            throw new Error( "This function is only used when in design mode" );
 
         if( (! $gadWnd) || ($gadWnd.length === 0) )
-            throw "Error: no gadget window found";
+            throw new Error( "No gadget window found" );
 
         if( p_base.isEmpty( free._aGadgets_ ) )
             return null;
@@ -646,7 +653,7 @@ var free =
                 return gadget;
         }
 
-        throw "Error: no gadget found for the given window";
+        throw new Error( "No gadget found for the given window" );
     },
 
     _updateGadgetSize_: function( $gadWnd, isOngoing = false )
@@ -656,7 +663,8 @@ var free =
 
         gadget.x      = parseInt( $gadWnd.offset().left );
         gadget.y      = parseInt( $gadWnd.offset().top );
-        gadget.z      = (p_base.isNumber( z ) ? z : 100);
+        let zParsed = parseInt( z, 10 );
+        gadget.z    = isNaN( zParsed ) ? 100 : zParsed;
         gadget.width  = parseInt( $gadWnd.width() );
         gadget.height = parseInt( $gadWnd.height() );
 
@@ -665,6 +673,7 @@ var free =
 
         if( ! isOngoing )
         {
+            this._bodySize_ = p_app.getBodySize();   // Sync reference size to current window so next resize scales correctly
             free._isChanged_ = true;
         }
 
@@ -692,6 +701,7 @@ var free =
             g.x = targetX;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -705,6 +715,7 @@ var free =
             g.x = targetX - g.width / 2;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -718,6 +729,7 @@ var free =
             g.x = targetX - g.width;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -731,6 +743,7 @@ var free =
             g.y = targetY;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -744,6 +757,7 @@ var free =
             g.y = targetY - g.height / 2;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -757,6 +771,7 @@ var free =
             g.y = targetY - g.height;
             g.getContainer().parent().offset({ left: g.x, top: g.y });
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -771,6 +786,7 @@ var free =
             g.getContainer().parent().width(g.width);
             g.show();
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -785,6 +801,7 @@ var free =
             g.getContainer().parent().height(g.height);
             g.show();
         }
+        this._bodySize_ = p_app.getBodySize();
         this._isChanged_ = true;
     },
 
@@ -796,7 +813,33 @@ var free =
 
     _onBrowserResized_ : function()
     {
-        // TODO: to be implemented
+        if( ! this._bodySize_ || p_base.isEmpty( this._aGadgets_ ) )
+            return this;
+
+        const currentSize = p_app.getBodySize();
+        const scaleX      = currentSize.width  / this._bodySize_.width;
+        const scaleY      = currentSize.height / this._bodySize_.height;
+
+        for( const gadget of this._aGadgets_ )
+        {
+            // Gadgets without explicit dimensions (e.g. buttons) have no stored width/height;
+            // skip them to avoid collapsing their DOM element to 0px.
+            if( gadget.width == null || gadget.height == null )
+                continue;
+
+            const $wnd = gum.isInDesignMode() ? gadget.getContainer().parent() : gadget.getContainer();
+
+            // Apply scaling to the DOM only — canonical gadget coordinates (x, y, width, height)
+            // and _bodySize_ are intentionally NOT modified here. Each resize always scales from
+            // the same canonical values, preventing cumulative rounding drift across multiple events.
+            $wnd.offset({ left: Math.round( gadget.x      * scaleX ),
+                          top : Math.round( gadget.y      * scaleY ) })
+                .width(          Math.round( gadget.width  * scaleX ) )
+                .height(         Math.round( gadget.height * scaleY ) );
+
+            gadget.show();
+        }
+
         return this;
     }
 };

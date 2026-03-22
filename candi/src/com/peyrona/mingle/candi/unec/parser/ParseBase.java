@@ -1,8 +1,11 @@
 
 package com.peyrona.mingle.candi.unec.parser;
 
+import com.peyrona.mingle.candi.LangBuilder;
 import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
 import com.peyrona.mingle.lang.interfaces.ICandi;
+import com.peyrona.mingle.lang.interfaces.IXprEval;
+import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilIO;
@@ -448,6 +451,111 @@ public abstract class ParseBase
                   "\", but found: \""+ Arrays.toString( list.toArray() ) +'"', tokens.get( 1 ) );
 
         return true;
+    }
+
+    /**
+     * Validates and returns the language name from the mandatory LANGUAGE clause.
+     * <p>
+     * The clause must be present, non-empty, and contain exactly one token that
+     * names a registered language artifact.
+     *
+     * @param tokens The contents of the LANGUAGE clause.
+     * @return The lower-cased language name, or null if the clause is invalid.
+     */
+    protected final String getLang( List<Lexeme> tokens, String invokerCmd  )
+    {
+        if( isClauseMissed( "LANGUAGE", tokens ) ||
+            isClauseEmpty(  "LANGUAGE", tokens ) ||
+            isNotOneToken(  "LANGUAGE", tokens ) )
+        {
+            return null;
+        }
+
+        Lexeme id = findID( "LANGUAGE" );
+
+        if( id != null )
+        {
+            String sLang = id.text().toLowerCase();
+
+            // To be precise and referring to LIBRARY, 'Java' is not appropritae for LANGUAGE clause
+            // because any language that compiles to JavaByteCode can be used.
+            // This is not teh case for SCRIPT commnad when source code is embeded, where 'Java' is
+            // the proper name.
+            // To make things simple and because this is just a sematic question, internally only
+            // 'java' is used.
+            if( "LIBRARY".equals( invokerCmd ) && "jvm".equals( sLang ) )
+                sLang = "java";
+
+            ICandi.ILanguage lang = new LangBuilder().build( sLang );
+
+            if( lang == null )
+                addError( "There is no language artifact registered for: "+ id, getClause( "LANGUAGE" ) );
+
+            return sLang;
+        }
+
+        return null;
+    }
+
+    /**
+     * Evaluates a transpile-time config expression and returns a key-value pair.
+     * <p>
+     * Builds the expression from {@code lstLex}, checks for parse and evaluation
+     * errors, and rejects expressions that contain variables (not allowed in
+     * CONFIG/INIT clauses).
+     *
+     * @param xprEval The expression evaluator.
+     * @param key     The lower-cased config key.
+     * @param lstLex  The lexemes representing the value expression.
+     * @return A {@link Pair} with the key and its evaluated {@link Lexeme}, or
+     *         null if the expression is invalid.
+     */
+    protected final Pair<String,Lexeme> evalConfigExpr( IXprEval xprEval, String key, List<Lexeme> lstLex )
+    {
+        String sExpr = Lexer.toCode( lstLex );
+
+        xprEval.build( sExpr );
+
+        if( ! xprEval.getErrors().isEmpty() )
+            addErrors( UnecTools.updateErrorLine( lstLex.get(0).line(), xprEval.getErrors() ) );
+
+        if( getErrors().isEmpty() )
+        {
+            if( ! xprEval.getVars().isEmpty() )
+                addError( '"'+ Lexer.toCode( lstLex ) +"\" expression with variables not allowed here.", lstLex.get(0) );
+
+            try
+            {
+                Object oResult = xprEval.eval();
+
+                if( oResult != null )
+                    return new Pair( key, lstLex.get(0).updateUsign( oResult ) );
+            }
+            catch( Exception exc )
+            {
+                addError( "Invalid expression:\n"+ Lexer.toCode( lstLex ) +"\nCause: "+ UtilStr.toStringBrief( exc ), lstLex.get(0) );
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Adds a key-value pair to a map, emitting a duplicate-key error if the key
+     * already exists.
+     *
+     * @param map         The target map.
+     * @param pair        The key-value pair to insert.
+     * @param clauseName  The clause name used in the error message (e.g. "CONFIG").
+     * @param errorAnchor The {@link Lexeme} to attach the error to.
+     */
+    protected final void putNoDuplicate( Map<String,Lexeme> map, Pair<String,Lexeme> pair,
+                                         String clauseName, Lexeme errorAnchor )
+    {
+        if( map.containsKey( pair.getKey() ) )
+            addError( "Duplicated name in \""+ clauseName +"\" clause: \""+ errorAnchor.text() +'"', errorAnchor );
+        else
+            map.put( pair.getKey(), pair.getValue() );
     }
 
     protected String[] expandURIs( List<Lexeme> tokens )

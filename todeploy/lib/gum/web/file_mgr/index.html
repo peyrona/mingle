@@ -15,26 +15,31 @@
     <!-- jsTree CSS -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/themes/default/style.min.css">
 
-    <!-- jQuery (required by jsTree) -->
+    <!-- jQuery UI CSS -->
+    <link href="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/themes/base/jquery-ui.css" rel="stylesheet">
+
+    <!-- jQuery (required by jsTree and jQuery UI) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js"></script>
+
+    <!-- jQuery UI -->
+    <script src="https://ajax.googleapis.com/ajax/libs/jqueryui/1.12.1/jquery-ui.min.js"></script>
 
     <!-- jsTree -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.12/jstree.min.js"></script>
 
     <style>
-
         html, body
         {
             padding: 20px;
-            background-color: #333333;
+            background-color:rgb(85, 119, 126);
         }
 
         #fileTree
         {
             margin-top: 20px;
-            border: 1px solid #dbdbdb;
+            border: 3px solid #063e41;
             border-radius: 4px;
-            background-color: #adb0b6;
+            background-color: #6ebcc5;
             padding: 15px;
             min-height: 500px;
             max-height: 70vh;
@@ -88,14 +93,13 @@
 
 <body>
 
-    <!-- Login modal ===================================================== -->
-    <div id="modalLogin" class="modal is-active">
-        <div class="modal-background"></div>
-        <div class="modal-card">
-            <header class="modal-card-head">
-                <p class="modal-card-title">File Manager</p>
-            </header>
-            <section class="modal-card-body">
+    <!-- Login dialog (hidden — opened as jQuery UI dialog) ============== -->
+    <section id="login" style="display:none;">
+        <div class="columns is-vcentered">
+            <div class="column is-narrow" style="text-align:center;">
+                <img src="/gum/images/file-tree-256x256.png" width="128" height="128" alt="File Manager">
+            </div>
+            <div class="column">
                 <div class="field">
                     <label class="label">Shared secret</label>
                     <div class="field has-addons mb-0">
@@ -118,14 +122,12 @@
                         &nbsp;Remember in this machine
                     </label>
                 </div>
-            </section>
-            <footer class="modal-card-foot" style="justify-content: flex-end;">
-                <button class="button is-success" onclick="_login_()">Login</button>
-            </footer>
+                <p id="login-error" class="help is-danger mt-2" style="display:none;"></p>
+            </div>
         </div>
-    </div>
+    </section>
 
-    <div class="container">
+    <div class="container" id="main-content" style="display:none;">
         <div class="toolbar">
             <div class="buttons">
                 <button class="button is-info"    title="Upload a file to the server"         onclick="onUploadFile()">
@@ -269,6 +271,7 @@
             }
 
             initializeTree();
+            _tryAutoAccess_();
 
         // Add keyboard support for modals (Esc to close)
             $(document).on('keydown', function(e)
@@ -286,6 +289,54 @@
                 }
             });
         });
+
+        /**
+         * Probes the API without explicit credentials.
+         * - If it succeeds (IP scope allows access, or HMAC is disabled, or stored key is valid),
+         *   the file tree loads directly with no login dialog.
+         * - If it fails (authentication required), the login dialog is shown.
+         */
+        async function _tryAutoAccess_()
+        {
+            sharedKey = loadSharedSecret();   // Use stored key (if any) for the probe
+
+            try
+            {
+                const authPayload = await authenticateRequest( 'list', {} );
+                const authParams  =
+                {
+                    action   : authPayload.action,
+                    data     : JSON.stringify( authPayload.data || {} ),
+                    timestamp: String( authPayload.timestamp )
+                };
+
+                if( authPayload.hmac )
+                    authParams.hmac = authPayload.hmac;
+
+                await fetchIt( API_FILES + '?' + new URLSearchParams( authParams ).toString(), { method: 'GET' } );
+
+                // Probe succeeded — no dialog needed, show content and load the tree immediately
+                $('#main-content').show();
+                loadFileTree();
+            }
+            catch( _ )
+            {
+                // Auth required — show login dialog
+                $('#login')
+                    .dialog( {
+                                title     : 'File Explorer',
+                                modal     : true,
+                                autoOpen  : true,
+                                resizable : false,
+                                width     : 510,
+                                height    : 290,
+                                buttons   : [ {
+                                                text : "Login",
+                                                click: function() { _login_(); }
+                                              } ]
+                                } );
+            }
+        }
 
         function initializeTree()
         {
@@ -362,6 +413,8 @@
 
         async function _login_()
         {
+            $('#login-error').hide();
+
             sharedKey = $('#txt_secret_login').val();
 
             if( $('#chk_remember').is(':checked') )
@@ -385,14 +438,16 @@
                 // fetchIt() throws on any HTTP error (401, 403, …) — if it passes, session is established
                 await fetchIt( API_FILES + '?' + new URLSearchParams( authParams ).toString(), { method: 'GET' } );
 
-                // Auth succeeded — close the modal, then load the tree (session handles subsequent calls)
-                document.getElementById( 'modalLogin' ).classList.remove( 'is-active' );
+                // Auth succeeded — close the dialog, show content, then load the tree
+                if( $('#login').dialog( 'instance' ) )
+                    $('#login').dialog( 'destroy' );
+                $('#main-content').show();
                 showNotification( 'WARN: this tool is for internal use.<br>It is unsafe for public access.', 'is-warning' );
                 loadFileTree();
             }
             catch( error )
             {
-                showNotification( 'Connection failed: ' + error.message, 'is-danger' );
+                $('#login-error').text( "Wrong shared secret. Try again." ).show();
                 localStorage.removeItem( SHARED_SECRET_KEY );
                 sharedKey = null;
                 g_hmacKey = null;

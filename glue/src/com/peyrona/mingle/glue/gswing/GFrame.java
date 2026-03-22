@@ -33,7 +33,6 @@ public class GFrame extends JFrame
     public GFrame( boolean bSaveBounds )
     {
         setAutoRequestFocus( true );
-        setIconImage( JTools.getImage( "glue.png" ) );
         setDefaultCloseOperation( JFrame.DO_NOTHING_ON_CLOSE );
         setLocationRelativeTo( Main.frame );
         setAutoRequestFocus( true );
@@ -50,21 +49,25 @@ public class GFrame extends JFrame
     public void pack()
     {
         super.pack();
-
-        WndBoundsPersist.handlePack( this );
     }
 
     @Override
     public void setVisible( boolean b )
     {
         if( b )
-            pack();
+            WndBoundsPersist.applyBoundsOrPack( this );
 
         super.setVisible( b );
         toFront();
     }
 
     //------------------------------------------------------------------------//
+
+    public GFrame setVisible()
+    {
+        setVisible( true );
+        return this;
+    }
 
     public boolean isClosed()
     {
@@ -145,14 +148,6 @@ public class GFrame extends JFrame
     public GFrame put( Component component, Object constraints )
     {
         getContent().add( component, constraints );
-        return this;
-    }
-
-    public GFrame setVisible()
-    {
-        pack();
-        setVisible( true );
-        toFront();
         return this;
     }
 }

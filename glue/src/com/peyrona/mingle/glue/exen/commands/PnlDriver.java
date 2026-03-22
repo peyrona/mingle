@@ -1,15 +1,22 @@
 
 package com.peyrona.mingle.glue.exen.commands;
 
+import com.peyrona.mingle.candi.unec.parser.ParseDriver;
+import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
+import com.peyrona.mingle.lang.japi.UtilSys;
+import com.peyrona.mingle.lang.lexer.Lexer;
 
 /**
  * Panel for configuring and managing driver commands.
  * <p>
- * This panel provides UI components to create and edit driver definitions
- * in the Mingle system. It allows users to specify driver names and
- * associated script names. Currently marked as "NOT YET IMPLEMENTED"
- * indicating this is a work in progress.
+ * This panel provides UI components to view existing driver definitions
+ * and create new ones in the Mingle system. It allows users to specify
+ * driver names and associated script names.
+ * <p>
+ * Note: DRIVER CONFIG schema (used for compile-time device validation)
+ * is not part of the runtime model and therefore cannot be displayed
+ * for existing drivers or modified at runtime.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -23,6 +30,8 @@ final class PnlDriver extends PnlCmdBase
 
         initComponents();
 
+        PnlCmdBase.setJTextIsUneName( txtName );
+
         if( driver == null )
             return;
 
@@ -35,13 +44,21 @@ final class PnlDriver extends PnlCmdBase
     @Override
     public String getSourceCode()
     {
-        return "";
+        String sName   = txtName.getText().trim();
+        String sScript = txtScript.getText().trim();
+
+        return "DRIVER " + sName +
+               (sScript.isEmpty() ? "" : "\n\tSCRIPT " + sScript);
     }
 
     @Override
     public String getTranspiled()
     {
-        return null;     // Drivers themselves can not be changed on the fly
+        String      src   = getSourceCode();
+        Lexer       lexer = new Lexer( src );
+        ParseDriver tdrv  = new ParseDriver( lexer.getLexemes(), UtilSys.getConfig().newXprEval() );
+
+        return showErrors( src, lexer, tdrv ) ? null : tdrv.serialize();
     }
 
     //------------------------------------------------------------------------//

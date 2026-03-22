@@ -5,10 +5,12 @@ import com.peyrona.mingle.candi.unec.parser.ParseBase;
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
 import com.peyrona.mingle.candi.unec.parser.ParseDriver;
 import com.peyrona.mingle.candi.unec.parser.ParseDriver.DriverConfigItem;
+import com.peyrona.mingle.candi.unec.parser.ParseLibrary;
 import com.peyrona.mingle.candi.unec.parser.ParseRule;
 import com.peyrona.mingle.candi.unec.parser.ParseRuleThen;
 import com.peyrona.mingle.candi.unec.parser.ParseRuleThen.Action;
 import com.peyrona.mingle.candi.unec.parser.ParseScript;
+import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.IConfig;
@@ -91,6 +93,14 @@ final class Checker
                 else if( cmd instanceof ParseDevice ) checkDevice( (ParseDevice) cmd, tu, tus, config.newCILBuilder() );
             }
         }
+
+        // Register library names so the expression tokenizer can recognise them as namespaces
+        // in WHEN/THEN/IF expressions (phase 1 of the two-phase library registry).
+
+        for( TransUnit tu : tus )
+            for( ParseBase cmd : tu.getCommands() )
+                if( cmd instanceof ParseLibrary && cmd.getName() != null )
+                    StdXprFns.registerLibraryName( cmd.getName().text() );
 
         // Now that all devices had been processed, we have all groups and their members:
         // now we can check RULE's expressions (WHEN, THEN and IF)
@@ -542,7 +552,8 @@ final class Checker
             {
                 for( String sVarName : xpr.getVars().keySet() )
                 {
-                    if( ! (findByName( sVarName, tus ) instanceof ParseDevice) )
+                    if( ! (findByName( sVarName, tus ) instanceof ParseDevice)  &&
+                        ! (findByName( sVarName, tus ) instanceof ParseLibrary) )
                         lst.add( sVarName );
                 }
             }

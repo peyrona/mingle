@@ -57,7 +57,7 @@ SCRIPT                                           # An example with more than one
 
             private void exit( IRuntime rt )
             {
-                System.out.println( "Task accomplished" );
+                System.out.println( "Task accomplished.\nExecution will finish soon..." );
                 rt.exit( 3000 );                                     // Ends ExEn execution in 3 seconds
             }                                                        // (used to exit abruptly, it is rarely used)
         }

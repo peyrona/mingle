@@ -1,0 +1,74 @@
+#==================================================================================================================================
+# This example shows how to use the LIBRARY command to expose a Java JAR as a collection of callable functions.
+#
+# Unlike SCRIPT (which is a single-entry-point invocation), LIBRARY exposes ALL public methods of a class
+# so they can be called directly in WHEN/THEN/CONFIG expressions using the colon operator:
+#
+#     LibraryName:functionName( args )
+#
+# For Java libraries, no CLASS clause is needed. The runtime scans the JAR and locates the class whose
+# simple name matches the LIBRARY name (case-insensitive). Library authors just name their class to match
+# the LIBRARY name — which is natural practice.
+#
+# If the library class exposes a "public static void init( java.util.Map )" method, it is called once
+# after loading, receiving the values declared in the CONFIG clause.
+#
+# IMPORTANT! THIS EXAMPLE CANNOT BE EXECUTED because 'mathutils.jar' does not exist.
+#            It illustrates the syntax and intended use.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# --- Declare the library ---
+#
+# The JAR must contain a class named 'MathUtils' (case-insensitive match).
+# The runtime finds it automatically — no CLASS clause required.
+
+LIBRARY MathUtils
+   LANGUAGE JVM
+   FROM     "file://{*home.lib*}mathutils.jar"
+   CONFIG
+      decimals = 2          # Passed to MathUtils.init(Map) after the JAR is loaded
+
+
+# --- Devices ---
+
+DEVICE temperature
+   DRIVER CellSetDriver
+        CONFIG
+            value = 22.0
+
+DEVICE safe_temp
+   DRIVER OutputDriver     # Actuator: receives the clamped temperature for display or downstream use
+
+
+# --- Rules using the library ---
+
+# MathUtils:inRange() is called in the WHEN clause — returns true if temperature is between 0 and 150.
+# MathUtils:clamp() is called in the THEN clause — ensures the value never exceeds the safe bounds.
+
+WHEN temperature > 50 AND MathUtils:inRange( temperature, 0, 150 )
+THEN safe_temp = MathUtils:clamp( temperature, 0, 150 )
+
+
+# MathUtils:round() is used to format the result to the configured number of decimals.
+
+WHEN temperature > 0
+THEN safe_temp = MathUtils:round( temperature )
+
+# -------------------------------------------------------------------
+# This code periodically updates 'temperature' device
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+WHEN clock
+THEN temperature = rand( -30 , 250 )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

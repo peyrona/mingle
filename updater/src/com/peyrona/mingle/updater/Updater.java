@@ -20,7 +20,9 @@ import java.util.function.Supplier;
  */
 public final class Updater
 {
-    private static final AtomicBoolean isWorking = new AtomicBoolean( false );
+    private static final AtomicBoolean isWorking      = new AtomicBoolean( false );
+    private static final AtomicBoolean abortRequested = new AtomicBoolean( false );
+    private static volatile Thread     workingThread  = null;
 
     //------------------------------------------------------------------------//
 
@@ -47,6 +49,24 @@ public final class Updater
         updateIfNeeded( dryRun, () -> { return true; } );
 
         System.exit( 0 );
+    }
+
+    /**
+     * Requests an abort of the currently running update process.
+     * The update will stop after the current file finishes processing.
+     * Has no effect if no update is running.
+     */
+    public static void abort()
+    {
+        if( isWorking.get() )
+        {
+            UtilSys.getLogger().log( ILogger.Level.WARNING, "Abort requested for update process" );
+            abortRequested.set( true );
+
+            Thread t = workingThread;
+            if( t != null )
+                t.interrupt();   // Wake up any Thread.sleep() in rate-limiting
+        }
     }
 
     /**
@@ -184,12 +204,16 @@ public final class Updater
      */
     public static boolean update( boolean bDryRun, File catalogFile )
     {
+        abortRequested.set( false );   // Clear any stale flag from a previous run
+
         // Set working state to true before starting the update process
         if( ! isWorking.compareAndSet( false, true ) )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Update process is already running" );
             return false;
         }
+
+        workingThread = Thread.currentThread();
 
         try
         {
@@ -202,7 +226,7 @@ public final class Updater
             System.out.println( "[INFO] Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
             System.out.println( "[INFO] Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
-            GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun );
+            GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun, abortRequested );
             updater.checkAndUpdateFiles(catalogFile);
 
             System.out.println( "[INFO] Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
@@ -216,7 +240,9 @@ public final class Updater
         }
         finally
         {
-            isWorking.set( false );   // Always set working state to false when done
+            workingThread = null;
+            abortRequested.set( false );   // Reset for next use
+            isWorking.set( false );        // Always set working state to false when done
         }
     }
 }

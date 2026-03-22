@@ -62,6 +62,13 @@ public abstract class ExtraTypeCollection<T>
      */
     public abstract Object reduce( Object expr );
 
+    /**
+     * Returns a JSON string representation of this instance's data.
+     *
+     * @return A JSON string representation.
+     */
+    public abstract String toJson();
+
     //------------------------------------------------------------------------//
 
     /**

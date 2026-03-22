@@ -30,6 +30,10 @@
 # @project: https://github.com/peyrona/mingle
 #==================================================================================================================================
 
+DEVICE timer
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 30s
 
 DEVICE console
     DRIVER OutputDriver
@@ -40,72 +44,60 @@ DEVICE console
 # This example shows the basic usage of the MCP driver with a simple question.
 #==================================================================================================================================
 
+INCLUDE "{*home*}../balata/nl_test_defs.une"  # DO NOT FORGET TO DELETE THIS LINE PRIOR TO COMMIT TO GitHub AND TO ENABLE THESE -->
+
+# USE LLM_URI     AS ""    # Replace with your provider, e.g. "https://api.openai.com/v1/chat/completions"
+#     LLM_API_KEY AS ""    # Replace with your API key
+#     LLM_MODEL   AS ""    # Replace with your model "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo", etc.
+
 DEVICE chatbot
     DRIVER MCPDriver
         CONFIG
-            uri         SET "https://api.openai.com/v1/chat/completions"
-            api_key     SET "YOUR_API_KEY_HERE"     # Replace with your actual API key
-            model       SET "gpt-4o-mini"           # Or "gpt-4", "gpt-3.5-turbo", etc.
-            max_tokens  SET 256
-            temperature SET 0.7
-            system      SET "You are a helpful assistant. Be concise in your answers."
+            uri         SET LLM_URI      # Replace with your provider, e.g. "https://api.openai.com/v1/chat/completions"
+            api_key     SET LLM_API_KEY  # Replace with your API key
+            model       SET LLM_MODEL    # Replace with your model "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo", etc.
+            max_tokens  SET 4096         # Max number of tokens that model can returns
+            temperature SET 0.7          # Creativity level: 0 = deterministic, 1 = very creative
+
+
+WHEN timer
+THEN chatbot SET "Tell me a random fun fact about science or nature in one short sentence."
 
 
 # When the chatbot receives a response, display it
 WHEN chatbot
 THEN console SET "LLM Response: " + chatbot:get( "response" )
 
-
 #==================================================================================================================================
-# EXAMPLE 2: Periodic question (every 30 seconds)
-# Asks the LLM for a random fun fact.
-#==================================================================================================================================
-
-DEVICE timer_facts
-    DRIVER ClockDriver
-        CONFIG
-            interval SET 30000    # 30 seconds
-
-WHEN timer_facts
-THEN chatbot SET "Tell me a random fun fact about science or nature in one sentence."
-
-
-#==================================================================================================================================
-# EXAMPLE 3: Using pair for advanced requests with custom system prompt
+# EXAMPLE 2: Using pair for advanced requests with custom system prompt
 # This shows how to override the system prompt per-request.
 #==================================================================================================================================
 
-DEVICE timer_joke
-    DRIVER ClockDriver
-        CONFIG
-            interval SET 60000    # 60 seconds
-
-WHEN timer_joke
-THEN chatbot SET pair():put( "message", "Tell me a short joke" ) \
-                       :put( "system", "You are a comedian. Be funny and brief." ) \
-                       :put( "temperature", 1.0 )
-
+# WHEN timer
+# THEN chatbot SET pair():put( "message", "Tell me a short joke" ) \
+#                        :put( "system", "You are a comedian. Be funny and brief." ) \
+#                        :put( "temperature", 1.0 )
 
 #==================================================================================================================================
-# EXAMPLE 4: Weather-based LLM interaction
+# EXAMPLE 3: Weather-based LLM interaction
 # Combines weather data with LLM to get clothing recommendations.
 #==================================================================================================================================
 
-DEVICE weather
-    DRIVER OpenMeteoDriver
-        CONFIG
-            latitude  SET 40.4168    # Madrid, Spain
-            longitude SET -3.7038
-            interval  SET 3600000    # 1 hour
+# DEVICE weather
+#     DRIVER OpenMeteoDriver
+#         CONFIG
+#             latitude  SET 40.4168    # Madrid, Spain
+#             longitude SET -3.7038
+#             interval  SET 3600000    # 1 hour
 
-WHEN weather
-THEN chatbot SET "The current temperature is " + weather:get( "temperature" ) + " degrees Celsius " + \
-                 "and humidity is " + weather:get( "humidity" ) + "%. " + \
-                 "What should I wear today? Answer in one sentence."
+# WHEN weather
+# THEN chatbot SET "The current temperature is " + weather:get( "temperature" ) + " degrees Celsius " + \
+#                  "and humidity is " + weather:get( "humidity" ) + "%. " + \
+#                  "What should I wear today? Answer in one sentence."
 
 
 #==================================================================================================================================
-# EXAMPLE 5: Using a local LLM (Ollama)
+# EXAMPLE 4: Using a local LLM (Ollama)
 # This example shows how to use a locally running LLM via Ollama.
 # Uncomment and adjust if you have Ollama running locally.
 #==================================================================================================================================
@@ -123,5 +115,8 @@ THEN chatbot SET "The current temperature is " + weather:get( "temperature" ) + 
 # WHEN local_llm:len() > 0
 # THEN console SET "Local LLM says: " + local_llm:get( "response" )
 
+INCLUDE "{*home.inc*}basic-drivers.une"
+        "{*home.inc*}protocol-drivers.une"
+        "{*home.inc*}web-services-drivers.une"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

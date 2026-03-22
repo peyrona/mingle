@@ -6,10 +6,6 @@
 
 if( typeof grid === "undefined" )
 {
-    $.ajax( { url     : '/gum/lib/gridstack_v7.2.3.all.js',
-              dataType: 'script',
-              async   : false } );
-
 var grid =
 {
     _KEY_GADGET_           : 'key4gadget',           // Key used to store a gadget in the 'data' of a widget (a <div>) (Warning: jQuery converts this to camelCase)
@@ -21,6 +17,8 @@ var grid =
     _aCardsSelected_  : [],           // Selected cards (the one with blue border)
     _aCardsSelectedPos_: [],           // Position of selected cards when starting a drag operation
     _stack_      : null,
+    _isArrangeEnabled_ : false,   // play mode: drag/rearrange globally enabled?
+    _isResizeEnabled_  : false,   // play mode: resize globally enabled?
 
     /** Default options applied to every new sub-grid. */
     _SUB_GRID_OPTS_ : { column: 12,
@@ -127,7 +125,8 @@ var grid =
     {
         this._stack_.removeAll();
 
-        this._gadgetFocus_ = null;
+        this._$focused_       = null;
+        this._aCardsSelected_ = [];
 
         if( p_base.isEmpty( oSaved ) || p_base.isEmpty( oSaved.cards ))
         {
@@ -148,6 +147,12 @@ var grid =
                     this.addCard( card );
                 }
             }
+        }
+
+        if( ! gum.isInDesignMode() )
+        {
+            this._applyMoveState_();
+            this._applyResizeState_();
         }
 
         this._isChanged_ = false;
@@ -197,8 +202,8 @@ var grid =
 
             cards.forEach(item =>
                 {
-                    const y = parseInt(item.getAttribute('gs-y'));
-                    const h = parseInt(item.getAttribute('gs-h'));
+                    const y = parseInt(item.getAttribute('gs-y'), 10);
+                    const h = parseInt(item.getAttribute('gs-h'), 10);
                     maxY = Math.max(maxY, y + h);
                 } );
 
@@ -210,6 +215,9 @@ var grid =
 
         if( card && card.gadget )
             this.addGadget(GumGadget.instantiate(card.gadget));
+
+        if( ! gum.isInDesignMode() )
+            this._injectCardOptsBtn_( widget, false );   // false = no scrollbar item (regular card)
 
         this._isChanged_ = true;
         this._updateButtonsState_();
@@ -258,10 +266,10 @@ var grid =
             this._$focused_.removeData( this._KEY_GADGET_ );
 
             const child1 = subGrid.addWidget( { x: 0, y: 0, w: 6, h: 2, id: p_base.uuid() } );
-            const child2 = subGrid.addWidget( { x: 6, y: 0, w: 6, h: 2, id: p_base.uuid() } );
+            subGrid.addWidget( { x: 6, y: 0, w: 6, h: 2, id: p_base.uuid() } );
 
             const $child1 = $(child1);
-            $child1.data( grid._KEY_GADGET_, existingGadget );
+            $child1.data( this._KEY_GADGET_, existingGadget );
             $child1.find('.grid-stack-item-content')
                    .empty()
                    .append( existingGadget.getContainer() );
@@ -328,7 +336,7 @@ var grid =
             return this;
         }
 
-        const gadget = this._$focused_.data( grid._KEY_GADGET_ );
+        const gadget = this._$focused_.data( this._KEY_GADGET_ );
 
         if( ! gadget )
         {
@@ -392,7 +400,7 @@ var grid =
         if( ! this._$focused_ )
             return this;
 
-        this._$focused_.data( grid._KEY_GADGET_, gadget )    // Store the gadget in the widget (has to be 1st because 'find(...) crerates a new object)
+        this._$focused_.data( this._KEY_GADGET_, gadget )    // Store the gadget in the widget (has to be 1st because 'find(...)' creates a new object)
                        .find('.grid-stack-item-content')
                        .first()                              // Only the direct content, not nested sub-grid content
                        .empty()
@@ -537,12 +545,150 @@ var grid =
 
             grid._updateButtonsState_();
         }
+        else    // Play mode
+        {
+            this._initPlayModeCardEvents_();
+
+            // Load persisted arrange/resize state (cards are not loaded yet; state is applied in setContents)
+            this._isArrangeEnabled_ = this._lsGet_('gum-grid-arrange-enabled') === '1';
+            this._isResizeEnabled_  = this._lsGet_('gum-grid-resize-enabled')  === '1';
+        }
 
         return this;
     },
 
     //------------------------------------------------------------------------//
     // Private methods
+
+    /**
+     * Appends the play-mode options icon and popup menu to a card's content div.
+     * Called only in play mode, once per card (regular or sub-grid).
+     *
+     * @param {HTMLElement} parentEl         The .grid-stack-item element.
+     * @param {boolean}     bIncludeScrollbar Whether to include the scrollbar toggle item.
+     *                                        Pass true for sub-grid cards, false for regular cards.
+     */
+    _injectCardOptsBtn_ : function( parentEl, bIncludeScrollbar )
+    {
+        const sArrangeIcon = this._getCheckboxIcon_( this._isArrangeEnabled_ );
+        const sResizeIcon  = this._getCheckboxIcon_( this._isResizeEnabled_  );
+
+        let sMenu = '<ul class="grid-card-opts-menu">'                                          +
+                        '<li class="grid-card-opts-arrange">'                                   +
+                            '<i class="ti ' + sArrangeIcon + ' grid-card-opts-icon"></i>'       +
+                            'Allow moving'                                                      +
+                        '</li>'                                                                 +
+                        '<li class="grid-card-opts-resize">'                                    +
+                            '<i class="ti ' + sResizeIcon  + ' grid-card-opts-icon"></i>'       +
+                            'Allow resizing'                                                    +
+                        '</li>';
+
+        if( bIncludeScrollbar )
+            sMenu += '<li class="grid-card-opts-scroll">Hide scrollbar</li>';
+
+        sMenu += '<li class="grid-card-opts-help">Help</li></ul>';
+
+        const sHTML = '<i class="grid-card-opts-btn ti ti-dots" title="Card options"></i>' + sMenu;
+
+        // Inject directly into the outer .grid-stack-item wrapper (not into .grid-stack-item-content).
+        // This ensures the button is outside the gadget's DOM subtree and avoids pointer-event
+        // interception by the gadget's canvas/SVG content or GridStack's content-level handlers.
+        $(parentEl).append( sHTML );
+
+        // Restore persisted scroll state (only relevant for sub-grid cards)
+        if( bIncludeScrollbar )
+        {
+            const cardId = $(parentEl).attr('gs-id');
+
+            if( this._lsGet_( 'gum-card-scroll-' + cardId ) === '0' )
+            {
+                $(parentEl).find('> .grid-stack-item-content').addClass( 'no-scroll' );
+                $(parentEl).find( '.grid-card-opts-scroll' ).text( 'Show scrollbar' );
+            }
+        }
+    },
+
+    /**
+     * Attaches delegated event listeners for the play-mode card options icon and menu.
+     * Called once from init() when not in design mode.
+     */
+    _initPlayModeCardEvents_ : function()
+    {
+        // Toggle popup open/close on icon click
+        $('body').on( 'click', '.grid-card-opts-btn', function( e )
+        {
+            e.stopPropagation();
+
+            const $menu   = $(this).siblings( '.grid-card-opts-menu' );
+            const wasOpen = $menu.is( ':visible' );
+
+            $('.grid-card-opts-menu').hide();
+
+            if( ! wasOpen )
+                $menu.show();
+        } );
+
+        // Close any open menu when clicking elsewhere
+        $(document).on( 'click', function()
+        {
+            $('.grid-card-opts-menu').hide();
+        } );
+
+        // Arrange (drag/move) toggle
+        $('body').on( 'click', '.grid-card-opts-arrange', function( e )
+        {
+            e.stopPropagation();
+            grid._toggleArrange_();
+            $('.grid-card-opts-menu').hide();
+        } );
+
+        // Resize toggle
+        $('body').on( 'click', '.grid-card-opts-resize', function( e )
+        {
+            e.stopPropagation();
+            grid._toggleResize_();
+            $('.grid-card-opts-menu').hide();
+        } );
+
+        // Scrollbar toggle
+        $('body').on( 'click', '.grid-card-opts-scroll', function( e )
+        {
+            e.stopPropagation();
+
+            // The menu is a child of .grid-stack-item (not .grid-stack-item-content),
+            // so navigate to the item wrapper first and then find its content div.
+            const $content = $(this).closest( '.grid-stack-item' ).find( '> .grid-stack-item-content' );
+            const hiding   = ! $content.hasClass( 'no-scroll' );
+            const cardId   = $(this).closest( '.grid-stack-item' ).attr( 'gs-id' );
+
+            $content.toggleClass( 'no-scroll' );
+
+            $(this).text( hiding ? 'Show scrollbar' : 'Hide scrollbar' );
+
+            grid._lsSet_( 'gum-card-scroll-' + cardId, hiding ? '0' : '1' );
+
+            $('.grid-card-opts-menu').hide();
+        } );
+
+        // Help dialog
+        $('body').on( 'click', '.grid-card-opts-help', function( e )
+        {
+            e.stopPropagation();
+
+            $('.grid-card-opts-menu').hide();
+
+            p_app.alert(
+                '<p>In view mode you can interact with the dashboard via the <b>&#8943;</b> menu on each card:</p>' +
+                '<ul style="margin-top:6px; padding-left:20px;">'                                                   +
+                    '<li><b>Allow moving</b> — enables dragging cards to rearrange the layout.</li>'                +
+                    '<li><b>Allow resizing</b> — enables resizing cards by dragging their corners.</li>'            +
+                    '<li><b>Hide/Show scrollbar</b> — toggles the scrollbar on cards with an inner grid.</li>'      +
+                '</ul>'                                                                                             +
+                '<p style="margin-top:6px;">These settings are saved in this computer.</p>',
+                'Dashboard help'
+            );
+        } );
+    },
 
     /**
      * Returns the GridStack instance that directly owns the given card element.
@@ -675,6 +821,10 @@ var grid =
 
         this._addContainerFrame_( parentEl );
 
+        // In play mode: inject the card options icon into this sub-grid card
+        if( ! gum.isInDesignMode() )
+            this._injectCardOptsBtn_( parentEl, true );  // true = include scrollbar toggle
+
         // Restore container style if present
         if( card.containerStyle )
         {
@@ -730,16 +880,16 @@ var grid =
         let maxY = 0;
         this._stack_.getGridItems().forEach( item =>
             {
-                const y = parseInt( item.getAttribute('gs-y') ) || 0;
-                const h = parseInt( item.getAttribute('gs-h') ) || 2;
+                const y = parseInt( item.getAttribute('gs-y'), 10 ) || 0;
+                const h = parseInt( item.getAttribute('gs-h'), 10 ) || 2;
                 maxY = Math.max( maxY, y + h );
             } );
 
         // Create a new parent card in the main grid
         const newParent = this._stack_.addWidget( {
             x: 0, y: maxY,
-            w: parseInt( sourceEl.getAttribute('gs-w') ) || 4,
-            h: parseInt( sourceEl.getAttribute('gs-h') ) || 2,
+            w: parseInt( sourceEl.getAttribute('gs-w'), 10 ) || 4,
+            h: parseInt( sourceEl.getAttribute('gs-h'), 10 ) || 2,
             id: p_base.uuid()
         } );
 
@@ -770,10 +920,10 @@ var grid =
         for( const childEl of sourceItems )
         {
             const $child  = $(childEl);
-            const childW  = parseInt( childEl.getAttribute('gs-w') ) || 6;
-            const childH  = parseInt( childEl.getAttribute('gs-h') ) || 2;
-            const childX  = parseInt( childEl.getAttribute('gs-x') ) || 0;
-            const childY  = parseInt( childEl.getAttribute('gs-y') ) || 0;
+            const childW  = parseInt( childEl.getAttribute('gs-w'), 10 ) || 6;
+            const childH  = parseInt( childEl.getAttribute('gs-h'), 10 ) || 2;
+            const childX  = parseInt( childEl.getAttribute('gs-x'), 10 ) || 0;
+            const childY  = parseInt( childEl.getAttribute('gs-y'), 10 ) || 0;
             const gadget  = $child.data( this._KEY_GADGET_ );
 
             const newChild = newSubGrid.addWidget( {
@@ -841,6 +991,11 @@ var grid =
      */
     _addContainerFrame_ : function( el )
     {
+        const $existing = $(el).find('> .grid-stack-item-content > .container-style-frame');
+
+        if( $existing.length )
+            return $existing;
+
         const $frame = $('<div class="container-style-frame"></div>');
         $(el).find('> .grid-stack-item-content').append( $frame );
         return $frame;
@@ -942,7 +1097,7 @@ var grid =
             return;
 
         // '+' key does not require a focused card
-        if (evt.keyCode === 107 || (evt.keyCode === 187 && evt.shiftKey)) // + key on numpad or main keyboard
+        if( evt.key === '+' )    // + key on numpad or main keyboard (Shift+= included automatically)
         {
             evt.preventDefault();
             grid.addCard();
@@ -953,21 +1108,21 @@ var grid =
             return;
 
         // The isEditing check should be on the gadget inside the focused card.
-        const gadget = this._$focused_.data( grid._KEY_GADGET_ );
+        const gadget = this._$focused_.data( this._KEY_GADGET_ );
         if( gadget && gadget.isEditing() )
             return;
 
-        if( evt.keyCode === 113 )    // F2
+        if( evt.key === 'F2' )
         {
             evt.preventDefault();
             grid.editCard();
         }
-        else if( evt.keyCode === 45 && this._aCardsSelected_.length === 1 ) // Insert
+        else if( evt.key === 'Insert' && this._aCardsSelected_.length === 1 )
         {
             evt.preventDefault();
             grid.cloneCard();
         }
-        else if( evt.keyCode === 46 ) // Delete
+        else if( evt.key === 'Delete' )
         {
             evt.preventDefault();
             grid.delCard();
@@ -1019,22 +1174,132 @@ var grid =
             let   oPos     = null;
 
             for( const o of this._aCardsSelectedPos_ )
-                if( o.card[0] == el )
+                if( o.card[0] === el )
                 {
                     oPos = o;
                     break;
                 }
 
+            if( ! oPos )
+                return;
+
             const nDeltaX = nNewX - oPos.x;
             const nDeltaY = nNewY - oPos.y;
 
             for( const o of this._aCardsSelectedPos_ )
-                if( o.card[0] != el )
+                if( o.card[0] !== el )
                     grid._stack_.update( o.card[0], { x: o.x + nDeltaX, y: o.y + nDeltaY } );
         }
 
         this._aCardsSelectedPos_ = [];
 
+    },
+
+    /**
+     * Toggles the global drag/arrange capability for all cards in play mode.
+     * Persists the new state to localStorage.
+     */
+    _toggleArrange_ : function()
+    {
+        this._isArrangeEnabled_ = ! this._isArrangeEnabled_;
+        this._applyMoveState_();
+        this._updatePlayModeMenuIcons_();
+        this._lsSet_( 'gum-grid-arrange-enabled', this._isArrangeEnabled_ ? '1' : '0' );
+    },
+
+    /**
+     * Toggles the global resize capability for all cards in play mode.
+     * Persists the new state to localStorage.
+     */
+    _toggleResize_ : function()
+    {
+        this._isResizeEnabled_ = ! this._isResizeEnabled_;
+        this._applyResizeState_();
+        this._updatePlayModeMenuIcons_();
+        this._lsSet_( 'gum-grid-resize-enabled', this._isResizeEnabled_ ? '1' : '0' );
+    },
+
+    /**
+     * Applies the current _isArrangeEnabled_ state to every GridStack instance in the DOM.
+     * Iterates both the main grid and any sub-grids.
+     */
+    _applyMoveState_ : function()
+    {
+        document.querySelectorAll('.grid-stack').forEach( el =>
+        {
+            if( el.gridstack )
+                el.gridstack.enableMove( this._isArrangeEnabled_ );
+        } );
+    },
+
+    /**
+     * Applies the current _isResizeEnabled_ state to every GridStack instance in the DOM.
+     * Iterates both the main grid and any sub-grids.
+     */
+    _applyResizeState_ : function()
+    {
+        document.querySelectorAll('.grid-stack').forEach( el =>
+        {
+            if( el.gridstack )
+                el.gridstack.enableResize( this._isResizeEnabled_ );
+        } );
+    },
+
+    /**
+     * Refreshes the checkbox icons in every card options menu to reflect
+     * the current global arrange/resize state.
+     * Called after each toggle so all open (or closed) menus stay in sync.
+     */
+    _updatePlayModeMenuIcons_ : function()
+    {
+        const sArrange = this._getCheckboxIcon_( this._isArrangeEnabled_ );
+        const sResize  = this._getCheckboxIcon_( this._isResizeEnabled_  );
+
+        $('.grid-card-opts-arrange .grid-card-opts-icon')
+            .removeClass()
+            .addClass( 'ti ' + sArrange + ' grid-card-opts-icon' );
+
+        $('.grid-card-opts-resize .grid-card-opts-icon')
+            .removeClass()
+            .addClass( 'ti ' + sResize + ' grid-card-opts-icon' );
+    },
+
+    /**
+     * Returns the Tabler icon class name for a checked or unchecked checkbox,
+     * used to visualise boolean toggle state inside the card options menu.
+     *
+     * @param  {boolean} bChecked  True → checked icon, false → unchecked icon.
+     * @returns {string}           Tabler icon class (without the leading 'ti ').
+     */
+    _getCheckboxIcon_ : function( bChecked )
+    {
+        return bChecked ? 'ti-square-check' : 'ti-square';
+    },
+
+    /**
+     * Safe wrapper around localStorage.getItem.
+     * Returns null when storage is unavailable (e.g., private-browsing mode).
+     *
+     * @param  {string}      key
+     * @returns {string|null}
+     */
+    _lsGet_ : function( key )
+    {
+        try   { return localStorage.getItem( key ); }
+        catch { return null; }
+    },
+
+    /**
+     * Safe wrapper around localStorage.setItem.
+     * Silently ignores errors caused by unavailable storage or quota exceeded.
+     *
+     * @param {string} key
+     * @param {string} value
+     */
+    _lsSet_ : function( key, value )
+    {
+        try   { localStorage.setItem( key, value ); }
+        catch { /* Storage unavailable or quota exceeded — fail silently */ }
     }
 };
 }

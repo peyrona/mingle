@@ -14,10 +14,8 @@ import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.io.File;
 import java.io.IOException;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -156,7 +154,14 @@ public final class Main
             }
         }
 
-        throw new IOException( "None of the proposed models can be loaded:\n"+ Arrays.toString( asModel ) );
+        String msg = "None of the proposed models can be loaded:\n";
+
+        if( msg.toLowerCase().endsWith( "une.model" ) )
+            msg += "(Suspiciously the passed model file ends with '.une')\n";
+
+        msg += Arrays.toString( asModel );
+
+        throw new IOException( msg );
     }
 
     //-----------------------------------------------------------------------//
@@ -235,9 +240,9 @@ public final class Main
      * @param httpUri The full HTTP or HTTPS URI of the model.
      * @return The absolute local file path.
      */
-    private static String getLocalPathFromHttpUri( String httpUri ) throws MalformedURLException, URISyntaxException
+    private static String getLocalPathFromHttpUri( String httpUri ) throws URISyntaxException
     {
-        URI    uri       = new URL( httpUri ).toURI();
+        URI    uri       = URI.create( httpUri );
         Path   path      = Paths.get( uri.getPath() );
         String sFileName = (path.getFileName() == null) ? null : path.getFileName().toString();
 

@@ -1,0 +1,106 @@
+#==================================================================================================================================
+# This example shows how to use the LIBRARY command to expose a JavaScript module as a callable function collection.
+#
+# For JavaScript libraries, the FROM clause points to the .js file. All top-level functions
+# defined in the file become callable in WHEN/THEN/CONFIG expressions using the colon operator:
+#
+#     LibraryName:functionName( args )
+#
+# If the module defines a top-level "init( config )" function, it is called once after loading,
+# receiving the CONFIG values declared in the LIBRARY command.
+#
+# NOTE: JavaScript library support requires invokeFunction() to be implemented in NashornRT.
+#       See ICandi.ILanguage for the contract.
+#
+# IMPORTANT! THIS EXAMPLE CANNOT BE EXECUTED because 'formatter.js' does not exist.
+#            It illustrates the syntax and intended use.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+# --- Example JavaScript module content (formatter.js) ---
+#
+# function init( config ) {}                                // Optional: receives CONFIG values as a Map
+#
+# function formatTemperature( value, unit ) {
+#     var rounded = Math.round( value * 10 ) / 10;
+#     return rounded + " °" + unit;
+# }
+#
+# function formatPercent( value ) {
+#     return Math.min( 100, Math.max( 0, value ) ).toFixed(1) + "%";
+# }
+#
+# function isWorkingHours( hour ) {                         // hour is a number (0-23)
+#     return hour >= 8 && hour < 18;
+# }
+
+
+# --- Declare the library ---
+
+LIBRARY Formatter
+   LANGUAGE JavaScript
+   FROM     "file://{*home.lib*}formatter.js"
+   CONFIG
+      unit = "C"            # Temperature unit; passed to formatter.init(config) after loading
+
+
+# --- Devices ---
+
+DEVICE temperature
+   DRIVER CellSetDriver
+      CONFIG
+         value = 20.0
+
+DEVICE humidity
+   DRIVER CellSetDriver
+      CONFIG
+         value = 50.0
+
+DEVICE display_temp
+   DRIVER OutputDriver     # Actuator: shows formatted temperature string
+
+DEVICE display_hum
+   DRIVER OutputDriver     # Actuator: shows formatted humidity string
+
+
+# --- Rules using the library ---
+
+# Format temperature with its unit symbol before displaying it.
+
+WHEN temperature
+THEN display_temp = Formatter:formatTemperature( temperature, "C" )
+
+
+# Format humidity as a percentage string.
+
+WHEN humidity
+THEN display_hum = Formatter:formatPercent( humidity )
+
+
+# Only update the display during working hours (8:00–18:00).
+
+WHEN temperature AND Formatter:isWorkingHours( time():hour() )
+THEN display_temp = Formatter:formatTemperature( temperature, "C" )
+
+
+# -------------------------------------------------------------------
+# This code periodically updates the sensor devices
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+WHEN clock
+THEN temperature = rand( -10, 40 )
+
+WHEN clock
+THEN humidity = rand( 0, 100 )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

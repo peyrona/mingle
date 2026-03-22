@@ -27,13 +27,6 @@ import jiconfont.swing.IconFontSwing;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-
-
-// FIXME: esta dialog no está alineada con lo que el WebSocketClient espera:
-//        la CUA de la dialog no recoje lo que hay que enviar al client.
-//        Pero SÍ funciona para Plain Sockets.
-
-
 public final class ConnectDlg extends GDialog
 {
     private final JsonArray         jaClients;
@@ -83,7 +76,8 @@ public final class ConnectDlg extends GDialog
 
     public String getConnName()
     {
-        return UtilStr.isNotEmpty( sSavedName ) ? sSavedName : joSelected.getString( "name", "Unknown" );
+        return (joSelected == null) ? ""
+                                    : UtilStr.isNotEmpty( sSavedName ) ? sSavedName : joSelected.getString( "name", "Unknown" );
     }
 
     //------------------------------------------------------------------------//

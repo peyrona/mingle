@@ -7,6 +7,7 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -15,7 +16,6 @@ import com.peyrona.mingle.network.NetworkBuilder;
 import java.net.ConnectException;
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
@@ -38,7 +38,7 @@ public final class ExEnClient
     private final    Set<INetClient.IListener> lstPendingListeners = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because listeners are only added, never removed
 
     //------------------------------------------------------------------------//
-    // CONSTRUCTOR
+    // CONSTRUCTORS
 
     public ExEnClient( JsonObject joConnDef, String sConnName )
     {
@@ -49,7 +49,20 @@ public final class ExEnClient
         this.sConnName = sConnName;
     }
 
+    /**
+     * Use when Stick runs in the same JVM and a direct IRuntime reference is available.
+     *
+     * @param runtime   The running Stick instance.
+     * @param sConnName Display name for this connection.
+     */
+    public ExEnClient( IRuntime runtime, String sConnName )
+    {
+        this.joConnDef = null;
+        this.sConnName = sConnName;
+    }
+
     //------------------------------------------------------------------------//
+    // PUBLIC SCOPE
 
     public synchronized boolean connect() throws MingleException
     {
@@ -112,42 +125,35 @@ public final class ExEnClient
             lstPendingListeners.remove( l );
     }
 
-    public ExEnClient sendList()
+    public ExEnClient requestCmdList()
     {
-        if( netClient != null )
-        {
-            if( netClient.isConnected() )
-            {
-                netClient.send( new ExEnComm( ExEnComm.Request.List, "true" ).toString() );    // "true" (any not null valid JSON) to force to broadcast all msgs: see ExEnComm class constructor
-            }
-            else
-            {
-                JTools.alert( "Client appears as disconnected" );
-            }
-        }
+        if( netClient != null && netClient.isConnected() )
+            netClient.send( new ExEnComm( ExEnComm.Request.List, "true" ).toString() );    // "true" (any not null valid JSON) to force to broadcast all msgs: see ExEnComm class constructor
+        else
+            JTools.alert( "Can not send List message: target ExEn does not exists or it is disconnected" );
 
         return this;
     }
 
-    public ExEnClient sendAdd( ICommand cmd2Add )
+    public ExEnClient sendRequest2Add( ICommand cmd2Add )
     {
         return send( ExEnComm.Request.Add, cmd2Add );
     }
 
-    public ExEnClient sendDel( ICommand cmd2Del )
+    public ExEnClient sendRequest2Del( ICommand cmd2Del )
     {
         return send( ExEnComm.Request.Remove, cmd2Del );
     }
 
-    public ExEnClient sendReplace( ICommand cmdOld, ICommand cmdNew )
+    public ExEnClient sendRequest2Replace( ICommand cmdOld, ICommand cmdNew )
     {
-        sendDel( cmdOld );
-        sendAdd( cmdNew );
+        sendRequest2Del( cmdOld );
+        sendRequest2Add( cmdNew );
 
         return this;
     }
 
-    public ExEnClient sendClone( ICommand cmd, String newName )
+    public ExEnClient sendRequest2Clone( ICommand cmd, String newName )
     {
         ICmdEncDecLib builder = UtilSys.getConfig().newCILBuilder();
 
@@ -157,10 +163,12 @@ public final class ExEnClient
         return send( ExEnComm.Request.Add, builder.build( jo.toString() ) );
     }
 
-    public ExEnClient sendChangeActuator( String sActuatorName, Object newValue )
+    public ExEnClient sendRequest2ChangeActuator( String sActuatorName, Object newValue )
     {
         if( (netClient != null) && netClient.isConnected() )
             netClient.send( new ExEnComm( new MsgChangeActuator( sActuatorName, newValue ) ).toString() );
+        else
+            JTools.alert( "Can not send Change-Device message: target ExEn does not exists or it is disconnected" );
 
         return this;
     }
@@ -173,14 +181,12 @@ public final class ExEnClient
      * @param lstCmds
      * @return Itself.
      */
-    public ExEnClient sendSetOfCmds( ExEnComm.Request request, List<ICommand> lstCmds )
+    public ExEnClient sendSetOfCmds( ExEnComm.Request request, ICommand... aCmds )
     {
         if( (netClient != null) && netClient.isConnected() )
-        {
-            ICommand[] aCmds = lstCmds.toArray( ICommand[]::new );
-
             netClient.send( new ExEnComm( request, aCmds ).toString() );   // Can not send cmd one by one: all must be send inside one packet
-        }
+        else
+            JTools.alert( "Can not send Change-Device message: target ExEn does not exists or it is disconnected" );
 
         return this;
     }
@@ -194,7 +200,7 @@ public final class ExEnClient
     }
 
     @Override
-    public boolean equals(Object obj)
+    public boolean equals( Object obj )
     {
         if( this == obj )
             return true;
@@ -211,11 +217,14 @@ public final class ExEnClient
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
 
     private ExEnClient send( ExEnComm.Request request, ICommand cmd )
     {
         if( (netClient != null) && netClient.isConnected() )
             netClient.send( new ExEnComm( request, cmd ).toString() );
+        else
+            JTools.alert( "Can not send "+ request.name() +" message: target ExEn does not exists or it is disconnected" );
 
         return this;
     }
@@ -240,7 +249,7 @@ public final class ExEnClient
         {
             latch.countDown();   // Signal that connection is established
 
-            ExEnClient.this.sendList();
+            ExEnClient.this.requestCmdList();
 
             UtilSys.getLogger().log( ILogger.Level.INFO, getClass().getSimpleName() +" connected to "+ sConnName );
 

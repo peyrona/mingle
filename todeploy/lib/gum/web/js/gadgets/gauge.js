@@ -17,17 +17,19 @@ class GumGauge extends GumGadget
             this.accessor       = null;     // Key (for pair) or 1-based index (for list)
             this._devValueType_ = null;     // "list", "pair", or "scalar" — auto-detected, not persisted
             this.wrapper        = null;     // Instance of class GaugeWrap
-            this.min       = 0;        // Min value
-            this.max       = 100;      // Max value
-            this.angle     = 0;
-            this.radius    = 95;
-            this.thick     = 38;       // Arc thickness
-            this.zones     = [];       // Colored zones: { start : <num>, end: <num>, color: <str> }
-            this.ticks        = true;      // Show ticks or not (Divisions: 6, Length: 50, Color: #333333, Width: 10) (Subdivisions: 3, Length: 30, Color: #666666, Width: 6)
-            this.ticks_pos    = [];        // Show tick values at their position
-            this.ticks_color  = '#333333'; // Color for tick marks and tick labels
-            this.needle_color = '#000000'; // Color of the pointer needle
-            this.decimals     = 0;         // Decimal digits for current device value
+
+            this.min          = 0;          // Min value
+            this.max          = 100;        // Max value
+            this.angle_span   = 4.2;        // Total arc sweep in radians
+            this.zone_thick   = 12;         // Arc zone thickness
+            this.zones        = [];         // Colored zones: { start: <num>, end: <num>, color: <str> }
+            this.ticks        = true;       // Show ticks or not
+            this.ticks_pos    = '';         // Tick label values (comma-separated string)
+            this.ticks_color  = null;       // Color for tick marks and tick labels (null = default)
+            this.needle_color = null;       // Color of the pointer needle (null = default)
+            this.bg_color     = null;       // Gauge plate background color (null = default)
+            this.label        = '';         // Label text on gauge face
+            this.label_color  = null;       // Label text color (null = default)
         }
     }
 
@@ -82,8 +84,7 @@ class GumGauge extends GumGadget
         if( this.wrapper )
             this.wrapper.del();
 
-        this.wrapper = new GaugeWrap( this );   // Has to be recreated from zero: the lib I use
-                                                // does not allow to manipulate it after been created
+        this.wrapper = new GaugeWrap( this );
 
         this._updateListener_();
 
@@ -91,7 +92,7 @@ class GumGauge extends GumGadget
     }
 
     /**
-     * Returns a copy of this gatget properties (without uneeded properties).
+     * Returns a copy of this gadget properties (without unneeded properties).
      */
     distill()
     {
@@ -133,138 +134,352 @@ class GumGauge extends GumGadget
 //------------------------------------------------------------------------------------------------------------------------------------//
 //------------------------------------------------------------------------------------------------------------------------------------//
 
-//----------------------------------------------------------------------------//
-// Wrapper for another Gauge
-// In this case the warpper is for: https://bernii.github.io/gauge.js/
-// "angle"  , 0        // Of arch: from -33 to +33  (0 == 180º)
-// "radius" , 95       // Of arch: from 50 to 100
-// "width"  , 38       // Of arch: from  10 to  60  (Pointer (aguja) length: 60, Color: #000000, Stroke: 45 )
-// "ticks"  , true     // Show ticks or not (Divisions: 6, Length: 50, Color: #333333, Width: 10) (Subdivisions: 3, Length: 30, Color: #666666, Width: 6)
-//----------------------------------------------------------------------------//
-
-"use strict";
-
+/**
+ * Adapter between GumGauge configuration and GaugeVintage renderer.
+ * Translates persisted GumGauge properties into the GaugeVintage options format.
+ */
 class GaugeWrap
 {
     constructor( config )
     {
+        let tickValues = this._parseTickValues_( config.ticks_pos );
+
         let opts =
         {
-            angle      : config.angle  / 100,
-            radiusScale: config.radius / 100,
-            lineWidth  : config.thick  / 100,
-
-            limitMax: false,
-            limitMin: false,
-
-            generateGradient: false,
-            highDpiSupport  : true,
-
-            pointer:
-            {
-                length: 0.6,
-                strokeWidth: 0.045,
-                color: config.needle_color || '#000000'
-            },
-
-            staticLabels:
-            {
-                labels: this._getTicksValues_( config ),
-                color : config.ticks_color || '#333333',
-                font  : "14px sans-serif"
-            },
-
-            staticZones: this._getZones_( config ),
-
-            renderTicks: this._getTicks_( config )
+            angleSpan      : config.angle_span || 4.2,
+            zoneThickness  : config.zone_thick || 12,
+            zones          : config.zones      || [],
+            showTicks      : config.ticks !== false,
+            tickValues     : tickValues,
+            tickColor      : config.ticks_color  || '#333333',
+            needleColor    : config.needle_color || '#d32f2f',
+            backgroundColor: config.bg_color     || '#f4ecd8',
+            label          : config.label        || '',
+            labelColor     : config.label_color  || '#555555'
         };
 
-        let canvas = p_base.get( config.id );    // Better not to use JQuey
-
-        this.gauge = new Gauge( canvas );
-        this.gauge.setOptions( opts );
-        this.gauge.animationSpeed = 12;          // set animation speed delay (default is 32)
-        this.gauge.maxValue       = config.max;  // Note: setMaxValue(...) does not exist
-        this.gauge.setMinValue( config.min );    // Note: prefer setter over gauge.minValue = 0
-        this.gauge.set( config.min );            // Must be provided, and must be done in this wired way
+        this._vintage = new GaugeVintage( config.id, opts );
+        this._vintage.config.minValue = config.min;
+        this._vintage.config.maxValue = config.max;
+        this._vintage.setValue( config.min );
     }
 
     //----------------------------------------------------------------------------//
     // PUBLIC METHODS
 
+    /**
+     * Sets the current gauge value (animated).
+     * @param {number} nValue - The new value to display.
+     */
     set( nValue )
     {
-        this.gauge.set( nValue );
+        this._vintage.setValue( nValue );
     }
 
+    /**
+     * Stops the animation loop and cleans up.
+     */
     del()
     {
-        delete this.gauge;
+        this._vintage.stop();
+        delete this._vintage;
     }
 
     //----------------------------------------------------------------------------//
-    // PRIVATE' METHODS
+    // PRIVATE METHODS
 
-    _getTicksValues_( config )
+    /**
+     * Parses a comma-separated string of tick values into an array of numbers.
+     * @param {string} sPos - Comma-separated tick position string.
+     * @returns {number[]} Array of numeric tick values.
+     */
+    _parseTickValues_( sPos )
     {
-        let sPos = config.ticks_pos;
-
         if( p_base.isEmpty( sPos ) )
-            return [];                  // gauge.js needs an array
+            return [];
 
-        let aPos = sPos.split( ',' );
+        return sPos.split( ',' )
+                   .map( v => v.indexOf('.') > -1 ? parseFloat( v.trim() ) : parseInt( v.trim() ) )
+                   .filter( v => ! isNaN( v ) );
+    }
+}
 
-        if( p_base.isEmpty( aPos ) )
-            return [];                  // gauge.js needs an array
+//------------------------------------------------------------------------------------------------------------------------------------//
+//------------------------------------------------------------------------------------------------------------------------------------//
 
-        for( let n = 0; n < aPos.length; n++ )
-            aPos[n] = (aPos[n].indexOf('.') > -1 ? parseFloat( aPos[n] )
-                                                 : parseInt(   aPos[n] ));
+/**
+ * Represents a vintage-style analog sphere/arc gauge.
+ * Handles rendering logic via HTML5 Canvas and provides animation for value transitions.
+ */
+class GaugeVintage
+{
+    /**
+     * Initializes a new instance of the GaugeVintage class.
+     * @param {string} canvasId - The ID of the HTML canvas element.
+     * @param {Object} [options={}] - Configuration options for the gauge.
+     * @param {number} [options.angleSpan=4.2] - The total radial sweep of the gauge in radians.
+     * @param {number} [options.zoneThickness=12] - Thickness of the colored value zones.
+     * @param {Array<number>} [options.tickValues=[0, 20, 40, 60, 80, 100]] - Array of values to display as ticks.
+     * @param {string} [options.tickColor='#2b2b2b'] - Hex color for ticks and tick text.
+     * @param {string} [options.needleColor='#d32f2f'] - Hex color for the needle.
+     * @param {string} [options.backgroundColor='#f4ecd8'] - Hex color for the gauge plate.
+     * @param {Array<Object>} [options.zones=[]] - Array of zone objects {start, end, color}.
+     * @param {string} [options.label=""] - Label text displayed on the gauge face.
+     * @param {string} [options.labelColor='#555555'] - Hex color for the label text.
+     */
+    constructor( canvasId, options = {} )
+    {
+        this.canvas = document.getElementById( canvasId );
+        this.ctx    = this.canvas.getContext('2d');
 
-        return aPos;
+        this._stopped = false;
+
+        this.config = {
+            minValue      : 0,
+            maxValue      : 100,
+            value         : 0,
+            displayValue  : 0,
+            angleSpan     : options.angleSpan      || 4.2,
+            zoneThickness : options.zoneThickness  || 12,
+            showTicks     : options.showTicks !== false,
+            tickValues    : options.tickValues     || [0, 20, 40, 60, 80, 100],
+            tickColor     : options.tickColor      || '#2b2b2b',
+            needleColor   : options.needleColor    || '#d32f2f',
+            centerColor   : options.centerColor    || '#2b2b2b',
+            backgroundColor: options.backgroundColor || '#f4ecd8',
+            labelColor    : options.labelColor     || '#555555',
+            zones         : options.zones          || [],
+            label         : options.label          || '',
+            animationSpeed: 0.1,
+            jitterAmount  : 0.2
+        };
+
+        this.resize();
+        window.addEventListener( 'resize', () => this.resize() );
+        this.animate();
     }
 
-    _getDecimals_( config )
+    /**
+     * Adjusts the canvas internal coordinate system to match its display size.
+     */
+    resize()
     {
-        if( p_base.isEmpty( config.ticks_pos ) )
-            return 0;
+        if( ! this.canvas || ! this.canvas.parentElement )
+            return;
 
-        return ((config.ticks_pos.indexOf('.') > 1) ? 3 : 0);
+        const rect = this.canvas.parentElement.getBoundingClientRect();
+        this.canvas.width  = rect.width;
+        this.canvas.height = rect.height;
     }
 
-    _getZones_( config )
+    /**
+     * Sets the target value for the gauge. The gauge will animate toward this value.
+     * @param {number|string} val - The new value to set.
+     */
+    setValue( val )
     {
-        if( p_base.isEmpty( config.zones ) )
-            return null;
+        const num = parseFloat( val );
+        this.config.value = Math.min( Math.max( isNaN(num) ? 0 : num, this.config.minValue ), this.config.maxValue );
+    }
 
-        let aRet = [];
+    /**
+     * Updates a specific configuration property.
+     * @param {string} key   - The configuration key to update.
+     * @param {any}    value - The new value for the configuration key.
+     */
+    updateConfig( key, value )
+    {
+        this.config[key] = value;
+    }
 
-        for( let n = 0; n < config.zones.length; n++ )
+    /**
+     * Stops the animation loop. Call this before discarding the instance to avoid
+     * leaking rAF callbacks.
+     */
+    stop()
+    {
+        this._stopped = true;
+    }
+
+    /**
+     * Main rendering method. Clears the canvas and redraws the plate, zones, ticks, and needle.
+     */
+    draw()
+    {
+        const { ctx, canvas, config } = this;
+        if( !canvas.width || !canvas.height ) return;
+
+        const cx         = canvas.width  / 2;
+        const cy         = canvas.height / 2;
+        const baseRadius = (Math.min(cx, cy)) * 0.85;
+
+        // THRESHOLDS for UI logic
+        const fullCircleThreshold = 2 * Math.PI * 0.54;
+
+        // Determine actual arc for ticks/needle
+        let activeAngleSpan = config.angleSpan;
+        let isFullSphere    = config.angleSpan >= fullCircleThreshold;
+
+        // Special case: if sphere is visually "full", limit the active scale to 60% of the circle
+        if( config.angleSpan >= 2 * Math.PI - 0.05 )
         {
-            aRet.push( { strokeStyle: config.zones[n].color,
-                         min: config.zones[n].start,
-                         max: config.zones[n].end } );
+            activeAngleSpan = 2 * Math.PI * 0.60;
         }
 
-        return aRet;
+        // CENTERING: Arc is centered at the top (-PI/2)
+        const startAngle = (-Math.PI / 2) - (activeAngleSpan / 2);
+
+        ctx.clearRect( 0, 0, canvas.width, canvas.height );
+
+        // 1. Draw Plate (Background)
+        ctx.save();
+        ctx.beginPath();
+        if( isFullSphere )
+        {
+            ctx.arc( cx, cy, baseRadius, 0, 2 * Math.PI );
+        }
+        else
+        {
+            const margin = 0.15;
+            ctx.moveTo( cx, cy );
+            ctx.arc( cx, cy, baseRadius, startAngle - margin, startAngle + activeAngleSpan + margin );
+            ctx.closePath();
+        }
+        ctx.fillStyle = config.backgroundColor;
+        ctx.fill();
+        ctx.restore();
+
+        // 2. Color Zones
+        config.zones.forEach( zone =>
+        {
+            const sPerc  = (zone.start - config.minValue) / (config.maxValue - config.minValue);
+            const ePerc  = (zone.end   - config.minValue) / (config.maxValue - config.minValue);
+            const sAngle = startAngle + (sPerc * activeAngleSpan);
+            const eAngle = startAngle + (ePerc * activeAngleSpan);
+
+            ctx.beginPath();
+            ctx.arc( cx, cy, baseRadius - (config.zoneThickness/2 + 4), sAngle, eAngle );
+            ctx.strokeStyle  = zone.color;
+            ctx.lineWidth    = config.zoneThickness;
+            ctx.globalAlpha  = 0.4;
+            ctx.stroke();
+            ctx.globalAlpha  = 1.0;
+        });
+
+        // 3. Tick Marks and Values
+        if( config.showTicks )
+        {
+            ctx.save();
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillStyle    = config.tickColor;
+            ctx.strokeStyle  = config.tickColor;
+
+            config.tickValues.forEach( val =>
+            {
+                const perc  = (val - config.minValue) / (config.maxValue - config.minValue);
+                const angle = startAngle + (perc * activeAngleSpan);
+
+                const x1 = cx + Math.cos(angle) * (baseRadius - 8);
+                const y1 = cy + Math.sin(angle) * (baseRadius - 8);
+                const x2 = cx + Math.cos(angle) * baseRadius;
+                const y2 = cy + Math.sin(angle) * baseRadius;
+
+                ctx.beginPath();
+                ctx.moveTo( x1, y1 );
+                ctx.lineTo( x2, y2 );
+                ctx.lineWidth = 2.5;
+                ctx.stroke();
+
+                const tx = cx + Math.cos(angle) * (baseRadius - 32);
+                const ty = cy + Math.sin(angle) * (baseRadius - 32);
+                ctx.font = 'bold 16px "Courier New"';
+                ctx.fillText( val, tx, ty );
+            });
+            ctx.restore();
+        }
+
+        // 4. (Label rendered after glare — see step 7)
+
+        // 5. Needle Rendering
+        const jitter      = (Math.random() - 0.5) * config.jitterAmount;
+        const needlePerc  = (config.displayValue - config.minValue) / (config.maxValue - config.minValue);
+        const needleAngle = startAngle + (needlePerc * activeAngleSpan) + (jitter * 0.015);
+
+        ctx.save();
+        ctx.translate( cx, cy );
+        ctx.rotate( needleAngle );
+        ctx.shadowColor   = 'rgba(0,0,0,0.3)';
+        ctx.shadowBlur    = 4;
+        ctx.shadowOffsetX = 2;
+
+        // Triangle needle pointing towards arc
+        ctx.beginPath();
+        ctx.moveTo( 0, -5 );
+        ctx.lineTo( baseRadius - 15, 0 );
+        ctx.lineTo( 0,  5 );
+        ctx.closePath();
+        ctx.fillStyle = config.needleColor;
+        ctx.fill();
+
+        // Central pivot point
+        ctx.beginPath();
+        ctx.arc( 0, 0, 14, 0, 2 * Math.PI );
+        ctx.fillStyle = config.centerColor;
+        ctx.fill();
+        ctx.restore();
+
+        // 6. Glare/Glass Effect
+        ctx.save();
+        const grad = ctx.createLinearGradient( cx - baseRadius, cy - baseRadius, cx + baseRadius, cy + baseRadius );
+        grad.addColorStop( 0,   'rgba(255,255,255,0.15)' );
+        grad.addColorStop( 0.5, 'rgba(255,255,255,0)'    );
+        grad.addColorStop( 1,   'rgba(255,255,255,0.05)' );
+
+        ctx.beginPath();
+        if( isFullSphere )
+        {
+            ctx.arc( cx, cy, baseRadius, 0, 2 * Math.PI );
+        }
+        else
+        {
+            const margin = 0.15;
+            ctx.moveTo( cx, cy );
+            ctx.arc( cx, cy, baseRadius, startAngle - margin, startAngle + activeAngleSpan + margin );
+            ctx.closePath();
+        }
+        ctx.fillStyle = grad;
+        ctx.fill();
+        ctx.restore();
+
+        // 7. Label Text — drawn last so it sits on top of the knob and glare
+        if( config.label )
+        {
+            ctx.save();
+            ctx.font         = 'bold 13px "Courier New"';
+            ctx.fillStyle    = config.labelColor;
+            ctx.textAlign    = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText( config.label, cx, (cy + 14 + canvas.height) / 2 );   // midpoint of the space below the knob
+            ctx.restore();
+        }
     }
 
-    _getTicks_( config )        // No need to worry about arc thickness: the gauge readjust the length of ticks automatically
+    /**
+     * Starts the animation loop for smoothing value changes and adding jitter.
+     * @private
+     */
+    animate()
     {
-        if( ! config.ticks )
-            return null;
+        const step = () =>
+        {
+            if( this._stopped ) return;
 
-        let color = config.ticks_color || '#333333';
-
-        return  {
-                    divisions: 6,
-                    divWidth : 1,
-                    divLength: 0.4,
-                    divColor : color,
-                    subDivisions: 3,
-                    subLength   : 0.2,
-                    subWidth    : 0.6,
-                    subColor    : color
-                };
+            const diff = this.config.value - this.config.displayValue;
+            this.config.displayValue += diff * this.config.animationSpeed;
+            this.draw();
+            requestAnimationFrame( step );
+        };
+        step();
     }
 }

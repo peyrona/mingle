@@ -35,6 +35,7 @@ command = include_command
         | use_command
         | device_command
         | driver_command
+        | library_command
         | rule_command
         | script_command ;
 
@@ -91,13 +92,20 @@ name = identifier ;
 (* Note: Names are case-insensitive and limited to 48 characters.
    Names cannot start with a digit. *)
 
+namespace_separator = "." ;
+(* Used as a separator within LIBRARY CONFIG name paths: returns.floor, returns.ceil *)
+
+dotted_name = name , { namespace_separator , name } ;
+(* A name with an optional namespace path component.
+   Examples: floor (simple), returns.floor (namespaced) *)
+
 
 (* --- Reserved Keywords --- *)
 
 reserved_keyword = "AFTER"    | "ALL"      | "ANY"      | "AS"
                  | "CALL"     | "CONFIG"   | "DEVICE"   | "DRIVER"
                  | "FROM"     | "IF"       | "INCLUDE"  | "INIT"
-                 | "LANGUAGE" | "ONSTART"  | "ONSTOP"   | "REQUIRED"
+                 | "LANGUAGE" | "LIBRARY"  | "ONSTART"  | "ONSTOP"  | "REQUIRED"
                  | "RULE"     | "SCRIPT"   | "THEN"     | "USE"
                  | "WHEN"     | "WITHIN"
                  (* Reserved for future use: *)
@@ -475,6 +483,66 @@ data_type = "BOOLEAN" | "NUMBER" | "STRING" | "ANY" ;
 
 
 (* ============================================================================
+   LIBRARY COMMAND (Callable Function Libraries)
+   ============================================================================ *)
+
+library_command = "LIBRARY" , name ,
+                  language_clause ,
+                  library_from_clause ,
+                  [ library_config_clause ] ;
+
+(* Note: Unlike SCRIPT, LIBRARY always loads an external file.
+   All public methods (Java) or top-level functions (scripting languages) are
+   exposed and callable via the send operator in any expression:
+       LibraryName:functionName( args )
+   If the library exposes an init() function/method, it is called once after
+   loading, receiving the CONFIG values. *)
+
+library_from_clause = "FROM" , external_source ;
+(* LIBRARY always requires an external file source: .jar, .py, .js, .rb, .r, .so, .dll, etc.
+   Inline code ( "FROM { ... }" ) is not supported in LIBRARY commands. *)
+
+library_config_clause = "CONFIG" , library_config_item , { clause_separator , library_config_item } ;
+
+library_config_item = library_config_name , ( assign_operator | assign_alias ) , config_value ;
+
+library_config_name = dotted_name ;
+(* Config names may use dot notation to group related settings.
+   Examples:
+     decimals = 2               (simple name)
+     returns.floor = float      (namespaced: declare return type for native function) *)
+
+(* Library Examples:
+
+   (* Java library — class matching the LIBRARY name is auto-discovered in the JAR *)
+   LIBRARY MathUtils
+       LANGUAGE Java
+       FROM "file://{*home.lib*}mathutils.jar"
+       CONFIG
+           decimals = 2
+
+   (* Python library — all top-level functions become callable *)
+   LIBRARY TextUtils
+       LANGUAGE Python
+       FROM "file://{*home.lib*}textutils.py"
+       CONFIG
+           max_length = 80
+
+   (* Native C library via JNA — return types declared per function *)
+   LIBRARY MathLib
+       LANGUAGE C
+       FROM "file:///usr/lib/x86_64-linux-gnu/libm.so.6"
+       CONFIG
+           returns.floor = float
+           returns.sqrt  = float
+
+   (* Usage in expressions — send operator invokes library functions *)
+   WHEN sensor AND MathUtils:inRange( sensor, 0, 100 )
+   THEN result = MathUtils:clamp( sensor, 0, 100 )
+*)
+
+
+(* ============================================================================
    RULE COMMAND (Trigger-Action Rules)
    ============================================================================ *)
 
@@ -595,10 +663,17 @@ script_command = "SCRIPT" , [ name ] ,
 
 language_clause = "LANGUAGE" , language_name ;
 
-language_name = "java" | "Java" | "JAVA"
+language_name = "java"       | "Java"       | "JAVA"
               | "javascript" | "JavaScript" | "JAVASCRIPT" | "js" | "JS"
-              | "python" | "Python" | "PYTHON"
-              | "une" | "Une" | "UNE" ;
+              | "python"     | "Python"     | "PYTHON"
+              | "ruby"       | "Ruby"       | "RUBY"
+              | "r"          | "R"
+              | "c"          | "C"
+              | "rust"       | "Rust"       | "RUST"
+              | "native"     | "Native"     | "NATIVE"
+              | "une"        | "Une"        | "UNE" ;
+(* Note: Java, JavaScript, Python, and Une support inline SCRIPT code.
+   Ruby, R, C, Rust, and Native are only available in LIBRARY commands. *)
 
 from_clause = "FROM" , ( inline_code | external_source ) ;
 
@@ -762,6 +837,7 @@ onstop_modifier = "ONSTOP" ;
    [USE definitions]
    [DEVICE definitions]
    [DRIVER definitions]
+   [LIBRARY definitions]
    [SCRIPT definitions]
    [RULE definitions]
 
@@ -775,6 +851,7 @@ onstop_modifier = "ONSTOP" ;
    - Comment lines starting with # are ignored
    - Line continuation with \
    - Commands can have clauses in any order
+   - LIBRARY config names support dot-notation namespacing (e.g. returns.floor)
 *)
 
 

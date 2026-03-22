@@ -121,7 +121,7 @@ final class PnlRule extends PnlCmdBase
 
     private boolean initExtra()
     {
-        JTools.setJTextIsUneName( txtName );
+        PnlCmdBase.setJTextIsUneName( txtName );
 
         // Note: up and down buttons can not be added to this list
         lstBtn2Check4Changes.add( btnThenAdd );
@@ -155,10 +155,11 @@ final class PnlRule extends PnlCmdBase
 
         radGroupThen.add( radThenScript );
         radGroupThen.add( radThenAction );
+        radGroupThen.add( radThenExpr   );
         radThenAction.setSelected( true );
 
         if( (cmbThenScriptOrRule.getItemCount() == 0) || (cmbThenActionActuatorName.getItemCount() == 0) )
-            JTools.alert( "Prior to create a RULE you must create\nat least one SCRIPT or one device" );
+            JTools.alert( "Prior to create a RULE you must create\nat least one SCRIPT and one DEVICE" );
 
         return (cmbThenScriptOrRule.getItemCount() > 0);
     }
@@ -168,10 +169,31 @@ final class PnlRule extends PnlCmdBase
         if( isStarting )
             return;
 
-        long   nAfter  = ((Number) spnAfterAmount.getModel().getValue()).longValue();
+        if( cmbThenScriptOrRule.getItemCount() == 0 || cmbThenActionActuatorName.getItemCount() == 0 )
+            return;
+
+        long nAfter = ((Number) spnAfterAmount.getModel().getValue()).longValue();
+
+        if( radThenExpr.isSelected() )
+        {
+            String sExpr   = txtThenExpr.getText().trim();
+            String sAction = sExpr + (nAfter > 0 ? " AFTER "+ nAfter + PnlCmdBase.getTimeUnitFromComboBox( cmbAfterTimeUnit ) : "");
+
+            JsonObject joAction = Json.object()
+                                      .add( "target", sExpr  )
+                                      .add( "method", "expr" )
+                                      .add( "value" , ""     )
+                                      .add( "after" , nAfter );
+
+            ltbThen.udpate( sAction, joAction );
+            return;
+        }
 
         String sTarget = (radThenScript.isSelected() ? cmbThenScriptOrRule.getSelectedItem().toString()
                                                      : cmbThenActionActuatorName.getSelectedItem().toString());
+
+        if( sTarget.endsWith( sGROUP_SUFFIX ) )
+            sTarget = sTarget.substring( 0, sTarget.length() - sGROUP_SUFFIX.length() );
 
         String sValue  = (radThenScript.isSelected() ? ""
                                                      : txtThenActionActuatorValue.getText().trim());
@@ -180,7 +202,7 @@ final class PnlRule extends PnlCmdBase
                                                      : sTarget +" = "+ sValue);
 
         if( nAfter > 0 )
-            sAction += " AFTER "+ nAfter + JTools.getTimeUnitFromComboBox( cmbAfterTimeUnit );
+            sAction += " AFTER "+ nAfter + PnlCmdBase.getTimeUnitFromComboBox( cmbAfterTimeUnit );
 
         JsonObject joAction = Json.object()
                                   .add( "target", sTarget )
@@ -200,8 +222,17 @@ final class PnlRule extends PnlCmdBase
 
         final JsonObject joAction = (JsonObject) ltbThen.getSelectedAssociated();
         final String     sTarget  = joAction.get( "target" ).asString();
+        final String     sMethod  = joAction.get( "method" ).asString();
 
-        if( cmdWise.isScript( sTarget ) )
+        if( "expr".equals( sMethod ) )
+        {
+            radThenAction.setSelected( false );
+            radThenScript.setSelected( false );
+            radThenExpr.setSelected(   true  );
+
+            txtThenExpr.setText( sTarget );
+        }
+        else if( cmdWise.isScript( sTarget ) )
         {
             radThenAction.setSelected( false );
             radThenScript.setSelected( true  );
@@ -223,7 +254,7 @@ final class PnlRule extends PnlCmdBase
             String sValue = (joAction.get( "value" ).isString() ? joAction.get( "value" ).asString()
                                                                 : joAction.get( "value" ).toString() );
 
-            txtThenActionActuatorValue.setText(UtilType.toUne( sValue ).toString() );    // Do not move
+            txtThenActionActuatorValue.setText( UtilType.toUne( sValue ).toString() );    // Do not move
             cmbThenActionActuatorName.setSelectedIndex( index );                           // Do not move
         }
 
@@ -232,9 +263,10 @@ final class PnlRule extends PnlCmdBase
 
     private void onRadioThenSelected()
     {
-        cmbThenScriptOrRule.setEnabled( radThenScript.isSelected() );
-        cmbThenActionActuatorName.setEnabled( radThenAction.isSelected() );
+        cmbThenScriptOrRule.setEnabled(        radThenScript.isSelected() );
+        cmbThenActionActuatorName.setEnabled(  radThenAction.isSelected() );
         txtThenActionActuatorValue.setEnabled( radThenAction.isSelected() );
+        txtThenExpr.setEnabled(                radThenExpr.isSelected()   );
         updateSelectedItemInActionsListbox();
     }
 
@@ -643,7 +675,7 @@ final class PnlRule extends PnlCmdBase
 
     private void radThenExprActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_radThenExprActionPerformed
     {//GEN-HEADEREND:event_radThenExprActionPerformed
-        // TODO add your handling code here:
+        onRadioThenSelected();
     }//GEN-LAST:event_radThenExprActionPerformed
 
     //------------------------------------------------------------------------//

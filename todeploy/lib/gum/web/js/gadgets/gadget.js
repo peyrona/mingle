@@ -10,7 +10,7 @@ class GumGadget
      * Creates a new instance of the gadget passed at 'props.class'.
      *
      * @param {Object|String} props Either a set of properties to create a Gadget or a Gadget class name.
-     * @returns {GumSSD|GumCheck|GumButton|GumChart|GumText|GumGauge} An instance of specified.
+     * @returns {GumSSD|GumCheck|GumButton|GumChart|GumText|GumGauge|GumRadial} An instance of specified.
      */
     static instantiate( props )
     {
@@ -33,6 +33,7 @@ class GumGadget
             case "check"    : return new GumCheck(     props );
             case "gauge"    : return new GumGauge(     props );
             case "pie"      : return new GumPie(       props );
+            case "radial"   : return new GumRadial(    props );
             case "ssd"      : return new GumSSD(       props );
             case "text"     : return new GumText(      props );
             case "scheduler": return new GumScheduler( props );

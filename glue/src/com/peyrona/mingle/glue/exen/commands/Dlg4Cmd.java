@@ -53,8 +53,7 @@ final class Dlg4Cmd extends GDialog
         pnlEditor.setVisible( false );
 
         if( onApplyChanges != null )
-            // TODO: ---> setActionOnOk( onApplyChanges );
-            setActionOnOk( (ae) -> JTools.alert( "Option not yet implemented" ) );
+            setActionOnOk( onApplyChanges );
 
         prepareOnControlsChanged( pnlCentral );
 
@@ -85,6 +84,7 @@ final class Dlg4Cmd extends GDialog
         JButton btnOK = new JButton( "Apply changes" );
                 btnOK.setToolTipText( "Add or replace this command to the associated ExEn" );
                 btnOK.addActionListener( getActionOnOk() );
+btnOK.setEnabled( false );   // FIXME: habilatarlo cuando las ediciones estén terminadas
 
         JToggleButton btnHideShow = new JToggleButton( "Command" );
                       btnHideShow.setToolTipText( "Hide/Show the Une source code that represents this command" );
@@ -157,7 +157,7 @@ final class Dlg4Cmd extends GDialog
                         public void keyReleased( KeyEvent e ) { updateTxtCommand( pnlCentral ); }
                     } );
 
-                if( JTools.isJTextUneName( (JTextComponent) c) )    // Better to this manually
+                if( PnlCmdBase.isJTextUneName( (JTextComponent) c) )    // Better to this manually
                 {
                     c.addKeyListener( kl4UnaNames );
                 }

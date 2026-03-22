@@ -97,14 +97,13 @@ public class GDialog extends JDialog
     public void pack()
     {
         super.pack();
-        WndBoundsPersist.handlePack( this );
     }
 
     @Override
     public void setVisible( boolean b )
     {
         if( b )
-            pack();
+            WndBoundsPersist.applyBoundsOrPack( this );
 
         super.setVisible( b );
     }

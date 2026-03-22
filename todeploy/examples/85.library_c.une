@@ -1,0 +1,79 @@
+# -----------------------------------------------------------------------
+# Example 85 - LIBRARY command with a native C shared library via JNA
+#
+# Demonstrates calling exported functions from a native .so/.dll/.dylib
+# directly from WHEN/THEN expressions using the colon operator:
+#   LibraryName:functionName( args )
+#
+# LANGUAGE can be "C", "Rust", or "Native" — all use the same JNA runtime.
+#
+# Return types default to double.  Use CONFIG returns.<function> = <type>
+# to declare string / int / long / float / void returns explicitly.
+#
+# The system math library (libm) is present on every Linux/macOS system
+# and exposes standard C math functions, making it a perfect test target.
+# On Windows replace the FROM path with the DLL name, e.g. "msvcrt.dll".
+# -----------------------------------------------------------------------
+
+LIBRARY MathLib
+   LANGUAGE C
+   FROM     "file:///usr/lib/x86_64-linux-gnu/libm.so.6"    # adjust path for your system
+   CONFIG
+      returns.floor  = double
+      returns.ceil   = double
+      returns.round  = double
+      returns.fabs   = double
+      returns.sqrt   = double
+      returns.pow    = double
+
+
+# -----------------------------------------------------------------------
+# Devices
+# -----------------------------------------------------------------------
+
+DEVICE raw_temperature
+   DRIVER CellSetDriver
+      CONFIG
+         value = 23.7
+
+DEVICE console
+   DRIVER OutputDriver
+
+
+# -----------------------------------------------------------------------
+# Rules: use MathLib functions in WHEN and THEN expressions
+# -----------------------------------------------------------------------
+
+# Round the raw reading to the nearest integer before storing it
+# WHEN raw_temperature != MathLib:round( raw_temperature )
+# THEN console = MathLib:round( raw_temperature )
+
+
+# -----------------------------------------------------------------------
+# A Rust library example is identical — just change the LANGUAGE keyword:
+#
+#   LIBRARY SensorStats
+#      LANGUAGE Rust
+#      FROM     "file:///path/to/libsensor_stats.so"
+#      CONFIG
+#         returns.normalize = double
+#         returns.clamp     = double
+#
+#   WHEN raw_value > 0
+#   THEN result = SensorStats:clamp( raw_value, 0.0, 100.0 )
+# -----------------------------------------------------------------------
+
+# -------------------------------------------------------------------
+# This code periodically updates 'temperature' device
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 3s
+
+WHEN clock
+THEN raw_temperature = rand( -30 , 250 )
+     console = "Raw = " + raw_temperature
+     console = "Safe= " + MathLib:round( raw_temperature )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

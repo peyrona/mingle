@@ -239,10 +239,15 @@ final class Action implements IRule.IAction
 
         for( String varName : mapVars.keySet() )
         {
-            Object val = getDevice( varName ).value();
+            IDevice dev = getDevice( varName );
 
-            if( val != null )                // A device has a null value until its associated controller send a value
-                xprEval.set( varName, val );
+            if( dev != null )
+            {
+                Object val = dev.value();
+
+                if( val != null )                // A device has a null value until its associated controller send a value
+                    xprEval.set( varName, val );
+            }
         }
 
         return xprEval.eval();   // When one or more devices have not a value yet, the xpr was not evaluated and null is returned.

@@ -368,7 +368,12 @@ public class RPiGpioPinTest
         @Override
         public IRuntime exit( int millis )
         {
-            throw new RuntimeException( "Runtime exit called with millis: " + millis );
+            return exit( millis, 1, null );
+        }
+
+        @Override public IRuntime exit( int m, int c, Object s )
+        {
+            throw new RuntimeException( "Runtime exit called with millis: " + m );
         }
 
         // Implement other IRuntime methods with defaults or no-op
@@ -382,8 +387,9 @@ public class RPiGpioPinTest
         @Override public boolean isLoggable( ILogger.Level level ) { return true; }
         @Override public com.peyrona.mingle.lang.interfaces.commands.ICommand[] all( String... sCommandType ) { return new com.peyrona.mingle.lang.interfaces.commands.ICommand[0]; }
         @Override public com.peyrona.mingle.lang.interfaces.commands.ICommand get( String name ) { return null; }
-        @Override public void add( com.peyrona.mingle.lang.interfaces.commands.ICommand command ) { /* no-op */ }
-        @Override public boolean remove( com.peyrona.mingle.lang.interfaces.commands.ICommand command ) { return false; }
+        @Override public void addModel( String sModelJSON )   {}
+        @Override public void add( com.peyrona.mingle.lang.interfaces.commands.ICommand... command ) { /* no-op */ }
+        @Override public boolean remove( com.peyrona.mingle.lang.interfaces.commands.ICommand... command ) { return false; }
         @Override public boolean isNameOfGroup( String name ) { return false; }
         @Override public com.peyrona.mingle.lang.interfaces.commands.IDevice[] getMembersOf( String... group ) { return new com.peyrona.mingle.lang.interfaces.commands.IDevice[0]; }
         @Override public com.peyrona.mingle.lang.interfaces.commands.IDevice[] getInAnyGroup( String... group ) { return new com.peyrona.mingle.lang.interfaces.commands.IDevice[0]; }

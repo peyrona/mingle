@@ -3,8 +3,10 @@ package com.peyrona.mingle.glue.gswing;
 
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.Main;
+import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.awt.Color;
 import java.awt.Cursor;
+import java.awt.Insets;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
@@ -19,7 +21,8 @@ import jiconfont.swing.IconFontSwing;
  */
 public class GButton extends javax.swing.JButton
 {
-    private static final Color ICON_COLOR = JTools.getIconColor();
+    private IconCode iconCode = null;
+    private int      iconSize = 16;
 
     //------------------------------------------------------------------------//
 
@@ -36,6 +39,14 @@ public class GButton extends javax.swing.JButton
             container.add( this );
 
         setFocusPainted( false );
+
+        Insets insets = getMargin();
+               insets.left   = UtilUnit.setBetween( 9, insets.left  , 64 );
+               insets.top    = UtilUnit.setBetween( 7, insets.top   , 64 );
+               insets.bottom = UtilUnit.setBetween( 7, insets.bottom, 64 );
+               insets.right  = UtilUnit.setBetween( 9, insets.right , 64 );
+
+        setMargin( insets );
 
         addMouseListener( new MouseAdapter()
                             {
@@ -56,9 +67,23 @@ public class GButton extends javax.swing.JButton
 
     //------------------------------------------------------------------------//
 
-    public GButton setIcon( IconCode iconCode, int size )
+    public GButton setIcon( IconCode code, int size )
     {
-        setIcon( IconFontSwing.buildIcon( iconCode, size, ICON_COLOR ) );
+        iconCode = code;
+        iconSize = size;
+
+        setIcon( IconFontSwing.buildIcon( iconCode, size, JTools.getIconColor() ) );
+        return this;
+    }
+
+    public GButton setDefaultIconColor()
+    {
+        return setIconColor( JTools.getIconColor() );
+    }
+
+    public GButton setIconColor( Color color )
+    {
+        setIcon(IconFontSwing.buildIcon( iconCode, iconSize, color ) );
         return this;
     }
 

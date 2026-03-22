@@ -205,7 +205,12 @@ public final class Lexer
             {
                 Lexeme lex = new Lexeme();
 
-                if( Language.isDigit( ch ) )
+                // A number starts with a real digit, or with a '.' immediately followed by a digit (.5 syntax).
+                // A standalone '.' (e.g. in "returns.floor") is NOT a number start and is handled below.
+                boolean isNumberStart = Character.isDigit( ch ) ||
+                                        (ch == '.' && (offset + 1 < code.length()) && Character.isDigit( code.charAt( offset + 1 ) ));
+
+                if( isNumberStart )
                 {
                     addLexeme( lex, readNumber(), Lexeme.TYPE_NUMBER );
                     String msg = Language.checkNumber( lex.text );
@@ -255,6 +260,11 @@ public final class Lexer
                     String name = readName();
 
                     addLexeme( lex, name, word2Type( name ) );
+                }
+                else if( ch == '.' )    // Standalone dot: property/namespace separator used in CONFIG keys (e.g. "returns.floor")
+                {
+                    skip( 1 );
+                    addLexeme( lex, ".", Lexeme.TYPE_OPERATOR );
                 }
                 else     // Unrecognized char
                 {

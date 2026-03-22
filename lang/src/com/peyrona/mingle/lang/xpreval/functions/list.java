@@ -1082,6 +1082,33 @@ public final class list
         return 0;
     }
 
+    /**
+     * Returns a JSON string representation of this instance's data.
+     * The result can be used for interoperativity.
+     * @return A JSON string representation.
+     */
+    @Override
+    public String toJson()
+    {
+        if( isEmpty() )
+            return "[]";
+
+        JsonArray ja = Json.array();
+
+        synchronized( inner )
+        {
+            for( Object item : inner )
+            {
+                if( item instanceof ExtraTypeCollection )
+                    ja.add( Json.parse( ((ExtraTypeCollection) item).toJson() ) );
+                else
+                    ja.add( UtilType.toJson( item ) );
+            }
+        }
+
+        return ja.toString();
+    }
+
     @Override
     public String toString()
     {
@@ -1198,6 +1225,7 @@ public final class list
      * </pre>
      *
      * @return A JSON object containing the class name and a JSON array of all elements.
+     * @see UtilType#toJson(java.lang.Object)
      */
     @Override
     public JsonObject serialize()

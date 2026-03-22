@@ -118,6 +118,13 @@ body
     padding-bottom: 14px;
 }
 
+ul /* Needed to show <ul> bullets: Bulma resets list-style to none */
+{
+    list-style-type: disc;
+    margin-left: 1em;
+    padding-left: 1em;
+}
+
 /*------------------------------------------------------------------*/
 /* OTHER STUFF */
 
@@ -390,4 +397,152 @@ body
 .gum-btn-flash
 {
     animation: gum-btn-flash-anim 0.4s ease-out;
+}
+
+/*------------------------------------------------------------------*/
+/* RADIAL GADGET (SVG arc gauge)                                     */
+
+.gauge-arc-container
+{
+    position       : relative;
+    display        : inline-flex;
+    flex-direction : column;
+    align-items    : center;
+    justify-content: center;
+}
+
+.gauge-arc-svg
+{
+    display : block;
+    overflow: visible;
+}
+
+.gauge-arc-track
+{
+    fill: none;
+}
+
+.gauge-arc-progress
+{
+    fill            : none;
+    stroke-linecap  : round;
+    transition      : stroke-dasharray 1s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.gauge-arc-content
+{
+    position       : absolute;
+    top            : 50%;
+    left           : 50%;
+    transform      : translate(-50%, -50%);
+    display        : flex;
+    flex-direction : column;
+    align-items    : center;
+    justify-content: center;
+    text-align     : center;
+    width          : 80%;
+    pointer-events : none;
+}
+
+.gauge-arc-value
+{
+    font-weight   : 700;
+    line-height   : 1;
+    margin-bottom : 0.2rem;
+}
+
+.gauge-arc-label
+{
+    font-weight    : 400;
+    text-transform : uppercase;
+    letter-spacing : 0.05em;
+}
+
+/* ---- Play-mode card options icon & menu (sub-grid cards only) ---- */
+
+/* Icon: hidden by default, revealed on card hover only in play mode */
+.grid-card-opts-btn
+{
+    position  : absolute;
+    top       : 4px;
+    right     : 4px;
+    z-index   : 10;
+    opacity   : 0;
+    transition: opacity 0.2s ease;
+    cursor    : pointer;
+    font-size : 18px;
+    line-height: 1;
+    color     : #444;
+    background: rgba(255, 255, 255, 0.75);
+    border-radius: 4px;
+    padding   : 1px 4px;
+    user-select: none;
+}
+
+body:not(.gum-design) .grid-stack-item:hover > .grid-card-opts-btn
+{
+    opacity: 0.65;
+}
+
+.grid-card-opts-btn:hover
+{
+    opacity: 1 !important;
+}
+
+/* Popup menu */
+.grid-card-opts-menu
+{
+    display      : none;
+    position     : absolute;
+    top          : 26px;
+    right        : 4px;
+    z-index      : 300;
+    background   : #fff;
+    border       : 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow   : 2px 3px 8px rgba(0, 0, 0, 0.18);
+    min-width    : 170px;
+    list-style   : none;
+    padding      : 4px 0;
+    margin       : 0;
+}
+
+.grid-card-opts-menu li
+{
+    padding    : 7px 14px;
+    cursor     : pointer;
+    font-size  : 13px;
+    white-space: nowrap;
+}
+
+.grid-card-opts-menu li:hover
+{
+    background: #f0f4ff;
+}
+
+.grid-card-opts-menu li .grid-card-opts-icon
+{
+    margin-right  : 6px;
+    vertical-align: middle;
+    font-size     : 14px;
+}
+
+/* Regular cards: suppress GridStack's default overflow-y:auto (GridStack specificity = 0,3,0;
+   this rule uses 0,4,0 via :not(:has()) and wins without needing !important) */
+.grid-stack > .grid-stack-item > .grid-stack-item-content:not(:has(> .grid-stack))
+{
+    overflow: hidden;
+}
+
+/* Sub-grid card content: allow vertical scrolling */
+.grid-stack > .grid-stack-item > .grid-stack-item-content:has(> .grid-stack)
+{
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+/* Scrollbar suppression: toggled via JS by adding .no-scroll to .grid-stack-item-content */
+.grid-stack > .grid-stack-item > .grid-stack-item-content:has(> .grid-stack).no-scroll
+{
+    overflow: hidden;
 }

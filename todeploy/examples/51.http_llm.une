@@ -1,0 +1,78 @@
+#==================================================================================================================================
+# This example demonstrates how to query a local LLM (Ollama) using the HttpClientDriver.
+#
+# The HttpClientDriver sends a POST request with a JSON body and the response is
+# parsed to extract the LLM answer from the 'response' field.
+#
+# IMPORTANT: Before running this example:
+#   1. Install Ollama: https://ollama.com
+#   2. Pull the model: ollama pull qwen3.5:9b  (or any model you prefer)
+#   3. Ensure Ollama is running: ollama serve
+#
+# NOTE: Special characters (quotes, backslashes) in the prompt will break the JSON body.
+#       For production use, sanitize the prompt before embedding it in the JSON string.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco Jose Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE OLLAMA_MODEL AS "qwen3.5:4b"   # Change to any model you have pulled (e.g. "llama3.2", "mistral")
+    TEMPERATURE  AS 0.5            # Creativity level: 0 = deterministic, 1 = very creative
+    MAX_TOKENS   AS 256            # Maximum tokens the LLM will generate
+    THINK        AS false          # Think mode
+    PROMPT       AS "Give me a fact about the universe in one sentence."  # Question to send to the LLM.
+
+
+# Output device for displaying results
+DEVICE console
+    DRIVER OutputDriver
+
+# Time between two invocations to the LLM
+DEVICE timer
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 10m    # LLMs can be slow; adjust to your hardware
+
+#==================================================================================================================================
+# The Ollama device sends HTTP POST requests to the local Ollama API.
+# A generous timeout is needed since LLMs may take several seconds to respond.
+#==================================================================================================================================
+
+DEVICE ollama
+    DRIVER HttpClientDriver
+        CONFIG
+            uri           SET "http://localhost:11434/api/generate"
+            timeout       SET 9m     # LLMs can be slow; adjust to your hardware
+            read_on_start SET false  # Ollama's /api/generate only accepts POST; skip the initial GET
+
+#==================================================================================================================================
+# RULE: When the timer changes, POST it to Ollama.
+#
+# The JSON body mirrors the Python 'requests.post(json={...})' call:
+#   {"model":"...", "prompt":"...", "stream":false, "options":{"temperature":...,"num_predict":...}}
+#==================================================================================================================================
+
+WHEN timer
+THEN console SET "[" + time() + "] Asking " + OLLAMA_MODEL + ": " + prompt
+     ollama  SET pair():put( "method", "POST" )                                                           \
+                       :put( "body"  , pair():put( "model"  , OLLAMA_MODEL )                              \
+                                             :put( "prompt" , PROMPT       )                              \
+                                             :put( "stream" , false        )                              \
+                                             :put( "think"  , THINK        )                              \
+                                             :put( "options", pair():put( "temperature", TEMPERATURE )    \
+                                                                    :put( "num_predict", MAX_TOKENS ) ) )
+
+#==================================================================================================================================
+# RULE 2: When Ollama responds, extract and display the answer.
+#
+# Ollama returns a JSON object; the generated text is in the 'response' field:
+#   {"model":"...","response":"The actual answer here","done":true,...}
+#==================================================================================================================================
+
+WHEN ollama
+THEN console SET "[" + time() + "] Ollama says: " + pair( ollama ):get( "response" )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

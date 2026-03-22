@@ -161,9 +161,6 @@ final class Util
                 fUserDir = UtilStr.isMeaningless( userDir ) ? new File( UtilSys.getEtcDir(), "gum_user_base" )
                                                             : new File( userDir );
 
-                if( UtilSys.isDevEnv )
-                    fUserDir = new File( System.getProperty( "user.home" ), "proyectos/mingle/balata/gum_user_base" );
-
                 if( ! UtilIO.mkdirs( fUserDir ) )
                     throw new MingleException( "Can not create "+ fUserDir );
 

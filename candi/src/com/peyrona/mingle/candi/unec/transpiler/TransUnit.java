@@ -5,6 +5,7 @@ import com.peyrona.mingle.candi.unec.parser.ParseBase;
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
 import com.peyrona.mingle.candi.unec.parser.ParseDriver;
 import com.peyrona.mingle.candi.unec.parser.ParseInclude;
+import com.peyrona.mingle.candi.unec.parser.ParseLibrary;
 import com.peyrona.mingle.candi.unec.parser.ParseRule;
 import com.peyrona.mingle.candi.unec.parser.ParseScript;
 import com.peyrona.mingle.candi.unec.parser.ParseUse;
@@ -306,12 +307,13 @@ public final class TransUnit
             ParseBase cmd = null;
             String    key = lstCmdLexemes.get(0).text();    // cmd keyword
 
-                 if( ParseScript.is(  key ) )  cmd = new ParseScript( lstCmdLexemes );
-            else if( ParseDriver.is(  key ) )  cmd = new ParseDriver( lstCmdLexemes, xprEval );
-            else if( ParseDevice.is(  key ) )  cmd = new ParseDevice( doUnits( lstCmdLexemes ), xprEval );    // Only DEVICE and RULE can have
-            else if( ParseRule.is(    key ) )  cmd = new ParseRule(   doUnits( lstCmdLexemes ), xprEval );    // temperature and time units
-            else if( ParseInclude.is( key ) )  cmd = null;                                                    // Processed at constructor
-            else if( ParseUse.is(     key ) )  cmd = null;                                                    // Processed at constructor
+                 if( ParseScript.is(  key ) )  cmd = new ParseScript(  lstCmdLexemes         );
+            else if( ParseLibrary.is( key ) )  cmd = new ParseLibrary( lstCmdLexemes, xprEval );
+            else if( ParseDriver.is(  key ) )  cmd = new ParseDriver(  lstCmdLexemes, xprEval );
+            else if( ParseDevice.is(  key ) )  cmd = new ParseDevice(  doUnits( lstCmdLexemes ), xprEval );    // Only DEVICE and RULE can have
+            else if( ParseRule.is(    key ) )  cmd = new ParseRule(    doUnits( lstCmdLexemes ), xprEval );    // temperature and time units
+            else if( ParseInclude.is( key ) )  cmd = null;                                                     // Processed at constructor
+            else if( ParseUse.is(     key ) )  cmd = null;                                                     // Processed at constructor
             else
             {
                 lstLexerErr.add( new CodeError( "Unrecognized command: \""+ key +'"', lstCmdLexemes.get(0) ) );

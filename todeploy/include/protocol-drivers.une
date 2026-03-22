@@ -27,8 +27,8 @@ DRIVER ModbusTcpClientDriver                  # This driver provides access to d
         type     AS string REQUIRED           # One of: "boolean" (1 bit), "int" (2 bytes), "long" & "float" (4 bytes)
         unitid   AS number                    # Unit ID / Slave ID (0-255). By default: 1
         order    AS string                    # Byte order for 32-bit values: "ABCD", "BADC", "CDAB" or "DCBA". By default: "ABCD".
-        interval AS number                    # Time between reads (min: 30 millis). Optional. Default: 5000 ms
-        timeout  AS number                    # Connection/response timeout. By default 4000 milliseconds
+        interval AS number                    # Time between reads in Une time unit (min: 30 millis). Optional. Default: 5s
+        timeout  AS number                    # Connection/response timeout in Une time unit. By default 4s
         retries  AS number                    # Number of retries on failure (0-10). By default: 2
         function AS string                    # One of: "coils" (FC01), "discrete" (FC02), "holding" (FC03), "input" (FC04).
                                               # By default: "coils" for boolean, "holding" for numeric types
@@ -44,10 +44,11 @@ DRIVER SocketClientDriver                     # This driver acts as a Socket (tr
 DRIVER HttpClientDriver                       # Generic HTTP client for REST API integration
     SCRIPT HttpClientController
     CONFIG
-        uri      AS string REQUIRED           # URI to connect to (e.g.: "https://api.example.com/data")
-        interval AS number                    # Polling interval in seconds. 0 = read once. If > 0, min is 1s. Default: 0
-        timeout  AS number                    # Request timeout in seconds (1-300). By default 30
-        headers  AS string                    # Custom headers as "name:value;name2:value2". By default none
+        uri           AS string REQUIRED      # URI to connect to (e.g.: "https://api.example.com/data")
+        interval      AS number               # Polling interval in Une time unit. 0 = read once. If > 0, min is 1s. Default: 0
+        timeout       AS number               # Request timeout in Une time unit, from 1s to 5m. By default 30s
+        headers       AS string               # Custom headers as "name:value;name2:value2". By default none
+        read_on_start AS boolean              # Perform or not an initial read  when the driver is started. By default true.
 
 
 DRIVER MCPDriver                              # MCP (Model Context Protocol) driver for LLM communication
@@ -56,7 +57,7 @@ DRIVER MCPDriver                              # MCP (Model Context Protocol) dri
         uri         AS string REQUIRED        # API endpoint URL (e.g.: "https://api.openai.com/v1/chat/completions")
         api_key     AS string REQUIRED        # API authentication key
         model       AS string REQUIRED        # Model name (e.g.: "gpt-4", "claude-3-opus-20240229")
-        timeout     AS number                 # Request timeout in seconds. By default 60
+        timeout     AS number                 # Request timeout in Une time unit. By default 3m
         max_tokens  AS number                 # Maximum tokens in response. By default 1024
         temperature AS number                 # Sampling temperature 0.0-2.0. By default 0.7
         context     AS string                 # Name of a DEVICE whose value is appended to the system prompt. By default empty
@@ -65,7 +66,7 @@ DRIVER MCPDriver                              # MCP (Model Context Protocol) dri
 DRIVER AgentNLDriver                          # Natural language interaction driver — delegates LLM calls to an MCP DEVICE
     SCRIPT AgentNLController
     CONFIG
-        mcp         AS string REQUIRED        # Name of the MCP DEVICE to use for LLM calls
+        transformer AS string REQUIRED        # Name of the DEVICE which valuethat to use for LLM calls
         log         AS string                 # Name of a DEVICE where the raw LLM response is posted. By default empty
         exclude     AS string                 # Comma-separated names (devices, rules, scripts) to exclude from the LLM context. By default empty
 
@@ -81,7 +82,7 @@ DRIVER SerialDriver                           # Serial port (RS-232/RS-485) comm
         parity      AS string                 # Parity: "none", "odd", "even", "mark", "space". By default "none"
         flowcontrol AS string                 # Flow control: "none", "rtscts", "xonxoff". By default "none"
         encoding    AS string                 # Character encoding (e.g.: "UTF-8", "ISO-8859-1"). By default "UTF-8"
-        timeout     AS number                 # Read timeout in milliseconds. By default 5000
+        timeout     AS number                 # Read timeout in in Une time unit. By default 5s
         terminator  AS string                 # Line terminator for reading: "\n", "\r", "\r\n". By default "\n"
         interval    AS number                 # Polling interval in millis. When x <= 0, auto-read. Min interval: 500 millis.
         reconnect   AS boolean                # Enable/disable automatic reconnection. By default true

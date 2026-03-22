@@ -1,0 +1,91 @@
+#==================================================================================================================================
+# This example shows how to use the LIBRARY command to expose a Ruby module as a callable function collection.
+#
+# For Ruby libraries, the FROM clause points to the .rb file. All top-level functions
+# defined in the module become callable in WHEN/THEN/CONFIG expressions using the colon operator:
+#
+#     LibraryName:functionName( args )
+#
+# If the module defines a top-level "init( config )" function, it is called once after loading,
+# receiving the CONFIG values declared in the LIBRARY command.
+#
+# NOTE: Ruby library support requires invokeFunction() to be implemented in TruffleRubyRT.
+#       See ICandi.ILanguage for the contract.
+#
+# IMPORTANT! THIS EXAMPLE CANNOT BE EXECUTED because 'temputils.rb' does not exist.
+#            It illustrates the syntax and intended use.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+# --- Example Ruby module content (temputils.rb) ---
+#
+# def init( config )
+#   # Optional: receives CONFIG values as a Hash
+# end
+#
+# def celsius_to_fahrenheit( temp )
+#   temp * 9.0 / 5.0 + 32
+# end
+#
+# def is_comfortable( temp )
+#   temp >= 15 && temp <= 25
+# end
+#
+# def round_to( value, decimals )
+#   factor = 10 ** decimals
+#   ( value * factor ).round.to_f / factor
+# end
+
+
+# --- Declare the library ---
+
+LIBRARY TempUtils
+   LANGUAGE Ruby
+   FROM     "file://{*home.lib*}temputils.rb"
+   CONFIG
+      unit = "C"            # Passed to TempUtils.init(config) after the module is loaded
+
+
+# --- Devices ---
+
+DEVICE temperature
+   DRIVER CellSetDriver
+      CONFIG
+         value = 20.0
+
+DEVICE display_temp
+   DRIVER OutputDriver     # Actuator: shows the formatted temperature value
+
+
+# --- Rules using the library ---
+
+# Convert temperature to Fahrenheit and round it before displaying.
+
+WHEN temperature
+THEN display_temp = TempUtils:round_to( TempUtils:celsius_to_fahrenheit( temperature ), 1 )
+
+
+# Only update the display when the temperature is in the comfortable range (15–25 °C).
+
+WHEN temperature AND TempUtils:is_comfortable( temperature )
+THEN display_temp = TempUtils:celsius_to_fahrenheit( temperature )
+
+
+# -------------------------------------------------------------------
+# This code periodically updates the 'temperature' device
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+WHEN clock
+THEN temperature = rand( -30, 50 )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

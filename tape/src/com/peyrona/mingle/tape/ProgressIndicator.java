@@ -1,5 +1,6 @@
 package com.peyrona.mingle.tape;
 
+import java.io.PrintWriter;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -13,16 +14,19 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public final class ProgressIndicator
 {
+    private final PrintWriter   console;
     private final Thread        thread;
     private final AtomicBoolean running = new AtomicBoolean( false );
 
     /**
      * Creates a new ProgressIndicator instance (but does not start it).
+     * @param console
      */
-    public ProgressIndicator()
+    public ProgressIndicator( PrintWriter console )
     {
-        thread = new Thread( this::printDots_, "ProgressIndicator" );
-        thread.setDaemon( true );
+        this.console = console;
+        this.thread  = new Thread( this::printDots_, "ProgressIndicator" );
+        this.thread.setDaemon( true );
     }
 
     /**
@@ -33,10 +37,7 @@ public final class ProgressIndicator
     public void start()
     {
         if( running.compareAndSet( false, true ) )
-        {
-            System.out.print( ">" );
             thread.start();
-        }
     }
 
     /**
@@ -48,14 +49,8 @@ public final class ProgressIndicator
     {
         if( running.compareAndSet( true, false ) )
         {
-            try
-            {
-                thread.join( 100 );
-            }
-            catch( InterruptedException ignored )
-            { }
-
-            System.out.println( '<' );
+            try { thread.join( 100 ); }
+            catch( InterruptedException ignored ) { }
         }
     }
 
@@ -64,9 +59,17 @@ public final class ProgressIndicator
      */
     private void printDots_()
     {
+        try { thread.sleep( 1000 ); }              // 1 sec initial delay because most part of Une
+        catch( InterruptedException ignored ) { }  // scripts can be transpiled in less than 1 sec
+
+        if( ! running.get() )                      // finished in ≤1 sec: show nothing
+            return;
+
+        console.print( ">" );
+
         while( running.get() )
         {
-            System.out.print( ':' );
+            console.print( ':' );
 
             try
             {
@@ -77,5 +80,8 @@ public final class ProgressIndicator
                 break;
             }
         }
+
+        console.println( '<' );
+        console.flush();
     }
 }

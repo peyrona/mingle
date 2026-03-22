@@ -18,6 +18,7 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
+import java.net.URI;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
@@ -139,7 +140,7 @@ public final class   WeatherOpenMeteo
 
                                 try
                                 {
-                                    conn   = (HttpURLConnection) new URL( sURL ).openConnection();
+                                    conn   = (HttpURLConnection) URI.create( sURL ).toURL().openConnection();
                                     reader = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) );
 
                                     StringBuilder sbAnswer = new StringBuilder( 1024 * 4 );

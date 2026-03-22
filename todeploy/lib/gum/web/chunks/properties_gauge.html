@@ -110,25 +110,17 @@
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label">Angle</label>
+                                <label class="label">Angle span</label>
                                 <div class="control">
-                                    <input class="input" type="number" name="angle" min="-33" max="33" value="0" onchange="dlgGauge.geh.changed(this)">
+                                    <input type="range" name="angle_span" min="1.0" max="6.28" step="0.01" value="4.2" onchange="dlgGauge.geh.changed(this)" style="width:100%;">
                                 </div>
                             </div>
                         </div>
                         <div class="column">
                             <div class="field">
-                                <label class="label">Radius</label>
+                                <label class="label">Zone thickness</label>
                                 <div class="control">
-                                    <input class="input" type="number" name="radius" min="50" max="100" value="95" onchange="dlgGauge.geh.changed(this)">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="column">
-                            <div class="field">
-                                <label class="label">Thickness</label>
-                                <div class="control">
-                                    <input class="input" type="number" name="thick" min="10" max="60" value="38" onchange="dlgGauge.geh.changed(this)">
+                                    <input class="input" type="number" name="zone_thick" min="2" max="40" value="12" onchange="dlgGauge.geh.changed(this)">
                                 </div>
                             </div>
                         </div>
@@ -179,7 +171,48 @@
                                         </button>
                                     </p>
                                     <p class="control is-expanded">
-                                        <input class="input" name="needle_color" type="color" value="#000000" disabled onchange="dlgGauge.geh.changed(this)">
+                                        <input class="input" name="needle_color" type="color" value="#d32f2f" disabled onchange="dlgGauge.geh.changed(this)">
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="columns">
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Background color</label>
+                                <div class="field has-addons mb-0">
+                                    <p class="control">
+                                        <button class="button" type="button" name="bg_color_toggle" title="Toggle custom color" onclick="dlgGauge._toggleClr_('bg_color')">
+                                            <span class="icon"><i class="ti ti-check"></i></span>
+                                        </button>
+                                    </p>
+                                    <p class="control is-expanded">
+                                        <input class="input" name="bg_color" type="color" value="#f4ecd8" disabled onchange="dlgGauge.geh.changed(this)">
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Label</label>
+                                <div class="control">
+                                    <input class="input" type="text" name="label" placeholder="Optional label on gauge face" onchange="dlgGauge.geh.changed(this)">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="column">
+                            <div class="field">
+                                <label class="label">Label color</label>
+                                <div class="field has-addons mb-0">
+                                    <p class="control">
+                                        <button class="button" type="button" name="label_color_toggle" title="Toggle custom color" onclick="dlgGauge._toggleClr_('label_color')">
+                                            <span class="icon"><i class="ti ti-check"></i></span>
+                                        </button>
+                                    </p>
+                                    <p class="control is-expanded">
+                                        <input class="input" name="label_color" type="color" value="#555555" disabled onchange="dlgGauge.geh.changed(this)">
                                     </p>
                                 </div>
                             </div>
@@ -305,6 +338,8 @@ var dlgGauge =
 
         this._setClrEnabled_( 'ticks_color',  ! p_base.isEmpty( gadget.ticks_color  ) );
         this._setClrEnabled_( 'needle_color', ! p_base.isEmpty( gadget.needle_color ) );
+        this._setClrEnabled_( 'bg_color',     ! p_base.isEmpty( gadget.bg_color     ) );
+        this._setClrEnabled_( 'label_color',  ! p_base.isEmpty( gadget.label_color  ) );
 
         return this;
     },

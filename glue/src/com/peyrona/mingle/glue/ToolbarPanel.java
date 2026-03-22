@@ -9,9 +9,11 @@ import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.glue.gswing.GFrame;
 import com.peyrona.mingle.glue.gswing.GTip;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.BorderLayout;
 import java.awt.Color;
+import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -19,6 +21,7 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ContainerEvent;
 import java.awt.event.ContainerListener;
 import java.awt.event.KeyEvent;
+import java.io.File;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
@@ -29,6 +32,7 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.SwingWorker;
 import javax.swing.event.ChangeEvent;
+import javax.swing.filechooser.FileNameExtensionFilter;
 import jiconfont.icons.font_awesome.FontAwesome;
 import jiconfont.swing.IconFontSwing;
 
@@ -52,6 +56,8 @@ final class ToolbarPanel extends javax.swing.JPanel
     private JButton btnExEn;
     private JButton btnGum;
     private JButton btnInfo;
+    private JButton btnLoad;
+    private JButton btnMode;
     private JButton btnSave;
 
     //------------------------------------------------------------------------//
@@ -70,18 +76,33 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     //------------------------------------------------------------------------//
 
-    public boolean close()
+    public boolean isUserFeedbackNeeded()
     {
-        if( (frmEditor != null) && (! frmEditor.isClosed()) )
+        boolean isUnsaved =   frmEditor != null    &&
+                            ! frmEditor.isClosed() &&
+                            JTools.getChild( frmEditor, UneMultiEditorPanel.class ).isAnyFileUnsaved();
+
+        boolean isEnExRunning = procExEn != null;
+
+        boolean isGumRunning  = procGum  != null;
+
+        return isUnsaved || isEnExRunning || isGumRunning;
+    }
+
+    public boolean close( boolean bForce )
+    {
+        if( (! bForce)          &&   // When bForced, the open files can not have an opportunity to close or ask user
+            (frmEditor != null) &&
+            (! frmEditor.isClosed()) )
         {
             JTools.getChild( frmEditor, UneMultiEditorPanel.class ).closeAll( frmEditor );
         }
 
-        if( (procExEn != null) && JTools.confirm( "You started an 'ExEn'.\nDo you want to stop it?" ) )
-            Util.killProcess( procExEn );
+        if( (procExEn != null) && (bForce || JTools.confirm( "You started an 'ExEn'.\nDo you want to stop it?" )) )
+            Util.killProcess( procExEn );    // When bForced, the process has to be killed
 
-        if( (procGum != null) && JTools.confirm( "You started 'Gum'.\nDo you want to stop it?" ) )
-            Util.killProcess( procGum );
+        if( (procGum != null) && (bForce || JTools.confirm( "You started 'Gum'.\nDo you want to stop it?" )) )
+            Util.killProcess( procGum );     // When bForced, the process has to be killed
 
         return true;
     }
@@ -110,7 +131,7 @@ final class ToolbarPanel extends javax.swing.JPanel
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
             .getRootPane()
-            .registerKeyboardAction( (ActionListener) -> onOpenUneEditor(),
+            .registerKeyboardAction( (ActionListener) -> onOpenEditor(),
                                      KeyStroke.getKeyStroke( KeyEvent.VK_F2, 0 ),
                                      JComponent.WHEN_IN_FOCUSED_WINDOW );
         Main.frame
@@ -135,13 +156,17 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void updateButtonsState()
     {
-        int nTabCount = Main.frame.getExEnsTabPane().getTabCount();
+        boolean bExEn = Main.frame.getExEnsTabPane().getTabCount() > 0
+                        ||
+                        procExEn != null;
 
-        btnSave.setEnabled( nTabCount > 0 );
-        btnDel.setEnabled(  nTabCount > 0 );
-        btnAdd.setEnabled(  true );
-        btnEdit.setEnabled( true );
-        btnInfo.setEnabled( true );
+        btnLoad.setEnabled( bExEn );
+        btnSave.setEnabled( bExEn );
+        btnDel.setEnabled(  bExEn );
+        btnAdd.setEnabled(  true  );
+        btnEdit.setEnabled( true  );
+        btnMode.setEnabled( true  );
+        btnInfo.setEnabled( true  );
     }
 
     /**
@@ -151,13 +176,17 @@ final class ToolbarPanel extends javax.swing.JPanel
      */
     private void initComponents()
     {
-        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn()     ).setToolTip( "Connect to an ExEn already running [F4]" );
-        btnSave = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onSaveCurrentModel() ).setToolTip( "Save current model" );
-        btnDel  = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onClearExEn()        ).setToolTip( "Empty current model: delete all rules and devices" );
-        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunStopExEn()      ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F5]" );
-        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenUneEditor()    ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F2]" );  // Editor is always enabled
-        btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()       ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F8]" );
-        btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()             ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
+        FontAwesome icnMode = SettingsManager.isDarkMode() ? FontAwesome.SUN_O : FontAwesome.MOON_O;
+
+        btnAdd  = new GButton(this).setIcon( FontAwesome.PLUG    , 16 ).addAction( (ActionEvent evt) -> onConnect2ExEn() ).setToolTip( "Connect to an ExEn already running [F4]" );
+        btnExEn = new GButton(this).setIcon( FontAwesome.PLAY    , 16 ).addAction( (ActionEvent evt) -> onRunStopExEn()  ).setToolTip( "Execute a local empty ExEn (Stick) using default local configuration file [F5]" );
+        btnLoad = new GButton(this).setIcon( FontAwesome.FOLDER  , 16 ).addAction( (ActionEvent evt) -> onLoadModel()    ).setToolTip( "Inject an existing model to selected ExEn" );
+        btnSave = new GButton(this).setIcon( FontAwesome.FLOPPY_O, 16 ).addAction( (ActionEvent evt) -> onSaveModel()    ).setToolTip( "Save selected ExEn model to file" );
+        btnDel  = new GButton(this).setIcon( FontAwesome.TRASH   , 16 ).addAction( (ActionEvent evt) -> onClearExEn()    ).setToolTip( "Empty selected ExEn model: delete all rules and devices" );
+        btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()   ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F8]" );
+        btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenEditor()   ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F2]" );  // Editor is always enabled
+        btnMode = new GButton(this).setIcon( icnMode             , 16 ).addAction( (ActionEvent evt) -> onToggleMode()   ).setToolTip( "Alternate between Light and Dark modes" );
+        btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()         ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
     }
 
     private void onConnect2ExEn()
@@ -202,6 +231,7 @@ final class ToolbarPanel extends javax.swing.JPanel
             protected void done()
             {
                 JTools.hideWaitFrame();
+                updateButtonsState();
 
                 if( connectionError == null )
                 {
@@ -217,16 +247,6 @@ final class ToolbarPanel extends javax.swing.JPanel
         };
 
         worker.execute();
-    }
-
-    /**
-     * This action removes all commands from highlighted ExEn sending requests to the ExEn.
-     * @param evt
-     */
-    private void onClearExEn()
-    {
-        if( JTools.confirm( "Do you want to remove all commands?" ) )
-            Main.frame.getExEnsTabPane().clear();
     }
 
     /**
@@ -283,26 +303,76 @@ final class ToolbarPanel extends javax.swing.JPanel
                        .delay( 1500 )
                        .execute( () ->     // Stick needs some time to be ready
                                     {
-                                        SwingUtilities.invokeLater(() ->
+                                        if( procExEn == null || ! procExEn.isAlive() )
+                                            return;
+
+                                        SwingUtilities.invokeLater( () ->
                                             {
                                                 btnExEn.setIcon( IconFontSwing.buildIcon( FontAwesome.STOP, 16, JTools.getIconColor() ) );
                                                 btnExEn.setToolTipText( "Stops local internal Stick (ExEn)" );
                                                 JTools.hideWaitFrame();
-                                                GTip.show( "After the ExEn is running, you can:\n\n"+
-                                                           "   * Load a '.model' file (click 'folder' icon in toolbar)\n\n"+
-                                                           "   * Create new commands using this application (Glue)" );
                                             } );
+
+                                        JsonArray  jaClients  = UtilSys.getConfig().get( "network", "clients", new JsonArray() );
+                                        JsonObject joProtocol = jaClients.isEmpty() ? null : jaClients.get( 0 ).asObject();
+
+                                        if( joProtocol == null )
+                                        {
+                                            JTools.error( "No network client configured to connect to local ExEn" );
+                                            return;
+                                        }
+
+                                        final String     sLocalExEn  = "Local ExEn";
+                                        final ExEnClient localClient = new ExEnClient( joProtocol, sLocalExEn );
+
+                                        try
+                                        {
+                                            localClient.connect();
+
+                                            SwingUtilities.invokeLater( () ->
+                                                {
+                                                    Main.frame.getExEnsTabPane().add( sLocalExEn, localClient );
+                                                    GTip.show( "ExEn is running. You can now:\n\n"+
+                                                               "   * Load a '.model' file (click 'folder' icon in toolbar)\n\n"+
+                                                               "   * Create new commands using this application (Glue)" );
+                                                } );
+                                        }
+                                        catch( Exception exc )
+                                        {
+                                            JTools.error( "Could not connect to the local ExEn: " + exc.getMessage() );
+                                        }
                                     } );
             }
         }
+
+        updateButtonsState();
     }
 
-    private void onSaveCurrentModel()
+    private void onLoadModel()
+    {
+        File[] aFiles = JTools.fileLoader( Main.frame, null, false,
+                                           new FileNameExtensionFilter( "Select a model to load", "model" ) );
+
+        if( UtilColls.isNotEmpty( aFiles ) )
+            Main.frame.getExEnsTabPane().load( aFiles[0] );
+    }
+
+    private void onSaveModel()
     {
         Main.frame.getExEnsTabPane().save();
     }
 
-    private void onOpenUneEditor()
+    /**
+     * This action removes all commands from highlighted ExEn sending requests to the ExEn.
+     * @param evt
+     */
+    private void onClearExEn()
+    {
+        if( JTools.confirm( "Do you want to remove all commands?" ) )
+            Main.frame.getExEnsTabPane().clear();
+    }
+
+    private void onOpenEditor()
     {
         if( frmEditor != null && ! frmEditor.isClosed() )
         {
@@ -395,6 +465,23 @@ final class ToolbarPanel extends javax.swing.JPanel
                                         showBrowserNotSupportedDialog();
                                     }
                                 } );
+        }
+    }
+
+    private void onToggleMode()
+    {
+        boolean isDarkTheNew = ! SettingsManager.isDarkMode();
+
+        if( JTools.setLaF( isDarkTheNew ) )
+        {
+            SwingUtilities.invokeLater( () ->
+                                        {
+                                            FontAwesome icon = isDarkTheNew ? FontAwesome.SUN_O : FontAwesome.MOON_O;
+                                            ((GButton) btnMode).setIcon( icon, 16 );
+
+                                            for( Component btn : JTools.getOfClass( this, GButton.class ) )
+                                                ((GButton) btn).setDefaultIconColor();
+                                        } );
         }
     }
 

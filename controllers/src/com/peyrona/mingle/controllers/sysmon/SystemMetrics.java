@@ -152,7 +152,7 @@ public final class SystemMetrics
      */
     public static float getCpuLoad()
     {
-        float v = (float) OSMXBean.getSystemCpuLoad();       // [0.0, 1.0] or negative if not available
+        float v = (float) OSMXBean.getCpuLoad();              // [0.0, 1.0] or negative if not available
 
         return (v < 0.0) ? Float.NaN : v;
     }

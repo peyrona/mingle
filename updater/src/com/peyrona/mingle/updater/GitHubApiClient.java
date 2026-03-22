@@ -4,16 +4,20 @@ import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
+import java.io.BufferedInputStream;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.net.HttpURLConnection;
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -424,9 +428,10 @@ public final class GitHubApiClient
         rateLimitInstance.applyRateLimiting();
 
         HttpURLConnection connection = null;
+
         try
         {
-            URL url = new URL( downloadUrl );
+            URL url = new URI( downloadUrl ).toURL();
 
             connection = executeWithRetry( url, filePath );
 
@@ -439,8 +444,8 @@ public final class GitHubApiClient
             Files.createDirectories( targetPath.getParent() );
 
             // Download file with buffered copying for better performance
-            try( java.io.InputStream inputStream = new java.io.BufferedInputStream( connection.getInputStream() ); java.io.OutputStream outputStream = java.nio.file.Files.newOutputStream( targetPath,
-                                                                                                                                                                                            java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.TRUNCATE_EXISTING ) )
+            try( InputStream  inputStream  = new BufferedInputStream( connection.getInputStream() );
+                 OutputStream outputStream = Files.newOutputStream( targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING ) )
             {
                 byte[] buffer = new byte[65536]; // 64KB buffer
                 int bytesRead;
@@ -456,7 +461,7 @@ public final class GitHubApiClient
                 return true;
             }
         }
-        catch( java.net.MalformedURLException e )
+        catch( URISyntaxException | MalformedURLException e )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Malformed download URL: " + downloadUrl );
             return false;

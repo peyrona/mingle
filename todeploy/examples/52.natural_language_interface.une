@@ -1,0 +1,119 @@
+#==================================================================================================================================
+# This example demonstrates natural language control of a Mingle application via Telegram and an LLM.
+#
+# The 'LLM' device takes its context from the 'context' device.(which reads it froma  file).
+#
+# Flow:
+#   1. User sends a free-text message to the Telegram bot (e.g. "Switch the kitchen light off").
+#   2. The device 'telegram' recevies it and dispatch a message announcing it has a new value.
+#   3. The only rule in this app is triggered and it modifies the estate of device 'agent'
+#   4. The rule dispatches what was recevied from device 'telegram' to the device 'agent'
+#   5. The device 'agent' dispatches it to device 'llm' along with the model estate (all devices
+#      names and values) and waits for the llm to answer.
+#   6. Once 'llm' replies (a JSON array of actions), the 'agent':
+#         6.1  Validates each one of these actions,
+#         6.2. Posts the corresponding messages to the EventBus
+#         6.3. Echoes the raw LLM response back to the user ('log' is 'console').
+#
+# Prerequisites:
+#   - A Telegram bot token and the chat id where messages will be sent/received.
+#   - An MCP-compatible LLM endpoint and API key.
+#
+# LLM action schema (returned as a JSON array):
+#   {"action":"write"  , "device":"<name>", "value":<value>}
+#   {"action":"execute", "name":"<rule_or_script_name>"}
+#   {"action":"unknown", "reason":"<explanation>"}
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+INCLUDE "{*home*}../balata/nl_test_defs.une"  # DO NOT FORGET TO DELETE THIS LINE PRIOR TO COMMIT TO GitHub AND TO ENABLE THESE -->
+
+# USE LLM_URI     AS ""    # Replace with your provider, e.g. "https://api.openai.com/v1/chat/completions"
+#     LLM_API_KEY AS ""    # Replace with your API key
+#     LLM_MODEL   AS ""    # Replace with your model "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo", etc.
+#     IM_CHAT     AS ""    # Replace with your Telegram chat ID
+#     IM_TOKEN    AS ""    # Replace with your Telegram chat token
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+DEVICE telegram
+    DRIVER TelegramDriver
+    CONFIG
+        chat    SET IM_CHAT
+        token   SET IM_TOKEN
+        receive SET true
+
+
+DEVICE context
+    DRIVER FileDriver
+        CONFIG
+            file     SET "{*home.etc*}agent_nl_context.txt"
+            charset  SET "UTF-8"
+            interval SET 0          # Time between reads. Default 0: only readed once, when ExEn starts.
+
+
+DEVICE chatbot
+    DRIVER MCPDriver
+    CONFIG
+        uri         SET LLM_URI
+        api_key     SET LLM_API_KEY
+        model       SET LLM_MODEL
+        max_tokens  SET 4096         # Max number of tokens that model can returns
+        temperature SET 0.7          # Creativity level: 0 = deterministic, 1 = very creative
+        context     SET "context"    # The context to be added to every prompt (can be a string or another DEVICE's value)
+
+
+DEVICE agent
+    DRIVER AgentNLDriver
+    CONFIG
+        transformer SET "chatbot"   # Delegate LLM calls to the 'chatbot' MCP device
+        log         SET "console"   # To echo the raw LLM response back to the Telegram user (optional)
+
+
+# Squence triggered by this RULE:
+#    1. A message arrives from Telegram IM to the DEVICE 'telegram' changing its value
+#    2. The new 'telegram's device value is assigned to the DEVICE 'agent'
+#    3. DEVICE 'agent' sends this telegram value to the DEVICE 'chatbot'
+#    4. DEVICE 'agent' is notified (via Bus hook) when the 'chatbot' has an answer (has changed it value)
+#    5. DEVICE 'agent' analyzes the answer from the transformer and posts as many messages as needed into
+#       the Bus to accomplish all user's requests (those that were understood, obviously).
+
+WHEN telegram
+THEN agent   SET telegram
+     console SET telegram
+
+#------------------------------------------------------------------------------------------------------------------------------
+# Devices to interact with via natural language
+
+DEVICE alarm
+    DRIVER CellSetDriver
+        CONFIG
+            value SET OFF
+
+DEVICE light_kitchen
+    DRIVER CellSetDriver
+        CONFIG
+            value SET OFF
+
+
+DEVICE light_bedroom
+    DRIVER CellSetDriver
+        CONFIG
+            value SET OFF
+
+#------------------------------------------------------------------------------------------------------------------------------
+# Just to make it clear
+
+INCLUDE "{*home.inc*}basic-drivers.une"
+        "{*home.inc*}protocol-drivers.une"
+        "{*home.inc*}web-services-drivers.une"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

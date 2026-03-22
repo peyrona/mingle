@@ -31,6 +31,11 @@ public interface ICmdKeys
     public static final String RULE_THEN_VALUE  = "value";
     public static final String RULE_THEN_AFTER  = "after";
 
+    public static final String CMD_LIBRARY      = "library";   // Must be lower case
+    public static final String LIBRARY_LANGUAGE = "language";  // Shared string value with SCRIPT_LANGUAGE
+    public static final String LIBRARY_FROM     = "from";      // Shared string value with SCRIPT_FROM
+    public static final String LIBRARY_CONFIG   = "config";    // Shared string value with DRIVER_INIT
+
     public static final String CMD_SCRIPT       = "script";    // Must be lower case
     public static final String SCRIPT_LANGUAGE  = "language";
     public static final String SCRIPT_FROM      = "from";

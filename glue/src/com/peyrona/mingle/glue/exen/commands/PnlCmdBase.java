@@ -14,11 +14,14 @@ import java.awt.Dialog;
 import java.util.ArrayList;
 import java.util.List;
 import javax.swing.JButton;
+import javax.swing.JComboBox;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
 import javax.swing.JTable;
+import javax.swing.JTextField;
 import javax.swing.event.TableModelListener;
 import javax.swing.table.TableModel;
+import javax.swing.text.JTextComponent;
 
 /**
  * Base panel for panels showing commands: Scripts, Drivers, Devices and Rules.
@@ -78,9 +81,88 @@ abstract class PnlCmdBase extends JPanel
         return false;
     }
 
+    protected static String fromClause2Code( String sFrom )
+    {
+        if( sFrom.isBlank() )
+            return "";
+
+        sFrom = sFrom.replace( ';', ',' );   // Both ';' and ',' are allowed as separators
+
+        StringBuilder sb = new StringBuilder( 512 );
+
+        for( String s : sFrom.split( "," ) )
+        {
+            if( ! s.isBlank() )
+                sb.append( "\n\t\t\t\"" ).append( s.trim() ).append( '"' );
+        }
+
+        if( sb.isEmpty() )
+            return "";
+
+        return "\n\tFROM "+ sb;
+    }
+
+    /**
+     * Extracts time unit character from a formatted combo box selection.
+     * <p>
+     * Parses the selected item to extract the unit character from the
+     * second-to-last position. Expected format: "Unit Name  (u)" where 'u'
+     * is the unit character. Returns empty string for first item (index 0).
+     * </p>
+     *
+     * @param cmbUnits combo box containing time unit selections; should not be null
+     * @return unit character (e.g., "s", "m", "h") or empty string
+     */
+    protected static String getTimeUnitFromComboBox( JComboBox<String> cmbUnits )
+    {
+        String sItem = cmbUnits.getSelectedItem().toString();
+        String sUnit = "";
+        if( cmbUnits.getSelectedIndex() > 0 )
+        {
+            char cUnit = sItem.charAt( sItem.length() - 2 ); // e.g.: "Seconds  (s)"
+            sUnit = Character.valueOf( cUnit ).toString();
+        }
+        return sUnit;
+    }
+
+    /**
+     * Checks if a text component is configured for UNE name input.
+     * <p>
+     * Determines if the text component has been marked as containing an UNE name
+     * by checking for a specific client property. Used for input validation and
+     * key filtering to ensure only valid UNE name characters are entered.
+     * </p>
+     *
+     * @param txt the text component to check; should not be null
+     * @return true if the component is configured for UNE name input, false otherwise
+     * @see #setJTextIsUneName(JTextField)
+     */
+    protected static boolean isJTextUneName( JTextComponent txt )
+    {
+        Object val = txt.getClientProperty( "_THIS_TEXT_COMPONENT_CONTAINS_AN_UNE_NAME_" );
+        return (val instanceof Boolean) && ((Boolean) val);
+    }
+
+    /**
+     * Marks a JTextField as being used for UNE name input.
+     * <p>
+     * Sets a client property on the text field to indicate it should accept
+     * only valid UNE name characters. This enables input filtering and validation
+     * specific to UNE naming conventions.
+     * </p>
+     *
+     * @param txt the text field to mark for UNE name input; should not be null
+     * @return the same JTextField instance for method chaining
+     * @see #isJTextUneName(JTextComponent)
+     */
+    protected static JTextField setJTextIsUneName( JTextField txt )
+    {
+        txt.putClientProperty( "_THIS_TEXT_COMPONENT_CONTAINS_AN_UNE_NAME_", true );
+        return txt;
+    }
+
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
-
 
     //------------------------------------------------------------------------//
     // INNER CLASS: Table model for errors
@@ -117,7 +199,6 @@ abstract class PnlCmdBase extends JPanel
                 case 0: return error.message();
                 case 1: return error.line();
                 case 2: return error.column();
-                case 3: return "";  // Empty string for column 3
                 default: return null;
             }
         }

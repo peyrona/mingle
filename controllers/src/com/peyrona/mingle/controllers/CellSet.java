@@ -24,13 +24,20 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 
 /**
- * This Controller can be imagined as a simple spreadsheet: it is an arbitrary
-setDeviceConfig of cells and every cell can contain a value or a formula.<br>
+ * This Controller can be imagined as a simple spreadsheet: every cell can
+ * contain a value or a formula.<br>
  * Cells have a name to refer to them (a cell is the equivalent to a variable
  * in traditional languages).
  * <p>
- * All Devices referring to a CellDriver, refer to the same Driver instance:
- * the name of the device is the cell's name.
+ * Each Device using a CellDriver gets its own CellSet instance. The device
+ * name serves as the cell name. Shared infrastructure (Dispatcher, EventBus
+ * listener) is managed as static class-level state, initialized on first
+ * instance start and torn down on last instance stop.
+ * <p>
+ * Two separate registries are maintained as static state:
+ * {@code map} (device name → CellValue) is used for formula-variable lookups
+ * and circular-reference detection; {@code instances} (device name → CellSet)
+ * is used for lifecycle management and Dispatcher fan-out.
  * </p>
  * This Controller ignores FakeController flag.
  *
@@ -41,13 +48,15 @@ setDeviceConfig of cells and every cell can contain a value or a formula.<br>
 public final class   CellSet
              extends ControllerBase
 {
-    private static final String                    KEY_VALUE = "value";
-    private static final Object                       LOCK   = new Object();
-    private static final Map<String,CellValue>        map    = new ConcurrentHashMap<>();
-    private static final AtomicInteger                nCount = new AtomicInteger( 0 );    // To track live instances (before clean-up)
-    private static       Dispatcher<MsgDeviceChanged> dis    = null;                      // Needed to recalculate new values for all affected cells every time a device changes its value
-    private static       IEventBus.Listener           ebl    = null;
-    private              PropertyChangeListener       pcl    = null;
+    private static final String                       KEY_VALUE = "value";
+    private static final Object                       LOCK      = new Object();
+    private static final Map<String,CellValue>        values    = new ConcurrentHashMap<>();   // Maps device name → CellValue (for formula lookups and DFS)
+    private static final Map<String,CellSet>          instances = new ConcurrentHashMap<>();   // Maps device name → owning CellSet instance (for lifecycle management)
+    private static final AtomicInteger                nCount    = new AtomicInteger( 0 );      // To track live instances (for shared-resource teardown)
+    private static       Dispatcher<MsgDeviceChanged> dis       = null;                        // Shared: recalculates formula cells on any device change
+    private static       IEventBus.Listener           ebl       = null;                        // Shared: feeds MsgDeviceChanged events into the Dispatcher
+    private volatile     CellValue                    cell      = null;                        // Per-instance cell data (value or formula)
+    private              PropertyChangeListener       pcl       = null;                        // Per-instance: listens for direct mutations on ExtraTypeCollection values
 
     //------------------------------------------------------------------------//
     // This controller is always valid
@@ -56,10 +65,10 @@ public final class   CellSet
     public void set( String deviceName, Map<String,Object> deviceConf, IController.Listener listener )
     {
         setDeviceName( deviceName );                       // Must be 1st
-        setListener( listener );                           // Must be at begining: in case an error happens, Listener is needed
-        set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );     // Initial value. It is guarranted to exist because it is REQUIRED and therefore the Transpiler checks it
+        setListener( listener );                           // Must be at beginning: in case an error happens, Listener is needed
+        set( KEY_VALUE, deviceConf.get( KEY_VALUE ) );     // Initial value. It is guaranteed to exist because it is REQUIRED and therefore the Transpiler checks it
 
-        // Can not validate the value now because could be a formula and for thisd case, the Runtime is needed.
+        // Cannot validate the value now because it could be a formula, and for that case the Runtime is needed.
 
         setValid( true );
     }
@@ -70,58 +79,89 @@ public final class   CellSet
         if( ! super.start( rt ) )
             return false;
 
-        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::setDeviceConfig(...)) for this CellSet instance
+        CellValue cv = new CellValue( get( KEY_VALUE ) );    // Previously saved (at ::set(...)) for this CellSet instance
 
-             if( cv.hasErrors() )        sendIsInvalid( "Formula has errors: unusable device" );
-        else if( hasCircularRef( cv ) )  sendIsInvalid( "Formula has circular references: unusable device" );
-        else                             map.put( getDeviceName(), cv );
+        if( cv.hasErrors() )
+        {
+            sendIsInvalid( "Formula has errors: unusable device'"+ getDeviceName() +'\'' );
+        }
+        else if( hasCircularRef( cv ) )
+        {
+            String formulaStr = (cv.xpreval != null) ? cv.xpreval.toString() : "null";
+            sendIsInvalid( "Circular reference in '"+ formulaStr +"': unusable device '"+ getDeviceName() +'\'' );
+        }
+        else
+        {
+            cell = cv;
+        }
 
         if( isInvalid() )
             return false;
 
-        nCount.incrementAndGet();
-
-        synchronized( LOCK )    // Class-level lock guards static fields dis and ebl
+        try
         {
-            // This is needed because 'list' and 'pair' classes can be modified directly (list:add( 5 )).
-            if( get( KEY_VALUE ) instanceof ExtraTypeCollection )
+            synchronized( LOCK )    // Class-level lock guards static fields dis and ebl
             {
-                pcl = (PropertyChangeEvent pce) -> sendChanged( CellSet.this.get( KEY_VALUE ) );    // Bug 3 fix: sendChanged (not sendReaded) so dependent formula cells are notified
-
-                ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
-            }
-
-            Consumer<MsgDeviceChanged> consumer = (msg) ->
+                // This is needed because 'list' and 'pair' classes can be modified directly (list:add( 5 )).
+                if( get( KEY_VALUE ) instanceof ExtraTypeCollection )
                 {
-                    for( Map.Entry<String,CellValue> entry : map.entrySet() )
-                    {
-                        if( entry.getValue().isFormula() )
+                    pcl = (PropertyChangeEvent pce) -> sendChanged( CellSet.this.get( KEY_VALUE ) );    // sendChanged (not sendReaded) so dependent formula cells are notified
+
+                    ((ExtraTypeCollection) get( KEY_VALUE )).addPropertyChangeListener( pcl );
+                }
+
+                // Dispatcher and EventBus listener are shared across all CellSet instances.
+                if( dis == null )
+                {
+                    Consumer<MsgDeviceChanged> consumer = (msg) ->
                         {
-                            Object oldVal = entry.getValue().read();
-                            Object newVal = entry.getValue().onDeviceChanged( msg.name, msg.value );
+                            for( CellSet cs : instances.values() )
+                            {
+                                CellValue c = cs.cell;    // Single volatile read; prevents TOCTOU with concurrent stop()
 
-                            if( ! Objects.equals( newVal, oldVal ) )    // Needed to avoid a feedback spiral
-                                sendChanged( entry.getKey(), newVal );
-                        }
-                    }
-                };
+                                if( c != null && c.isFormula() )
+                                {
+                                    Object oldVal = c.read();
+                                    Object newVal = c.onDeviceChanged( msg.name, msg.value );
 
-            dis = new Dispatcher<>( consumer,
-                                    (exc) -> sendGenericError( ILogger.Level.SEVERE, exc.getMessage() ),
-                                    32, 4096 )
-                            .start();
+                                    if( ! Objects.equals( newVal, oldVal ) )    // Needed to avoid a feedback spiral
+                                        cs.sendChanged( newVal );
+                                }
+                            }
+                        };
 
-            // This listener receives messages of type 'MsgDeviceChanged'.
-            // Everytime a device changes its value, all cells which have an expression (not a constant)
-            // have to be re-visited and those which have this device in their formula (expression) have
-            // to be evaluated.
+                    dis = new Dispatcher<>( consumer,
+                                            (exc) -> sendGenericError( ILogger.Level.SEVERE, exc.getMessage() ),
+                                            32, 4096 )
+                                        .start();
 
-            ebl = (IEventBus.Listener<MsgDeviceChanged>) (MsgDeviceChanged msg) -> dis.add( msg );
+                    // This listener receives messages of type 'MsgDeviceChanged'.
+                    // Every time a device changes its value, all cells which have an expression (not a constant) have to
+                    // be re-visited and those which have this device in their formula (expression) have to be evaluated.
 
-            rt.bus().add( ebl, MsgDeviceChanged.class );
+                    ebl = (IEventBus.Listener<MsgDeviceChanged>) (MsgDeviceChanged msg) -> dis.add( msg );
+
+                    rt.bus().add( ebl, MsgDeviceChanged.class );
+                }
+            }
+        }
+        catch( RuntimeException ex )
+        {
+            // Synchronized block failed (e.g. bus.add() throws). cell has been set but map.put and
+            // nCount.incrementAndGet have not run yet, so there is nothing to roll back for those.
+            cell = null;
+            pcl  = null;
+            setValid( false );
+            return false;
         }
 
-        return isValid();
+        // Commit: register in both shared maps and increment the live-instance counter.
+        // All three happen after the synchronized block to avoid any rollback on failure.
+        values.put( getDeviceName(), cell );
+        instances.put( getDeviceName(), this );
+        nCount.incrementAndGet();
+
+        return true;
     }
 
     @Override
@@ -130,26 +170,34 @@ public final class   CellSet
         if( ! isStarted() )
             return;
 
-        if( nCount.decrementAndGet() == 0 )   // Only tear down shared resources when the very last instance stops.
+        // instances.remove() returns non-null if and only if this instance was fully registered
+        // (i.e. instances.put and nCount.incrementAndGet both ran in start()). This replaces
+        // the former bCounted flag with an equivalent but simpler idiom.
+        values.remove( getDeviceName() );
+        boolean wasRegistered = (instances.remove( getDeviceName() ) != null);
+
+        if( wasRegistered && nCount.decrementAndGet() == 0 )    // Only tear down shared resources when the very last instance stops.
         {
             synchronized( LOCK )
             {
-                if( ebl != null )
+                // Re-check after acquiring lock: a concurrent start() may have
+                // incremented nCount between our decrement and this lock acquisition.
+                if( nCount.get() == 0 )
                 {
-                    getRuntime().bus().remove( ebl );
-                    ebl = null;
-                }
+                    if( ebl != null )
+                    {
+                        getRuntime().bus().remove( ebl );
+                        ebl = null;
+                    }
 
-                if( dis != null )
-                {
-                    dis.stop();
-                    dis = null;
+                    if( dis != null )
+                    {
+                        dis.stop();
+                        dis = null;
+                    }
                 }
             }
         }
-
-        if( getDeviceName() != null )      // Only remove this instance's cell, not all cells
-            map.remove( getDeviceName() );
 
         if( pcl != null )
         {
@@ -157,22 +205,19 @@ public final class   CellSet
             pcl = null;
         }
 
+        cell = null;
         super.stop();
     }
 
     @Override
-    public synchronized void read()
+    public void read()
     {
-        if( isInvalid() )
+        CellValue c = cell;    // Single volatile read; prevents TOCTOU with concurrent stop()
+
+        if( isInvalid() || c == null )
             return;
 
-        Object    value;
-        CellValue cellValue = map.get( getDeviceName() );
-
-        if( cellValue == null )
-            return;
-
-        value = cellValue.read();
+        Object value = c.read();
 
         if( value != null )
             sendReaded( value );
@@ -181,19 +226,34 @@ public final class   CellSet
     @Override
     public synchronized void write( Object newVal )
     {
-        if( isInvalid() )
+        if( isInvalid() || newVal == null || cell == null )
             return;
 
-        if( newVal == null )
-            return;
+        // Manage PCL lifecycle when the value transitions to or from an ExtraTypeCollection.
+        // Without this, a collection assigned at runtime via write() has no listener and its
+        // mutations never trigger sendChanged; and replacing a collection with a non-collection
+        // would leave a dangling listener on the old object.
+        Object oldStored = get( KEY_VALUE );
 
-        CellValue cv = map.get( getDeviceName() );
+        if( pcl != null && oldStored instanceof ExtraTypeCollection )
+            ((ExtraTypeCollection) oldStored).removePropertyChangeListener( pcl );
 
-        if( cv == null )
-            return;
+        if( newVal instanceof ExtraTypeCollection )
+        {
+            if( pcl == null )
+                pcl = (pce) -> sendChanged( CellSet.this.get( KEY_VALUE ) );
+
+            ((ExtraTypeCollection) newVal).addPropertyChangeListener( pcl );
+            set( KEY_VALUE, newVal );    // Keep mapConfig in sync so PCL callback and stop() use the current collection.
+        }
+        else
+        {
+            pcl = null;
+            set( KEY_VALUE, newVal );    // Keep mapConfig in sync for non-collection types too.
+        }
 
         // Always notify; the change must be reported
-        sendChanged( cv.write( newVal ) );
+        sendChanged( cell.write( newVal ) );
     }
 
     //------------------------------------------------------------------------//
@@ -207,7 +267,7 @@ public final class   CellSet
      * a cycle as soon as a path leads back to the cell being registered.
      *
      * @param cv the CellValue of the cell currently being registered
-     * @return true if a cycle is detected (also marks the controller invalid via sendIsInvalid)
+     * @return true if a cycle is detected
      */
     private boolean hasCircularRef( CellValue cv )
     {
@@ -216,19 +276,17 @@ public final class   CellSet
 
         Set<String> visited = new HashSet<>();
 
-        if( dfsHasCycle( getDeviceName(), cv, visited ) )
-        {
-            String formulaStr = (cv.xpreval != null) ? cv.xpreval.toString() : "null";
-            sendIsInvalid( "Circular reference in: "+ formulaStr );
-            return true;
-        }
-
-        return false;
+        return dfsHasCycle( getDeviceName(), cv, visited );
     }
 
     /**
      * DFS helper: returns true if any path reachable from {@code cv} leads back
      * to {@code originName}.
+     * <p>
+     * Uses {@code map} (device name → CellValue) for neighbour lookups, which
+     * avoids cross-instance field access and the visibility concerns that would
+     * otherwise require extra volatile reads.
+     * </p>
      *
      * @param originName the cell being registered (the cycle root we are looking for)
      * @param cv         the CellValue whose formula vars are explored next
@@ -250,9 +308,9 @@ public final class   CellSet
             if( ! visited.add( var ) )
                 continue;
 
-            CellValue referenced = map.get( var );
+            CellValue refCv = values.get( var );    // map now stores CellValue directly; no cross-instance field access
 
-            if( referenced != null && referenced.isFormula() && dfsHasCycle( originName, referenced, visited ) )
+            if( refCv != null && refCv.isFormula() && dfsHasCycle( originName, refCv, visited ) )
                 return true;
         }
 
@@ -261,13 +319,13 @@ public final class   CellSet
 
     //------------------------------------------------------------------------//
     // INNER CLASS
-    // CARE: formulas can referenciate devices that are not yet initialized
+    // CARE: formulas can reference devices that are not yet initialized
     //------------------------------------------------------------------------//
-    final class CellValue
+    private final class CellValue
     {
-        private Object   value   = null;
-        private IXprEval xpreval = null;
-        private boolean  bErrors = false;    // A boolean instead of "(xpreval != null) && (! xpreval.getErrors().isEmpty());" to save CPU
+        private volatile Object   value   = null;
+        private volatile IXprEval xpreval = null;
+        private          boolean  bErrors = false;    // A boolean instead of "(xpreval != null) && (! xpreval.getErrors().isEmpty());" to save CPU
 
         //------------------------------------------------------------------------//
 
@@ -286,12 +344,7 @@ public final class   CellSet
 
         //------------------------------------------------------------------------//
 
-        // isFormula(), read(), write() and onDeviceChanged() are synchronized on the
-        // CellValue instance.  Without this, the Dispatcher consumer thread (which calls
-        // onDeviceChanged) races with the controller thread (read/write) and the
-        // PropertyChangeListener thread, causing torn reads/writes of 'value' and 'xpreval'.
-
-        synchronized boolean isFormula()
+        boolean isFormula()
         {
             return xpreval != null;
         }
@@ -301,16 +354,16 @@ public final class   CellSet
             return bErrors;    // only called during single-threaded init (start()) or from within synchronized onDeviceChanged()
         }
 
-        synchronized Object read()
+        Object read()
         {
-            return value;    // If has errors, 'value' already contains the errors
+            return value;     // If has errors, 'value' already contains the errors
         }
 
         /**
          * This cell value is changed (by RULE THEN action).
          *
-         * @param value
-         * @return
+         * @param val the new value or formula
+         * @return the resulting stored value
          */
         synchronized Object write( Object val )
         {
@@ -321,27 +374,20 @@ public final class   CellSet
 
         /**
          * A device that is not a Cell has changed its value: this affects those
-         * Cells which have formula that include this device that have changed.
+         * Cells which have a formula that references this device.
          *
-         * @param devName
-         * @param devValue
-         * @return
+         * @param devName  the name of the device that changed
+         * @param devValue the new value of that device
+         * @return the resulting cell value
          */
         synchronized Object onDeviceChanged( String devName, Object devValue )
         {
-            if( isFormula() )
+            if( isFormula() && ! hasErrors() && xpreval != null )    // If has errors, 'value' already contains the errors
             {
-                if( ! hasErrors() && xpreval != null )    // If has errors, 'value' already contains the errors
-                {
-                    Object v = xpreval.eval( devName, devValue );
+                Object v = xpreval.eval( devName, devValue );
 
-                    if( v != null )    // null when not all vars have a value -> the formula is not ready yet
-                        value = v;
-                }
-            }
-            else
-            {
-                value = devValue;
+                if( v != null )    // null when not all vars have a value -> the formula is not ready yet
+                    value = v;
             }
 
             return value;
@@ -351,13 +397,13 @@ public final class   CellSet
 
         private void update( Object val )   // Invoked from CellSet::write(...) (which is sync)
         {
-            if( val.getClass().equals( String.class ) )
+            if( val instanceof String )
             {
                 String str = val.toString().trim();
 
                 if( (str.length() > 0) && (str.charAt( 0 ) == '=') )
                 {
-                    str = new StringBuilder( str ).deleteCharAt(0).toString();   // substr to jump '=' (strange but this is the fastest way)
+                    str = str.substring( 1 );    // Delete '='
 
                     if( xpreval != null && str.equals( xpreval.toString() ) )    // toString() returns the original xpr
                         return;

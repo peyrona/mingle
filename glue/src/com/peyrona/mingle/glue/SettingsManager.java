@@ -258,10 +258,10 @@ public final class SettingsManager
         JsonArray connections = config.get( "connections" ).asArray();
 
         // Remove existing entry for this label
-        for( int i = connections.size() - 1; i >= 0; i-- )
+        for( int n = connections.size() - 1; n >= 0; n-- )
         {
-            if( name.equals( connections.get( i ).asObject().getString( "label", null ) ) )
-                connections.remove( i );
+            if( name.equals( connections.get( n ).asObject().getString( "label", null ) ) )
+                connections.remove( n );
         }
 
         // Add new entry
@@ -281,12 +281,30 @@ public final class SettingsManager
 
         JsonArray connections = config.get( "connections" ).asArray();
 
-        for( int i = connections.size() - 1; i >= 0; i-- )
+        for( int n = connections.size() - 1; n >= 0; n-- )
         {
-            if( name.equals( connections.get( i ).asObject().getString( "label", null ) ) )
-                connections.remove( i );
+            if( name.equals( connections.get( n ).asObject().getString( "label", null ) ) )
+                connections.remove( n );
         }
 
+        saveConfig();
+    }
+
+    public static boolean isDarkMode()
+    {
+        loadConfig();
+        return config.getBoolean( "darklightmode", true );
+    }
+
+    public static boolean isLightMode()
+    {
+        return ! isDarkMode();
+    }
+
+    public static void setDarkLightMode( boolean isDark )
+    {
+        loadConfig();
+        config.set( "darklightmode", isDark );
         saveConfig();
     }
 

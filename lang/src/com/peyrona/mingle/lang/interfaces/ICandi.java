@@ -5,6 +5,7 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Interface for all Compilers and all Interpreters except Une transpiler.
@@ -110,6 +111,39 @@ public interface ICandi
          * @throws Exception
          */
         IController newController( String sInvokerUID ) throws Exception;
+
+        /**
+         * Invokes a named top-level function in a previously prepared module or file.
+         * <p>
+         * This method is used by the LIBRARY command for non-Java languages (Python, JavaScript)
+         * to call individual functions by name. The module is identified by {@code sInvokerUID}
+         * (the LIBRARY name), which must have been previously prepared via {@link #prepare}.
+         * Java libraries do not use this path; they use direct reflection via
+         * {@link com.peyrona.mingle.lang.xpreval.functions.StdXprFns#invokeLibrary}.
+         *
+         * @param sInvokerUID An Unique ID identifying the prepared module (e.g. the LIBRARY name).
+         * @param funcName    The name of the function to invoke within the module.
+         * @param args        Arguments to pass to the function.
+         * @return The function's return value, or {@code null} if the function returns nothing.
+         * @throws UnsupportedOperationException if this language does not support function-level invocation.
+         * @throws Exception if the function is not found or invocation fails.
+         */
+        default Object invokeFunction( String sInvokerUID, String funcName, Object... args ) throws Exception
+        {
+            throw new UnsupportedOperationException( "invokeFunction() is not supported by this language implementation." );
+        }
+
+        /**
+         * Passes the LIBRARY CONFIG entries to the runtime after {@link #bind} completes.
+         * <p>
+         * Called by {@code Library.loadScriptLibrary()} so runtimes can consume user-defined
+         * configuration (e.g. function return-type hints for native libraries). The default
+         * implementation is a no-op; override when configuration matters.
+         *
+         * @param sBindId An Unique ID, e.g. the LIBRARY name.
+         * @param config  The CONFIG map declared in the LIBRARY command (never {@code null}).
+         */
+        default void configure( String sBindId, Map<String,Object> config ) {}
     }
 
     public interface IBuilder

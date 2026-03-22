@@ -49,8 +49,8 @@ public final class ParseScript extends ParseBase
         name      = findName();
         Lexeme firstMeaningful = UtilColls.find( lstTokenFrom, (lex) -> ! lex.isDelimiter() );
         isInline  = (firstMeaningful != null) && firstMeaningful.isInline();               // Before 'callName' because 'callName' uses it
-        language  = getLang( getClauseContents( "language" ) );                               // Before 'from' because 'from' uses it
-        callName  = getCall( getClauseContents( "call"     ) );                               // This must preserve the string-case
+        language  = getLang( getClauseContents( "language" ), sKEY );                      // Before 'from' because 'from' uses it
+        callName  = getCall( getClauseContents( "call"     ) );                            // This must preserve the string-case
         from      = getFrom( getClauseContents( "from"     ) );
 
         // Detect PRE ONSTART and PRE ONSTOP compound clauses
@@ -60,8 +60,8 @@ public final class ParseScript extends ParseBase
         // Regular ONSTART/ONSTOP only if not preceded by PRE
         isPreStart = hasPreOnStart;
         isPreStop  = hasPreOnStop;
-        isOnStart  = !hasPreOnStart && getClauseContents( "onstart" ) != null;
-        isOnStop   = !hasPreOnStop  && getClauseContents( "onstop"  ) != null;
+        isOnStart  = ! hasPreOnStart && getClauseContents( "onstart" ) != null;
+        isOnStop   = ! hasPreOnStop  && getClauseContents( "onstop"  ) != null;
 
         if( (name == null) && (! (isOnStart || isOnStop || isPreStart || isPreStop)) )
             addError( "SCRIPT has no name: this is allowed only when it is either ONSTART, ONSTOP, PRE ONSTART or PRE ONSTOP:", lstToken.get(0) );
@@ -144,37 +144,6 @@ public final class ParseScript extends ParseBase
         Lexeme token = UtilColls.find( tokens, (lex) -> ! lex.isDelimiter() );
 
         return token.text();    // This is an exception to the Une "ignore-case-principle": method name case must be preserved.
-    }
-
-    /**
-     * 'LANGUAGE' clause is mandatory, can not be empty and must be only one token.
-     *
-     * @param aoToken
-     */
-    private String getLang( List<Lexeme> tokens )
-    {
-        if( isClauseMissed( "LANGUAGE", tokens ) ||
-            isClauseEmpty(  "LANGUAGE", tokens ) ||
-            isNotOneToken(  "LANGUAGE", tokens ) )
-        {
-            return null;
-        }
-
-        Lexeme id = findID( "LANGUAGE" );
-
-        if( id != null )
-        {
-            String sLang = id.text().toLowerCase();
-
-            ICandi.ILanguage lang = new LangBuilder().build( sLang );
-
-            if( lang == null )
-                addError( "There is no language artifact registered for: "+ id, getClause( "LANGUAGE" ) );
-
-            return sLang;
-        }
-
-        return null;
     }
 
     /**

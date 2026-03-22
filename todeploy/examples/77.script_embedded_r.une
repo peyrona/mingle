@@ -1,0 +1,46 @@
+#==================================================================================================================================
+# This application shows how to use other language to perform small tasks (scripts).
+# This is called "embedded" (AKA 'inline') code, and allows to mix Une code with other languages (R, Python, Java, etc).
+#
+# Although there is no limitation to the size of embedded source code, long pieces should not be mixed with Une source code: just
+# for clarity sake.
+#
+# Each SCRIPT is executed by ExEn in its own thread. Therefore execution order is not guaranteed.
+#
+# For more information, pleaser refer to the "Mingle Standard Platform" handbook.
+#
+# Note: intentionally, this example does not INCLUDE the normal "standard-replaces.une" (it is not needed)
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. the Mingle project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+SCRIPT R_1
+   ONSTART
+   LANGUAGE R        # Java interop uses: java.type("ClassName"); method calls on Java objects use the $ operator
+   FROM {
+            LocalTime <- java.type( "java.time.LocalTime" )         # All Java APIs are accesible from FastR
+
+            cat( "Hello Mingle world from R.\n" )
+            cat( "Time is:", LocalTime$now()$toString(), "\n" )
+        }
+
+
+SCRIPT R_2
+   ONSTART
+   LANGUAGE R
+   FROM {
+            scripts <- _exen_rt_$all( "scripts" )                   # ExEn RunTime instance is injected into '_exen_rt_'
+
+            for( s in scripts ) {
+                cat( "There is a script named '", s$name(), "'\n", sep="" )
+            }
+
+            _exen_rt_$exit( 3000 )                                  # Ends ExEn execution in 3 seconds (this is rarely used)
+        }
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -147,7 +147,8 @@ public class Main
                " / ___|  | |  | |  |  \\/  |" +'\n'+
                "| |  _   | |  | |  | |\\/| |" +'\n'+
                "| |_| |  | |__| |  | |  | |"  +'\n'+
-               " \\____|   \\____/   |_|  |_|"+'\n';
+               " \\____|   \\____/   |_|  |_|"+'\n'+
+             "\nDashboards editor and player + File Manager + HTTP/S Server + Reverse Proxy.\n";
     }
 
     private static void checkPreRequisites( JsonObject joSSL ) throws Exception

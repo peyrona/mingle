@@ -34,15 +34,29 @@
                     <div class="column">             <!-- Right Column with Password Input -->
                         <div class="field">
                             <label class="label">Shared key</label>
-                            <div class="control">
-                                <input id="txt_key_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
+                            <div class="field has-addons mb-0">
+                                <p class="control">
+                                    <button type="button" class="button" onclick="toggleInputVisibility('txt_key_login','ico_eye_key')" title="Show/hide">
+                                        <span class="icon"><i id="ico_eye_key" class="ti ti-eye"></i></span>
+                                    </button>
+                                </p>
+                                <div class="control is-expanded">
+                                    <input id="txt_key_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
+                                </div>
                             </div>
                             <p class="help">Used to gain access to Dahsboards' manager.</p>
                         </div>
                         <div class="field">
                             <label class="label">Password for dashboards</label>
-                            <div class="control">
-                                <input id="txt_pwd_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
+                            <div class="field has-addons mb-0">
+                                <p class="control">
+                                    <button type="button" class="button" onclick="toggleInputVisibility('txt_pwd_login','ico_eye_pwd')" title="Show/hide">
+                                        <span class="icon"><i id="ico_eye_pwd" class="ti ti-eye"></i></span>
+                                    </button>
+                                </p>
+                                <div class="control is-expanded">
+                                    <input id="txt_pwd_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
+                                </div>
                             </div>
                             <p class="help">To access dashboards protected with this password.</p>
                         </div>
@@ -52,6 +66,7 @@
                                 &nbsp;Remember me in this machine
                             </label>
                         </div>
+                        <p id="login-error" class="help is-danger mt-2" style="display:none;"></p>
                     </div>
                 </div>
             </div>
@@ -65,10 +80,10 @@
                     <button id="btn_toggle_pwd"    class="button is-responsive is-small is-rounded" style="display:none;"
                             onclick="toggleSection('div-pwd')"   title="Change master password">
                         <span class="icon is-small"><i class="ti ti-user"></i></span>
-                        <span>Master password</span>
+                        <span>Master pwd</span>
                     </button>
                     <button id="btn_toggle_secret" class="button is-responsive is-small is-rounded" style="display:none;"
-                            onclick="toggleSection('div-hmac')"  title="Change shared secret">
+                            onclick="toggleSection('div-hmac')"  title="Change shared secret (HMAC)">
                         <span class="icon is-small"><i class="ti ti-lock"></i></span>
                         <span>Shared secret</span>
                     </button>
@@ -189,13 +204,13 @@
                 </div>
                 <div class="control ml-3">
                     <label class="radio">
-                        <input type="radio" name="radLayout" value="grid">
+                        <input type="radio" name="radLayout" value="grid" checked>
                         &nbsp;Grid of cells of different sizes containing gadgets
                     </label>
                 </div>
                 <div class="control ml-3 mt-1">
                     <label class="radio">
-                        <input type="radio" name="radLayout" value="free" checked>
+                        <input type="radio" name="radLayout" value="free">
                         &nbsp;Free positioning of gadgets of different sizes
                     </label>
                 </div>
@@ -309,19 +324,7 @@
                                                                     }
                                                                 } );
 
-                                    $('#login')
-                                        .dialog( {
-                                                    title     : 'GUM ::: Login',
-                                                    modal     : true,
-                                                    autoOpen  : true,
-                                                    resizable : true,
-                                                    width     : 510,
-                                                    height    : 400,
-                                                    buttons   : [ {
-                                                                    text : "Continue",
-                                                                    click: function() { $(this).dialog('destroy'); _sendLogin_(); }
-                                                                  } ]
-                                                    } );
+                                    _tryAutoLogin_();
                                 } );
 
             async function onPageReloaded()
@@ -615,8 +618,54 @@
             //------------------------------------------------------------------------------------------------//
             // AUXILIARY FUNCTIONS
 
+            /**
+             * Probes the boards API without explicit credentials.
+             * - If the probe succeeds (intranet IP, HMAC disabled, or stored key is valid),
+             *   the dashboard list loads directly with no login dialog.
+             * - If the probe fails (authentication required), the login dialog is shown.
+             */
+            async function _tryAutoLogin_()
+            {
+                sharedKey = loadSharedSecret();   // Use stored key (if any) for the probe
+
+                try
+                {
+                    const authPayload = await authenticateRequest( 'check', {} );
+                          authPayload.data     = JSON.stringify( authPayload.data || {} );
+                          authPayload.password = '';
+
+                    const response = await fetch( p_base.doURL('ws/board') + '?' + new URLSearchParams( authPayload ).toString() );
+
+                    if( ! response.ok )
+                        throw new Error( response.status );
+
+                    // Probe succeeded — no dialog needed, load boards directly
+                    isMaster = (await response.text()) === 'true';
+                    onPageReloaded();
+                }
+                catch( _ )
+                {
+                    // Auth required — show login dialog
+                    $('#login')
+                        .dialog( {
+                                    title     : 'Dashboards',
+                                    modal     : true,
+                                    autoOpen  : true,
+                                    resizable : true,
+                                    width     : 510,
+                                    height    : 400,
+                                    buttons   : [ {
+                                                    text : "Login",
+                                                    click: function() { _sendLogin_(); }
+                                                  } ]
+                                    } );
+                }
+            }
+
             async function _sendLogin_()
             {
+                $('#login-error').hide();
+
                 sharedKey = $('#txt_key_login').val();
                 sUserPwd  = $('#txt_pwd_login').val();
 
@@ -636,13 +685,14 @@
                               complete: () => p_app.hideLoading( uuid ),
                               error   : (xhr) =>
                                         {
-                                            p_app.showAjaxError( xhr );
+                                            $('#login-error').text( "Wrong shared key. Try again." ).show();
                                             clearSharedSecret();
                                             sharedKey = null;
                                             g_hmacKey = null;
                                         },
                               success : (isM) =>
                                         {
+                                            $('#login').dialog('destroy');
                                             isMaster = (isM === 'true');
                                             onPageReloaded();
                                         }
@@ -650,7 +700,7 @@
                 }
                 catch( error )
                 {
-                    p_app.alert( "Authentication error: " + error.message );
+                    $('#login-error').text( "Authentication error: " + error.message ).show();
                     p_app.hideLoading( uuid );
                     clearSharedSecret();
                 }
@@ -731,6 +781,23 @@
                     return sName;
             }
 
+            function toggleInputVisibility( sInputId, sIconId )
+            {
+                let input = document.getElementById( sInputId );
+                let icon  = document.getElementById( sIconId );
+
+                if( input.type === 'password' )
+                {
+                    input.type     = 'text';
+                    icon.className = 'ti ti-eye-off';
+                }
+                else
+                {
+                    input.type     = 'password';
+                    icon.className = 'ti ti-eye';
+                }
+            }
+
             function toggleNewPwdVisibility()
             {
                 let input = document.getElementById('txt_pwd_new');
@@ -803,37 +870,86 @@
 
             const SHARED_SECRET_KEY = 'gum_shared_secret';
 
-            function strToBuf(str)
+            // Pure-JS HMAC-SHA256 — no crypto.subtle: works on HTTP and HTTPS
+            function _rotr32_( x, n ) { return (x >>> n) | (x << (32 - n)); }
+
+            function _sha256_( bytes )
             {
-                return new TextEncoder().encode(str);
+                const K = [
+                    0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
+                    0xd807aa98, 0x12835b01, 0x243185be, 0x550c7dc3, 0x72be5d74, 0x80deb1fe, 0x9bdc06a7, 0xc19bf174,
+                    0xe49b69c1, 0xefbe4786, 0x0fc19dc6, 0x240ca1cc, 0x2de92c6f, 0x4a7484aa, 0x5cb0a9dc, 0x76f988da,
+                    0x983e5152, 0xa831c66d, 0xb00327c8, 0xbf597fc7, 0xc6e00bf3, 0xd5a79147, 0x06ca6351, 0x14292967,
+                    0x27b70a85, 0x2e1b2138, 0x4d2c6dfc, 0x53380d13, 0x650a7354, 0x766a0abb, 0x81c2c92e, 0x92722c85,
+                    0xa2bfe8a1, 0xa81a664b, 0xc24b8b70, 0xc76c51a3, 0xd192e819, 0xd6990624, 0xf40e3585, 0x106aa070,
+                    0x19a4c116, 0x1e376c08, 0x2748774c, 0x34b0bcb5, 0x391c0cb3, 0x4ed8aa4a, 0x5b9cca4f, 0x682e6ff3,
+                    0x748f82ee, 0x78a5636f, 0x84c87814, 0x8cc70208, 0x90befffa, 0xa4506ceb, 0xbef9a3f7, 0xc67178f2
+                ];
+
+                let H = [ 0x6a09e667, 0xbb67ae85, 0x3c6ef372, 0xa54ff53a,
+                          0x510e527f, 0x9b05688c, 0x1f83d9ab, 0x5be0cd19 ];
+
+                const bitLen = bytes.length * 8;
+                const padded = [...bytes, 0x80];
+
+                while( padded.length % 64 !== 56 )
+                    padded.push( 0 );
+
+                for( let s = 56; s >= 0; s -= 8 )
+                    padded.push( (bitLen / Math.pow(2, s)) & 0xff );
+
+                for( let off = 0; off < padded.length; off += 64 )
+                {
+                    const W = [];
+
+                    for( let i = 0; i < 16; i++ )
+                        W[i] = (padded[off+i*4]<<24) | (padded[off+i*4+1]<<16) | (padded[off+i*4+2]<<8) | padded[off+i*4+3];
+
+                    for( let i = 16; i < 64; i++ )
+                    {
+                        const s0 = _rotr32_(W[i-15], 7)  ^ _rotr32_(W[i-15], 18) ^ (W[i-15] >>> 3);
+                        const s1 = _rotr32_(W[i- 2], 17) ^ _rotr32_(W[i- 2], 19) ^ (W[i- 2] >>> 10);
+                        W[i] = (W[i-16] + s0 + W[i-7] + s1) | 0;
+                    }
+
+                    let [a,b,c,d,e,f,g,h] = H;
+
+                    for( let i = 0; i < 64; i++ )
+                    {
+                        const S1   = _rotr32_(e, 6)  ^ _rotr32_(e, 11)  ^ _rotr32_(e, 25);
+                        const ch   = (e & f) ^ (~e & g);
+                        const tmp1 = (h + S1 + ch + K[i] + W[i]) | 0;
+                        const S0   = _rotr32_(a, 2)  ^ _rotr32_(a, 13)  ^ _rotr32_(a, 22);
+                        const maj  = (a & b) ^ (a & c) ^ (b & c);
+                        const tmp2 = (S0 + maj) | 0;
+
+                        h=g; g=f; f=e; e=(d+tmp1)|0; d=c; c=b; b=a; a=(tmp1+tmp2)|0;
+                    }
+
+                    H = H.map( (hv, i) => (hv + [a,b,c,d,e,f,g,h][i]) | 0 );
+                }
+
+                return H.flatMap( w => [(w>>>24)&0xff, (w>>>16)&0xff, (w>>>8)&0xff, w&0xff] );
             }
 
-            function bufToHex(buffer)
+            function _hmacSha256Hex_( keyStr, msgStr )
             {
-                return Array.from(new Uint8Array(buffer))
-                    .map(b => b.toString(16).padStart(2, '0'))
-                    .join('');
-            }
+                const enc  = new TextEncoder();
+                let   kArr = Array.from( enc.encode( keyStr ) );
+                const mArr = Array.from( enc.encode( msgStr ) );
 
-            async function importSecretKey(secret)
-            {
-                return await crypto.subtle.importKey(
-                    'raw',
-                    strToBuf(secret),
-                    { name: 'HMAC', hash: 'SHA-256' },
-                    false,
-                    ['sign']
-                );
-            }
+                if( kArr.length > 64 )
+                    kArr = _sha256_( kArr );
 
-            async function computeHmac(key, message)
-            {
-                const signature = await crypto.subtle.sign(
-                    'HMAC',
-                    key,
-                    strToBuf(message)
-                );
-                return bufToHex(signature);
+                while( kArr.length < 64 )
+                    kArr.push( 0 );
+
+                const iKey  = kArr.map( b => b ^ 0x36 );
+                const oKey  = kArr.map( b => b ^ 0x5c );
+                const inner = _sha256_( [...iKey, ...mArr] );
+                const outer = _sha256_( [...oKey, ...inner] );
+
+                return outer.map( b => b.toString(16).padStart(2, '0') ).join('');
             }
 
             function loadSharedSecret()
@@ -864,11 +980,8 @@
                 if( ! sharedKey )
                     return { action: action, data: data, timestamp: timestamp };
 
-                if( ! g_hmacKey )
-                    g_hmacKey = await importSecretKey(sharedKey);
-
                 const message = action + timestamp + JSON.stringify(data || {});
-                const hmac = await computeHmac(g_hmacKey, message);
+                const hmac    = _hmacSha256Hex_( sharedKey, message );
 
                 return {
                     action: action,

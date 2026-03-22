@@ -2,10 +2,9 @@
 package com.peyrona.mingle.glue.exen.commands;
 
 import com.peyrona.mingle.candi.unec.parser.ParseDevice;
-import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.ExEnClient;
+import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.gswing.GDialog;
-import com.peyrona.mingle.glue.gswing.GList;
 import com.peyrona.mingle.lang.interfaces.commands.IDevice;
 import com.peyrona.mingle.lang.interfaces.commands.IDriver;
 import com.peyrona.mingle.lang.japi.UtilColls;
@@ -13,8 +12,6 @@ import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.lexer.Lexer;
 import java.awt.BorderLayout;
-import java.time.LocalTime;
-import java.util.Map;
 import javax.swing.JButton;
 import javax.swing.SpinnerNumberModel;
 import jiconfont.icons.font_awesome.FontAwesome;
@@ -28,8 +25,8 @@ import jiconfont.swing.IconFontSwing;
  */
 final class PnlDevice extends PnlCmdBase
 {
-    private final GList<String> ltbDrvConfig;
     private final ExEnClient    exenClient;
+    private final PnlAux4Config config = new PnlAux4Config();
 
     //------------------------------------------------------------------------//
 
@@ -45,8 +42,7 @@ final class PnlDevice extends PnlCmdBase
         initComponents();
         initExtra();
 
-        ltbDrvConfig = new GList<>( lstDriverConfig );
-        exenClient   = exenCli;
+        exenClient = exenCli;
 
         if( device != null )
         {
@@ -62,9 +58,7 @@ final class PnlDevice extends PnlCmdBase
             // DRIVER --------------------------------
 
             cmbDriverName.setSelectedItem( device.getDriverName() );
-
-            for( Map.Entry<String,Object> entry : device.getDriverInit().entrySet() )
-                ltbDrvConfig.add( entry.getKey() +" = "+ entry.getValue() );
+            config.setConfig( device.getDriverInit() );
         }
     }
 
@@ -77,13 +71,18 @@ final class PnlDevice extends PnlCmdBase
 
         float  nDelta    = ((Number) spnDelta.getModel().getValue()).floatValue();
         long   nDowntime = ((Number) spnDowntimed.getModel().getValue()).longValue();
-        String sValue    = (txtValue.getText().trim().isEmpty() ? "" : "\t\tvalue = \""+ txtValue.getText().trim() +'"');
         String sDelta    = ((nDelta    <= 0) ? "" : "\t\tdelta = "+ nDelta);
-        String sDowntime = ((nDowntime <= 0) ? "" : "\t\tdowntimed = "+ nDowntime) + JTools.getTimeUnitFromComboBox( cmbTimeUnit );
+        String sDowntime = ((nDowntime <= 0) ? "" : ("\t\tdowntimed = "+ nDowntime + PnlCmdBase.getTimeUnitFromComboBox( cmbTimeUnit )));
         String sGroups   = (txtGroups.getText().trim().isEmpty() ? "" : "\t\tgroups = \""+ txtGroups.getText().trim() +'"');
+        String rawValue  = txtValue.getText().trim();
+        String sValue    = "";
 
-        if( (! sValue.isEmpty()) && (! Language.isBooleanOp( sValue )) && (! Language.isNumber( sValue )) )
-            sValue = Language.toString( sValue );
+        if( ! rawValue.isEmpty() )
+        {
+            if( (! Language.isBooleanOp( rawValue )) && (! Language.isNumber( rawValue )) )
+                rawValue = Language.toString( rawValue );
+            sValue = "\t\tvalue = "+ rawValue;
+        }
 
         String sInit = sValue +'\n'+ sDelta +'\n'+ sDowntime +'\n'+ sGroups;
 
@@ -97,13 +96,8 @@ final class PnlDevice extends PnlCmdBase
 
         String sConfig = (cmbDriverName.getSelectedItem() == null) ? "" : ("\n\tDRIVER "+ cmbDriverName.getSelectedItem());     // DRIVER CONFIG
 
-        if( (! sConfig.isEmpty()) && (! ltbDrvConfig.isEmpty()) )
-        {
-            sConfig += "\n\t\tCONFIG ";
-
-            for( String s : ltbDrvConfig.getAll() )
-                sConfig += "\n\t\t\t"+ s;
-        }
+        if( ! sConfig.isEmpty() )
+            sConfig += config.getSourceCode();
 
         // --------------------------------------------------------
 
@@ -127,7 +121,7 @@ final class PnlDevice extends PnlCmdBase
 
     private boolean initExtra()
     {
-        JTools.setJTextIsUneName( txtName );
+        PnlCmdBase.setJTextIsUneName( txtName );
 
         cmbTimeUnit.setSelectedIndex( 0 );   // Millis
         spnDowntimed.setModel( new SpinnerNumberModel( 0,              // initial value
@@ -140,15 +134,10 @@ final class PnlDevice extends PnlCmdBase
                                                    Float.MAX_VALUE, // max
                                                    1 ) );           // step;
 
-        lstBtn2Check4Changes.add( btnDriverConfigAdd );
-        lstBtn2Check4Changes.add( btnDriverConfigDel );
+        pnl4Config.add( config, BorderLayout.CENTER );;
 
-        btnDriverConfigAdd.setIcon(  IconFontSwing.buildIcon( FontAwesome.PLUS    , 16, JTools.getIconColor() ) );
-        btnDriverConfigDel.setIcon(  IconFontSwing.buildIcon( FontAwesome.TRASH   , 16, JTools.getIconColor() ) );
         btnSendMsg2Actuator.setIcon( IconFontSwing.buildIcon( FontAwesome.TELEGRAM, 16, JTools.getIconColor() ) );
-
-        txtDriverConfigName.setEnabled( false );
-        txtDriverConfigValue.setEnabled( false );
+        btnSendMsg2Actuator.setEnabled( exenClient != null );
 
         for( IDriver driver : cmdWise.getDrivers() )
             cmbDriverName.addItem( driver.name() );
@@ -180,15 +169,7 @@ final class PnlDevice extends PnlCmdBase
         cmbTimeUnit = new javax.swing.JComboBox<>();
         pnlDriver = new javax.swing.JPanel();
         cmbDriverName = new javax.swing.JComboBox<>();
-        pnlDriverConfig = new javax.swing.JPanel();
-        label99 = new javax.swing.JLabel();
-        txtDriverConfigName = new javax.swing.JTextField();
-        jLabel5 = new javax.swing.JLabel();
-        txtDriverConfigValue = new javax.swing.JTextField();
-        jScrollPane1 = new javax.swing.JScrollPane();
-        lstDriverConfig = new javax.swing.JList<>();
-        btnDriverConfigAdd = new javax.swing.JButton();
-        btnDriverConfigDel = new javax.swing.JButton();
+        pnl4Config = new javax.swing.JPanel();
 
         txtName.setColumns(24);
         txtName.setCursor(new java.awt.Cursor(java.awt.Cursor.DEFAULT_CURSOR));
@@ -269,107 +250,17 @@ final class PnlDevice extends PnlCmdBase
 
         pnlDriver.setBorder(javax.swing.BorderFactory.createTitledBorder(" DRIVER "));
 
-        pnlDriverConfig.setBorder(javax.swing.BorderFactory.createTitledBorder(" CONFIG "));
-
-        label99.setText("name");
-
-        txtDriverConfigName.addKeyListener(new java.awt.event.KeyAdapter()
-        {
-            public void keyReleased(java.awt.event.KeyEvent evt)
-            {
-                txtDriverConfigNameKeyReleased(evt);
-            }
-        });
-
-        jLabel5.setText("value");
-
-        txtDriverConfigValue.addKeyListener(new java.awt.event.KeyAdapter()
-        {
-            public void keyReleased(java.awt.event.KeyEvent evt)
-            {
-                txtDriverConfigValueKeyReleased(evt);
-            }
-        });
-
-        lstDriverConfig.addListSelectionListener(new javax.swing.event.ListSelectionListener()
-        {
-            public void valueChanged(javax.swing.event.ListSelectionEvent evt)
-            {
-                lstDriverConfigValueChanged(evt);
-            }
-        });
-        jScrollPane1.setViewportView(lstDriverConfig);
-
-        btnDriverConfigAdd.addActionListener(new java.awt.event.ActionListener()
-        {
-            public void actionPerformed(java.awt.event.ActionEvent evt)
-            {
-                btnDriverConfigAddActionPerformed(evt);
-            }
-        });
-
-        btnDriverConfigDel.addActionListener(new java.awt.event.ActionListener()
-        {
-            public void actionPerformed(java.awt.event.ActionEvent evt)
-            {
-                btnDriverConfigDelActionPerformed(evt);
-            }
-        });
-
-        javax.swing.GroupLayout pnlDriverConfigLayout = new javax.swing.GroupLayout(pnlDriverConfig);
-        pnlDriverConfig.setLayout(pnlDriverConfigLayout);
-        pnlDriverConfigLayout.setHorizontalGroup(
-            pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(pnlDriverConfigLayout.createSequentialGroup()
-                .addContainerGap()
-                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(jLabel5)
-                    .addComponent(label99))
-                .addGap(12, 12, 12)
-                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(txtDriverConfigName)
-                    .addComponent(txtDriverConfigValue, javax.swing.GroupLayout.DEFAULT_SIZE, 157, Short.MAX_VALUE))
-                .addGap(18, 18, 18)
-                .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 250, Short.MAX_VALUE)
-                .addGap(18, 18, 18)
-                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addComponent(btnDriverConfigAdd)
-                    .addComponent(btnDriverConfigDel))
-                .addContainerGap())
-        );
-        pnlDriverConfigLayout.setVerticalGroup(
-            pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(pnlDriverConfigLayout.createSequentialGroup()
-                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                    .addGroup(pnlDriverConfigLayout.createSequentialGroup()
-                        .addContainerGap()
-                        .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                            .addComponent(jScrollPane1, javax.swing.GroupLayout.DEFAULT_SIZE, 139, Short.MAX_VALUE)
-                            .addGroup(pnlDriverConfigLayout.createSequentialGroup()
-                                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                    .addComponent(txtDriverConfigName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addComponent(label99))
-                                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                                .addGroup(pnlDriverConfigLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
-                                    .addComponent(txtDriverConfigValue, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                                    .addComponent(jLabel5)))))
-                    .addGroup(pnlDriverConfigLayout.createSequentialGroup()
-                        .addGap(22, 22, 22)
-                        .addComponent(btnDriverConfigAdd)
-                        .addGap(18, 18, 18)
-                        .addComponent(btnDriverConfigDel)))
-                .addContainerGap())
-        );
+        pnl4Config.setLayout(new java.awt.BorderLayout());
 
         javax.swing.GroupLayout pnlDriverLayout = new javax.swing.GroupLayout(pnlDriver);
         pnlDriver.setLayout(pnlDriverLayout);
         pnlDriverLayout.setHorizontalGroup(
             pnlDriverLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGroup(pnlDriverLayout.createSequentialGroup()
+            .addGroup(javax.swing.GroupLayout.Alignment.TRAILING, pnlDriverLayout.createSequentialGroup()
                 .addContainerGap()
                 .addGroup(pnlDriverLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.TRAILING)
-                    .addComponent(pnlDriverConfig, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(cmbDriverName, 0, 546, Short.MAX_VALUE))
+                    .addComponent(pnl4Config, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addComponent(cmbDriverName, 0, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
         pnlDriverLayout.setVerticalGroup(
@@ -377,8 +268,8 @@ final class PnlDevice extends PnlCmdBase
             .addGroup(pnlDriverLayout.createSequentialGroup()
                 .addContainerGap()
                 .addComponent(cmbDriverName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
-                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.UNRELATED)
-                .addComponent(pnlDriverConfig, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                .addGap(18, 18, 18)
+                .addComponent(pnl4Config, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addContainerGap())
         );
 
@@ -394,9 +285,9 @@ final class PnlDevice extends PnlCmdBase
                     .addGroup(javax.swing.GroupLayout.Alignment.LEADING, layout.createSequentialGroup()
                         .addComponent(jLabel2)
                         .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
-                        .addComponent(txtName, javax.swing.GroupLayout.PREFERRED_SIZE, 429, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addComponent(txtName, javax.swing.GroupLayout.DEFAULT_SIZE, 429, Short.MAX_VALUE)
                         .addGap(18, 18, 18)
-                        .addComponent(btnSendMsg2Actuator, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)))
+                        .addComponent(btnSendMsg2Actuator, javax.swing.GroupLayout.PREFERRED_SIZE, 116, javax.swing.GroupLayout.PREFERRED_SIZE)))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -415,58 +306,6 @@ final class PnlDevice extends PnlCmdBase
         );
     }// </editor-fold>//GEN-END:initComponents
 
-    private void btnDriverConfigAddActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnDriverConfigAddActionPerformed
-    {//GEN-HEADEREND:event_btnDriverConfigAddActionPerformed
-        int nSec = LocalTime.now().toSecondOfDay();
-
-        ltbDrvConfig.add( "name_"+ nSec +" = value_"+ nSec );
-
-        btnDriverConfigDel.setEnabled( true );
-        txtDriverConfigName.setEnabled( true );
-        txtDriverConfigValue.setEnabled( true );
-    }//GEN-LAST:event_btnDriverConfigAddActionPerformed
-
-    private void lstDriverConfigValueChanged(javax.swing.event.ListSelectionEvent evt)//GEN-FIRST:event_lstDriverConfigValueChanged
-    {//GEN-HEADEREND:event_lstDriverConfigValueChanged
-        String sLabel = ltbDrvConfig.getSelected();
-
-        if( sLabel != null )
-        {
-            String[] as = sLabel.split( " = " );
-
-            txtDriverConfigName.setText(  as[0] );
-            txtDriverConfigValue.setText( as[1] );
-        }
-    }//GEN-LAST:event_lstDriverConfigValueChanged
-
-    private void btnDriverConfigDelActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnDriverConfigDelActionPerformed
-    {//GEN-HEADEREND:event_btnDriverConfigDelActionPerformed
-        ltbDrvConfig.remove();
-
-        if( ltbDrvConfig.isEmpty() )
-        {
-            btnDriverConfigDel.setEnabled( false );
-            txtDriverConfigName.setText( null );
-            txtDriverConfigValue.setEnabled( false );
-            txtDriverConfigName.setText( null );
-            txtDriverConfigValue.setEnabled( false );
-        }
-    }//GEN-LAST:event_btnDriverConfigDelActionPerformed
-
-    private void txtDriverConfigNameKeyReleased(java.awt.event.KeyEvent evt)//GEN-FIRST:event_txtDriverConfigNameKeyReleased
-    {//GEN-HEADEREND:event_txtDriverConfigNameKeyReleased
-        ltbDrvConfig.udpate( txtDriverConfigName.getText().trim() +
-                             " = "+
-                             txtDriverConfigValue.getText().trim() );
-    }//GEN-LAST:event_txtDriverConfigNameKeyReleased
-
-    private void txtDriverConfigValueKeyReleased(java.awt.event.KeyEvent evt)//GEN-FIRST:event_txtDriverConfigValueKeyReleased
-    {//GEN-HEADEREND:event_txtDriverConfigValueKeyReleased
-        ltbDrvConfig.udpate( txtDriverConfigName.getText().trim() +
-                             " = "+
-                             txtDriverConfigValue.getText().trim() );
-    }//GEN-LAST:event_txtDriverConfigValueKeyReleased
-
     private void btnSendMsg2ActuatorActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnSendMsg2ActuatorActionPerformed
     {//GEN-HEADEREND:event_btnSendMsg2ActuatorActionPerformed
         GDialog dlg = new GDialog( "Change Actuator State", true );
@@ -479,7 +318,7 @@ final class PnlDevice extends PnlCmdBase
                                             if( pnl.getValue() != null )
                                             {
                                                 dlg.dispose();
-                                                exenClient.sendChangeActuator( txtName.getText().trim().toLowerCase(), pnl.getValue() );
+                                                exenClient.sendRequest2ChangeActuator( txtName.getText().trim().toLowerCase(), pnl.getValue() );
                                             }
                                         }  );
 
@@ -490,28 +329,20 @@ final class PnlDevice extends PnlCmdBase
     }//GEN-LAST:event_btnSendMsg2ActuatorActionPerformed
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
-    private javax.swing.JButton btnDriverConfigAdd;
-    private javax.swing.JButton btnDriverConfigDel;
     private javax.swing.JButton btnSendMsg2Actuator;
     private javax.swing.JComboBox<String> cmbDriverName;
     private javax.swing.JComboBox<String> cmbTimeUnit;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
-    private javax.swing.JLabel jLabel5;
     private javax.swing.JLabel jLabel8;
-    private javax.swing.JScrollPane jScrollPane1;
-    private javax.swing.JLabel label99;
     private javax.swing.JLabel lblDelta;
     private javax.swing.JLabel lblDelta1;
-    private javax.swing.JList<String> lstDriverConfig;
+    private javax.swing.JPanel pnl4Config;
     private javax.swing.JPanel pnlDeviceInit;
     private javax.swing.JPanel pnlDriver;
-    private javax.swing.JPanel pnlDriverConfig;
     private javax.swing.ButtonGroup radGroupDeviceType;
     private javax.swing.JSpinner spnDelta;
     private javax.swing.JSpinner spnDowntimed;
-    private javax.swing.JTextField txtDriverConfigName;
-    private javax.swing.JTextField txtDriverConfigValue;
     private javax.swing.JTextField txtGroups;
     private javax.swing.JTextField txtName;
     private javax.swing.JTextField txtValue;

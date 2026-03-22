@@ -80,10 +80,20 @@ public interface IRuntime
     /**
      * Gently ends ExEn execution by ending all internal processes.
      *
-     * @param millis Delay. 'millis' 0 or negative means immediately.
+     * @param millis Delay. 'millis': 0 or negative means immediately.
      * @return Itself.
      */
     IRuntime exit( int millis );
+
+    /**
+     * Gently ends ExEn execution by ending all internal processes.
+     *
+     * @param millis Delay. 'millis': 0 or negative means immediately.
+     * @param exitCode To be passed to <code>System.exit( ... )</code>
+     * @param reason Instances of Throwable are treated according, all others (except null) will be parsed as string.
+     * @return Itself
+     */
+    IRuntime exit( int millis, int exitCode, Object reason );
 
     //------------------------------------------------------------------------//
     // ICommand RELATED API
@@ -111,6 +121,15 @@ public interface IRuntime
     ICommand get( String name );
 
     /**
+     * Parses a JSON model string (transpiled Une code) and adds all its commands to the ExEn.
+     * <p>
+     * If {@code sModelJSON} is null or blank, this method does nothing.
+     *
+     * @param sModelJSON A string containing a valid JSON model produced by the Une transpiler.
+     */
+    void addModel( String sModelJSON );
+
+    /**
      * Adds passed ICommand to the ExEn.
      * <p>
      * Prior to add a new entity, all its prerequisites must be satisfied: when adding a Device,
@@ -119,9 +138,9 @@ public interface IRuntime
      * Note that Rules do not need any other entities. But if any of its actions (THEN clause)
      * triggers a Script and it does not exist when the rule is satisfied, and error will happen.
      *
-     * @param command ICommand to be removed.
+     * @param commands One or more ICommand instances to be added.
      */
-    void add( ICommand command );
+    void add( ICommand... commands );
 
     /**
      * Removes passed ICommand from the ExEn.
@@ -133,10 +152,10 @@ public interface IRuntime
      * after removing an Script or a Driver.
      * <p>
      *
-     * @param command ICommand to be removed.
-     * @return true when the ICommand was successfully removed; false otherwise.
+     * @param commands One or more ICommand instances to be removed.
+     * @return true when all ICommand instances were successfully removed; false otherwise.
      */
-    boolean remove( ICommand command );
+    boolean remove( ICommand... commands );
 
     //------------------------------------------------------------------------//
     // IDevice GROUPS RELATED API

@@ -453,12 +453,21 @@ final class UneTokenMaker extends AbstractTokenMaker
         tm.put( "BXOR", Token.OPERATOR );
         tm.put( "BNOT", Token.OPERATOR );
 
-        // Language names (for SCRIPT LANGUAGE clause)
+        // Language names for LANGUAGE clause in SCRIPT command only
+        tm.put( "UNE",        Token.DATA_TYPE );
+
+        // Language names for LANGUAGE clause in LIBRARY command only (native shared libraries via JNA)
+        tm.put( "JVM",        Token.DATA_TYPE );
+        tm.put( "C",          Token.DATA_TYPE );
+        tm.put( "RUST",       Token.DATA_TYPE );
+
+        // Language names valid in both SCRIPT and LIBRARY commands
         tm.put( "JAVA",       Token.DATA_TYPE );
         tm.put( "JAVASCRIPT", Token.DATA_TYPE );
         tm.put( "JS",         Token.DATA_TYPE );
         tm.put( "PYTHON",     Token.DATA_TYPE );
-        tm.put( "UNE",        Token.DATA_TYPE );
+        tm.put( "RUBY",       Token.DATA_TYPE );
+        tm.put( "R",          Token.DATA_TYPE );
 
         // Functions from expression evaluator
         try

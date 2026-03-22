@@ -15,6 +15,7 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import javax.swing.AbstractAction;
 import javax.swing.ActionMap;
+import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
 import javax.swing.InputMap;
 import javax.swing.JComponent;
@@ -23,6 +24,7 @@ import javax.swing.JList;
 import javax.swing.KeyStroke;
 import javax.swing.ListCellRenderer;
 import javax.swing.ListSelectionModel;
+import javax.swing.border.EmptyBorder;
 import javax.swing.event.ListSelectionEvent;
 import javax.swing.event.ListSelectionListener;
 
@@ -53,6 +55,8 @@ public class GList<T>
         this.list.setModel( this.model );
         this.list.setSelectionMode( ListSelectionModel.SINGLE_SELECTION );
         this.list.setCellRenderer( new GCellRenderer() );
+
+        this.list.setBorder( new EmptyBorder( 5, 7, 5, 7 ) );
     }
 
     //------------------------------------------------------------------------//
@@ -416,6 +420,7 @@ public class GList<T>
         GCellRenderer()
         {
             setOpaque( true );
+            setBorder( BorderFactory.createEmptyBorder( 4, 6, 4, 6 ) );
             fnCaption = (T i) -> i.toString();      // This is the default caption function
         }
 

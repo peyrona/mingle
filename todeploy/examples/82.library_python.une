@@ -1,0 +1,86 @@
+#==================================================================================================================================
+# This example shows how to use the LIBRARY command to expose a Python module as a callable function collection.
+#
+# For Python libraries, the FROM clause points to the .py file (the module). All top-level functions
+# defined in the module become callable in WHEN/THEN/CONFIG expressions using the colon operator:
+#
+#     LibraryName:functionName( args )
+#
+# If the module defines a top-level "init( config )" function, it is called once after loading,
+# receiving the CONFIG values declared in the LIBRARY command.
+#
+# NOTE: Python library support requires invokeFunction() to be implemented in JythonRT.
+#       See ICandi.ILanguage for the contract.
+#
+# IMPORTANT! THIS EXAMPLE CANNOT BE EXECUTED because 'textutils.py' does not exist.
+#            It illustrates the syntax and intended use.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project. This project is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+
+# --- Example Python module content (textutils.py) ---
+#
+# def init( config ):
+#     pass                                   # Optional: receives CONFIG values as a dict
+#
+# def capitalize( text ):
+#     return text.capitalize()
+#
+# def word_count( text ):
+#     return len( text.split() )
+#
+# def truncate( text, max_len ):
+#     return text[:int(max_len)] + "..." if len(text) > int(max_len) else text
+
+
+# --- Declare the library ---
+
+LIBRARY TextUtils
+   LANGUAGE Python
+   FROM     "file://{*home.lib*}textutils.py"
+   CONFIG
+      max_length = 80       # Passed to textutils.init(config) after the module is loaded
+
+
+# --- Devices ---
+
+DEVICE raw_message
+   DRIVER CellSetDriver
+      CONFIG
+         value = "Hello world from the IoT sensor"
+
+DEVICE display_message
+   DRIVER OutputDriver     # Actuator: shows the processed message on a display or dashboard
+
+
+# --- Rules using the library ---
+
+# Capitalize each incoming message before displaying it.
+
+WHEN raw_message
+THEN display_message = TextUtils:capitalize( raw_message )
+
+
+# Only relay messages that are longer than 3 words.
+
+WHEN raw_message AND TextUtils:word_count( raw_message ) > 3
+THEN display_message = TextUtils:truncate( raw_message, 80 )
+
+
+# -------------------------------------------------------------------
+# This code periodically updates the 'raw_message' device
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval = 5s
+
+WHEN clock
+THEN raw_message = "Incoming sensor reading update"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -708,6 +708,35 @@ public final class pair
     }
 
     /**
+     * Returns a JSON string representation of this instance's data.
+     * The result can be used for interoperativity.
+     * @return A JSON string representation.
+     */
+    @Override
+    public String toJson()
+    {
+        if( isEmpty() )
+            return "{}";
+
+        JsonObject jo = Json.object();
+
+        synchronized( inner )
+        {
+            for( Map.Entry entry : getEntrySet() )
+            {
+                Object val = entry.getValue();
+
+                if( val instanceof ExtraTypeCollection )
+                    jo.add( entry.getKey().toString(), Json.parse( ((ExtraTypeCollection) val).toJson() ) );
+                else
+                    jo.add( entry.getKey().toString(), UtilType.toJson( val ) );
+            }
+        }
+
+        return jo.toString();
+    }
+
+    /**
      * Returns a string representation of this dictionary.
      * <p>
      * Format: {@code {key1=value1, key2=value2, ...}}
@@ -775,6 +804,7 @@ public final class pair
      * This can be passed to {@link #deserialize(JsonObject)} to reconstruct the dictionary.
      *
      * @return A JSON object representing this dictionary
+     * @see UtilType#toJson(java.lang.Object)
      */
     @Override
     public JsonObject serialize()

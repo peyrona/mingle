@@ -65,7 +65,7 @@ DEVICE external_ip
 
 
 WHEN external_ip
-    THEN console = "["+ time() +"] External IP: " + external_ip
+THEN console = "["+ time() +"] External IP: " + external_ip
 
 
 #==================================================================================================================================
@@ -81,12 +81,12 @@ DEVICE geo_info
 
 
 WHEN geo_info
-    THEN console = "----- Geolocation Info -----"
-         console = "Country  : " + geo:get( "country" )
-         console = "City     : " + geo:get( "city" )
-         console = "Latitude : " + geo:get( "lat" )
-         console = "Longitude: " + geo:get( "lon" )
-         console = "ISP      : " + geo:get( "isp" )
+THEN console = "----- Geolocation Info -----"
+     console = "Country  : " + geo:get( "country" )
+     console = "City     : " + geo:get( "city" )
+     console = "Latitude : " + geo:get( "lat" )
+     console = "Longitude: " + geo:get( "lon" )
+     console = "ISP      : " + geo:get( "isp" )
 USE geo AS pair( geo_info )
 
 
@@ -96,17 +96,17 @@ USE geo AS pair( geo_info )
 # Use 'interval' to automatically poll an API at regular intervals.
 # This is useful for monitoring dashboards, sensor data, or any changing data.
 
-DEVICE bitcoin_price
-    DRIVER HttpClientDriver
-        CONFIG
-            uri      = "https://api.coindesk.com/v1/bpi/currentprice/USD.json"
-            interval = 60                     # Poll every 60 seconds
-            timeout  = 10                     # 10 second timeout
+# DEVICE bitcoin_price
+#     DRIVER HttpClientDriver
+#         CONFIG
+#             uri      = "https://api.coindesk.com/v1/bpi/currentprice/USD.json"
+#             interval = 60                     # Poll every 60 seconds
+#             timeout  = 10                     # 10 second timeout
 
 
-WHEN bitcoin_price
-    THEN console = "["+ time() +"] Bitcoin: $" + btc:get( "rate" ) + " USD"
-USE btc AS pair( bitcoin_price ):get( "bpi" ):get( "USD" )
+# WHEN bitcoin_price
+#     THEN console = "["+ time() +"] Bitcoin: $" + btc:get( "rate" ) + " USD"
+# USE btc AS pair( bitcoin_price ):get( "bpi" ):get( "USD" )
 
 
 #==================================================================================================================================
@@ -135,31 +135,30 @@ USE btc AS pair( bitcoin_price ):get( "bpi" ):get( "USD" )
 # This example shows how to send data to an API using POST method.
 # We use a test endpoint that echoes back what we send.
 
-DEVICE echo_api
-    DRIVER HttpClientDriver
-        CONFIG
-            uri     = "https://httpbin.org/post"
-            timeout = 10
+# DEVICE echo_api
+#     DRIVER HttpClientDriver
+#         CONFIG
+#             uri     = "https://httpbin.org/post"
+#             timeout = 10
 
 
 # Device to trigger POST request (using a button simulation)
-DEVICE send_button
-    DRIVER CellSetDriver
-        CONFIG
-            value = false
+# DEVICE send_button
+#     DRIVER CellSetDriver
+#         CONFIG
+#             value = false
 
 
 # When button is pressed, send a POST request
-WHEN send_button
-THEN echo_api  = pair():put( "method", "POST" ) \
-                       :put( "body", "{\"message\":\"Hello from Mingle!\",\"timestamp\":\""+ time() +"\"}" )
-     console   = "["+ time() +"] POST request sent"
+# WHEN send_button
+# THEN echo_api  = pair():put( "method", "POST" ) \
+#                        :put( "body", "{\"message\":\"Hello from Mingle!\",\"timestamp\":\""+ time() +"\"}" )
+#      console   = "["+ time() +"] POST request sent"
 
 
 # Display the API response
-WHEN echo_api
-THEN console = "["+ time() +"] API Response received\nResponse: "+ echo_api
-
+# WHEN echo_api
+# THEN console = "["+ time() +"] API Response received\nResponse: "+ echo_api
 
 #==================================================================================================================================
 # EXAMPLE 6: REST API CRUD operations demo
@@ -234,28 +233,19 @@ THEN rest_api = pair():put( "method", "DELETE" )
 #==================================================================================================================================
 # You can use conditions to handle different API responses.
 
-DEVICE health_check
-    DRIVER HttpClientDriver
-        CONFIG
-            uri      = "https://httpbin.org/status/200"
-            interval = 30
-            timeout  = 5
+# DEVICE health_check
+#     DRIVER HttpClientDriver
+#         CONFIG
+#             uri      = "https://httpbin.org/status/200"
+#             interval = 30
+#             timeout  = 5
 
 
-WHEN health_check:search( "error" ) > 0
-THEN console = "[ALERT] Health check failed: " + health_check
+# WHEN health_check:search( "error" ) > 0
+# THEN console = "[ALERT] Health check failed: " + health_check
 
 
-WHEN health_check AND NOT health_check:search( "error" )
-THEN console = "["+ time() +"] Health check OK"
-
-
-#==================================================================================================================================
-# Include standard libraries
-#==================================================================================================================================
-
-INCLUDE "file://{*home.inc*}standard-replaces.une"
-        "file://{*home.inc*}basic-drivers.une"
-        "file://{*home.inc*}protocol-drivers.une"
+# WHEN health_check AND NOT health_check:search( "error" )
+# THEN console = "["+ time() +"] Health check OK"
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -379,7 +379,7 @@ public final class Logger implements ILogger
                           sb.append( "  <level>" ).append( record.getLevel() ).append( "</level>\n" );
                           sb.append( "  <class>" ).append( record.getSourceClassName() ).append( "</class>\n" );
                           sb.append( "  <method>" ).append( record.getSourceMethodName() ).append( "</method>\n" );
-                          sb.append( "  <thread>" ).append( record.getThreadID() ).append( "</thread>\n" );
+                          sb.append( "  <thread>" ).append( record.getLongThreadID() ).append( "</thread>\n" );
                           sb.append( "  <message>" ).append( escapeXml( record.getMessage() ) ).append( "</message>\n" );
                           sb.append( "</record>\n" );
             return sb.toString();

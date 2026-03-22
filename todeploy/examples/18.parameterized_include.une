@@ -48,6 +48,7 @@ DEVICE clock                # Notice that this DEVICE, although declared here, i
 DEVICE console              # The same with this device.
     DRIVER OutputDriver
 
+
 # Here we decided to use '.template.une' to easily identify this Une file will be used as a parameterized INCLUDE.
 
 INCLUDE "{*home*}examples/check_machine.template.une"
