@@ -15,6 +15,20 @@
 >
 
 
+# How to install Mingle?
+
+Copy and paste into your terminal:
+
+* **Linux**
+  curl \-fsSL (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh) | bash
+
+* **macOS**
+  curl \-fsSL (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh) | bash
+
+* **Windows (PowerShell)**
+  irm (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1) | iex
+
+
 # Questions and Answers
 
  **Do I need to know about computer programming?**
@@ -26,19 +40,6 @@
 
 > A PC with Windows, macOS or Linux. In fact, **Mingle** would run in any machine where Java 11 (or above) can run.
 > Raspberry Pi is a cheap computer very appropriate to experiment with _Une_.
-
- **How to install Mingle?**
-
-Copy and paste the command for your operating system into your terminal:
-
-* **Linux**
-  curl \-fsSL \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh) | bash
-
-* **macOS**
-  curl \-fsSL \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh) | bash
-
-* **Windows (PowerShell)**
-  irm \[https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1\](https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1) | iex
 
  **What is the easiest way to start?**
 
