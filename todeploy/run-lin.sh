@@ -46,52 +46,48 @@ die()
 
 bootstrap_app()
 {
-    # If lib/menu.jar already exists here, no download needed
-    if [[ -f "lib/menu.jar" ]]; then
-        log "INFO" "Mingle already present in current directory."
-        exec bash ./run-lin.sh "$@"
+    # 1. Dependency Check: unzip is vital for the bootstrap
+    if ! command -v unzip >/dev/null 2>&1; then
+        die "'unzip' is required but not found. Please install it (e.g.: sudo apt-get update && sudo apt-get install unzip)"
     fi
 
-    local install_dir current_dir_name
-    current_dir_name="$(basename "$(pwd)")"
-
-    if [[ "$current_dir_name" == "mingle" ]]; then
+    # 2. Determine installation directory
+    local install_dir
+    if [[ "$(basename "$(pwd)")" == "mingle" ]]; then
         install_dir="$(pwd)"
-        log "INFO" "Already inside a 'mingle' directory. Installing here: '$install_dir'..."
+        log "INFO" "Already inside a 'mingle' directory. Installing here..."
     else
         install_dir="$(pwd)/mingle"
         log "INFO" "Bootstrapping Mingle into '$install_dir'..."
     fi
 
-    command -v unzip >/dev/null 2>&1 || \
-        die "'unzip' is required but not found. Please install it (e.g.: sudo apt-get install unzip)"
+    # 3. Create directory with proper permissions
+    mkdir -p "$install_dir" || die "Failed to create directory '$install_dir'. Try running with sudo if permissions are restricted."
 
-    mkdir -p "$install_dir" || die "Failed to create directory '$install_dir'"
-
+    # 4. Fetch latest release info
     log "INFO" "Fetching latest release info from GitHub..."
-
     local api_response zip_url
     api_response=$(curl -fsSL "https://api.github.com/repos/peyrona/mingle/releases/latest") || \
         die "Failed to fetch release info from GitHub."
 
     zip_url=$(echo "$api_response" | grep '"browser_download_url"' | grep '\.zip"' | head -1 | cut -d'"' -f4 || true)
-
     [[ -n "$zip_url" ]] || die "Could not determine the latest release download URL."
 
+    # 5. Download and Unpack
     local zip_file="$install_dir/_download.zip"
     log "INFO" "Downloading $zip_url..."
-    curl -L --progress-bar -o "$zip_file" "$zip_url" || {
-        rm -f "$zip_file"
-        die "Download failed."
-    }
+    curl -L --progress-bar -o "$zip_file" "$zip_url" || { rm -f "$zip_file"; die "Download failed."; }
 
-    log "INFO" "Extracting (existing files will not be replaced)..."
-    unzip -n "$zip_file" -d "$install_dir" || die "Extraction failed."
+    log "INFO" "Extracting files..."
+    unzip -o "$zip_file" -d "$install_dir" || die "Extraction failed."
     rm "$zip_file"
 
+    # 6. Handoff to the local script
     log "INFO" "Bootstrap complete. Starting Mingle..."
     cd "$install_dir" || die "Failed to change to '$install_dir'"
 
+    # Ensure the local script is executable
+    chmod +x run-lin.sh
     exec bash ./run-lin.sh "$@"
 }
 
@@ -226,23 +222,16 @@ download_java()
 
 main()
 {
-    # Bootstrap: if running from a pipe (one-liner install), download and install first.
+    # Robust pipe detection: If BASH_SOURCE is not a file on disk, we are in a pipe
     local src="${BASH_SOURCE[0]:-}"
-    if [[ -z "$src" ]] || [[ "$src" == /dev/fd/* ]] || [[ "$src" == /proc/* ]]; then
+    if [[ ! -f "$src" ]]; then
         bootstrap_app "$@"
+        return # bootstrap_app uses 'exec', but return is a safety fallback
     fi
 
+    # Normal execution starts here
     clear
-
     [[ "$(uname)" == "Linux" ]] || die "This script is intended for Linux systems."
-
-    if isRoot; then
-        log "INFO" "This script is launched by an Admin"
-    else
-        log "INFO" "This script is NOT launched by an Admin"
-    fi
-
-    log "INFO" "This script runs 'menu.jar' passing all received parameters"
 
     init_environment
 
@@ -250,26 +239,18 @@ main()
     if [ -f "lib/rpi/wiringpi.sh" ]; then
         bash "lib/rpi/wiringpi.sh"
     else
-        die "The application file 'lib/rpi/wiringpi.sh' was not found."
+        die "The application file 'lib/rpi/wiringpi.sh' was not found. Try running the installation one-liner again."
     fi
 
-    # If Java is not found, download it.
+    # Java setup and application launch
     if ! find_java; then
         download_java
-        # After download, try to find it again to set JAVA_CMD.
-        if ! find_java; then
-            die "Java check failed. Could not find an usable Java installation even after download."
-        fi
+        find_java || die "Java check failed even after download."
     fi
 
     log "INFO" "Using Java: $JAVA_CMD"
+    [[ -f "lib/menu.jar" ]] || die "The application file 'menu.jar' was not found."
 
-    if [ ! -f "lib/menu.jar" ]; then
-        die "The application file 'menu.jar' was not found."
-    fi
-
-    # All arguments passed to this script will be forwarded to the application.
-    # Use setsid to create a new session, so GUI apps survive terminal closure
     setsid "$JAVA_CMD" -jar lib/menu.jar "$@"
 }
 
