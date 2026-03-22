@@ -48,6 +48,7 @@ GEMINI.md
 
 # Build scripts
 /*.sh           # All sh in base folder
+todeploy/run-*.sh
 
                 # Can not ignore /todeploy/ because is used by the Updater
 /0.PhD/
