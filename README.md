@@ -20,13 +20,13 @@
 Copy and paste into your terminal:
 
 * **Linux**<br>
-  curl \-fsSL (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh) | bash
+  curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh | bash
 
 * **macOS**<br>
-  curl \-fsSL (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh) | bash
+  curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-mac.sh | bash
 
 * **Windows (PowerShell)**<br>
-  irm (https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1) | iex
+  irm https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-win.ps1 | iex
 
 
 # Questions and Answers

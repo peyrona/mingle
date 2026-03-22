@@ -279,77 +279,48 @@ function Expand-ZipNoOverwrite {
 }
 
 function Bootstrap-App {
-    param(
-        [string[]]$Arguments
-    )
+    param([string[]]$Arguments)
 
-    $currentDir = (Get-Location).Path
-
-    # If lib\menu.jar already exists here, no download needed
-    $existingJar = Join-Path $currentDir "lib\menu.jar"
-    if (Test-Path -Path $existingJar -PathType Leaf) {
-        Write-Log -Level "INFO" -Message "Mingle already present in current directory."
-        $scriptPath = Join-Path $currentDir "run-win.ps1"
-        & powershell -ExecutionPolicy Bypass -File $scriptPath @Arguments
-        exit $LASTEXITCODE
-    }
-
-    $currentDirName = Split-Path $currentDir -Leaf
-
-    if ($currentDirName -eq "mingle") {
-        $installDir = $currentDir
-        Write-Log -Level "INFO" -Message "Already inside a 'mingle' directory. Installing here: '$installDir'..."
-    }
-    else {
-        $installDir = Join-Path $currentDir "mingle"
-        Write-Log -Level "INFO" -Message "Bootstrapping Mingle into '$installDir'..."
-    }
-
-    # Create install directory if needed
-    if (-not (Test-Path -Path $installDir -PathType Container)) {
-        New-Item -Path $installDir -ItemType Directory -Force | Out-Null
-    }
-
-    # Fetch latest release ZIP URL from GitHub API
-    Write-Log -Level "INFO" -Message "Fetching latest release info from GitHub..."
-
+    # 1. Enforcement of TLS 1.2 for modern web requests
     [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
+    $currentDir = Get-Location
+    $installDir = Join-Path $currentDir "mingle"
+
+    if ((Split-Path $currentDir -Leaf) -eq "mingle") {
+        $installDir = $currentDir
+    }
+
+    Write-Log -Level "INFO" -Message "Bootstrapping Mingle into '$installDir'..."
+
+    # 2. Create directory
+    if (-not (Test-Path -Path $installDir)) {
+        New-Item -ItemType Directory -Path $installDir -Force | Out-Null
+    }
+
+    # 3. Fetch latest release from GitHub API
     try {
         $releaseInfo = Invoke-RestMethod -Uri "https://api.github.com/repos/peyrona/mingle/releases/latest" -UseBasicParsing
-        $zipAsset    = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -First 1
-        $zipUrl      = $zipAsset.browser_download_url
+        $zipUrl = $releaseInfo.assets | Where-Object { $_.name -like "*.zip" } | Select-Object -ExpandProperty browser_download_url -First 1
     }
     catch {
-        Exit-WithError -Message "Failed to fetch release info from GitHub. Error: $_"
+        Exit-WithError -Message "Failed to fetch release info: $($_.Exception.Message)"
     }
 
-    if ([string]::IsNullOrEmpty($zipUrl)) {
-        Exit-WithError -Message "Could not determine the latest release download URL."
-    }
-
-    # Download the ZIP
+    # 4. Download and Extract
     $zipFile = Join-Path $installDir "_download.zip"
-    Write-Log -Level "INFO" -Message "Downloading $zipUrl..."
+    Write-Log -Level "INFO" -Message "Downloading latest release..."
+    Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
 
-    try {
-        $ProgressPreference = 'Continue'
-        Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
-    }
-    catch {
-        if (Test-Path $zipFile) { Remove-Item $zipFile -Force }
-        Exit-WithError -Message "Download failed. Error: $_"
-    }
-
-    # Extract without overwriting existing files
-    Write-Log -Level "INFO" -Message "Extracting (existing files will not be replaced)..."
-    Expand-ZipNoOverwrite -ZipPath $zipFile -DestPath $installDir
+    Write-Log -Level "INFO" -Message "Extracting files..."
+    Expand-Archive -Path $zipFile -DestinationPath $installDir -Force
     Remove-Item $zipFile -Force
 
-    Write-Log -Level "INFO" -Message "Bootstrap complete. Starting Mingle..."
-
-    $scriptPath = Join-Path $installDir "run-win.ps1"
-    & powershell -ExecutionPolicy Bypass -File $scriptPath @Arguments
+    # 5. Execute the local copy
+    $localScript = Join-Path $installDir "run-win.ps1"
+    Write-Log -Level "INFO" -Message "Installation complete. Launching..."
+    Set-Location -Path $installDir
+    & powershell -ExecutionPolicy Bypass -File $localScript @Arguments
     exit $LASTEXITCODE
 }
 
@@ -358,61 +329,48 @@ function Bootstrap-App {
 # ---------------------------------------------------------------------------------------------
 
 function Main {
-    param(
-        [string[]]$Arguments
-    )
+    param([string[]]$Arguments)
 
-    # Bootstrap: if running from a pipe (one-liner install), download and install first.
-    # $PSScriptRoot is empty when the script is executed via iex/piped input.
-    $menuJar = if ($PSScriptRoot) { Join-Path $PSScriptRoot "lib\menu.jar" } else { "lib\menu.jar" }
-    if (-not (Test-Path -Path $menuJar -PathType Leaf)) {
+    # Robust pipe detection: If MyInvocation.ScriptName is empty, it's a pipe/iex
+    if ([string]::IsNullOrEmpty($MyInvocation.ScriptName)) {
         Bootstrap-App -Arguments $Arguments
         return
     }
 
     Clear-Host
 
-    # Check if running on Windows
+    # Check OS
     if ($env:OS -ne "Windows_NT") {
         Exit-WithError -Message "This script is intended for Windows systems."
     }
 
-    if (Test-IsAdmin) {
-        Write-Log -Level "INFO" -Message "This script is launched by an Admin"
-    }
-    else {
-        Write-Log -Level "INFO" -Message "This script is NOT launched by an Admin"
-    }
-
-    Write-Log -Level "INFO" -Message "This script runs 'menu.jar' passing all received parameters"
-
     Initialize-Environment
 
-    # If Java is not found, download it.
+    # Admin Check
+    if (Test-IsAdmin) {
+        Write-Log -Level "INFO" -Message "Launched with Administrator privileges."
+    }
+
+    # Java setup
     if (-not (Find-Java)) {
         Install-Java
-
-        # After download, try to find it again to set JavaCmd.
         if (-not (Find-Java)) {
-            Exit-WithError -Message "Java check failed. Could not find an usable Java installation even after download."
+            Exit-WithError -Message "Could not locate Java even after installation attempt."
         }
     }
 
-    Write-Log -Level "INFO" -Message "Using Java: $script:JavaCmd"
-
-    $menuJar = Join-Path -Path $script:ScriptDir -ChildPath "lib/menu.jar"
-    if (-not (Test-Path -Path $menuJar -PathType Leaf)) {
-        Exit-WithError -Message "The application file 'menu.jar' was not found."
+    # Verify JAR
+    $menuJar = Join-Path $script:ScriptDir "lib\menu.jar"
+    if (-not (Test-Path -Path $menuJar)) {
+        # If we are in the script but the JAR is missing, trigger bootstrap
+        Bootstrap-App -Arguments $Arguments
+        return
     }
 
-    if ($null -eq $Arguments -or $Arguments.Count -eq 0) {
-        Write-Host "Press any key to continue..."
-        $null = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-    }
+    Write-Log -Level "INFO" -Message "Starting Mingle application..."
 
-    # All arguments passed to this script will be forwarded to the application.
-    # Use Start-Process to launch independently, so GUI apps survive console closure
-    $javaArgs = @("-jar", $menuJar) + $Arguments
+    # Forward arguments and launch
+    $javaArgs = @("-jar", "`"$menuJar`"") + $Arguments
     Start-Process -FilePath $script:JavaCmd -ArgumentList $javaArgs
 }
 
