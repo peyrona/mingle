@@ -1,0 +1,62 @@
+# NetBeans specific (any project)
+nbproject/private/
+build/
+dist/
+
+# Compiled class files
+*.class
+
+# Log files
+*.log
+
+# Package files
+*.jar
+*.war
+*.ear
+
+# IDE files
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Otros ficheros y dirs to ignore
+.*
+.*/
+**/.*           # ignore all hidden files in all tree
+**/.*/          # ignore all hidden folders in all tree
+!/.gitignore    # do not ignore this hidden file
+
+/.cache/
+/.config/
+
+*.graphml
+*.txt
+*.odt
+*.odg
+*.model
+*.zip           # Ignore all .zip files
+
+
+# AI assistant documentation
+CLAUDE.md
+GEMINI.md
+
+# Build scripts
+/*.sh           # All sh in base folder
+
+                # Can not ignore /todeploy/ because is used by the Updater
+/0.PhD/
+/balata/
+/build/
+/docs/
+/javadocs/
+/website/
+/menu/nbproject/private/
+/gum_undertow/nbproject/private/
+/gumjetty/nbproject/private/
+/gum/nbproject/private/
