@@ -17,7 +17,8 @@
 
 # How to install Mingle?
 
-Copy and paste into your terminal:
+Copy and paste into your terminal:<br>
+(a folder named 'mingle' with everything inside will be created)
 
 * **Linux**<br>
   curl -fsSL https://raw.githubusercontent.com/peyrona/mingle/main/todeploy/run-lin.sh | bash
@@ -38,7 +39,7 @@ Copy and paste into your terminal:
 
  **What computer do I need?**
 
-> A PC with Windows, macOS or Linux. In fact, **Mingle** would run in any machine where Java 11 (or above) can run.
+> A PC with Windows, macOS or Linux. In fact, **Mingle** runs in any machine where Java 17 (or above) can run.
 > Raspberry Pi is a cheap computer very appropriate to experiment with _Une_.
 
  **What is the easiest way to start?**
