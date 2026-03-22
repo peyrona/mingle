@@ -1,0 +1,18 @@
+{"transpiler":"MSP Transpiler v.2026-03-22",
+"code-version":"1.0",
+"uid":"883d6f9f-f6a1-4624-b4fb-189b9e2bbe42",
+"generated":"2026-03-22T16:37:25.682926776Z",
+"commands":[
+{"cmd":"library","name":"mathlib","language":"c","from":["file:///usr/lib/x86_64-linux-gnu/libm.so.6"],"config":{"returns.round":"double","returns.floor":"double","returns.sqrt":"double","returns.ceil":"double","returns.fabs":"double","returns.pow":"double"}},
+{"cmd":"device","name":"raw_temperature","driver":"cellsetdriver","config":{"value":23.7},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":3000},"init":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"raw_temperature","value":"rand( - 30, 250)"},{"after":-1,"target":"console","value":"\"Raw = \" + raw_temperature"},{"after":-1,"target":"console","value":"\"Safe= \" + MathLib:round( raw_temperature)"}],"if":null},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"}
+]
+}

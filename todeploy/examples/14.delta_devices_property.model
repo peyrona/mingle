@@ -1,0 +1,16 @@
+{"transpiler":"MSP Transpiler v.2026-03-22",
+"code-version":"1.0",
+"uid":"69dd45d7-4154-41cb-b325-e8d1d819fffd",
+"generated":"2026-03-22T16:37:26.793127197Z",
+"commands":[
+{"cmd":"device","name":"cpu_1","driver":"systemmonitordriver","config":{"metric":"cpu","interval":3000},"init":null},
+{"cmd":"device","name":"cpu_2","driver":"systemmonitordriver","config":{"metric":"cpu","interval":3000},"init":{"delta":2}},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"CPU_1 >= 0","then":[{"after":-1,"target":"console","value":"\"CPU_1 (no delta)   = \" + CPU_1"}],"if":null},
+{"cmd":"rule","name":null,"when":"CPU_2 >= 0","then":[{"after":-1,"target":"console","value":"\"CPU_2 (with delta) = \" + CPU_2"}],"if":null},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

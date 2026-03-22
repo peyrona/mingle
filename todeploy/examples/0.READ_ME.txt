@@ -1,0 +1,23 @@
+==========================================================================================
+   IT IS VERY IMPORTANT TO READ THIS FILE: I REALLY MEAN IT
+==========================================================================================
+
+
+
+As later examples are based on knowledges adquired by the preious ones, it is strongly recommended to follow the numerical order.
+
+All example files are part of the Mingle project, and are (as well as any other file) licensed under Apache 2.0 License.
+
+For more information about DRIVERs, pleaser refer to the "Mingle Standard Platform" handbook.
+
+
+============================================
+   EXAMPLES ORGANIZATION
+============================================
+01 to 24 --> Basic knowledge: general
+
+25 to 74 --> Drivers: an example of how to use every DRIVER delivered with the MSP (Mingle Standard Platform)
+
+75 to 94 --> Advanced examples: intended to be used by developers (programmers)
+
+95 to 99 --> For testing purposes

@@ -1,0 +1,24 @@
+{"transpiler":"MSP Transpiler v.2026-03-22",
+"code-version":"1.0",
+"uid":"9b2b2dd8-1e73-4869-b1fb-2b4dfa43a4c3",
+"generated":"2026-03-22T16:37:25.977424278Z",
+"commands":[
+{"cmd":"library","name":"formatter","language":"javascript","from":["file://{*home.lib*}formatter.js"],"config":{"unit":"C"}},
+{"cmd":"device","name":"temperature","driver":"cellsetdriver","config":{"value":20},"init":null},
+{"cmd":"device","name":"humidity","driver":"cellsetdriver","config":{"value":50},"init":null},
+{"cmd":"device","name":"display_temp","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"display_hum","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"temperature","then":[{"after":-1,"target":"display_temp","value":"Formatter:formatTemperature( temperature, \"C\" )"}],"if":null},
+{"cmd":"rule","name":null,"when":"humidity","then":[{"after":-1,"target":"display_hum","value":"Formatter:formatPercent( humidity)"}],"if":null},
+{"cmd":"rule","name":null,"when":"temperature && Formatter:isWorkingHours( time():hour())","then":[{"after":-1,"target":"display_temp","value":"Formatter:formatTemperature( temperature, \"C\" )"}],"if":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":5000},"init":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"temperature","value":"rand( - 10, 40)"}],"if":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"humidity","value":"rand( 0, 100)"}],"if":null},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"}
+]
+}

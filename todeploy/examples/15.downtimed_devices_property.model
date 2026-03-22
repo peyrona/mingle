@@ -1,0 +1,17 @@
+{"transpiler":"MSP Transpiler v.2026-03-22",
+"code-version":"1.0",
+"uid":"b9297d7f-88d1-40bc-9838-cab68cfe57d7",
+"generated":"2026-03-22T16:37:26.682312699Z",
+"commands":[
+{"cmd":"device","name":"cpu","driver":"systemmonitordriver","config":{"metric":"cpu","interval":7000},"init":{"downtime":4000}},
+{"cmd":"device","name":"downtimed","driver":"cellsetdriver","config":{"value":{"class":"com.peyrona.mingle.lang.xpreval.functions.list","data":[]}},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"! downtimed:isEmpty()","then":[{"after":-1,"target":"console","value":"\"Following devices did not report new values for long time: they could be damaged, check them: \" + downtimed"}],"if":null},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

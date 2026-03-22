@@ -1,0 +1,14 @@
+{"transpiler":"MSP Transpiler v.2026-03-22",
+"code-version":"1.0",
+"uid":"1f3acda0-3ec1-4b44-a53d-dfb8f76a3f4c",
+"generated":"2026-03-22T16:37:25.379692263Z",
+"commands":[
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":3000},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"console","value":"\"'clock' value is: \" + clock"}],"if":null},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}
