@@ -70,6 +70,51 @@ function Initialize-Environment {
 }
 
 # ---------------------------------------------------------------------------------------------
+# Bootstarp function: to make Mingle fresh installation
+# ---------------------------------------------------------------------------------------------
+
+function Bootstrap-App {
+    param([string[]]$Arguments)
+
+    # 1. Determine installation directory
+    $currentDir = Get-Location
+    $installDir = Join-Path -Path $currentDir.Path -ChildPath "mingle"
+
+    New-Item -Path $installDir -ItemType Directory -Force | Out-Null
+    Set-Location -Path $installDir
+
+    # 2. Fetch latest release info
+    Write-Log -Level "INFO" -Message "Fetching latest release info from GitHub..."
+    try {
+        $apiUrl = "https://api.github.com/repos/peyrona/mingle/releases/latest"
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
+        $zipUrl = $release.assets | Where-Object { $_.browser_download_url -like "*.zip" } | Select-Object -ExpandProperty browser_download_url -First 1
+    } catch {
+        Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
+        Exit-WithError -Message "Failed to fetch release info from GitHub."
+    }
+
+    if (-not $zipUrl) { Exit-WithError -Message "Could not find a zip release." }
+
+    # 3. Download and Unpack
+    $zipFile = Join-Path -Path $installDir -ChildPath "_download.zip"
+    Write-Log -Level "INFO" -Message "Downloading $zipUrl..."
+    try {
+        Invoke-WebRequest -Uri $zipUrl -OutFile $zipFile -UseBasicParsing
+        Write-Log -Level "INFO" -Message "Extracting files..."
+        Expand-Archive -Path $zipFile -DestinationPath $installDir -Force
+        Remove-Item -Path $zipFile -Force
+    } catch {
+        Remove-Item -Path $installDir -Recurse -Force -ErrorAction SilentlyContinue
+        Exit-WithError -Message "Bootstrap failed during download/extraction. Cleaned up $installDir."
+    }
+
+    # 4. Handoff to the local script
+    Write-Log -Level "INFO" -Message "Bootstrap complete. Starting Mingle..."
+    & powershell.exe -File .\run-win.ps1 $Arguments
+}
+
+# ---------------------------------------------------------------------------------------------
 # Java Detection and Installation
 # ---------------------------------------------------------------------------------------------
 
@@ -149,7 +194,8 @@ function Main {
     # Bootstrap detection
     if ([string]::IsNullOrEmpty($MyInvocation.ScriptName)) {
         Bootstrap-App -Arguments $Arguments
-        return
+        Write-Log -Level "INFO" -Message "Mingle was successfully installed inside 'mingle' folder"
+        exit 0
     }
 
     if ($env:OS -ne "Windows_NT") {

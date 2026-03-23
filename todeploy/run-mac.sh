@@ -36,7 +36,6 @@ die()
 # ---------------------------------------------------------------------------------------------
 # Bootstrap: Download and Install
 # Called when the script is piped from a one-liner (app files not yet present).
-# Existing files are never replaced.
 # ---------------------------------------------------------------------------------------------
 
 bootstrap_app()
@@ -48,13 +47,8 @@ bootstrap_app()
 
     # 2. Determine installation directory
     local install_dir
-    if [[ "$(basename "$(pwd)")" == "mingle" ]]; then
-        install_dir="$(pwd)"
-        log "INFO" "Already inside a 'mingle' directory. Installing here..."
-    else
-        install_dir="$(pwd)/mingle"
-        log "INFO" "Bootstrapping Mingle into '$install_dir'..."
-    fi
+    install_dir="$(pwd)/mingle"
+    log "INFO" "Bootstrapping Mingle into '$install_dir'..."
 
     # 3. Create directory
     mkdir -p "$install_dir" || die "Failed to create directory '$install_dir'."
