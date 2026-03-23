@@ -37,8 +37,8 @@ SCRIPT
              put( "gate" , pair() )    # Narrative gates: each key marks a plot moment already announced
 
              console = "════════════════════════════════════════════════════"
-             console = "            Of Wolves and Rabbits"
-             console = "            A Tale Told in Rules"
+             console = "             Of Wolves and Rabbits"
+             console = "             A Tale Told in Rules"
              console = "════════════════════════════════════════════════════"
              console = "\n"
              console = "The meadow awakens. Spring is in the air."

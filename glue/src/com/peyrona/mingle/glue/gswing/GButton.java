@@ -72,18 +72,23 @@ public class GButton extends javax.swing.JButton
         iconCode = code;
         iconSize = size;
 
-        setIcon( IconFontSwing.buildIcon( iconCode, size, JTools.getIconColor() ) );
+        setIconColor( null );
+
         return this;
     }
 
     public GButton setDefaultIconColor()
     {
-        return setIconColor( JTools.getIconColor() );
+        return setIconColor( null );
     }
 
     public GButton setIconColor( Color color )
     {
-        setIcon(IconFontSwing.buildIcon( iconCode, iconSize, color ) );
+        if( color == null )
+            color = JTools.getIconColor();
+
+        setIcon( IconFontSwing.buildIcon( iconCode, iconSize, color ) );
+
         return this;
     }
 

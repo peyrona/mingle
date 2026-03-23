@@ -20,11 +20,6 @@ JAVA_CMD=""
 # Utility Functions
 # ---------------------------------------------------------------------------------------------
 
-isRoot()
-{
-    [ "$EUID" -eq 0 ] || [ "$(id -u)" -eq 0 ]
-}
-
 log()
 {
     local level=$1
@@ -93,25 +88,13 @@ bootstrap_app()
 
 init_environment()
 {
-    # Get script directory and change into it, so all paths are relative
+    # Get script directory and change into it
     SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)" || \
         die "Failed to determine script directory"
 
     cd "${SCRIPT_DIR}" || die "Failed to change to script directory"
 
-    if [ ! -d "log" ]; then
-        mkdir log
-    fi
-
-    if isRoot; then
-        chmod -R 777 log      # Proper directory permissions: rwxr-xr-x
-    fi
-
-    # Ensure DISPLAY is set for GUI applications (needed when launched from .desktop/.app files)
-    if [ -z "${DISPLAY:-}" ]; then
-        export DISPLAY=":0"
-        log "WARN" "DISPLAY was not set. Defaulting to :0"
-    fi
+    # Note: DISPLAY export as it is typically not used in macOS Aqua/Quartz
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -218,23 +201,17 @@ download_java()
 
 main()
 {
+    [[ "$(uname)" == "Darwin" ]] || die "This script is intended for macOS systems."
+
     # Robust pipe detection: If BASH_SOURCE is not a file on disk, we are in a pipe
     local src="${BASH_SOURCE[0]:-}"
     if [[ ! -f "$src" ]]; then
         bootstrap_app "$@"
-        return
+        echo "Mingle was successfully installed inside 'mingle' folder"
+        exit 0
     fi
 
     # Normal execution starts here
-    clear
-    [[ "$(uname)" == "Darwin" ]] || die "This script is intended for macOS systems."
-
-    if isRoot; then
-        log "INFO" "This script is launched by an Admin"
-    else
-        log "INFO" "This script is NOT launched by an Admin"
-    fi
-
     init_environment
 
     # Java setup and application launch
@@ -252,7 +229,8 @@ main()
         read -r -s -n 1
     fi
 
-    setsid "$JAVA_CMD" -jar lib/menu.jar "$@"
+    # Using 'exec' instead of 'setsid' for better macOS compatibility
+    exec "$JAVA_CMD" -jar lib/menu.jar "$@"
 }
 
 main "$@"

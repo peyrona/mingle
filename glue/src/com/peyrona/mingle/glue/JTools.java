@@ -1,6 +1,7 @@
 
 package com.peyrona.mingle.glue;
 
+import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.glue.gswing.GDialog;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilIO;
@@ -101,21 +102,30 @@ public final class JTools
         iconClr = null;
     }
 
-    public static boolean setLaF( boolean isDark )
+    public static boolean toggleLaF()
     {
-        if( isDark == SettingsManager.isDarkMode() )
-            return false;
+        boolean isDarkTheNew = ! SettingsManager.isDarkMode();
 
         iconClr = null;    // This is cheap and can save troubles
 
         try
         {
-            SettingsManager.setDarkLightMode( isDark );
+            SettingsManager.setDarkLightMode( isDarkTheNew );
 
-            if( isDark )  com.formdev.flatlaf.FlatDarculaLaf.setup();
-            else          com.formdev.flatlaf.FlatLightLaf.setup();
+            if( isDarkTheNew )  com.formdev.flatlaf.FlatDarculaLaf.setup();
+            else                com.formdev.flatlaf.FlatLightLaf.setup();
 
             com.formdev.flatlaf.FlatLaf.updateUI();
+
+            SwingUtilities.invokeLater( () ->   // Update buttons icon color in all currently open windows
+                                        {
+                                            for( Window window : Window.getWindows() )
+                                            {
+                                                for( Component btn : JTools.getOfClass( window, GButton.class ) )
+                                                    ((GButton) btn).setDefaultIconColor();
+                                            }
+                                        } );
+
 
             return true;
         }

@@ -20,11 +20,6 @@ JAVA_CMD=""
 # Utility Functions
 # ---------------------------------------------------------------------------------------------
 
-isRoot()
-{
-    [ "$EUID" -eq 0 ] || [ "$(id -u)" -eq 0 ]
-}
-
 log()
 {
     local level=$1
@@ -99,14 +94,6 @@ init_environment()
 
     cd "${SCRIPT_DIR}" || die "Failed to change to script directory"
 
-    if [ ! -d "log" ]; then
-        mkdir log
-    fi
-
-    if isRoot; then
-        chmod -R 777 log      # Proper directory permissions: rwxr-xr-x
-    fi
-
     # Ensure DISPLAY is set for GUI applications (needed when launched from .desktop files)
     if [ -z "${DISPLAY:-}" ]; then
         export DISPLAY=":0"
@@ -153,67 +140,44 @@ find_java()
 
 download_java()
 {
-    log "INFO" "Attempting to download and install Adoptium JDK 17..."
+    log "INFO" "Attempting to download and install OpenJDK 17..."
 
-    # --- Detect Architecture ---
     local ARCH
     ARCH=$(uname -m)
-    local JDK_ARCH
-    local TARGET_DIR
+    local JDK_URL=""
+    local TARGET_DIR=""
+    local DOWNLOAD_FILE="jdk-17-linux.tar.gz"
 
     if [ "$ARCH" = "x86_64" ]; then
         log "INFO" "Detected AMD64 (x64) architecture."
-        JDK_ARCH="x64"
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
         TARGET_DIR="jdk.17.linux.x64"
-    elif [ "$ARCH" = "i686" ] || [ "$ARCH" = "i386" ]; then
-        log "INFO" "Detected AMD32 (x86) architecture."
-        JDK_ARCH="x86"
-        TARGET_DIR="jdk.17.linux.x86"
+    elif [[ "$ARCH" =~ i.86 ]]; then
+        die "Linux x86 not supported: after installing it manually, try again this script."
     elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
         log "INFO" "Detected ARM64 architecture."
-        JDK_ARCH="aarch64"
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/aarch64/jdk/hotspot/normal/eclipse"
         TARGET_DIR="jdk.17.linux.aarch64"
-    elif [ "$ARCH" = "armv7l" ] || [ "$ARCH" = "armv6l" ]; then
-        log "INFO" "Detected ARM32 architecture."
-        JDK_ARCH="arm"
-        TARGET_DIR="jdk.17.linux.arm"
+    elif [[ "$ARCH" =~ armv.l ]]; then
+        log "INFO" "Detected ARM32 architecture. Using Azul Zulu OpenJDK..."
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/arm/jdk/hotspot/normal/eclipse"
+        TARGET_DIR="jdk.17.linux.arm32"
     else
         die "Unsupported architecture for automatic download: $ARCH"
     fi
 
-    # --- Variables ---
-    local JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/$JDK_ARCH/jdk/hotspot/normal/eclipse"
-    local DOWNLOAD_FILE="jdk-17-linux.tar.gz"
-
-    # --- 1. Download JDK ---
     log "INFO" "Downloading from $JDK_URL..."
     if ! curl -L --progress-bar -o "$DOWNLOAD_FILE" "$JDK_URL"; then
-        rm -f "$DOWNLOAD_FILE" # Clean up partial file
-        die "curl command failed to download from $JDK_URL"
+        rm -f "$DOWNLOAD_FILE"
+        die "Download failed."
     fi
 
-    if [ ! -s "$DOWNLOAD_FILE" ]; then
-        rm -f "$DOWNLOAD_FILE" # Clean up empty file
-        die "Download failed or resulted in an empty file."
-    fi
-    log "INFO" "Download complete."
-
-    # --- 2. Create Directory ---
-    log "INFO" "Creating directory ./$TARGET_DIR..."
     mkdir -p "$TARGET_DIR"
-
-    # --- 3. Unpack JDK ---
-    log "INFO" "Unpacking $DOWNLOAD_FILE into ./$TARGET_DIR..."
+    log "INFO" "Unpacking into ./$TARGET_DIR..."
     if ! tar xzf "$DOWNLOAD_FILE" -C "$TARGET_DIR" --strip-components=1; then
         die "Failed to unpack the JDK archive."
     fi
-    log "INFO" "Extraction complete."
-
-    # --- 4. Delete Archive ---
-    log "INFO" "Cleaning up $DOWNLOAD_FILE..."
     rm "$DOWNLOAD_FILE"
-
-    log "INFO" "✅ JDK 17 is ready in ./$TARGET_DIR"
 }
 
 # ---------------------------------------------------------------------------------------------
@@ -222,24 +186,27 @@ download_java()
 
 main()
 {
+    [[ "$(uname)" == "Linux" ]] || die "This script is intended for Linux systems."
+
     # Robust pipe detection: If BASH_SOURCE is not a file on disk, we are in a pipe
     local src="${BASH_SOURCE[0]:-}"
     if [[ ! -f "$src" ]]; then
         bootstrap_app "$@"
-        return # bootstrap_app uses 'exec', but return is a safety fallback
+        echo "Mingle was successfully installed inside 'mingle' folder"
+        exit 0
     fi
 
     # Normal execution starts here
-    clear
-    [[ "$(uname)" == "Linux" ]] || die "This script is intended for Linux systems."
-
     init_environment
 
     # Check for Raspberry Pi GPIO setup
-    if [ -f "lib/rpi/wiringpi.sh" ]; then
-        bash "lib/rpi/wiringpi.sh"
-    else
-        die "The application file 'lib/rpi/wiringpi.sh' was not found. Try running the installation one-liner again."
+    if grep -q "Raspberry Pi" /sys/firmware/devicetree/base/model 2>/dev/null; then
+        log "INFO" "Raspberry Pi hardware detected."
+        if [ -f "lib/rpi/wiringpi.sh" ]; then
+            bash "lib/rpi/wiringpi.sh"
+        else
+            log "WARN" "The application file 'lib/rpi/wiringpi.sh' was not found. Skipping WiringPi setup."
+        fi
     fi
 
     # Java setup and application launch

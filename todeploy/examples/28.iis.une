@@ -148,11 +148,11 @@ SCRIPT station_ai
                  else              { solar=100; power=100; temp=22.4; co2= 518; o2=21.1; } // steady state
 
                  // Post all updates simultaneously — all reads happened above before any write
-                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "solar_output", solar ) );
-                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "power_level",  power ) );
-                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "temperature",  temp  ) );
-                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "co2_ppm",      co2   ) );
-                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "o2_level",     o2    ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "solar_output", (float) solar ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "power_level",  (float) power ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "temperature",  (float) temp  ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "co2_ppm",      (float) co2   ) );
+                 rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "o2_level",     (float) o2    ) );
                  rt.bus().post( new com.peyrona.mingle.lang.messages.MsgChangeActuator( "sim_time",     (t+1) ) );
              }
          }
@@ -173,7 +173,7 @@ WHEN sim_time AND sim_time:mod(5) IS 0 AND sim_time > 0
 THEN console = _NL_
      console = "┌─ STATUS REPORT ─ min " + sim_time + " ─────────────────────────────────────────────────┐"
      console = "│  Solar: " + solar_output:format("000.0") + "%   Power: " + power_level:format("00") + "%   Temp: " + temperature:format("000.0") + "°C   CO₂: " + co2_ppm:format("0000") + " ppm   O₂: " + o2_level:format("00.0") + "%  │"
-     console = "└───────────────────────────────────────────────────────────────────────────┘"
+     console = "└──────────────────────────────────────────────────────────────────────────┘"
      console = _NL_
 
 

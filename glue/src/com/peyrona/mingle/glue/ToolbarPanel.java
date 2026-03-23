@@ -13,7 +13,6 @@ import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.BorderLayout;
 import java.awt.Color;
-import java.awt.Component;
 import java.awt.Desktop;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -470,18 +469,10 @@ final class ToolbarPanel extends javax.swing.JPanel
 
     private void onToggleMode()
     {
-        boolean isDarkTheNew = ! SettingsManager.isDarkMode();
-
-        if( JTools.setLaF( isDarkTheNew ) )
+        if( JTools.toggleLaF() )
         {
-            SwingUtilities.invokeLater( () ->
-                                        {
-                                            FontAwesome icon = isDarkTheNew ? FontAwesome.SUN_O : FontAwesome.MOON_O;
-                                            ((GButton) btnMode).setIcon( icon, 16 );
-
-                                            for( Component btn : JTools.getOfClass( this, GButton.class ) )
-                                                ((GButton) btn).setDefaultIconColor();
-                                        } );
+            FontAwesome icon = SettingsManager.isDarkMode() ? FontAwesome.SUN_O : FontAwesome.MOON_O;
+            ((GButton) btnMode).setIcon( icon, 16 );
         }
     }
 

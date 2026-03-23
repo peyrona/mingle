@@ -3,6 +3,7 @@ package com.peyrona.mingle.glue.codeditor;
 
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorUnit;
+import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.awt.Color;
@@ -15,7 +16,6 @@ import java.awt.datatransfer.Clipboard;
 import java.awt.datatransfer.DataFlavor;
 import java.util.List;
 import javax.swing.DefaultComboBoxModel;
-import javax.swing.Icon;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
@@ -39,23 +39,23 @@ import jiconfont.swing.IconFontSwing;
  */
 final class UneEditorToolBar extends JToolBar
 {
-    JButton btnComment;
-    JButton btnCopy;
-    JButton btnPaste;
-    JButton btnRTF;
-    JButton btnHelp;
-    JButton btnNew;
-    JButton btnNext;
-    JButton btnOpen;
-    JButton btnPrev;
-    JButton btnRedo;
-    JButton btnFolding;
-    JButton btnRepl;
-    JButton btnReplAll;
-    JButton btnRuns;
-    JButton btnSave;
-    JButton btnTranspi;
-    JButton btnUndo;
+    GButton btnComment;
+    GButton btnCopy;
+    GButton btnPaste;
+    GButton btnRTF;
+    GButton btnHelp;
+    GButton btnNew;
+    GButton btnNext;
+    GButton btnOpen;
+    GButton btnPrev;
+    GButton btnRedo;
+    GButton btnFolding;
+    GButton btnRepl;
+    GButton btnReplAll;
+    GButton btnRuns;
+    GButton btnSave;
+    GButton btnTranspi;
+    GButton btnUndo;
     JCheckBox chk4Grid;
     JCheckBox chkAutoSave;
     JCheckBox chkFaked;
@@ -148,10 +148,10 @@ final class UneEditorToolBar extends JToolBar
 
         // JLabels have to be always enabled, otherwise the mouse cursor does not change its shape
 
-        txtSearch.setText(     null );
+        txtSearch.setText(     null  );
         btnPrev.setEnabled(    false );
         btnNext.setEnabled(    false );
-        txtReplace.setText(    null );
+        txtReplace.setText(    null  );
         btnRepl.setEnabled(    false );
         btnReplAll.setEnabled( false );
 
@@ -190,17 +190,13 @@ final class UneEditorToolBar extends JToolBar
 
     //------------------------------------------------------------------------//
 
-    private JButton addButton( JPanel pnlRow, FontAwesome icon, String tooltip )
+    private GButton addButton( JPanel pnlRow, FontAwesome icon, String tooltip )
     {
-        Icon ic = IconFontSwing.buildIcon( icon, 16f, JTools.getIconColor() );
+        GButton btn = new GButton()
+                     .setIcon( icon, 16 )
+                     .setToolTip( tooltip );
 
-        JButton btn = new JButton();
-                btn.setFocusable( false );
-                btn.setIcon( ic );
-                btn.setToolTipText( tooltip );
-                btn.setFocusPainted( false );
-
-        return (JButton) pnlRow.add( btn );
+        return (GButton) pnlRow.add( btn );
     }
 
     private void init()
@@ -208,16 +204,16 @@ final class UneEditorToolBar extends JToolBar
         JPanel row1 = new JPanel( new FlowLayout( FlowLayout.LEFT ) );
         JPanel row2 = new JPanel( new FlowLayout( FlowLayout.LEFT ) );
 
-        btnNew     = addButton( row1, FontAwesome.PLUS       , "New empty script code editor [Ctrl+N]" );
-        btnOpen    = addButton( row1, FontAwesome.FOLDER_OPEN, "Open an Une or a JSON file [Ctrl+O]" );
-        btnSave    = addButton( row1, FontAwesome.FLOPPY_O   , "Save all open files [Ctrl+Shift+S] (to save current file [Ctrl+S])" );
-        btnCopy    = addButton( row1, FontAwesome.CLONE      , "Copy selected text into clipboard [Ctrl+C]" );
-        btnPaste   = addButton( row1, FontAwesome.CLIPBOARD  , "Paste from clipboard into caret position  [Ctrl+V]" );
-        btnUndo    = addButton( row1, FontAwesome.UNDO       , "Undo (Ctrl+Z)" );
-        btnRedo    = addButton( row1, FontAwesome.REPEAT     , "Redo [Ctrl+Y]" );
-        btnComment = addButton( row1, FontAwesome.HASHTAG    , "Toggle commented for selected lines or current line if none selected (Ignore lines) [Ctrl+I]" );
-        btnFolding = addButton( row1, FontAwesome.EXPAND     , "Expand / Collapse all" );
-        btnRTF     = addButton( row1, FontAwesome.CODE       , "Copy to clipboard as RTF selected text or all text if nothing selected" );
+        btnNew     = addButton( row1, FontAwesome.PLUS        , "New empty script code editor [Ctrl+N]" );
+        btnOpen    = addButton( row1, FontAwesome.FOLDER_OPEN , "Open an Une or a JSON file [Ctrl+O]" );
+        btnSave    = addButton( row1, FontAwesome.FLOPPY_O    , "Save all open files [Ctrl+Shift+S] (to save current file [Ctrl+S])" );
+        btnCopy    = addButton( row1, FontAwesome.CLONE       , "Copy selected text into clipboard [Ctrl+C]" );
+        btnPaste   = addButton( row1, FontAwesome.CLIPBOARD   , "Paste from clipboard into caret position  [Ctrl+V]" );
+        btnUndo    = addButton( row1, FontAwesome.UNDO        , "Undo (Ctrl+Z)" );
+        btnRedo    = addButton( row1, FontAwesome.REPEAT      , "Redo [Ctrl+Y]" );
+        btnComment = addButton( row1, FontAwesome.HASHTAG     , "Toggle commented for selected lines or current line if none selected (Ignore lines) [Ctrl+I]" );
+        btnFolding = addButton( row1, FontAwesome.CHEVRON_DOWN, "Expand / Collapse all" );
+        btnRTF     = addButton( row1, FontAwesome.CODE        , "Copy to clipboard as RTF selected text or all text if nothing selected" );
 
         row1.add( newSeparator() );
 
