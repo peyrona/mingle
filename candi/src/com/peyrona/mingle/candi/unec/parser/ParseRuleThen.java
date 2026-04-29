@@ -285,9 +285,7 @@ public class ParseRuleThen extends ParseBase
         }
 
         if( index == lexemes.size() )                 // AFTER not found: it is ok because the clause is optional
-        {
             return -1;
-        }
 
         // If AFTER exists, it needs a numerical parameter
 

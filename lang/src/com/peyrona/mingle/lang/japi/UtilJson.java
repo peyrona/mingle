@@ -541,8 +541,9 @@ public final class UtilJson
             }
             else
             {
-                // Toggle string state on unescaped quotes
-                if( c == '"' && (n == 0 || input.charAt( n - 1 ) != '\\') )
+                // Toggle string state on unescaped quotes. A quote is escaped only when
+                // preceded by an ODD number of backslashes (an even run is itself escaped).
+                if( c == '"' && ! isEscaped( input, n ) )
                 {
                     inString = !inString;
                     output.append( c );
@@ -561,6 +562,20 @@ public final class UtilJson
         return output.toString();
     }
 
+    /**
+     * Returns true if the character at the given position is preceded by an odd
+     * number of backslashes (i.e. it is escaped by the JSON string rules).
+     */
+    private static boolean isEscaped( String input, int pos )
+    {
+        int count = 0;
+
+        for( int k = pos - 1; k >= 0 && input.charAt( k ) == '\\'; k-- )
+            count++;
+
+        return (count & 1) == 1;
+    }
+
     //------------------------------------------------------------------------//
     // FUNCS FOR ::toUneType
     //------------------------------------------------------------------------//
@@ -570,8 +585,8 @@ public final class UtilJson
              if( jv.isObject()  )  return convertJsonObject( jv.asObject() );
         else if( jv.isArray()   )  return convertJsonArray( jv.asArray() );
         else if( jv.isString()  )  return jv.asString();
-        else if( jv.isNumber()  )  return jv.asFloat();
         else if( jv.isBoolean() )  return jv.asBoolean();
+        else if( jv.isNumber()  )  return toNumber( jv );
         else                       return "";              // Handle JSON null (in Une null does not exists)
     }
 
@@ -609,5 +624,23 @@ public final class UtilJson
             l.add( convertJsonValue( value ) );
 
         return l;
+    }
+
+    private static Object toNumber( JsonValue jv )
+    {
+        String text = jv.toString();
+
+        if( text.indexOf( '.' ) > -1 )
+            return jv.asFloat();
+
+        try
+        {
+            return Integer.valueOf( text );
+        }
+        catch( NumberFormatException e )
+        {
+            try  { return Long.valueOf( text ); }
+            catch( NumberFormatException e2 ) { throw new MingleException( "Invalid number \""+ text +'\"' ); }
+        }
     }
 }

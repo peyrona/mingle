@@ -334,9 +334,9 @@ public final class UtilReflect
         if( (param != null)                   &&
             (param.length > 1)                &&
             (method.getParameterCount() == 1) &&
-            (method.getParameterTypes()[0].getClass().isArray()) )
+            (method.getParameterTypes()[0].isArray()) )
         {
-            param = (Object[]) param[0];
+            param = new Object[] { param };
         }
 
         try

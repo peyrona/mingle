@@ -28,12 +28,6 @@ public final class Updater
 
     public static void main( String[] args )
     {
-        if( args == null )
-        {
-            System.err.println( "Error: args cannot be null" );
-            System.exit( 1 );
-        }
-
         UtilCLI cli = new UtilCLI( args );
 
         if( cli.hasOption( "help" ) || cli.hasOption( "h" ) )
@@ -44,7 +38,7 @@ public final class Updater
             System.exit( 0 );
         }
 
-        boolean dryRun  = cli.hasOption( "dry" );
+        boolean dryRun = cli.hasOption( "dry" );
 
         updateIfNeeded( dryRun, () -> { return true; } );
 
@@ -81,10 +75,10 @@ public final class Updater
 
     /**
      * Checks if updates are needed by comparing catalog.json versions.
-     * If versions differ, executes the consumer with the number of files needing updates.
+     * If versions differ, executes the supplier; if the supplier returns true, runs the update.
      *
-     * @param bDryRun If true, simulate updates without modifying files
-     * @param fnExcuteUpdate Receives the number of files that are needed to be updated and returns true if the update method has to be invoked.
+     * @param bDryRun          If true, simulate updates without modifying files
+     * @param fnExcuteUpdate   Returns true if the update method should be invoked
      */
     public static void updateIfNeeded( boolean bDryRun, Supplier<Boolean> fnExcuteUpdate )
     {
@@ -101,8 +95,8 @@ public final class Updater
 
         try
         {
-            System.out.println( "[INFO] Checking for needed updates by comparing catalog versions..." );
-            System.out.println( "[INFO] Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Checking for needed updates by comparing catalog versions..." );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             // Get local catalog version
             File   localCatalogFile = new File( UtilSys.getEtcDir(), "catalog.json" );
@@ -114,14 +108,14 @@ public final class Updater
                 {
                     String localCatalogContent = Files.readString( localCatalogFile.toPath(), StandardCharsets.UTF_8 );
 
-                    if( localCatalogContent != null && ! localCatalogContent.trim().isEmpty() )
+                    if( ! localCatalogContent.trim().isEmpty() )
                     {
-                        localVersion = GitHubFileUpdater.parseVersionFromCatalog( localCatalogContent );
-                        System.out.println( "[INFO] Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
+                        localVersion = CatalogParser.parseVersionFromCatalog( localCatalogContent );
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog version: " + (localVersion != null ? localVersion : "unknown") );
                     }
                     else
                     {
-                        System.out.println( "[INFO] Local catalog.json is empty" );
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog.json is empty" );
                     }
                 }
                 catch( IOException e )
@@ -131,22 +125,21 @@ public final class Updater
             }
             else
             {
-                System.out.println( "[INFO] Local catalog.json not found" );
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Local catalog.json not found" );
             }
 
             // Get remote catalog version
-            String remoteVersion = null;
-
-            tempRemoteCatalog = File.createTempFile( "remote_catalog", ".json" );
+            String remoteVersion  = null;
+            tempRemoteCatalog     = File.createTempFile( "remote_catalog", ".json" );
 
             if( GitHubApiClient.downloadFileFromRoot( "catalog.json", tempRemoteCatalog.toPath() ) )
             {
                 String remoteCatalogContent = Files.readString( tempRemoteCatalog.toPath(), StandardCharsets.UTF_8 );
 
-                if( remoteCatalogContent != null && ! remoteCatalogContent.trim().isEmpty() )
+                if( ! remoteCatalogContent.trim().isEmpty() )
                 {
-                    remoteVersion = GitHubFileUpdater.parseVersionFromCatalog( remoteCatalogContent );
-                    System.out.println( "[INFO] Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
+                    remoteVersion = CatalogParser.parseVersionFromCatalog( remoteCatalogContent );
+                    UtilSys.getLogger().log( ILogger.Level.INFO, "Remote catalog version: " + (remoteVersion != null ? remoteVersion : "unknown") );
                 }
                 else
                 {
@@ -161,11 +154,11 @@ public final class Updater
             }
             else if( Objects.equals( remoteVersion, localVersion ) )
             {
-                System.out.println( "[INFO] Versions match (local: " + localVersion + "), no update needed" );
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Versions match (local: " + localVersion + "), no update needed" );
             }
             else
             {
-                System.out.println( "[INFO] Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Version mismatch detected (local: " + localVersion + ", remote: " + remoteVersion + "), update needed" );
 
                 if( fnExcuteUpdate.get() )
                 {
@@ -174,7 +167,7 @@ public final class Updater
                         try
                         {
                             Files.copy( tempRemoteCatalog.toPath(), localCatalogFile.toPath(), java.nio.file.StandardCopyOption.REPLACE_EXISTING );
-                            System.out.println( "[INFO] Updated local catalog.json" );
+                            UtilSys.getLogger().log( ILogger.Level.INFO, "Updated local catalog.json" );
                         }
                         catch( Exception e )
                         {
@@ -191,22 +184,21 @@ public final class Updater
         finally
         {
             if( tempRemoteCatalog != null && tempRemoteCatalog.exists() )
-                tempRemoteCatalog.delete();   // Clean up temp file
+                tempRemoteCatalog.delete();
         }
     }
 
     /**
-     * Updates files from GitHub repository for the specified path.
+     * Updates files from GitHub repository.
      *
-     * @param bDryRun If true, simulate updates without modifying files
-     * @param catalogFile The catalog file to use for the update.
+     * @param bDryRun     If true, simulate updates without modifying files
+     * @param catalogFile The catalog file to use for the update
      * @return true if update process completed successfully, false otherwise
      */
     public static boolean update( boolean bDryRun, File catalogFile )
     {
-        abortRequested.set( false );   // Clear any stale flag from a previous run
+        abortRequested.set( false );
 
-        // Set working state to true before starting the update process
         if( ! isWorking.compareAndSet( false, true ) )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Update process is already running" );
@@ -223,13 +215,13 @@ public final class Updater
                 return false;
             }
 
-            System.out.println( "[INFO] Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
-            System.out.println( "[INFO] Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Starting Updater" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun, abortRequested );
-            updater.checkAndUpdateFiles(catalogFile);
+            updater.checkAndUpdateFiles( catalogFile );
 
-            System.out.println( "[INFO] Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
 
             return true;
         }
@@ -241,8 +233,8 @@ public final class Updater
         finally
         {
             workingThread = null;
-            abortRequested.set( false );   // Reset for next use
-            isWorking.set( false );        // Always set working state to false when done
+            abortRequested.set( false );
+            isWorking.set( false );
         }
     }
 }

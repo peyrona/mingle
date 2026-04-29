@@ -43,6 +43,7 @@
             padding: 15px;
             min-height: 500px;
             max-height: 70vh;
+            max-width: 100%;
             overflow: auto;
         }
 
@@ -73,9 +74,73 @@
             font-size: 1.2rem;
         }
 
+        /* Folder toggle knobs: replace sprite with Tabler chevrons */
+        #fileTree .jstree-ocl
+        {
+            background-image: none !important;
+            width: auto !important;
+            height: auto !important;
+            text-indent: 0 !important;
+            background-position: 0 0 !important;
+            display: inline-block !important;
+            font-family: 'tabler-icons' !important;
+            font-size: 1.3rem;
+            line-height: 1.5;
+            speak: never;
+            font-style: normal;
+            font-weight: normal;
+            font-variant: normal;
+            text-transform: none;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        #fileTree .jstree-closed > .jstree-ocl::before
+        {
+            content: "\ea61"; /* ti-chevron-right */
+        }
+
+        #fileTree .jstree-open > .jstree-ocl::before
+        {
+            content: "\ea5f"; /* ti-chevron-down */
+        }
+
+        #fileTree .jstree-leaf > .jstree-ocl::before
+        {
+            content: "";
+        }
+
+        /* Wholerow hover highlight */
+        #fileTree .jstree-wholerow-hovered
+        {
+            background-color: rgba(6, 62, 65, 0.15) !important;
+        }
+
+        #fileTree .jstree-wholerow-clicked
+        {
+            background-color: rgba(6, 62, 65, 0.25) !important;
+        }
+
+        /* Limit width on wide screens and center the page content */
+        .container
+        {
+            max-width: 1024px !important;
+        }
+
         .toolbar
         {
             margin-bottom: 20px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .toolbar .buttons
+        {
+            flex-wrap: wrap;
+            margin-bottom: 0;
         }
 
         .modal-card
@@ -86,7 +151,38 @@
         #editorContent
         {
             font-family: 'Courier New', monospace;
+            width: 100%;
             min-height: 400px;
+            box-sizing: border-box;
+        }
+
+        /* Mobile-first responsive adjustments */
+        @media (max-width: 600px)
+        {
+            html, body
+            {
+                padding: 10px;
+            }
+
+            #txtSearch
+            {
+                width: 100% !important;
+            }
+
+            .toolbar .control
+            {
+                width: 100%;
+            }
+
+            #fileTree
+            {
+                max-height: 60vh;
+            }
+
+            .modal-card
+            {
+                width: 90vw;
+            }
         }
     </style>
 </head>
@@ -142,8 +238,11 @@
                 <button class="button is-info"    title="Rename highlighted node [F2]"        onclick="onRenameNode()">
                     <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-edit"></i></span>
                 </button>
-                <button class="button is-info"    title="Show/Edit file contents [Dbl-Click]" onclick="onEditFile()">
+                <button class="button is-info"    title="Show/Edit file contents [Dbl-Click]" onclick="onOpenFile()">
                     <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-file-text"></i></span>
+                </button>
+                <button class="button is-info"    title="Download selected file"              onclick="onDownloadFile()">
+                    <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-download"></i></span>
                 </button>
                 <button class="button is-success" title="Refresh (reload) whole tree"         onclick="onRefreshTree()">
                     <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-refresh"></i></span>
@@ -151,6 +250,9 @@
                 <button class="button is-danger"  title="Delete files and folders"            onclick="onDeleteNode()">
                     <span class="icon" style="font-size: 1.5rem;"><i class="ti ti-trash"></i></span>
                 </button>
+            </div>
+            <div class="control">
+                <input id="txtSearch" class="input" type="text" placeholder="Enter file name to search" title="Enter file name to search" style="width:32ch;">
             </div>
         </div>
 
@@ -205,27 +307,9 @@
         </div>
     </div>
 
-
-
     <!-- Modal for Edit File -->
-    <div id="modalEditFile" class="modal">
-        <div class="modal-background" onclick="closeModal('modalEditFile')"></div>
-        <div class="modal-card" style="width: 800px;">
-            <header class="modal-card-head">
-                <p class="modal-card-title"><span id="editFileName"></span></p>
-                <button class="delete" onclick="closeModal('modalEditFile')"></button>
-            </header>
-            <section class="modal-card-body">
-                <div class="field">
-                    <div class="control">
-                        <textarea id="editorContent" class="textarea"></textarea>
-                    </div>
-                </div>
-            </section>
-            <footer class="modal-card-foot">
-                <button class="button is-success" onclick="saveFile()">Save</button>
-            </footer>
-        </div>
+    <div id="modalEditFile" style="display: none;">
+        <textarea id="editorContent" style="padding:9px;"></textarea>
     </div>
 
     <!-- Modal for Confirmation -->
@@ -252,7 +336,28 @@
         const API_FILES = window.location.origin + '/gum/ws/files';
         const API_UPLOAD = window.location.origin + '/gum/upload';
         const aSelected = [];
-        const EDITABLE_EXTENSIONS = ['txt', 'json', 'une', 'model', 'html', 'css', 'js', 'java', 'py'];
+
+        // File extensions that can be opened and edited in the built-in text editor.
+        const EDITABLE_EXTENSIONS = ['txt', 'json', 'une', 'model', 'html', 'css', 'js', 'java', 'py', 'sh'];
+
+        // All known text-based extensions (superset of EDITABLE_EXTENSIONS).
+        // Unknown extensions are treated as binary — the safe default.
+        const TEXT_EXTENSIONS = [
+            'bat', 'cfg', 'conf', 'csv', 'css', 'h', 'htm', 'html', 'ini',
+            'java', 'js', 'json', 'log', 'md', 'model', 'ps1', 'py', 'r',
+            'sh', 'sql', 'tex', 'toml', 'ts', 'txt', 'une', 'xml', 'yaml', 'yml'
+        ];
+
+        // Common binary file extensions (for reference and UI decisions).
+        const BINARY_EXTENSIONS = [
+            'jpg', 'jpeg', 'png', 'gif', 'bmp', 'webp', 'svg', 'ico', 'tiff',
+            'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods',
+            'zip', 'gz', 'tar', 'rar', '7z', 'bz2', 'xz',
+            'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a',
+            'mp4', 'avi', 'mkv', 'mov', 'webm',
+            'exe', 'dll', 'so', 'jar', 'class', 'wasm',
+            'db', 'sqlite', 'bin', 'dat', 'iso'
+        ];
 
         // Variables
         let currentEditPath = null;
@@ -273,7 +378,7 @@
             initializeTree();
             _tryAutoAccess_();
 
-        // Add keyboard support for modals (Esc to close)
+            // Add keyboard support for modals (Esc to close)
             $(document).on('keydown', function(e)
             {
                 if( e.key === 'Escape' )
@@ -287,6 +392,18 @@
                         return false;
                     }
                 }
+            });
+
+            // Initialize jQuery UI dialog for file editor
+            $('#modalEditFile').dialog( {
+                autoOpen: false,
+                modal: true,
+                resizable: true,
+                width: 800,
+                height: 600,
+                minWidth: 400,
+                minHeight: 300,
+                buttons: { 'Save': function() { saveFile(); } }
             });
         });
 
@@ -346,7 +463,12 @@
                             'data': [],
                             'check_callback': true,
                             'themes': { 'icons': true  }
-                        }
+                        },
+                'plugins': [ 'wholerow', 'search' ],
+                'search' : {
+                                'show_only_matches'         : true,
+                                'show_only_matches_children': true
+                            }
             });
 
             $('#fileTree')
@@ -356,6 +478,7 @@
 
                     if( rootNodeId )
                     {
+                        data.instance.deselect_all();
                         data.instance.select_node(rootNodeId);
                         data.instance.open_node(rootNodeId);
                     }
@@ -369,8 +492,8 @@
                     })
                 .on('dblclick.jstree', '.jstree-anchor', function(evt)
                     {
-                        if( aSelected.length > 0 )
-                            onEditFile();
+                        if( aSelected.length > 0 && isFile() )
+                            onOpenFile();
                     })
                 .on('edit.jstree', function(evt, data)
                     {
@@ -389,6 +512,21 @@
                             renameNode( sOldPath, sNewPath );
                         }
                     });
+
+            // Incremental search: trigger on every keystroke, debounced 250 ms
+            let _searchTimer = null;
+
+            $('#txtSearch').on('input', function()
+            {
+                clearTimeout( _searchTimer );
+
+                const query = $(this).val();
+
+                _searchTimer = setTimeout( function()
+                {
+                    $('#fileTree').jstree( 'search', query );
+                }, 250 );
+            });
         }
 
         //------------------------------------------------------------------------//
@@ -691,8 +829,10 @@
 
         function onCreateFolder()
         {
-            if( isFolder() || getSelected() === null || isRoot() )  openModal( 'modalCreateFolder' );
-            else              showNotification( 'Please select a folder or nothing to create in root', 'is-warning' );
+            if( isFolder() || getSelected() === null || isRoot() )
+                openModal( 'modalCreateFolder' );
+            else
+                showNotification( 'Please select a folder (even root folder)', 'is-warning' );
         }
 
         async function createFolder()
@@ -721,9 +861,7 @@
             const sFileName = document.getElementById( 'fileName' ).value.trim();
 
             if( ! isValidFileName( sFileName ) )
-            {
                 return;
-            }
 
             const sParent = getSelected() ? getSelectedPath() : '';
 
@@ -757,6 +895,71 @@
             await renameResource( sOldPath, sNewPath );
         }
 
+        async function onOpenFile()
+        {
+            if( ! forbidMultiSelect('opened') )
+                return;
+
+            if( ! isFile() )
+            {
+                showNotification( 'Please select a file, not a folder', 'is-warning' );
+                return;
+            }
+
+            const sFilePath = getSelectedPath();
+            const ext = getFileExtension(sFilePath).toLowerCase();
+
+            if( EDITABLE_EXTENSIONS.includes( ext ) )
+            {
+                const sContent = await getFileContent( sFilePath );
+
+                if( sContent !== null )
+                {
+                    currentEditPath = sFilePath;
+                    document.getElementById( 'editorContent' ).value = sContent;
+                    $('#modalEditFile').dialog('option', 'title', sFilePath);
+                    $('#modalEditFile').dialog('open');
+                }
+            }
+            else
+            {
+                const sFileName = getNodeName( sFilePath );
+                showConfirmDialog( 'Do you want to download "' + sFileName + '"?', async ( confirmed ) =>
+                {
+                    if( confirmed )
+                        downloadFile( sFilePath, sFileName );
+                });
+            }
+        }
+
+        async function downloadFile( sFilePath, sFileName )
+        {
+            try
+            {
+                const response = await fetch( API_FILES + '?file=' + encodeURIComponent( sFilePath ) );
+
+                if( ! response.ok )
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+
+                // Use the server-supplied Content-Type so the browser understands the file.
+                // Fall back to octet-stream (force-download) for unknown types.
+                const mimeType = response.headers.get( 'Content-Type' ) || 'application/octet-stream';
+                const blob = new Blob( [ await response.arrayBuffer() ], { type: mimeType } );
+                const url  = URL.createObjectURL( blob );
+                const a    = document.createElement( 'a' );
+                      a.href     = url;
+                      a.download = sFileName;
+                document.body.appendChild( a );
+                a.click();
+                a.remove();
+                URL.revokeObjectURL( url );
+            }
+            catch( error )
+            {
+                showNotification( 'Error downloading file: ' + error.message, 'is-danger' );
+            }
+        }
+
         async function onEditFile()
         {
             if( ! forbidMultiSelect('edited') )
@@ -782,19 +985,42 @@
             if( sContent !== null )
             {
                 currentEditPath = sFilePath;
-                document.getElementById( 'editFileName' ).textContent = getNodeName( sFilePath );
                 document.getElementById( 'editorContent' ).value = sContent;
-                openModal( 'modalEditFile' );
+                $('#modalEditFile').dialog('option', 'title', sFilePath);
+                $('#modalEditFile').dialog('open');
             }
         }
 
         async function saveFile()
         {
             const sContent = document.getElementById( 'editorContent' ).value;
+
             // currentEditPath already holds the full path of the file being edited
             await updateFileContent( currentEditPath, sContent );
 
-            closeModal( 'modalEditFile' );
+            $('#modalEditFile').dialog('close');
+        }
+
+        function onDownloadFile()
+        {
+            if( ! forbidMultiSelect('downloaded') )
+                return;
+
+            if( ! getSelected() || isRoot() )
+            {
+                showNotification( 'Please select a file to download', 'is-warning' );
+                return;
+            }
+
+            if( ! isFile() )
+            {
+                showNotification( 'Only files can be downloaded', 'is-warning' );
+                return;
+            }
+
+            const sFilePath = getSelectedPath();
+            const sFileName = getNodeName( sFilePath );
+            downloadFile( sFilePath, sFileName );
         }
 
         function onRefreshTree()

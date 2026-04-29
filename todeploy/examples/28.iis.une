@@ -50,7 +50,7 @@ SCRIPT
              console = "  CREW              :  6 personnel"
              console = "  SIMULATION RATE   :  1 simulated minute per 3 seconds"
              console = "════════════════════════════════════════════════════════════════════"
-             console = _NL_
+             console = "\n"
              voice   = "Station IIS online. All systems nominal. Beginning mission simulation."
          }
 
@@ -170,11 +170,11 @@ THEN station_ai
 # ─── Periodic status reports ──────────────────────────────────────────────────────────────────────────────────────────────────────
 
 WHEN sim_time AND sim_time:mod(5) IS 0 AND sim_time > 0
-THEN console = _NL_
+THEN console = "\n"
      console = "┌─ STATUS REPORT ─ min " + sim_time + " ─────────────────────────────────────────────────┐"
      console = "│  Solar: " + solar_output:format("000.0") + "%   Power: " + power_level:format("00") + "%   Temp: " + temperature:format("000.0") + "°C   CO₂: " + co2_ppm:format("0000") + " ppm   O₂: " + o2_level:format("00.0") + "%  │"
      console = "└──────────────────────────────────────────────────────────────────────────┘"
-     console = _NL_
+     console = "\n"
 
 
 # ─── Solar array events ───────────────────────────────────────────────────────────────────────────────────────────────────────────

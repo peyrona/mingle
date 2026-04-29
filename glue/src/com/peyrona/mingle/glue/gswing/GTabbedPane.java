@@ -1,4 +1,3 @@
-
 package com.peyrona.mingle.glue.gswing;
 
 import com.peyrona.mingle.glue.JTools;
@@ -6,6 +5,7 @@ import java.awt.BasicStroke;
 import java.awt.Color;
 import java.awt.Component;
 import java.awt.Container;
+import java.awt.Cursor;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
 import java.awt.Font;
@@ -15,6 +15,7 @@ import java.awt.event.ActionListener;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.awt.event.MouseMotionAdapter;
 import javax.swing.AbstractButton;
 import javax.swing.BorderFactory;
 import javax.swing.Icon;
@@ -30,6 +31,7 @@ import jiconfont.swing.IconFontSwing;
 
 /**
  * An improved JTabPane which main new thing is tabs having a custom button.
+ * Now includes Drag and Drop functionality for reordering tabs.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -37,9 +39,95 @@ import jiconfont.swing.IconFontSwing;
  */
 public class GTabbedPane extends JTabbedPane
 {
+    private boolean dragging = false;
+    private int draggedTabIndex = -1;
+
     public GTabbedPane()
     {
         addChangeListener( (ChangeEvent ce) -> updateSelectedTab() );
+        initDragAndDrop();
+    }
+
+    /**
+     * Initializes the mouse listeners required for tab dragging.
+     */
+    private void initDragAndDrop()
+    {
+        addMouseListener( new MouseAdapter()
+        {
+            @Override
+            public void mousePressed( MouseEvent e )
+            {
+                draggedTabIndex = indexAtLocation( e.getX(), e.getY() );
+            }
+
+            @Override
+            public void mouseReleased( MouseEvent e )
+            {
+                if( dragging )
+                    setCursor( Cursor.getPredefinedCursor( Cursor.DEFAULT_CURSOR ) );
+
+                dragging = false;
+                draggedTabIndex = -1;
+            }
+        } );
+
+        addMouseMotionListener( new MouseMotionAdapter()
+        {
+            @Override
+            public void mouseDragged( MouseEvent e )
+            {
+                if( draggedTabIndex == -1 )
+                    return;
+
+                if( ! dragging )
+                {
+                    dragging = true;
+                    setCursor( Cursor.getPredefinedCursor( Cursor.MOVE_CURSOR ) );
+                }
+
+                int targetTabIndex = indexAtLocation( e.getX(), e.getY() );
+
+                if( targetTabIndex != -1 && targetTabIndex != draggedTabIndex )
+                {
+                    boolean forward = targetTabIndex > draggedTabIndex;
+                    moveTab( draggedTabIndex, targetTabIndex, forward );
+                    draggedTabIndex = targetTabIndex;
+                }
+            }
+        } );
+    }
+
+    /**
+     * Moves a tab from one index to another.
+     * Logic: removes the data from the source and inserts it at the target.
+     */
+    private void moveTab( int srcIndex, int destIndex, boolean forward )
+    {
+        // Save current tab properties
+        String title = getTitleAt( srcIndex );
+        Component content = getComponentAt( srcIndex );
+        Component tabComponent = getTabComponentAt( srcIndex );
+        Icon icon = getIconAt( srcIndex );
+        String tip = getToolTipTextAt( srcIndex );
+        boolean isEnabled = isEnabledAt( srcIndex );
+        Color bg = getBackgroundAt( srcIndex );
+        Color fg = getForegroundAt( srcIndex );
+
+        // Remove and Insert
+        removeTabAt( srcIndex );
+        insertTab( title, icon, content, tip, destIndex );
+
+        // Restore custom tab component (the panel with the button)
+        setTabComponentAt( destIndex, tabComponent );
+
+        // Restore other properties
+        setEnabledAt( destIndex, isEnabled );
+        setBackgroundAt( destIndex, bg );
+        setForegroundAt( destIndex, fg );
+
+        // Set focus
+        setSelectedIndex( destIndex );
     }
 
     //------------------------------------------------------------------------//
@@ -172,9 +260,9 @@ public class GTabbedPane extends JTabbedPane
     //------------------------------------------------------------------------//
 
     /**
-         * Component to be used as tabComponent.
-         * Contains a JLabel to show the text and a JButton to close the tab it belongs to.
-         */
+     * Component to be used as tabComponent.
+     * Contains a JLabel to show the text and a JButton to close the tab it belongs to.
+     */
     private final class TabPanel extends JPanel
     {
         TabPanel( JTabbedPane tabbedPane, Icon icon, String sTooltipText, ActionListener al )
@@ -220,7 +308,6 @@ public class GTabbedPane extends JTabbedPane
 
     //------------------------------------------------------------------------//
     // INNER CLASS
-    // Thanks to: unknown author
     //------------------------------------------------------------------------//
     private final class TheButton extends JButton
     {
@@ -242,20 +329,17 @@ public class GTabbedPane extends JTabbedPane
             addActionListener( al );                  // Launches the action by clicking the button
         }
 
-        //we don't want to update UI for this button
         @Override
         public void updateUI()
         {
         }
 
-        //paint the cross
         @Override
         protected void paintComponent(Graphics g)
         {
             super.paintComponent( g );
             Graphics2D g2 = (Graphics2D) g.create();
 
-            //shift the image for pressed buttons
             if( getModel().isPressed() )
                 g2.translate( 1, 1 );
 
@@ -280,7 +364,6 @@ public class GTabbedPane extends JTabbedPane
             if( component instanceof AbstractButton )
             {
                 AbstractButton button = (AbstractButton) component;
-
                 button.setBorderPainted( true );
             }
         }
@@ -293,7 +376,6 @@ public class GTabbedPane extends JTabbedPane
             if( component instanceof AbstractButton )
             {
                 AbstractButton button = (AbstractButton) component;
-
                 button.setBorderPainted( false );
             }
         }

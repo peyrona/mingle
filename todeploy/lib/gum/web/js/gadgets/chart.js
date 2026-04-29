@@ -25,6 +25,7 @@ class GumChart extends GumGadget
             this.db_user   = null;
             this.db_pwd    = null;
             this.db_tables = [];        // Must be an empty array.  [ {table:"name", timestamp:"col_name", values:"col_name"}, ... ]
+            this._chartUid = p_base.uuid();   // Stable ID for localStorage keys (persisted via distill)
         }
 
         this.wrapper = new ChartWrap( this );
@@ -388,6 +389,8 @@ class ChartWrap
 
         this.canvas = $canvas[0];     // Now that div (which contains a canvas) is appended, a reference to it can be assigned
 
+        this._restoreTimeFrame_();
+
         let self = this;
 
         this.canvas.onwheel = (evt) => self._zoom_( evt );
@@ -436,6 +439,52 @@ class ChartWrap
             $div[0].style.visibility = (isDbPanelVisible ? "visible" : "hidden");     // Shows or hides these controls: time-ini, time-end and button Load/Live
 
         return this;
+    }
+
+    _restoreTimeFrame_()
+    {
+        if( ! this.parent._chartUid )
+            return;
+
+        let sRaw;
+
+        try { sRaw = localStorage.getItem( 'gum-chart-tf-' + this.parent._chartUid ); }
+        catch( ignored ) { return; }
+
+        if( ! sRaw )
+            return;
+
+        let oSaved;
+
+        try { oSaved = JSON.parse( sRaw ); }
+        catch( ignored ) { return; }
+
+        if( ! oSaved || typeof oSaved.amount !== 'number' || ! oSaved.unit )
+            return;
+
+        let $txtValue = $('#'+this.divId+' [name="txtTimeFrame"]');
+        let $lstUnit  = $('#'+this.divId+' [name="lstTimeFrameUnit"]');
+
+        if( $txtValue.length === 0 || $lstUnit.length === 0 )
+            return;
+
+        $txtValue.val( oSaved.amount );
+        $lstUnit.val( oSaved.unit );
+
+        if( oSaved.amount === 0 )
+        {
+            this.timeframe = 0;
+        }
+        else
+        {
+            switch( oSaved.unit )
+            {
+                case "mins" : this.timeframe = oSaved.amount *           60 * 1000; break;
+                case "hours": this.timeframe = oSaved.amount *      60 * 60 * 1000; break;
+                case "days" : this.timeframe = oSaved.amount * 24 * 60 * 60 * 1000; break;
+                default     : return;
+            }
+        }
     }
 
     /**
@@ -778,11 +827,19 @@ class ChartWrap
         let sUnit  = $lstUnit.val();
         let nValue = parseInt( sValue );
 
-        if( isNaN(nValue) || nValue < 0 )
+        if( isNaN( nValue ) || nValue < 0 )
         {
             console.error("Invalid timeframe value");
             return;
         }
+
+        try
+        {
+            localStorage.setItem( 'gum-chart-tf-' + wrapper.parent._chartUid,
+                                  JSON.stringify( { amount: nValue, unit: sUnit } ) );
+        }
+        catch( ignored )
+        { }
 
         // When nValue is 0, show all points (no timeframe restriction)
         if( nValue === 0 )

@@ -98,8 +98,8 @@ public class FileUpdateOperation
 
     private boolean verifyDownloadedFile( File backupFile )
     {
-        String remoteHash = (githubInfo != null) ? githubInfo.sha : null;
-        
+        String remoteHash = githubInfo.sha;
+
         if( remoteHash == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Missing remote hash for: " + relativePath );

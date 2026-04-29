@@ -171,7 +171,9 @@ public final class UnecTools
 
         map.put("rule",
                 "[RULE <name>]\n" +
-                "WHEN <device-name> | [ANY | ALL] | <group>} <RelationalOp> <expression>\n" +
+                "WHEN <device-name> | [ANY | ALL] | <group>} {<RelationalOp> | <EdgeOp>} <expression>\n" +
+                "\t  <RelationalOp>: == != < > <= >=\n" +
+                "\t  <EdgeOp>: ?> (RISES) | ?< (DROPS) | ?= (BECOMES) | ?!= (LEAVES) | ?<> (CROSSES)\n" +
                 "\tTHEN {<script> | <rule> | [{<device> | <group>} =] <expression>} [AFTER <time-unit>] [; ...]\n" +
                 "\tIF {<device-name> | [ANY | ALL] <group>} [<RelationalOp> <expression>] [{AFTER | WITHIN} <time-unit>]\n"+
                 "\tUSE <name> AS <expression> [;...]");
@@ -184,7 +186,8 @@ public final class UnecTools
                 "\t[CALL \"<entry_point>\"]");
 
         map.put("use",
-                "USE <literal> AS <literal> [; ...]");
+                "USE <name> AS {<literal> | <string>} [; ...]\n" +
+                "USE <TemplateName> <param1> [literal] <param2> ... AS <single-command expansion>");
 
         return map;
     }

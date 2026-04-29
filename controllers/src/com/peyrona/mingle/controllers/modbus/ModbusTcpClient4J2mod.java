@@ -262,7 +262,10 @@ public final class ModbusTcpClient4J2mod implements IModbusClient
             master.connect();
 
         if( ! master.isConnected() )
+        {
+            master = null;
             throw new IOException( "Failed to connect to Modbus server at " + sHost + ":" + nPort );
+        }
     }
 
     /**

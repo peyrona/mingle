@@ -185,7 +185,7 @@ final class ToolbarPanel extends javax.swing.JPanel
         btnGum  = new GButton(this).setIcon( FontAwesome.CLOUD   , 16 ).addAction( (ActionEvent evt) -> onRunStopGum()   ).setToolTip( "Executes WebServer to manage Dashboards (Gum) at 'localhost:8080' [F8]" );
         btnEdit = new GButton(this).setIcon( FontAwesome.PENCIL  , 16 ).addAction( (ActionEvent evt) -> onOpenEditor()   ).setToolTip( "Editor for Une scripts, configuration files and other types of files [F2]" );  // Editor is always enabled
         btnMode = new GButton(this).setIcon( icnMode             , 16 ).addAction( (ActionEvent evt) -> onToggleMode()   ).setToolTip( "Alternate between Light and Dark modes" );
-        btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()         ).setToolTip( "About dialog with a reset-tool-tips button [F1]" );
+        btnInfo = new GButton(this).setIcon( FontAwesome.INFO    , 16 ).addAction( (ActionEvent evt) -> onInfo()         ).setToolTip( "About dialog with two reset buttons [F1]" );
     }
 
     private void onConnect2ExEn()

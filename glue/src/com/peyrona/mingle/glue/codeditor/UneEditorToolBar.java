@@ -193,8 +193,8 @@ final class UneEditorToolBar extends JToolBar
     private GButton addButton( JPanel pnlRow, FontAwesome icon, String tooltip )
     {
         GButton btn = new GButton()
-                     .setIcon( icon, 16 )
-                     .setToolTip( tooltip );
+                            .setIcon( icon, 16 )
+                            .setToolTip( tooltip );
 
         return (GButton) pnlRow.add( btn );
     }

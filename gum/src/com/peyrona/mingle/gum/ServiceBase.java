@@ -245,6 +245,40 @@ abstract class ServiceBase
         return send( str, HttpServletResponse.SC_OK );
     }
 
+    /**
+     * Sends binary data to the client with the specified MIME content type.
+     * Uses the raw output stream to avoid any character-encoding transformation.
+     *
+     * @param data        Raw bytes to send.
+     * @param contentType MIME type (e.g. "image/png", "application/pdf").
+     * @return {@code this} for method chaining.
+     */
+    protected ServiceBase sendBinary( byte[] data, String contentType )
+    {
+        try
+        {
+            response.setContentType( contentType );
+            response.setContentLength( data.length );
+            response.setStatus( HttpServletResponse.SC_OK );
+            response.getOutputStream().write( data );
+            response.getOutputStream().flush();
+        }
+        catch( IOException e )
+        {
+            try
+            {
+                if( ! response.isCommitted() )
+                    response.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
+            }
+            catch( Exception ex )
+            {
+                // Ignore - already in error state
+            }
+        }
+
+        return this;
+    }
+
     protected ServiceBase sendOK()
     {
         response.setStatus( HttpServletResponse.SC_OK );

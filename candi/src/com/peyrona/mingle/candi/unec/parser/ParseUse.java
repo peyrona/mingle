@@ -29,8 +29,9 @@ import java.util.regex.Pattern;
  */
 public final class ParseUse extends ParseBase
 {
-    private static final Map<String,String> mapAll = new HashMap<>();
-    private        final List<UseAs>        lstRep = new ArrayList<>();
+    private static final Map<String,String>         mapAll       = new HashMap<>();
+    private static final Map<String,ParsedTemplate> mapTemplates = new HashMap<>();
+    private        final List<UseAs>                lstRep       = new ArrayList<>();
     private static final String sKEY = "USE";
 
     //------------------------------------------------------------------------//
@@ -50,6 +51,28 @@ public final class ParseUse extends ParseBase
     public static void clean()
     {
         mapAll.clear();
+        mapTemplates.clear();
+    }
+
+    /**
+     * Returns true if at least one parameterized template has been defined.
+     *
+     * @return true if templates exist.
+     */
+    public static boolean hasTemplates()
+    {
+        return ! mapTemplates.isEmpty();
+    }
+
+    /**
+     * Returns the template matching the given name (case-insensitive), or null if none.
+     *
+     * @param name First token text of a command lexeme group.
+     * @return The matching ParsedTemplate, or null.
+     */
+    public static ParsedTemplate findTemplate( String name )
+    {
+        return mapTemplates.get( name.toUpperCase() );
     }
 
     //------------------------------------------------------------------------//
@@ -81,6 +104,16 @@ public final class ParseUse extends ParseBase
             {
                 addError( "Left literal is empty", lstRow.get(0) );
                 continue;
+            }
+
+            if( isTemplateDefinition( row.before ) )
+            {
+                ParsedTemplate tmpl = buildTemplate( row.before, row.after, lstRow );
+
+                if( tmpl != null )
+                    mapTemplates.put( tmpl.name.toUpperCase(), tmpl );
+
+                continue;    // Templates are not token replacements: do not add to lstRep or mapAll
             }
 
             if( mapAll.containsKey( row.hash ) )
@@ -157,6 +190,89 @@ public final class ParseUse extends ParseBase
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    /**
+     * Returns true if the before-side of a USE row contains a {@code <param>} triplet,
+     * which signals a parameterized template definition rather than a plain symbol replacement.
+     *
+     * @param before The lexeme list to the left of AS.
+     * @return true if a template definition is detected.
+     */
+    private boolean isTemplateDefinition( List<Lexeme> before )
+    {
+        // Pattern: look for OP(<) NAME OP(>) starting at position 1 (position 0 is the template name)
+        for( int i = 1; i + 2 < before.size(); i++ )
+        {
+            if( before.get(i).isOperator()   && before.get(i).isText("<")  &&
+                before.get(i+1).isName()                                    &&
+                before.get(i+2).isOperator() && before.get(i+2).isText(">") )
+                return true;
+        }
+        return false;
+    }
+
+    /**
+     * Builds a ParsedTemplate from the before-side and after-side of a USE row that
+     * has been identified as a template definition.
+     *
+     * @param before     Lexemes to the left of AS (template name + pattern).
+     * @param after      Lexemes to the right of AS (expansion).
+     * @param errorCtx   Full row lexemes used for error location reporting.
+     * @return The ParsedTemplate, or null if a validation error was recorded.
+     */
+    private ParsedTemplate buildTemplate( List<Lexeme> before, List<Lexeme> after, List<Lexeme> errorCtx )
+    {
+        String tmplName = before.get(0).text();
+        String tmplKey  = tmplName.toUpperCase();
+
+        if( Language.isCmdWord( tmplKey ) )
+        {
+            addError( '\'' + tmplName + "' is a reserved word and cannot be used as a template name", errorCtx.get(0) );
+            return null;
+        }
+
+        if( mapTemplates.containsKey( tmplKey ) )
+        {
+            addError( "Duplicated template: '" + tmplName + "' already defined", errorCtx.get(0) );
+            return null;
+        }
+
+        // Also block simple-USE from reusing the same name
+        if( mapAll.containsKey( tmplKey ) )
+        {
+            addError( "'" + tmplName + "' is already defined as a symbol replacement", errorCtx.get(0) );
+            return null;
+        }
+
+        // Prevent simple-USE from later reusing this name
+        mapAll.put( tmplKey, "(template)" );
+
+        // Build pattern: walk before[1..], detecting <NAME> triplets as params, rest as literals
+        List<ParsedTemplate.PatternElement> pattern = new ArrayList<>();
+        int i = 1;
+
+        while( i < before.size() )
+        {
+            Lexeme cur = before.get(i);
+
+            if( cur.isOperator()          && cur.isText("<")    &&
+                (i + 2) < before.size()                         &&
+                before.get(i+1).isName()                        &&
+                before.get(i+2).isOperator()                    &&
+                before.get(i+2).isText(">") )
+            {
+                pattern.add( new ParsedTemplate.PatternElement( before.get(i+1).text() ) );   // captured param
+                i += 3;
+            }
+            else
+            {
+                pattern.add( new ParsedTemplate.PatternElement( cur ) );    // required literal
+                i++;
+            }
+        }
+
+        return new ParsedTemplate( tmplName, pattern, after, errorCtx.get(0) );
+    }
 
     /**
      * Invoked for every row of the USE command
@@ -291,6 +407,149 @@ public final class ParseUse extends ParseBase
                 l.add( lex.clonar() );
 
             return l;
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // INNER CLASS
+    //------------------------------------------------------------------------//
+
+    /**
+     * A parameterized template defined by {@code USE <name> <p1> [lit] <p2> ... AS <expansion>}.
+     * <p>
+     * When the transpiler encounters a top-level command whose first token matches the template
+     * name, it calls {@link #expand(java.util.List)} to substitute arguments and produce the
+     * actual expansion lexemes.
+     */
+    public static final class ParsedTemplate
+    {
+        /**
+         * One element in the template's invocation pattern: either a named capture slot
+         * ({@code <param>}) or a required literal token.
+         */
+        public static final class PatternElement
+        {
+            final String paramName;    // Non-null for a capture slot; null for a literal
+            final Lexeme literal;      // Non-null for a required literal; null for a capture slot
+
+            /** Capture-slot constructor. */
+            PatternElement( String paramName )
+            {
+                this.paramName = paramName;
+                this.literal   = null;
+            }
+
+            /** Required-literal constructor. */
+            PatternElement( Lexeme literal )
+            {
+                this.paramName = null;
+                this.literal   = literal;
+            }
+
+            /** Returns true when this element captures a parameter. */
+            boolean isParam() { return paramName != null; }
+        }
+
+        /** Template name as declared (e.g. {@code "SLOT"}). */
+        public final String               name;
+
+        /** Ordered list of pattern elements (excludes the name token itself). */
+        public final List<PatternElement> pattern;
+
+        /** Expansion token list (the right side of AS). */
+        public final List<Lexeme>         expansion;
+
+        /** First lexeme of the definition row, used for error reporting. */
+        public final Lexeme               definition;
+
+        ParsedTemplate( String name, List<PatternElement> pattern, List<Lexeme> expansion, Lexeme definition )
+        {
+            this.name       = name;
+            this.pattern    = Collections.unmodifiableList( pattern );
+            this.expansion  = Collections.unmodifiableList( expansion );
+            this.definition = definition;
+        }
+
+        /**
+         * Matches the invocation lexeme list against this template's pattern and, on
+         * success, returns the expanded lexeme list with all parameter values substituted.
+         * <p>
+         * Parameter references of the form {@code <param>} in the expansion are replaced by
+         * the corresponding captured value.  References {@code <param>} embedded inside
+         * string literals are also replaced by regex substitution.
+         *
+         * @param invocation All lexemes of the invocation command
+         *                   ({@code invocation.get(0)} is the template name token).
+         * @return The expanded lexeme list, or null if the invocation does not match the pattern.
+         */
+        public List<Lexeme> expand( List<Lexeme> invocation )
+        {
+            Map<String,Lexeme> params = new java.util.LinkedHashMap<>();
+            int invIdx = 1;    // Skip the template-name token at position 0
+
+            for( PatternElement elem : pattern )
+            {
+                if( invIdx >= invocation.size() )
+                    return null;    // Not enough tokens in invocation
+
+                if( elem.isParam() )
+                {
+                    params.put( elem.paramName.toUpperCase(), invocation.get( invIdx++ ) );
+                }
+                else    // Required literal: must match exactly
+                {
+                    if( ! invocation.get( invIdx ).equivalent( elem.literal ) )
+                        return null;    // Literal mismatch -> graceful fallback
+
+                    invIdx++;
+                }
+            }
+
+            // Build the expanded lexeme list; process by index to detect <param> triplets
+            List<Lexeme> result = new ArrayList<>( expansion.size() );
+            int i = 0;
+
+            while( i < expansion.size() )
+            {
+                Lexeme lex = expansion.get( i );
+
+                if( lex.isString() )
+                {
+                    // Replace <paramName> patterns embedded inside string literals
+                    String s = lex.text();
+
+                    for( Map.Entry<String,Lexeme> entry : params.entrySet() )
+                    {
+                        String placeholder = "<" + entry.getKey() + ">";
+                        s = s.replaceAll( "(?i)" + Pattern.quote( placeholder ), entry.getValue().text() );
+                    }
+
+                    Lexeme clone = lex.clonar();
+                    clone.updateUsign( s );
+                    result.add( clone );
+                    i++;
+                }
+                else if( lex.isOperator()                && lex.isText( "<" )  &&
+                         (i + 2) < expansion.size()                            &&
+                         expansion.get( i+1 ).isName()                         &&
+                         expansion.get( i+2 ).isOperator()                     &&
+                         expansion.get( i+2 ).isText( ">" ) )
+                {
+                    // <paramName> triplet in expansion → substitute with the captured argument value
+                    String macroKey = expansion.get( i+1 ).text().toUpperCase();
+                    Lexeme value    = params.get( macroKey );
+
+                    result.add( (value != null) ? value.clonar() : lex.clonar() );
+                    i += 3;
+                }
+                else
+                {
+                    result.add( lex.clonar() );
+                    i++;
+                }
+            }
+
+            return result;
         }
     }
 }

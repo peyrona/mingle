@@ -1,0 +1,26 @@
+{"transpiler":"MSP Transpiler v.2026-04-21",
+"code-version":"1.0",
+"uid":"7cc3667b-4639-4765-a3be-e64707c2c1f0",
+"generated":"2026-04-21T06:32:23.168537383Z",
+"commands":[
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"cpu","driver":"systemmonitordriver","config":{"metric":"cpu","interval":3000},"init":null},
+{"cmd":"device","name":"ram","driver":"systemmonitordriver","config":{"metric":"jvmram","interval":5000},"init":null},
+{"cmd":"device","name":"cpu_alerts","driver":"cellsetdriver","config":{"value":0},"init":null},
+{"cmd":"device","name":"ram_alerts","driver":"cellsetdriver","config":{"value":0},"init":null},
+{"cmd":"rule","name":null,"when":"cpu > 80","then":[{"after":-1,"target":"console","value":"\"<sensor> exceeded 80! Current value: \" + cpu"}],"if":null},
+{"cmd":"rule","name":null,"when":"ram > 85","then":[{"after":-1,"target":"console","value":"\"<sensor> exceeded 85! Current value: \" + ram"}],"if":null},
+{"cmd":"rule","name":null,"when":"cpu > 80","then":[{"after":-1,"target":"cpu_alerts","value":"cpu_alerts + 1"}],"if":null},
+{"cmd":"rule","name":null,"when":"ram > 85","then":[{"after":-1,"target":"ram_alerts","value":"ram_alerts + 1"}],"if":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":30000},"init":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"console","value":"\"Alert summary — CPU: \" + cpu_alerts + \", RAM: \" + ram_alerts"}],"if":null},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"}
+]
+}

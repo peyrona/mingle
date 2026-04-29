@@ -1,0 +1,72 @@
+#==================================================================================================================================
+# How to enable and disable a RULE from another RULE's THEN clause.
+#
+# The functions enable("rule_name") and disable("rule_name") allow a rule to control
+# whether another named rule is active, without removing it from the runtime.
+#
+# A disabled rule ignores all device changes: its WHEN clause is never evaluated.
+# It can be re-enabled at any time, resuming normal operation.
+#
+# This is useful for:
+#   - Time-based activation (e.g. an alarm active only at night)
+#   - Interlock logic (only one of several rules is active at a time)
+#   - Manual overrides that suspend automatic behaviour
+#
+# In this example a simplified alarm system is simulated:
+#   - The "motion_alert" rule monitors CPU usage as a stand-in for a real sensor.
+#   - The alarm alternates between ARMED and DISARMED every few clock ticks.
+#   - While DISARMED, the motion_alert rule is disabled and reports nothing.
+#   - While ARMED, the motion_alert rule is enabled and reports when "motion" is detected.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE ARMED_PERIOD     AS 6000   # milliseconds per half-cycle (armed vs disarmed)
+    MOTION_THRESHOLD AS 5      # CPU % above this value counts as "motion"
+
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 2s
+
+
+DEVICE motion_sensor             # Simulates a motion sensor using CPU load
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 2s
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# ---- Control rules: arm and disarm the alarm on alternating clock cycles ----
+
+# ARMED period: even half-cycle (clock mod 2*ARMED_PERIOD < ARMED_PERIOD)
+RULE arm_alarm
+    WHEN (clock:mod( 2 * ARMED_PERIOD )) < ARMED_PERIOD
+    THEN console SET "[ Alarm ARMED   ]"
+         enable("motion_alert")
+
+
+# DISARMED period: odd half-cycle
+RULE disarm_alarm
+    WHEN (clock:mod( 2 * ARMED_PERIOD )) >= ARMED_PERIOD
+    THEN console SET "[ Alarm DISARMED ]"
+         disable("motion_alert")
+
+
+# ---- The monitored rule: only fires while it is enabled ----
+
+# This rule starts enabled. It will be disabled by disarm_alarm and re-enabled by arm_alarm.
+RULE motion_alert
+    WHEN motion_sensor > MOTION_THRESHOLD
+    THEN console SET "!! MOTION DETECTED: CPU=" + motion_sensor + "% !!"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

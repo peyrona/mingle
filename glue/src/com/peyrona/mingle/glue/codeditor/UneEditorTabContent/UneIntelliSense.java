@@ -43,6 +43,10 @@ import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
 import javax.swing.ListSelectionModel;
 import javax.swing.SwingUtilities;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.ListSelectionEvent;
+import javax.swing.event.ListSelectionListener;
 import javax.swing.text.BadLocationException;
 import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 
@@ -75,9 +79,9 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
 public final class UneIntelliSense extends JPopupMenu
 {
     // Completion item categories (numbers are to sort)
-    private static final String CAT_FUNCTION = "1.function";
-    private static final String CAT_METHOD   = "2.method";
-    private static final String CAT_TYPE     = "3.type";
+    private static final String CAT_TYPE     = "1.type";
+    private static final String CAT_FUNCTION = "2.function";
+    private static final String CAT_METHOD   = "3.method";
     private static final String CAT_BOOLEAN  = "4.boolean";
     private static final String CAT_OPERATOR = "5.operator";
     private static final String CAT_COMMAND  = "6.command";
@@ -86,11 +90,12 @@ public final class UneIntelliSense extends JPopupMenu
     private static final String CAT_MACRO    = "9.macro";
 
     // Cached completion data (loaded once)
-    // signaturesCache is the single source of truth for all functions, types, and methods
+    // signaturesCache is used for documentation signatures; functionsCache is the authoritative function list
     // extendedCache is still needed to distinguish types from functions
     private static Map<String, String>        driversCache    = null;
     private static Map<String, List<String>>  extendedCache   = null;
     private static Map<String, List<String>>  signaturesCache = null;
+    private static List<String>               functionsCache  = null;
 
     // Initialization error tracking
     private static final List<Exception>      initErrors      = new ArrayList<>();
@@ -152,6 +157,25 @@ public final class UneIntelliSense extends JPopupMenu
                                 UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Signatures init failed" );
                             }
                         } );
+
+        UtilSys.executor( true )
+               .execute( () ->
+                        {
+                            try
+                            {
+                                List<String> lst = new ArrayList<>();
+
+                                for( String fn : UtilSys.getConfig().newXprEval().getFunctions() )
+                                    lst.add( fn );
+
+                                functionsCache = lst;
+                            }
+                            catch( Exception e )
+                            {
+                                initErrors.add( e );
+                                UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Functions init failed" );
+                            }
+                        } );
     }
 
     //------------------------------------------------------------------------//
@@ -177,7 +201,7 @@ public final class UneIntelliSense extends JPopupMenu
      */
     public void showCompletions()
     {
-        if( driversCache == null || extendedCache == null || signaturesCache == null )
+        if( driversCache == null || extendedCache == null || signaturesCache == null || functionsCache == null )
         {
             if( ! initErrors.isEmpty() )
             {
@@ -205,7 +229,8 @@ public final class UneIntelliSense extends JPopupMenu
         {
             Rectangle2D rect = editor.modelToView2D( editor.getCaretPosition() );
             show( editor, (int) rect.getX(), (int) rect.getY() + (int) rect.getHeight() );
-            SwingUtilities.invokeLater( () -> completionList.grabFocus() );
+            SwingUtilities.invokeLater( () -> { completionList.grabFocus(); showDocForSelected(); } );
+
         }
         catch( BadLocationException e )
         {
@@ -243,14 +268,41 @@ public final class UneIntelliSense extends JPopupMenu
                 {
                     switch( e.getKeyCode() )
                     {
+                        case KeyEvent.VK_UP:
+                            int upIndex = completionList.getSelectedIndex();
+                            int upSize  = listModel.getSize();
+                            if( upSize > 0 )
+                            {
+                                // If at the top (0 or -1), wrap to the bottom (size - 1)
+                                int nextIndex = (upIndex <= 0) ? upSize - 1 : upIndex - 1;
+                                completionList.setSelectedIndex( nextIndex );
+                                completionList.ensureIndexIsVisible( nextIndex );
+                            }
+                            e.consume();
+                            break;
+
+                        case KeyEvent.VK_DOWN:
+                            int downIndex = completionList.getSelectedIndex();
+                            int downSize  = listModel.getSize();
+                            if( downSize > 0 )
+                            {
+                                // If at the bottom or no selection, wrap to the top (0)
+                                int nextIndex = (downIndex >= downSize - 1) ? 0 : downIndex + 1;
+                                completionList.setSelectedIndex( nextIndex );
+                                completionList.ensureIndexIsVisible( nextIndex );
+                            }
+                            e.consume();
+                            break;
+
                         case KeyEvent.VK_ESCAPE:
-                            setVisible( false );
-                            editor.grabFocus();
+                            dismiss();
+                            e.consume();
                             break;
 
                         case KeyEvent.VK_ENTER:
                         case KeyEvent.VK_TAB:
                             insertSelectedCompletion();
+                            e.consume();
                             break;
 
                         case KeyEvent.VK_BACK_SPACE:
@@ -259,17 +311,27 @@ public final class UneIntelliSense extends JPopupMenu
                                 filterPrefix = filterPrefix.substring( 0, filterPrefix.length() - 1 );
                                 applyFilter();
                             }
+                            e.consume();
                             break;
 
-                        default:
-                            // Handle typing for filter
-                            char c = e.getKeyChar();
+                        // Up/Down/PgUp/PgDown/Home/End fall through to JList's default
+                        // navigation actions in BasicListUI — selection moves and the
+                        // ListSelectionListener updates the doc popup automatically.
+                    }
+                }
 
-                            if( Character.isLetterOrDigit( c ) || c == '_' )
-                            {
-                                filterPrefix += c;
-                                applyFilter();
-                            }
+                @Override
+                public void keyTyped( KeyEvent e )
+                {
+                    // Filter input + suppress JList's built-in "first-letter selection"
+                    // (BasicListUI keyTyped handler) which would otherwise fight our filter.
+                    char c = e.getKeyChar();
+
+                    if( Character.isLetterOrDigit( c ) || c == '_' )
+                    {
+                        filterPrefix += c;
+                        applyFilter();
+                        e.consume();
                     }
                 }
             } );
@@ -283,6 +345,53 @@ public final class UneIntelliSense extends JPopupMenu
                         insertSelectedCompletion();
                 }
             } );
+
+        // Show API docs alongside the completion list whenever the selection changes.
+        // Using only valueChanged events that have settled (not isAdjusting) prevents
+        // mid-drag intermediate fires from causing flicker during arrow / page navigation.
+        completionList.addListSelectionListener( new ListSelectionListener()
+            {
+                @Override
+                public void valueChanged( ListSelectionEvent e )
+                {
+                    if( ! e.getValueIsAdjusting() )
+                        showDocForSelected();
+                }
+            } );
+
+        // Show API docs when the user types '(' directly in the editor after a known
+        // function or type name (no IntelliSense list active).
+        editor.getDocument().addDocumentListener( new DocumentListener()
+            {
+                @Override public void removeUpdate(  DocumentEvent e ) {}
+                @Override public void changedUpdate( DocumentEvent e ) {}
+
+                @Override
+                public void insertUpdate( DocumentEvent e )
+                {
+                    if( e.getLength() == 1 )
+                    {
+                        try
+                        {
+                            if( "(".equals( editor.getDocument().getText( e.getOffset(), 1 ) ) )
+                                onOpenParenTyped( e.getOffset() );
+                        }
+                        catch( BadLocationException ignored ) {}
+                    }
+                }
+            } );
+    }
+
+    /**
+     * Dismisses both the completion list and the doc popup, returning focus to the editor.
+     * Centralises the "user wants out" behaviour so it is consistent across paths
+     * (Escape, no items match, etc.).
+     */
+    private void dismiss()
+    {
+        setVisible( false );
+        docPopup.setVisible( false );
+        editor.grabFocus();
     }
 
     //------------------------------------------------------------------------//
@@ -590,8 +699,8 @@ public final class UneIntelliSense extends JPopupMenu
 
     private void addDriverCommandClauses()
     {
-        addItem( "SCRIPT",   CAT_CLAUSE, "Script implementing the driver" );
-        addItem( "CONFIG",   CAT_CLAUSE, "Configuration parameters" );
+        addItem( "SCRIPT", CAT_CLAUSE, "Script implementing the driver" );
+        addItem( "CONFIG", CAT_CLAUSE, "Configuration parameters" );
     }
 
     private void addRuleClauses()
@@ -602,8 +711,9 @@ public final class UneIntelliSense extends JPopupMenu
         addItem( "USE",    CAT_CLAUSE, "Local alias definition" );
         addItem( "AFTER",  CAT_CLAUSE, "Delay before action" );
         addItem( "WITHIN", CAT_CLAUSE, "Time window condition" );
-        addItem( "ANY",    CAT_CLAUSE, "Any device in group" );
-        addItem( "ALL",    CAT_CLAUSE, "All devices in group" );
+        addItem( "ANY",    CAT_CLAUSE, "Any device in the group" );
+        addItem( "ALL",    CAT_CLAUSE, "All devices in the group" );
+        addItem( "NONE",   CAT_CLAUSE, "None of the devices in the group" );
     }
 
     private void addScriptClauses()
@@ -634,81 +744,77 @@ public final class UneIntelliSense extends JPopupMenu
 
     private void addConfigKeywords()
     {
-        addItem( "SET",      CAT_OPERATOR, "Assignment operator" );
-        addItem( "AS",       CAT_CLAUSE,   "Type specification" );
-        addItem( "REQUIRED", CAT_CLAUSE,   "Mark as required" );
-        addItem( "BOOLEAN",  CAT_TYPE,     "Boolean data type" );
-        addItem( "NUMBER",   CAT_TYPE,     "Numeric data type" );
-        addItem( "STRING",   CAT_TYPE,     "String data type" );
-        addItem( "ANY",      CAT_TYPE,     "Any data type" );
+        addItem( "AS",       CAT_CLAUSE, "Type specification" );
+        addItem( "REQUIRED", CAT_CLAUSE, "Mark as required" );
+        addItem( "BOOLEAN",  CAT_TYPE,   "Boolean data type" );
+        addItem( "NUMBER",   CAT_TYPE,   "Numeric data type" );
+        addItem( "STRING",   CAT_TYPE,   "String data type" );
+     // addItem( "ANY",      CAT_TYPE,   "Any data type" );    To not interfere with addRuleClasuses() --> ANY
     }
 
     private void addExpressionCompletions()
     {
-        // Functions and types - use signaturesCache as single source of truth
-        if( signaturesCache != null )
+        java.util.Set<String> added = new java.util.HashSet<>();
+
+        // Pass 1: types from signaturesCache (with their documented signatures)
+        if( signaturesCache != null && extendedCache != null )
         {
-            for( String key : signaturesCache.keySet() )
+            for( String type : extendedCache.keySet() )
             {
-                // Skip qualified names (like "pair.get", "stdxprfns.mid") to avoid duplicates
-                if( key.contains( "." ) )
-                    continue;
-
-                // Skip methods that belong to types (they should only appear in AFTER_COLON context)
-                if( isMethodOfAnyType( key ) )
-                    continue;
-
-                List<String> sigs = signaturesCache.get( key );
-
-                // Determine category: type if in extendedCache, otherwise function
-                boolean isType = (extendedCache != null && extendedCache.containsKey( key ));
-                String category = isType ? CAT_TYPE : CAT_FUNCTION;
-                String description = isType ? "Extended data type" : "Function";
+                List<String> sigs = signaturesCache.get( type );
 
                 if( sigs != null && ! sigs.isEmpty() )
                 {
                     for( String sig : sigs )
-                        addItem( sig, category, description );
+                        addItem( sig, CAT_TYPE, "Extended data type" );
                 }
                 else
                 {
-                    addItem( key + "()", category, description );
+                    addItem( type + "()", CAT_TYPE, "Extended data type" );
                 }
+
+                added.add( type );
             }
         }
 
-        // Extended types that might not be in signaturesCache (e.g., list, pair, date, time)
+        // Pass 2: types not covered by signaturesCache
         if( extendedCache != null )
         {
             for( String type : extendedCache.keySet() )
             {
-                boolean alreadyAdded = (signaturesCache != null && signaturesCache.containsKey( type ));
-
-                if( ! alreadyAdded )
+                if( ! added.contains( type ) )
                 {
                     addItem( type + "()", CAT_TYPE, "Extended data type" );
+                    added.add( type );
+                }
+            }
+        }
+
+        // Pass 3: functions from the evaluator (authoritative source)
+        if( functionsCache != null )
+        {
+            for( String fn : functionsCache )
+            {
+                if( added.contains( fn ) )
+                    continue;  // Already emitted as a type
+
+                List<String> sigs = (signaturesCache != null) ? signaturesCache.get( fn ) : null;
+
+                if( sigs != null && ! sigs.isEmpty() )
+                {
+                    for( String sig : sigs )
+                        addItem( sig, CAT_FUNCTION, "Function" );
+                }
+                else
+                {
+                    addItem( fn + "()", CAT_FUNCTION, "Function" );
                 }
             }
         }
 
         // Boolean values
-        addItem( "TRUE",   CAT_BOOLEAN, "Boolean true" );
-        addItem( "FALSE",  CAT_BOOLEAN, "Boolean false" );
-        addItem( "ON",     CAT_BOOLEAN, "Alias for TRUE" );
-        addItem( "OFF",    CAT_BOOLEAN, "Alias for FALSE" );
-        addItem( "YES",    CAT_BOOLEAN, "Alias for TRUE" );
-        addItem( "NO",     CAT_BOOLEAN, "Alias for FALSE" );
-        addItem( "OPEN",   CAT_BOOLEAN, "Alias for FALSE" );
-        addItem( "CLOSED", CAT_BOOLEAN, "Alias for TRUE" );
-
-        // Operator aliases
-        addItem( "IS",     CAT_OPERATOR, "Equals (==)" );
-        addItem( "SET",    CAT_OPERATOR, "Assignment (=)" );
-        addItem( "AND",    CAT_OPERATOR, "Logical AND (&&)" );
-        addItem( "OR",     CAT_OPERATOR, "Logical OR (||)" );
-        addItem( "NOT",    CAT_OPERATOR, "Logical NOT (!)" );
-        addItem( "ABOVE",  CAT_OPERATOR, "Greater than (>)" );
-        addItem( "BELOW",  CAT_OPERATOR, "Less than (<)" );
+        addItem( "TRUE",  CAT_BOOLEAN, "Boolean true" );
+        addItem( "FALSE", CAT_BOOLEAN, "Boolean false" );
     }
 
     private void addMethodsForContext( String lineText )
@@ -826,6 +932,107 @@ public final class UneIntelliSense extends JPopupMenu
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE METHODS - DOCUMENTATION DISPLAY
+
+    /**
+     * Shows API documentation for the currently selected item in the completion list,
+     * positioned to the right of the completion popup.
+     * <p>
+     * If the selected item is not a callable (function/type/method), the doc popup
+     * is left in its previous state — neither shown nor hidden. This prevents flicker
+     * when navigating with PgUp/PgDown across mixed item types (e.g. functions then
+     * booleans). The popup is only ever hidden via {@link #dismiss()} or by Swing's
+     * built-in click-outside auto-hide.
+     */
+    private void showDocForSelected()
+    {
+        if( ! isVisible() )
+            return;
+
+        CompletionItem item = completionList.getSelectedValue();
+
+        if( item == null )
+            return;
+
+        boolean isCallable = CAT_FUNCTION.equals( item.category )
+                          || CAT_TYPE    .equals( item.category )
+                          || CAT_METHOD  .equals( item.category );
+
+        if( ! isCallable )
+            return;   // keep whatever was showing — don't flicker on non-callable items
+
+        // Extract base name from signature, e.g., "mid(target, from)" → "mid"
+        String name     = item.text;
+        int    parenPos = name.indexOf( '(' );
+        if( parenPos > 0 )
+            name = name.substring( 0, parenPos );
+
+        // For methods, try the qualified name first (e.g., "pair.put"), then fall back to simple name
+        if( CAT_METHOD.equals( item.category ) &&
+            item.description != null           &&
+            item.description.startsWith( "Method of " ) )
+        {
+            String typeName  = item.description.substring( 10 ).trim();
+            String qualified = typeName + "." + name;
+
+            if( ! docPopup.showDocumentationNextTo( qualified, this ) )
+                docPopup.showDocumentationNextTo( name, this );
+        }
+        else
+        {
+            docPopup.showDocumentationNextTo( name, this );
+        }
+    }
+
+    /**
+     * Called when '(' is typed directly in the editor (outside of an active completion list).
+     * Looks up the word immediately before the '(' and shows its API docs if it is a known callable.
+     */
+    private void onOpenParenTyped( int parenOffset )
+    {
+        if( isVisible() )
+            return;   // Active completion list will handle docs via selection listener
+
+        try
+        {
+            int    line      = editor.getLineOfOffset( parenOffset );
+            int    lineStart = editor.getLineStartOffset( line );
+            String before    = editor.getText( lineStart, parenOffset - lineStart ).trim();
+            String name      = extractLastWord( before );
+
+            if( name.isEmpty() )
+                return;
+
+            if( isKnownCallable( name ) )
+                docPopup.showDocumentation( name, parenOffset );
+        }
+        catch( BadLocationException ignored ) {}
+    }
+
+    /**
+     * Returns true if the given name (case-insensitive) is a known function, extended type, or method
+     * that has API documentation.
+     */
+    private boolean isKnownCallable( String name )
+    {
+        String lower = name.toLowerCase();
+
+        if( extendedCache   != null && extendedCache  .containsKey( lower ) ) return true;
+        if( signaturesCache != null && signaturesCache.containsKey( lower ) ) return true;
+
+        if( functionsCache != null )
+        {
+            for( String fn : functionsCache )
+            {
+                if( fn.equalsIgnoreCase( name ) )
+                    return true;
+            }
+        }
+
+        return false;
+    }
+
+    //------------------------------------------------------------------------//
     // PRIVATE METHODS - FILTERING AND INSERTION
 
     private boolean applyFilter()
@@ -866,7 +1073,9 @@ public final class UneIntelliSense extends JPopupMenu
             }
         }
 
-        // If exactly one match, check if we should auto-insert and show documentation
+        // If exactly one match for a callable AND the filter exactly matches the
+        // base name, auto-insert it. Delegates to insertSelectedCompletion so the
+        // single insertion path manages doc popup lifecycle consistently.
         if( listModel.size() == 1 )
         {
             CompletionItem item = listModel.get( 0 );
@@ -874,54 +1083,15 @@ public final class UneIntelliSense extends JPopupMenu
             if( CAT_FUNCTION.equals( item.category ) || CAT_TYPE.equals( item.category )
                 || CAT_METHOD.equals( item.category ) )
             {
-                // Extract the function/type name from the signature (e.g., "mid" from "mid(target, from)")
                 String itemName = item.text;
-                int parenPos = itemName.indexOf( '(' );
+                int    parenPos = itemName.indexOf( '(' );
                 if( parenPos > 0 )
                     itemName = itemName.substring( 0, parenPos );
 
-                // Only auto-insert and show docs if filter exactly matches the function/type name
-                // This prevents auto-completion when user types partial match like "mi" for "mid"
-                if( ! itemName.equalsIgnoreCase( filter ) )
+                if( itemName.equalsIgnoreCase( filter ) )
                 {
-                    // Partial match - show completion list, don't auto-insert
                     completionList.setSelectedIndex( 0 );
-                    return false;
-                }
-
-                // Exact match - proceed with documentation and auto-insert
-                String docKey = item.text;
-
-                // Try to show documentation popup
-                boolean shown = false;
-
-                // For methods, try qualified name first (e.g. "pair.put")
-                if( CAT_METHOD.equals( item.category ) )
-                {
-                    String desc = item.description;
-                    if( desc != null && desc.startsWith( "Method of " ) )
-                    {
-                        String type = desc.substring( 10 ).trim();
-                        shown = docPopup.showDocumentation( type + "." + docKey, insertOffset );
-                    }
-                }
-
-                // Fallback to simple name (or for functions/types)
-                if( ! shown )
-                    shown = docPopup.showDocumentation( docKey, insertOffset );
-
-                if( shown )
-                {
-                    // Automatically insert the completion text (only name() - no parameters)
-                    insertCompletion( item );
-                    setVisible( false );  // Hide completion popup
-                    return true;
-                }
-                else
-                {
-                    // If documentation not found AND it was the only match, hide completion list and show warning
-                    setVisible( false );
-                    JTools.info( "Documentation for '" + docKey + "' not found" );
+                    insertSelectedCompletion();
                     return true;
                 }
             }
@@ -934,18 +1104,19 @@ public final class UneIntelliSense extends JPopupMenu
         }
         else
         {
-            setVisible( false );
+            dismiss();
             return true;
         }
     }
 
     private void showInitializationErrors()
     {
-        boolean driversLoaded    = (driversCache != null);
-        boolean extendedLoaded   = (extendedCache != null);
+        boolean driversLoaded    = (driversCache    != null);
+        boolean extendedLoaded   = (extendedCache   != null);
         boolean signaturesLoaded = (signaturesCache != null);
+        boolean functionsLoaded  = (functionsCache  != null);
 
-        if( ! driversLoaded && ! extendedLoaded && ! signaturesLoaded )
+        if( ! driversLoaded && ! extendedLoaded && ! signaturesLoaded && ! functionsLoaded )
         {
             StringBuilder msg = new StringBuilder();
             msg.append( "IntelliSense initialization failed.\n\n" );
@@ -966,16 +1137,25 @@ public final class UneIntelliSense extends JPopupMenu
         msg.append( "The following components failed to load:\n\n" );
 
         int failedCount = 0;
+
         if( ! driversLoaded )
         {
             msg.append( "  - Drivers (driver completion not available)\n" );
             failedCount++;
         }
-        if( ! signaturesLoaded )
+
+        if( ! functionsLoaded )
         {
-            msg.append( "  - Signatures (function completion not available)\n" );
+            msg.append( "  - Functions (function completion not available)\n" );
             failedCount++;
         }
+
+        if( ! signaturesLoaded )
+        {
+            msg.append( "  - Signatures (function documentation not available)\n" );
+            failedCount++;
+        }
+
         if( ! extendedLoaded )
         {
             msg.append( "  - Extended types (method completion not available)\n" );
@@ -991,15 +1171,14 @@ public final class UneIntelliSense extends JPopupMenu
             }
         }
 
-        if( driversLoaded || signaturesLoaded || extendedLoaded )
+        if( driversLoaded || functionsLoaded || signaturesLoaded || extendedLoaded )
         {
             msg.append( "\nAvailable IntelliSense features:\n\n" );
-            if( driversLoaded )
-                msg.append( "  - Driver completion (works)\n" );
-            if( signaturesLoaded )
-                msg.append( "  - Function completion (works)\n" );
-            if( extendedLoaded )
-                msg.append( "  - Extended type methods (works)\n" );
+
+            if( driversLoaded    )  msg.append( "  - Driver completion (works)\n" );
+            if( functionsLoaded  )  msg.append( "  - Function completion (works)\n" );
+            if( signaturesLoaded )  msg.append( "  - Function documentation (works)\n" );
+            if( extendedLoaded   )  msg.append( "  - Extended type methods (works)\n" );
         }
 
         msg.append( "\nSome IntelliSense features may not be available." );
@@ -1073,15 +1252,18 @@ public final class UneIntelliSense extends JPopupMenu
         if( selected == null )
             return;
 
+        // Hide the completion list first; the doc popup is managed explicitly below
+        // so it does not flicker through a hide/show cycle.
         setVisible( false );
 
-        // For drivers, insert the CONFIG template
         if( CAT_DRIVER.equals( selected.category ) && driversCache != null )
         {
+            docPopup.setVisible( false );
+
             try
             {
                 String insertion = selected.text;
-                String config = driversCache.get( selected.text );
+                String config    = driversCache.get( selected.text );
 
                 if( config != null && ! config.isEmpty() )
                 {
@@ -1098,6 +1280,7 @@ public final class UneIntelliSense extends JPopupMenu
 
                     insertion = sb.toString();
                 }
+
                 editor.replaceRange( insertion, insertOffset, editor.getCaretPosition() );
             }
             catch( Exception e )
@@ -1109,31 +1292,38 @@ public final class UneIntelliSense extends JPopupMenu
         {
             insertCompletion( selected );
 
-            // For functions/methods/types, show documentation for the selected signature
-            if( CAT_FUNCTION.equals( selected.category ) || CAT_TYPE.equals( selected.category )
-                || CAT_METHOD.equals( selected.category ) )
-            {
-                String docKey = selected.text;
+            boolean isCallable = CAT_FUNCTION.equals( selected.category )
+                              || CAT_TYPE    .equals( selected.category )
+                              || CAT_METHOD  .equals( selected.category );
 
-                // For methods, try qualified name first (e.g., "pair.get")
-                if( CAT_METHOD.equals( selected.category ) )
+            if( isCallable )
+            {
+                // Anchor the doc popup at the new caret position (now between the inserted
+                // parentheses) so it is visually attached to where the user will type args.
+                String name     = selected.text;
+                int    parenPos = name.indexOf( '(' );
+                if( parenPos > 0 )
+                    name = name.substring( 0, parenPos );
+
+                int caret = editor.getCaretPosition();
+
+                if( CAT_METHOD.equals( selected.category )
+                    && selected.description != null
+                    && selected.description.startsWith( "Method of " ) )
                 {
-                    String desc = selected.description;
-                    if( desc != null && desc.startsWith( "Method of " ) )
-                    {
-                        String type = desc.substring( 10 ).trim();
-                        if( ! docPopup.showDocumentation( type + "." + docKey, insertOffset ) )
-                            docPopup.showDocumentation( docKey, insertOffset );
-                    }
-                    else
-                    {
-                        docPopup.showDocumentation( docKey, insertOffset );
-                    }
+                    String type = selected.description.substring( 10 ).trim();
+
+                    if( ! docPopup.showDocumentation( type + "." + name, caret ) )
+                        docPopup.showDocumentation( name, caret );
                 }
                 else
                 {
-                    docPopup.showDocumentation( docKey, insertOffset );
+                    docPopup.showDocumentation( name, caret );
                 }
+            }
+            else
+            {
+                docPopup.setVisible( false );
             }
         }
 
@@ -1206,7 +1396,14 @@ public final class UneIntelliSense extends JPopupMenu
                 CompletionItem item = (CompletionItem) value;
                 label.setText( item.text );
 
-                if( ! isSelected )
+                if( isSelected )
+                {
+                    // Force selection colours regardless of focus state so the highlight
+                    // is always visible (DefaultListCellRenderer dims it when unfocused).
+                    label.setBackground( list.getSelectionBackground() );
+                    label.setForeground( list.getSelectionForeground() );
+                }
+                else
                 {
                     switch( item.category )
                     {
@@ -1260,8 +1457,9 @@ public final class UneIntelliSense extends JPopupMenu
                                 String driverKey = entry.getKey();
 
                                 // Check for duplicates (case-insensitive)
-                                boolean isDuplicate = map.keySet().stream()
-                                    .anyMatch( k -> k.equalsIgnoreCase( driverKey ) );
+                                boolean isDuplicate = map.keySet()
+                                                         .stream()
+                                                         .anyMatch( k -> k.equalsIgnoreCase( driverKey ) );
 
                                 if( ! isDuplicate )
                                     map.put( driverKey, entry.getValue() );

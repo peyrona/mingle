@@ -215,10 +215,8 @@ final class Pin implements IPin
                     if( status.statusOK != 1 )   // Check if interrupt was processed successfully
                         return;
 
-                    if( isDispatching.get() )    // To avoid re-entrance
+                    if( ! isDispatching.compareAndSet( false, true ) )    // To avoid re-entrance
                         return;
-
-                    isDispatching.set( true );
 
                     try
                     {

@@ -1,0 +1,103 @@
+#==================================================================================================================================
+# Edge detection operators: RISES, DROPS, BECOMES, LEAVES, CROSSES.
+#
+# Standard comparison operators (>, <, ==, ...) fire on EVERY evaluation where the condition is true.
+# Edge operators fire exactly ONCE when the value TRANSITIONS across the threshold — not while it stays there.
+#
+# This matters: without edge detection, "cpu ABOVE 75" fires an alert every second for as long as the
+# CPU stays above 75. With RISES it fires once, when the CPU first crosses 75.
+#
+# Operator   Symbol   Fires when
+# ---------  -------  ---------------------------------------------------
+# RISES      ?>       value just crossed ABOVE threshold  (cur > t  AND prev <= t)
+# DROPS      ?<       value just crossed BELOW threshold  (cur < t  AND prev >= t)
+# BECOMES    ?=       value just became exactly v         (cur == v AND prev != v)
+# LEAVES     ?!=      value just stopped being v          (cur != v AND prev == v)
+# CROSSES    ?<>      value crossed threshold in either direction
+#
+# These are English aliases defined in 'standard-replaces.une'.
+# The underlying operator symbols (?>, ?<, ?=, ?!=, ?<>) can also be used directly.
+#
+# COLD START: on the very first evaluation all edge operators return false.
+#             They establish a baseline silently and only fire on subsequent transitions.
+#
+# prev("deviceName") — companion function that returns the previous value of a device.
+#                      The argument must be a string literal with quotes, not a variable reference.
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+USE HOT_THRESHOLD AS 75     # CPU % — above this is "hot"
+    LOW_THRESHOLD AS 20     # CPU % — below this is "idle"
+    MID_POINT     AS 50     # CPU % — used to demonstrate CROSSES
+
+
+# ---- Devices ----------------------------------------------------------------
+
+DEVICE cpu                         # Simulates a temperature sensor using real CPU load
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 2s
+
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 3s
+
+
+DEVICE door                        # Simulated door contact sensor (true = OPEN, false = CLOSED)
+    DRIVER CellSetDriver
+        CONFIG
+            value SET false
+
+
+DEVICE console
+    DRIVER OutputDriver
+
+
+# ---- Simulation -------------------------------------------------------------
+
+# Drive the simulated door randomly on each clock tick
+WHEN clock
+THEN door SET rand(0, 1) > 0.5
+
+
+# ---- Edge detection rules ---------------------------------------------------
+
+# RISES (?>) — fires once when cpu crosses ABOVE the hot threshold
+RULE cpu_hot
+    WHEN cpu RISES HOT_THRESHOLD
+    THEN console SET "RISES  : cpu just went above "+ HOT_THRESHOLD +"% (now "+ cpu +"%)"
+
+
+# DROPS (?<) — fires once when cpu crosses BELOW the idle threshold
+RULE cpu_idle
+    WHEN cpu DROPS LOW_THRESHOLD
+    THEN console SET "DROPS  : cpu just went below "+ LOW_THRESHOLD +"% (now "+ cpu +"%)"
+
+
+# CROSSES (?<>) — fires once on any crossing of the mid-point, in either direction.
+# prev("cpu") returns the value from the previous read — note the quoted string argument.
+RULE cpu_crosses_mid
+    WHEN cpu CROSSES MID_POINT
+    THEN console SET "CROSSES: cpu just crossed "+ MID_POINT +"% (was "+ prev("cpu") +"%, now "+ cpu +"%)"
+
+
+# BECOMES (?=) — fires once when door transitions TO open (false → true)
+RULE door_opened
+    WHEN door BECOMES true
+    THEN console SET "BECOMES: door just opened"
+
+
+# LEAVES (?!=) — fires once when door transitions FROM open (true → false)
+RULE door_closed
+    WHEN door LEAVES true
+    THEN console SET "LEAVES : door just closed"
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

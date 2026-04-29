@@ -22,8 +22,7 @@
 # So:
 #     "power=on, red=255, green=0, blue=0"
 # will switch the LED strip on and se the color to pure red. You can send all values or just those you want to change:
-#     "green=255, blue=255"
-# as second command, will turn the LED strip into white color.
+#     "green=255, blue=255" as second command, will turn the LED strip into white color.
 #
 # Take a look to the example to uderstand how to these drivers work.
 
@@ -43,13 +42,14 @@ DRIVER ShellyRGBWPMDriver
     CONFIG
         ip      AS string REQUIRED   # IP address of Shelly device. E.g.: "192.168.7.220"
         channel AS number            # Channel ID (usually 0 for RGBW, 0-3 for White). By default 0
-        type    AS string            # Device type: "rgbw", "rgb" or "white". By default "rgbw"
+        mode    AS string            # Device mode: "rgbw", "rgb" or "white". By default "rgbw"
+        ramp    AS number            # Default transition in milliseconds (default 0 = instant)
 
 #==================================================================================================================================
 # The rest of tis file contains the SCRIPTs needed by the DRIVERs declared above.
 #
 # Unless you are an experienced developer, you should simply ignore the rest of this file.
-# ===================================================================================================================================
+#==================================================================================================================================
 
 SCRIPT LednetWifi5ChController
    LANGUAGE java                                                                  # Which language was used to write the controller

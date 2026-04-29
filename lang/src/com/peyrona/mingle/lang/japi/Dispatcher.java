@@ -257,13 +257,14 @@ public final class Dispatcher<T>
     {
         assert item != null;
 
-        // Fast path: ArrayBlockingQueue.offer() is thread-safe
-        if( queue.offer( item ) )
-            return this;
-
-        // Slow path: queue is full, need synchronization for potential resize
+        // Serialize all offers with the resize swap in checkAndGrow(). Otherwise a fast-path
+        // offer() resolved against the old queue reference can land in a queue that was
+        // just replaced by checkAndGrow(), silently losing the item.
         synchronized( this )
         {
+            if( queue.offer( item ) )
+                return this;
+
             checkAndGrow();
 
             if( ! queue.offer( item ) )
@@ -304,6 +305,11 @@ public final class Dispatcher<T>
      */
     public Dispatcher<T> flush()
     {
+        // Calling flush() from the consumer thread itself would livelock: isProcessing stays
+        // true while the consumer is inside consumer.accept(), so the loop would never exit.
+        if( Thread.currentThread() == thrQueue )
+            throw new IllegalStateException( "flush() must not be called from the consumer thread" );
+
         while( (! queue.isEmpty()) || isProcessing )
         {
             try

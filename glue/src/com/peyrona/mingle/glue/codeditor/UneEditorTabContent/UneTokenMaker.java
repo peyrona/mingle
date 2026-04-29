@@ -1,8 +1,13 @@
 
 package com.peyrona.mingle.glue.codeditor.UneEditorTabContent;
 
+import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.lexer.Language;
+import java.io.File;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
 import java.util.List;
 import java.util.Map;
 import javax.swing.text.Segment;
@@ -67,7 +72,13 @@ final class UneTokenMaker extends AbstractTokenMaker
             int value = wordsToHighlight.get( segment, start, end );
 
             if( value != -1 )
+            {
                 tokenType = value;
+
+                // Highlight as FUNCTION only when actually called: name must be followed by '('
+                if( tokenType == Token.FUNCTION && !isFollowedByParen( segment, end ) )
+                    tokenType = Token.IDENTIFIER;
+            }
         }
 
         super.addToken( segment, start, end, tokenType, startOffset );
@@ -290,6 +301,27 @@ final class UneTokenMaker extends AbstractTokenMaker
     // PRIVATE METHODS
 
     /**
+     * Returns true if the first non-whitespace character after {@code afterEnd} in the segment
+     * is '(', i.e. the preceding identifier is actually being called as a function.
+     * Look-ahead is bounded by the current segment (single line).
+     */
+    private boolean isFollowedByParen( Segment segment, int afterEnd )
+    {
+        char[] array   = segment.array;
+        int    scanEnd = segment.offset + segment.count;
+
+        for( int i = afterEnd + 1; i < scanEnd; i++ )
+        {
+            char c = array[i];
+
+            if( c == '(' )              return true;
+            if( c != ' ' && c != '\t' ) return false;
+        }
+
+        return false;
+    }
+
+    /**
      * Determines the token type based on the current character and context.
      */
     private int determineTokenType( char[] array, int pos, int end, char c )
@@ -417,41 +449,9 @@ final class UneTokenMaker extends AbstractTokenMaker
         tm.put( "STRING",  Token.DATA_TYPE );
         tm.put( "ANY",     Token.DATA_TYPE );
 
-        // Boolean literals and aliases
-        tm.put( "TRUE",   Token.LITERAL_BOOLEAN );
-        tm.put( "FALSE",  Token.LITERAL_BOOLEAN );
-        tm.put( "ON",     Token.LITERAL_BOOLEAN );
-        tm.put( "OFF",    Token.LITERAL_BOOLEAN );
-        tm.put( "YES",    Token.LITERAL_BOOLEAN );
-        tm.put( "NO",     Token.LITERAL_BOOLEAN );
-        tm.put( "OPEN",   Token.LITERAL_BOOLEAN );
-        tm.put( "CLOSED", Token.LITERAL_BOOLEAN );
-
-        // Boolean/Conditional operator aliases
-        tm.put( "AND", Token.RESERVED_WORD_2 );
-        tm.put( "OR",  Token.RESERVED_WORD_2 );
-        tm.put( "XOR", Token.RESERVED_WORD_2 );
-        tm.put( "NOT", Token.RESERVED_WORD_2 );
-
-        // Relational operator aliases
-        tm.put( "IS",      Token.OPERATOR );
-        tm.put( "EQUALS",  Token.OPERATOR );
-        tm.put( "ARE",     Token.OPERATOR );
-        tm.put( "BELOW",   Token.OPERATOR );
-        tm.put( "ABOVE",   Token.OPERATOR );
-        tm.put( "LEAST",   Token.OPERATOR );
-        tm.put( "MOST",    Token.OPERATOR );
-        tm.put( "UNEQUAL", Token.OPERATOR );
-        tm.put( "IS_NOT",  Token.OPERATOR );
-
-        // Assignment operator alias
-        tm.put( "SET", Token.OPERATOR );
-
-        // Bitwise operator aliases
-        tm.put( "BAND", Token.OPERATOR );
-        tm.put( "BOR",  Token.OPERATOR );
-        tm.put( "BXOR", Token.OPERATOR );
-        tm.put( "BNOT", Token.OPERATOR );
+        // Boolean literals (core language — not from standard-replaces.une)
+        tm.put( "TRUE",  Token.LITERAL_BOOLEAN );
+        tm.put( "FALSE", Token.LITERAL_BOOLEAN );
 
         // Language names for LANGUAGE clause in SCRIPT command only
         tm.put( "UNE",        Token.DATA_TYPE );
@@ -502,27 +502,116 @@ final class UneTokenMaker extends AbstractTokenMaker
                 {
                     tm.put( op, Token.RESERVED_WORD_2 );
                 }
+                else if( Language.isEdgeOp( op ) )
+                {
+                    tm.put( op, Token.OPERATOR );
+                }
             }
         }
         catch( Exception e )
         {
-            // Config may not be available during static initialization in some contexts
-            // Fall back to basic function set
-            String[] basicFunctions = { "floor", "ceil", "round", "abs", "min", "max",
-                                        "sin", "cos", "tan", "sqrt", "log", "rand",
-                                        "len", "upper", "lower", "trim", "left", "right", "mid",
-                                        "contains", "startswith", "endswith", "replace", "split", "format",
-                                        "date", "time", "list", "pair", "pairs",
-                                        "year", "month", "day", "weekday", "hour", "minute", "second", "millis",
-                                        "add", "put", "get", "has", "size", "empty", "build", "keys", "values",
-                                        "str", "num", "bool", "del" };
+            JTools.error( e );
+        }
 
-            for( String fn : basicFunctions )
-            {
-                tm.put( fn, Token.FUNCTION );
-            }
+        // USE-clause aliases from standard-replaces.une (boolean literals, operators, day/month names…)
+        // Loaded last so user-defined aliases always take precedence over built-in function/method names
+        // (e.g. list.set() would otherwise override the SET alias for the assignment operator).
+        try
+        {
+            loadUseAliases( new File( UtilSys.getIncDir(), "standard-replaces.une" ), tm );
+        }
+        catch( Exception e )
+        {
+            // Include dir not yet configured (e.g. unit tests) — aliases simply won't be highlighted.
         }
 
         return tm;
+    }
+
+    /**
+     * Reads a Une source file and registers every {@code USE word AS replacement} pair
+     * in {@code tm} with the appropriate token type. Silently ignores lines that do not
+     * match the expected format so that future file extensions do not break highlighting.
+     *
+     * @param file Une source file containing USE directives (e.g. standard-replaces.une).
+     * @param tm   The token map to populate.
+     * @throws IOException If the file cannot be read.
+     */
+    private static void loadUseAliases( File file, TokenMap tm ) throws IOException
+    {
+        for( String rawLine : Files.readAllLines( file.toPath(), StandardCharsets.UTF_8 ) )
+        {
+            // Strip inline comment (everything from the first '#' that is not inside a string literal).
+            // Simple heuristic: scan left-to-right, toggle inside-string on '"', stop at '#' outside string.
+            boolean inStr = false;
+            int     cutAt = -1;
+
+            for( int n = 0; n < rawLine.length(); n++ )
+            {
+                char ch = rawLine.charAt( n );
+
+                if( ch == '"' )
+                {
+                    inStr = !inStr;
+                }
+                else if( ! inStr && ch == '#' )
+                {
+                    cutAt = n; break;
+                }
+            }
+
+            String line = ((cutAt >= 0) ? rawLine.substring( 0, cutAt ) : rawLine).trim();
+
+            if( line.isEmpty() )
+                continue;
+
+            // Strip leading "USE " keyword if present (first pair on a USE block line).
+            if( line.regionMatches( true, 0, "USE ", 0, 4 ) )
+                line = line.substring( 4 ).trim();
+
+            // Must contain " AS " to be a valid alias pair.
+            int asIdx = line.toUpperCase().indexOf( " AS " );
+
+            if( asIdx < 0 )
+                continue;
+
+            String word        = line.substring( 0, asIdx  ).trim();
+            String replacement = line.substring( asIdx + 4 ).trim();
+
+            // Strip surrounding double quotes from the replacement (e.g. "\n" → \n).
+            if( replacement.startsWith( "\"" ) && replacement.endsWith( "\"" ) && replacement.length() >= 2 )
+                replacement = replacement.substring( 1, replacement.length() - 1 );
+
+            if( word.isEmpty() || replacement.isEmpty() )
+                continue;
+
+            tm.put( word, classifyReplacement( replacement ) );
+        }
+    }
+
+    /**
+     * Maps a USE replacement value to the RSyntaxTextArea token type that best represents
+     * how the aliased word is used in Une source code.
+     *
+     * @param replacement The right-hand side of a {@code USE word AS <replacement>} pair.
+     * @return An RSyntaxTextArea {@link Token} type constant.
+     */
+    private static int classifyReplacement( String replacement )
+    {
+        if( "true".equalsIgnoreCase( replacement ) || "false".equalsIgnoreCase( replacement ) )
+            return Token.LITERAL_BOOLEAN;
+
+        if( replacement.matches( "\\d+" ) )
+            return Token.LITERAL_NUMBER_DECIMAL_INT;
+
+        if( replacement.startsWith( "\"" ) || replacement.startsWith( "\\" ) )
+            return Token.LITERAL_STRING_DOUBLE_QUOTE;
+
+        // Boolean operators (&&, ||, |&, !) → RESERVED_WORD_2 for distinct colour.
+        if( Language.isBooleanOp( replacement ) )
+            return Token.RESERVED_WORD_2;
+
+        // Relational, edge-detection (?>, ?<, ?=, ?!=, ?<>), bitwise, assignment → OPERATOR.
+        return Token.OPERATOR;
     }
 }

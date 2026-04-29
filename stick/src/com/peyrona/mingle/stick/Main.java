@@ -125,11 +125,11 @@ public final class Main
                 UtilStr.isLastChar( sModel, '*' ) )
                 continue;
 
-            if( UtilStr.endsWith( sModel, ".une" ) )
-                itera.set( UtilStr.removeLast( sModel, 4 ) );
+            if( UtilIO.hasExtension( sModel, "une" ) )
+                sModel = UtilStr.removeLast( sModel, 3 );
 
-            if( ! UtilStr.endsWith( sModel, ".model" ) )
-                itera.set( sModel + ".model" );
+            if( ! UtilIO.hasExtension( sModel, "model" ) )
+                itera.set( sModel + (UtilStr.endsWith( sModel, "." ) ? "" : ".") + "model" );
         }
 
         return lstModel.toArray( String[]::new );
@@ -182,7 +182,10 @@ public final class Main
      */
     private static void compareAndUpdateModels( IConfig config, String[] asModelNames )
     {
-        if( UtilColls.isEmpty( asModelNames ) )    // Faster first
+        if( ! UtilSys.isFsWritable )    // Faster first
+            return;
+
+        if( UtilColls.isEmpty( asModelNames ) )
             return;
 
         if( ! config.get( "exen", "update_models", false ) )

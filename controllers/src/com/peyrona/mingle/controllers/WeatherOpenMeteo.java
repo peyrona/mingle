@@ -153,7 +153,7 @@ public final class   WeatherOpenMeteo
                                 }
                                 catch( IOException ioe )
                                 {
-                                    sendWriteError( sURL, ioe );
+                                    sendReadError( ioe );
                                 }
                                 finally
                                 {

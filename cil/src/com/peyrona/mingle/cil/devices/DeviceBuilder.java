@@ -51,7 +51,7 @@ public final class DeviceBuilder
 
     private static void populate( JsonValue jv, Map<String,Object> map )
     {
-        if( ! jv.isNull() )           // Driver Init (config)
+        if( jv != null && ! jv.isNull() )           // Driver Init (config): null when the key is absent from the JSON
         {
             jv.asObject()
               .forEach( member -> map.put( member.getName(), UtilJson.toUneType( member.getValue() ) ) );

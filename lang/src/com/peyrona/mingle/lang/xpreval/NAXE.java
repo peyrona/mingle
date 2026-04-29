@@ -130,6 +130,10 @@ public final class NAXE implements IXprEval
         {
             return evaluator.eval();    // NullPointerException can be thrown: this is intended
         }
+        catch( MingleException me )     // Already a Mingle-level error — preserve it
+        {
+            throw me;
+        }
         catch( Exception exc )          // Only happens when improper use of this class
         {
             if( UtilColls.isNotEmpty( lstErrors ) )
@@ -174,7 +178,7 @@ public final class NAXE implements IXprEval
         if( evaluator == null )
             throw new MingleException( "Cannot check future state: expression has errors. Check getErrors() before calling isFuturing()." );
 
-        return evaluator.isFutureing();
+        return evaluator.isFuturing();
     }
 
     @Override
@@ -216,7 +220,7 @@ public final class NAXE implements IXprEval
     @Override
     public String[] getOperators()
     {
-        return new StdXprOps().getAll();
+        return StdXprOps.getAll();
     }
 
     @Override

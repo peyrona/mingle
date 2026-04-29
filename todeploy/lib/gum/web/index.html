@@ -15,6 +15,7 @@
 
         <!-- Gum ================================ -->
         <link href="index.css" rel="stylesheet">  <!-- Tabler Icons and Bulma, are inside CSS -->
+        <style>html { transition: filter 0.6s ease; }</style>
 
         <script src="js/p_base.js"   ></script>
         <script src="js/p_app.js"    ></script>
@@ -300,9 +301,45 @@
             var isMaster = false;
             // ------------------------------
 
+            // SCREEN DIMMING ---------------
+            const DIM_TIMEOUT_MS = 3 * 60 * 1000;   // Idle time before dimming (ms)
+            const DIM_BRIGHTNESS = 0.1;              // Brightness level when dimmed (0–1)
+
+            let _dimTimer_      = null;
+            let _isDimmed_      = false;
+            let _savedFilter_   = '';
+
+            function _dimScreen_()
+            {
+                if( _isDimmed_ ) return;
+                _savedFilter_ = document.documentElement.style.filter || '';
+                document.documentElement.style.filter = 'brightness('+ DIM_BRIGHTNESS +')';
+                _isDimmed_ = true;
+            }
+
+            function _restoreScreen_()
+            {
+                if( ! _isDimmed_ ) return;
+                document.documentElement.style.filter = _savedFilter_;
+                _isDimmed_ = false;
+            }
+
+            function _resetDimTimer_()
+            {
+                _restoreScreen_();
+                clearTimeout( _dimTimer_ );
+                _dimTimer_ = setTimeout( _dimScreen_, DIM_TIMEOUT_MS );
+            }
+            // ------------------------------
+
             $(document).ready( function()
                                 {
                                     gt.del( "_GUM_REUSE_WND_" );
+
+                                    [ 'mousemove', 'mousedown', 'click', 'touchstart', 'keydown', 'scroll', 'wheel' ]
+                                        .forEach( ev => document.addEventListener( ev, _resetDimTimer_, { passive: true } ) );
+
+                                    _resetDimTimer_();
 
                                     let storedSecret = loadSharedSecret();
 

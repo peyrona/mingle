@@ -115,8 +115,8 @@ final class HttpServer
         contexts.addHandler( createWsHandler( timeout ) );           // /gum/ws/*         - WITH AUTH FILTER
         contexts.addHandler( createBridgeHandler( timeout ) );       // /gum/bridge/*     - WITH AUTH FILTER
         contexts.addHandler( createUploadHandler( timeout ) );       // /gum/upload       - WITH AUTH FILTER
-        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/file_mgr/*   - WITH AUTH FILTER
-        contexts.addHandler( createServedFilesHandler( timeout ) );  // /gum/user-files/* - WITH AUTH FILTER
+        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/user-files/_mgr/* - WITH AUTH FILTER
+        contexts.addHandler( createServedFilesHandler( timeout ) );  // /gum/user-files/*      - WITH AUTH FILTER
         contexts.addHandler( createBoardHandler( timeout ) );        // /gum/board/*      - WITH AUTH FILTER
         contexts.addHandler( createGumHandler( timeout ) );          // /gum              - WITH AUTH FILTER
         contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout       - WITH AUTH FILTER
@@ -145,7 +145,7 @@ final class HttpServer
                       "Dashboard's folder : " + Util.getBoardsDir().getCanonicalPath() + "/\n" +
                       "Serving files from : " + Util.getServedFilesDir().getCanonicalPath() + "/\n" +
                       "    * at context   : " + sServer + "user-files/\n" +
-                      "    * UI manager   : " + sServer + "file_mgr/index.html\n";
+                      "    * UI manager   : " + sServer + "user-files/_mgr/index.html\n";
 
         if( (httpsPort > 0) && (keystorePath != null) && (keystorePassword != null) )
             logger.say( "HTTPS services available at port " + httpsPort + '\n' );
@@ -926,7 +926,7 @@ final class HttpServer
  */
     public static class AuthenticationFilter implements javax.servlet.Filter
     {
-        private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/file_mgr", "/gum/user-files" };
+        private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/user-files/_mgr", "/gum/user-files" };
         private static final String[] asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico", "map" };
 
         //------------------------------------------------------------------------//

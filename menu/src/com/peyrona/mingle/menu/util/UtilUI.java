@@ -145,7 +145,7 @@ public class UtilUI
             }
 
             lastActivityMs = System.currentTimeMillis();
-            return line.trim().toLowerCase();
+            return line.trim();
         }
         catch( IOException e )
         {

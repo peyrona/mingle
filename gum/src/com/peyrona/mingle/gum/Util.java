@@ -69,7 +69,7 @@ final class Util
 
     static String getFileManagerContext()
     {
-        return "/gum/file_mgr";
+        return "/gum/user-files/_mgr";
     }
 
     static File getDashboardManagerDir() throws IOException

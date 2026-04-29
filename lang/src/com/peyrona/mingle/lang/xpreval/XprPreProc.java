@@ -12,49 +12,39 @@ import java.util.List;
 import java.util.function.Function;
 
 /**
- * Using an infix valid Une expression, expands groups (ANY and ALL modifiers) and
- * makes boolean and arithmetic optimizations.<br>
- * <br>
- * This class is public to be used by compilers and interpreters and also by
- * other implementations of IXprEval.
+ * Using an infix valid Une expression, expands groups (ANY, ALL, and NONE modifiers)
+ * and makes boolean and arithmetic optimizations.
  *
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
+/**
+ * Using an infix valid Une expression, expands groups (ANY, ALL, and NONE modifiers)
+ * and makes boolean and arithmetic optimizations.
+ *
+ * @author Francisco José Morero Peyrona
+ */
 final class XprPreProc
 {
-    private static final short GROUP_NAME_ALL = -1;   // A group name that has an ALL modifier
-    private static final short GROUP_NAME_ANY = -2;   // A group name that has an ANY modifier
+    private static final short GROUP_NAME_ALL  = -1;
+    private static final short GROUP_NAME_ANY  = -2;
+    private static final short GROUP_NAME_NONE = -3;
 
     private final List<XprToken>      lstInfix  = new ArrayList<>();
     private final List<ICandi.IError> lstErrors = new ArrayList<>();
 
-    //------------------------------------------------------------------------//
-
-    /**
-     * Creates the instance and pre-processes the expression:
-     * <ul>
-     *   <li>Expands groups (ANY and ALL modifiers).</li>
-     *   <li>Makes boolean optimizations.</li>
-     *   <li>Makes arithmetic optimizations.</li>
-     * </ul>
-     *
-     * @param xpr
-     * @param fnGroupWise A function that receives the name of a group and returns the list of devices belonging to this group.
-     * @return Itself.
-     */
     XprPreProc( String xpr, Function<String,String[]> fnGroupWise )
     {
         XprTokenizer   tokenizer = new XprTokenizer( xpr );
         List<XprToken> lstTmp    = tokenizer.getTokens();
 
-        lstErrors.addAll( tokenizer.getErrors() );     // If tokenizer.getErrors() is empty, no harm
+        lstErrors.addAll( tokenizer.getErrors() );
 
         if( validate( lstTmp, xpr ) )
         {
             if( fnGroupWise != null )
-                lstTmp = doAllAny( lstTmp, fnGroupWise );
+                lstTmp = doQuantifiers( lstTmp, fnGroupWise );
 
             optimizeBooleans( lstTmp );
         }
@@ -63,27 +53,8 @@ final class XprPreProc
         lstInfix.addAll( lstTmp );
     }
 
-    //------------------------------------------------------------------------//
-
-    /**
-     * Returns the tokens that represent the infix string expression.
-     *
-     * @return The tokens that represent the infix string expression.
-     */
-    List<XprToken> getAsInfix()
-    {
-        return Collections.unmodifiableList( lstInfix );
-    }
-
-    /**
-     * Returns found errors.
-     *
-     * @return Where to place found errors: key is the error description and
-     */
-    List<ICandi.IError> getErrors()
-    {
-        return Collections.unmodifiableList( lstErrors );
-    }
+    List<XprToken>      getAsInfix()  { return Collections.unmodifiableList( lstInfix  ); }
+    List<ICandi.IError> getErrors()   { return Collections.unmodifiableList( lstErrors ); }
 
     @Override
     public String toString()
@@ -96,64 +67,49 @@ final class XprPreProc
             else                                   sb.append( ' ' ).append( token.text() );
         }
 
-        return sb.toString();
+        return sb.toString().trim();
     }
 
-    //------------------------------------------------------------------------//
-
-    /**
-     * Expand groups.
-     *
-     * @param lstTokens
-     * @param fnGroupWise
-     * @param mapErrors
-     * @return
-     */
     @SuppressWarnings(value = "empty-statement")
-    private List<XprToken> doAllAny( List<XprToken> lstTokens, Function<String,String[]> fnGroupWise )
+    private List<XprToken> doQuantifiers( List<XprToken> lstTokens, Function<String,String[]> fnGroupWise )
     {
         List<XprToken> lstResult = new ArrayList<>();
-
-        if( lstTokens.isEmpty() )
-            return lstResult;
 
         for( int n = 0; n < lstTokens.size(); n++ )
         {
             XprToken token = lstTokens.get( n );
 
-            if( isAllOrAny( token ) )    // If this token is ANY or ALL, then next token must be a group-name
+            if( isQuantifier( token ) )
             {
-                if( n == (lstTokens.size() - 1) )
+                if( n >= (lstTokens.size() - 1) )
                 {
                     lstErrors.add( new CodeError( "No group name found after \"" + token.text() + '"', token ) );
                 }
                 else
                 {
-                    XprToken tGroupName = UtilColls.getAt( lstTokens, n + 1 );   // Following token after ANY or ALL
-                    XprToken tAfter     = UtilColls.getAt( lstTokens, n + 4 );   // In "ANY window > ALL doors", tAfter == "ALL"
+                    XprToken tGroupName = lstTokens.get( n + 1 );
+                    // Check if next token exists before accessing index n + 2
+                    XprToken tAfter = (n + 2 < lstTokens.size()) ? lstTokens.get( n + 2 ) : null;
 
-                    if( isAllOrAny( tAfter ) )
+                    if( isQuantifier( tAfter ) )
                     {
-                        lstErrors.add( new CodeError( "No group name found after \"" + token.text() + '"', token ) );
+                        lstErrors.add( new CodeError( "Unexpected quantifier \"" + tAfter.text() + "\" after \"" + token.text() + '"', tAfter ) );
+                    }
+                    else if( tGroupName.type() == XprToken.VARIABLE )
+                    {
+                        if( token.isText( XprUtils.sALL ) )       tGroupName.type( GROUP_NAME_ALL  );
+                        else if ( token.isText( XprUtils.sANY ) ) tGroupName.type( GROUP_NAME_ANY  );
+                        else                                      tGroupName.type( GROUP_NAME_NONE );
                     }
                     else
                     {
-                        if( tGroupName.type() == XprToken.VARIABLE )    // We mark next (n+1) token as GROUP_NAME_XXX so in next for iteration it will be properly processed
-                        {
-                            if( token.isText( XprUtils.sALL ) )  tGroupName.type( XprPreProc.GROUP_NAME_ALL );
-                            else                                 tGroupName.type( XprPreProc.GROUP_NAME_ANY );
-                        }
-                        else
-                        {
-                            lstErrors.add( new CodeError( "Group name expected after \"" + token.text() + "\", but found: \"" + tGroupName.text() + '"', tGroupName ) );
-                        }
+                        lstErrors.add( new CodeError( "Group name expected after \"" + token.text() + "\", but found: \"" + tGroupName.text() + '"', tGroupName ) );
                     }
-                } // Do not add this token ("ANY" or "ALL") to the resulting list (lstResult): it is not usefull anymore
+                }
             }
-            else if( (token.type() == XprPreProc.GROUP_NAME_ALL) ||   // If this token is a group-name, then expand the group
-                     (token.type() == XprPreProc.GROUP_NAME_ANY) )
+            else if( isInternalGroupName( token.type() ) )
             {
-                String[] asGroupMembers = fnGroupWise.apply( token.text() );    // We obtain all members of the group
+                String[] asGroupMembers = fnGroupWise.apply( token.text() );
 
                 if( UtilColls.isEmpty( asGroupMembers ) )
                 {
@@ -161,25 +117,18 @@ final class XprPreProc
                 }
                 else
                 {
-                    int ndxStart = n + 1;   // Token at n is the gropup name: token after is the operator
-                    int ndxEnd   = n + 2;   // Token after the operator aafter the group name (start of expression or constant)
+                    int ndxStart = n + 1;
+                    int ndxEnd   = n + 1; // Start looking for the template immediately after the group name
 
-                    while( (++ndxEnd < lstTokens.size()) &&                                  // e.g.: "ALL windows == (true || false)
+                    // Scan for the end of the template (e.g. "== 5")
+                    while( (++ndxEnd < lstTokens.size()) &&
                            (! Language.isBooleanOp(   lstTokens.get( ndxEnd ).text() )) &&
                            (! Language.isParenthesis( lstTokens.get( ndxEnd ).text() )) &&
                            (! lstTokens.get( ndxEnd ).isType(XprToken.RESERVED_WORD )) );
 
-                    // Note: No adjustment needed - the while loop's pre-increment (++ndxEnd) means
-                    // ndxEnd already points past the last token to include, and subList() excludes the end index.
-
-                    // Can't send 'lstTokens.subList( ndxStart, ndxEnd )' to expand because alterations made in the sublist are also made in the list
-                    // Therefore I have to create a new List containing all the sublist's items.
-
-                    List<XprToken> lstCopy = new ArrayList<>( lstTokens.subList( ndxStart, ndxEnd ) );
-
-                    lstResult.addAll( expand( token, asGroupMembers, lstCopy ) );
-
-                    n = ndxEnd - 1;   // -1 because 'for' loop will incr. into 1
+                    List<XprToken> lstTemplate = new ArrayList<>( lstTokens.subList( ndxStart, ndxEnd ) );
+                    lstResult.addAll( expand( token, asGroupMembers, lstTemplate ) );
+                    n = ndxEnd - 1;
                 }
             }
             else
@@ -188,95 +137,85 @@ final class XprPreProc
             }
         }
 
-        // System.out.print( "Entra: "+ XprUtils.toString( lstTokens ) ); System.out.println();
-        // System.out.print( "Salen: "+ XprUtils.toString( lstResult ) ); System.out.println();
-
         return lstResult;
     }
 
-    /**
-     * Auxiliary function invoked from ::doAllAny(...)
-     *
-     * @param token
-     * @param asGroupMembers Name of the groups members (device's names).
-     * @param lstTemplate v.g.: "== (8 || 10)"
-     * @return
-     */
     private static List<XprToken> expand( XprToken token, String[] asGroupMembers, List<XprToken> lstTemplate )
     {
-        // 'line' and 'columnEnd' can not be changed: must be the original (before expansion to show the right place to the user)
-
         List<XprToken> lstExpanded = new ArrayList<>();
-                       lstExpanded.add( new XprToken( token, "(", XprToken.PARENTH_OPEN ) );
 
-        XprToken tLogicalOp = new XprToken( token, ((token.type() == XprPreProc.GROUP_NAME_ANY) ? "||" : "&&"), XprToken.OPERATOR );
+        // Safety check for empty groups to prevent syntax errors
+        if( asGroupMembers == null || asGroupMembers.length == 0 )
+            return lstExpanded;
 
-        // Repeat the template for every member of the group
+        if( token.type() == GROUP_NAME_NONE )
+        {
+            lstExpanded.add( new XprToken( token, "(", XprToken.PARENTH_OPEN ) );
+            lstExpanded.add( new XprToken( token, "!", XprToken.OPERATOR_UNARY ) );
+        }
+
+        lstExpanded.add( new XprToken( token, "(", XprToken.PARENTH_OPEN ) );
+
+        String opText = (token.type() == GROUP_NAME_ALL) ? "&&" : "||";
 
         for( String deviceName : asGroupMembers )
         {
+            lstExpanded.add( new XprToken( token, "(", XprToken.PARENTH_OPEN ) ); // Wrap individual member expression
             lstExpanded.add( new XprToken( token, deviceName, XprToken.VARIABLE ) );
             lstExpanded.addAll( lstTemplate );
-            lstExpanded.add( tLogicalOp );
+            lstExpanded.add( new XprToken( token, ")", XprToken.PARENTH_CLOSED ) );
+            lstExpanded.add( new XprToken( token, opText, XprToken.OPERATOR ) );  // fresh instance each iteration (XprToken is mutable)
         }
 
-        UtilColls.removeTail( lstExpanded );     // Removes last "&&" or "||"
-
+        UtilColls.removeTail( lstExpanded );
         lstExpanded.add( new XprToken( token, ")", XprToken.PARENTH_CLOSED ) );
+
+        if( token.type() == GROUP_NAME_NONE )
+            lstExpanded.add( new XprToken( token, ")", XprToken.PARENTH_CLOSED ) );
 
         return lstExpanded;
     }
 
-    // Aux func invoked from ::doAllAny(...)
-    private boolean isAllOrAny( XprToken token )
+    private boolean isQuantifier( XprToken token )
     {
-        return  token != null                          &&
-                token.isType( XprToken.RESERVED_WORD ) &&
-                token.isText( XprUtils.sALL, XprUtils.sANY );
+        return token != null && token.isType( XprToken.RESERVED_WORD ) &&
+               token.isText( XprUtils.sALL, XprUtils.sANY, XprUtils.sNONE );
     }
 
-    /**
-     * Optimizes trivial boolean expressions:
-     * <ol>
-     *    <li>"X == true"  by removing last 2 tokens ('==' , 'true').</li>
-     *    <li>"X == false" by changing for: "! X"</li>
-     * </ol>
-     * <br>
-     * Expressions like: "true || false", "true && false", etc will be resolved by EvalByAST:solveConstantNodes(...)
-     *
-     * @param lstTokens
-     */
+    private boolean isInternalGroupName( short type )
+    {
+        return type == GROUP_NAME_ALL ||
+               type == GROUP_NAME_ANY ||
+               type == GROUP_NAME_NONE;
+    }
+
     private static void optimizeBooleans( List<XprToken> lstTokens )
     {
-        for( int n = 0; n < lstTokens.size(); n++ )
+        for( int n = 0; n < lstTokens.size() - 1; n++ )
         {
             XprToken token = lstTokens.get( n );
 
-            if( token.isType( XprToken.OPERATOR ) && (n < lstTokens.size() - 1) )    // n is not the last token
+            if( token.isType( XprToken.OPERATOR ) && token.isText( "==" ) )
             {
-                if( token.isText( "==" ) )                                           // We are interested only in "==" (it is harder to optimize the "!=" op)
+                if( lstTokens.get( n+1 ).isText( "true" ) )
                 {
-                    if( lstTokens.get( n+1 ).isText( "true" ) )
-                    {
-                        lstTokens.remove( n );          // Removes "=="
-                        lstTokens.remove( n );          // Removes "true"
-                    }
-                 // else if( lstTokens.get( n+1 ).isType( "false" ) )                // Can not be done here: has to be done at the AST
+                    lstTokens.remove( n ); // remove ==
+                    lstTokens.remove( n ); // remove true
+                    n--; // re-check current position
                 }
             }
         }
     }
 
-    private boolean validate( List<XprToken> lstTokens, String xpr )    // Invoked after preprocessed: no "ANY", no "ALL", but with "AFTER" and "WITHIN"
+    private boolean validate( List<XprToken> lstTokens, String xpr )
     {
         if( lstTokens.isEmpty() )
         {
-            if( UtilStr.isEmpty( xpr ) )      // Truly empty input is an error; non-empty input that stripped to nothing (e.g. escape chars) is not
+            if( UtilStr.isEmpty( xpr ) )
                 lstErrors.add( new CodeError( "Expression is empty", -1, -1 ) );
 
-            return false;                     // Either way, nothing to process
+            return false;
         }
-
         return true;
     }
 }

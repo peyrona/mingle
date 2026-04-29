@@ -236,21 +236,27 @@ final class Action implements IRule.IAction
             return xprEval.eval();
 
         // Expression has variables: they are not automatically updated, so, lets find out their current values.
+        // Note: xprEval is a shared instance across triggers. If a device-backed var previously held a value
+        // and later becomes null (controller lost, device restarted), set() would silently be skipped and a
+        // stale value from mapVars would feed eval(). Short-circuit to null in that case to match the documented
+        // contract: "when a device has no value yet, the xpr is not evaluated and null is returned".
 
         for( String varName : mapVars.keySet() )
         {
             IDevice dev = getDevice( varName );
 
-            if( dev != null )
-            {
-                Object val = dev.value();
+            if( dev == null )
+                continue;    // Not a device-backed var (e.g., a library constant) — leave xprEval's current value alone
 
-                if( val != null )                // A device has a null value until its associated controller send a value
-                    xprEval.set( varName, val );
-            }
+            Object val = dev.value();
+
+            if( val == null )
+                return null;    // Device has no current value; avoid evaluating with a stale value from a prior trigger
+
+            xprEval.set( varName, val );
         }
 
-        return xprEval.eval();   // When one or more devices have not a value yet, the xpr was not evaluated and null is returned.
+        return xprEval.eval();
     }
 
     private IDevice getDevice( String name )

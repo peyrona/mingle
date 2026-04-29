@@ -30,7 +30,7 @@ import java.util.concurrent.ConcurrentHashMap;
 public abstract class      ControllerBase
                 implements IController
 {
-    private static   Boolean              isFaked   = null;    // 'faked_drivers' flag is global, not per Controller
+    private static volatile boolean              isFaked   = false;  // 'faked_drivers' flag is global, not per Controller
     private          IRuntime             runtime   = null;
     private          String               devName   = null;    // device name
     private          boolean              bValid    = false;

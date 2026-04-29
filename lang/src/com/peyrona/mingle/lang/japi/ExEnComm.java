@@ -317,7 +317,10 @@ public class ExEnComm
         {
             synchronized( this )
             {
-                this.pclBuilder = builder = UtilSys.getConfig().newCILBuilder();
+                builder = this.pclBuilder;   // Re-check after acquiring the lock
+
+                if( builder == null )
+                    this.pclBuilder = builder = UtilSys.getConfig().newCILBuilder();
             }
         }
 

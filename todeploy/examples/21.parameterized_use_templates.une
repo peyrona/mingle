@@ -1,0 +1,108 @@
+#==================================================================================================================================
+# Example: Parameterized USE Templates
+#
+# The plain USE ... AS command replaces a fixed symbol with a fixed value (like a constant).
+# Parameterized templates extend this by allowing the left side to capture named parameters,
+# which are then substituted in the expansion.
+#
+# Template definition syntax:
+#
+#   USE <TemplateName> <param1> [literal] <param2> ... AS <single-command expansion>
+#
+# - Parameters are declared with angle brackets:  <paramName>
+# - Literal words between parameters are required in every invocation (for readability)
+# - The expansion uses <paramName> to place each captured value (same notation on both sides)
+# - Template names must not collide with Une reserved words or other command names
+# - A template expands to exactly one command; for multi-command templates use parameterized INCLUDE
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+# --- Template definitions -----------------------------------------
+
+# SLOT: creates an in-memory cell device that holds an initial value.
+#
+#   Expansion:  DEVICE <name> DRIVER CellSetDriver CONFIG value SET <val>
+#
+#   Invocation: SLOT alarm = ON
+#   Expands to: DEVICE alarm DRIVER CellSetDriver CONFIG value SET ON
+#
+USE SLOT <name> = <val> AS \
+    DEVICE <name> DRIVER CellSetDriver CONFIG value SET <val>
+
+
+# THRESHOLD: creates an alert rule that fires when a sensor meets or exceeds a limit.
+# The message includes the sensor name and its current value.
+#
+#   Expansion:  WHEN <sensor> ABOVE <limit>
+#               THEN console SET "<sensor> exceeded <limit>! Current: " + <sensor>
+#
+#   Invocation: THRESHOLD cpu AT 80
+#   Expands to: WHEN cpu ABOVE 80
+#               THEN console SET "cpu exceeded 80! Current: " + cpu
+#
+USE THRESHOLD <name> AT <limit> AS \
+    WHEN <name> ABOVE <limit> \
+    THEN console SET "<sensor> exceeded <limit>! Current value: "+ <name>
+
+
+# --- Infrastructure -----------------------------------------------
+
+DEVICE console
+    DRIVER OutputDriver
+
+DEVICE cpu
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "cpu"
+            interval SET 3s
+
+DEVICE ram
+    DRIVER SystemMonitorDriver
+        CONFIG
+            metric   SET "jvmram"
+            interval SET 5s
+
+
+# --- Cell devices (using the SLOT template) -----------------------
+#
+# Each invocation below is equivalent to a full DEVICE declaration.
+# "Alert counters" are cells that accumulate how many times each threshold was exceeded.
+
+SLOT cpu_alerts = 0
+SLOT ram_alerts = 0
+
+
+# --- Alert rules (using the THRESHOLD template) -------------------
+#
+# Each invocation below is equivalent to a full WHEN...THEN rule.
+
+THRESHOLD cpu AT 80
+THRESHOLD ram AT 85
+
+
+# --- Track alert counts -------------------------------------------
+#
+# Plain rules (not templates) count how many times each alert fires.
+
+WHEN cpu ABOVE 80
+THEN cpu_alerts = cpu_alerts + 1
+
+WHEN ram ABOVE 85
+THEN ram_alerts = ram_alerts + 1
+
+
+# --- Periodic summary report --------------------------------------
+
+DEVICE clock
+    DRIVER ClockDriver
+        CONFIG interval SET 30s
+
+WHEN clock
+THEN console SET "Alert summary — CPU: "+ cpu_alerts +", RAM: "+ ram_alerts
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

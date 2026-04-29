@@ -120,7 +120,7 @@ final class RPN
                          addError( lstInfix, "Missing operand for operator "+ token.text(), tNext, false );
                     }
 
-                    Operator op = operators.get( token.text() );
+                    Operator op = StdXprOps.get( token.text() );
 
                     if( op == null )
                     {
@@ -130,7 +130,7 @@ final class RPN
                     {
                         while( (! stack.isEmpty())
                                 && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY, XprToken.RESERVED_WORD )
-                                && (op.isLeftAssoc && (op.precedence <= getPrecedence( stack.peek(), operators )))
+                                && ((op.isLeftAssoc && op.precedence <= getPrecedence( stack.peek() )) || (! op.isLeftAssoc && op.precedence < getPrecedence( stack.peek() )))
                                 && (! stack.peek().isType( XprToken.PARENTH_OPEN )) )
                         {
                             lstRPN.add( stack.pop() );
@@ -227,7 +227,7 @@ final class RPN
 
                         while( (! stack.isEmpty())
                                && stack.peek().isType( XprToken.OPERATOR, XprToken.OPERATOR_UNARY, XprToken.RESERVED_WORD )
-                               && (Operator.PRECEDENCE_TEMPORAL <= getPrecedence( stack.peek(), operators ))
+                               && (Operator.PRECEDENCE_TEMPORAL <= getPrecedence( stack.peek() ))
                                && (! stack.peek().isType( XprToken.PARENTH_OPEN )) )
                         {
                             lstRPN.add( stack.pop() );
@@ -363,7 +363,12 @@ final class RPN
         // After processing all tokens, stack should have exactly 1 value (the result)
         if( stackDepth == 0 )
         {
-            addError( lstInfix, "Expression produces no result", lstRPN.get( 0 ), false );
+            if( ! lstRPN.isEmpty() )
+                addError( lstInfix, "Expression produces no result", lstRPN.get( 0 ), false );
+            else if( ! lstInfix.isEmpty() )
+                addError( lstInfix, "Expression produces no result", lstInfix.get( 0 ), false );
+            else
+                lstErrors.add( new CodeError( "Expression produces no result", -1, -1 ) );
         }
         // Note: stackDepth > 1 is not always an error due to complex expression patterns
     }
@@ -394,12 +399,12 @@ final class RPN
      * Returns the precedence of the given token. For RESERVED_WORDs (AFTER, WITHIN),
      * returns PRECEDENCE_TEMPORAL. For regular operators, looks up their precedence.
      */
-    private static int getPrecedence( XprToken token, StdXprOps operators )
+    private static int getPrecedence( XprToken token )
     {
         if( token.isType( XprToken.RESERVED_WORD ) )
             return Operator.PRECEDENCE_TEMPORAL;
 
-        Operator op = operators.get( token.text() );
+        Operator op = StdXprOps.get( token.text() );
 
         return (op != null) ? op.precedence : 0;
     }

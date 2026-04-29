@@ -22,8 +22,8 @@ import java.util.Map;
 public final class SystemMetrics
 {
     private static final    OperatingSystemMXBean OSMXBean = ManagementFactory.getPlatformMXBean( com.sun.management.OperatingSystemMXBean.class );
-    private static          Map<String,Long> mapRootsTotal = null;
-    private static          Map<String,Long> mapRootsFree  = null;
+    private static volatile Map<String,Long> mapRootsTotal = null;
+    private static volatile Map<String,Long> mapRootsFree  = null;
     private static volatile int              nCPUs         = -1;
 
     //----------------------------------------------------------------------------//
@@ -202,14 +202,17 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                Map<String,Long> map  = new HashMap<>();
-
-                for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
+                if( mapRootsTotal == null )
                 {
-                    map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
-                }
+                    Map<String,Long> map  = new HashMap<>();
 
-                mapRootsTotal = Collections.unmodifiableMap( map );
+                    for( File file : File.listRoots() )                               // Get a list of all filesystem roots on this system )
+                    {
+                        map.put( file.getAbsolutePath(), file.getTotalSpace() );      // Puts the root file and its total size
+                    }
+
+                    mapRootsTotal = Collections.unmodifiableMap( map );
+                }
             }
         }
 
@@ -222,14 +225,17 @@ public final class SystemMetrics
         {
             synchronized( SystemMetrics.class )
             {
-                Map<String,Long> map  = new HashMap<>();
-
-                for( String fRoot : mapRootsTotal.keySet() )
+                if( mapRootsFree == null )
                 {
-                    map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
-                }
+                    Map<String,Long> map  = new HashMap<>();
 
-                mapRootsFree = map;
+                    for( String fRoot : getRootsTotal().keySet() )
+                    {
+                        map.put( fRoot, 0l );     // Puts just the file, because the free space will be calculated in every call
+                    }
+
+                    mapRootsFree = map;
+                }
             }
         }
 

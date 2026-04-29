@@ -2,15 +2,11 @@ package com.peyrona.mingle.updater;
 
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.UtilSys;
-import java.io.File;
-import java.io.IOException;
-import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * File discovery strategy using catalog.json.
+ * File discovery strategy using catalog.json content.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -18,57 +14,35 @@ import java.util.List;
  */
 public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
 {
-    private final File catalogFile;
     private final String catalogContent;
 
     //------------------------------------------------------------------------//
 
-    public CatalogFileDiscoveryStrategy( File catalogFile )
-    {
-        this.catalogFile = catalogFile;
-        this.catalogContent = null;
-    }
-
     public CatalogFileDiscoveryStrategy( String catalogContent )
     {
-        this.catalogFile = null;
         this.catalogContent = catalogContent;
     }
 
     @Override
     public List<FileEntry> discoverFiles()
     {
-        List<FileEntry> entries = new ArrayList<>();
+        List<FileEntry> entries        = new ArrayList<>();
         List<FileEntry> catalogEntries = new ArrayList<>();
 
         try
         {
-            String content = this.catalogContent;
-            if( content == null )
-            {
-                content = Files.readString( catalogFile.toPath(),StandardCharsets.UTF_8 );
-            }
-            List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( content );
+            List<CatalogParser.CatalogFileEntry> catalogFileEntries = CatalogParser.parseCatalogJson( catalogContent );
 
             for( CatalogParser.CatalogFileEntry entry : catalogFileEntries )
             {
-                FileEntry fileEntry = new FileEntry( entry.path, entry.hash );
+                FileEntry fileEntry = new FileEntry( entry.path, entry.hash, entry.isProtected );
 
-                // Separate catalog.json from other files
+                // Separate catalog.json from other files to ensure it is processed last
                 if( "catalog.json".equals( entry.path ) )
-                {
                     catalogEntries.add( fileEntry );
-                }
                 else
-                {
                     entries.add( fileEntry );
-                }
             }
-
-        }
-        catch( IOException e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, e, "Error reading catalog.json" );
         }
         catch( RuntimeException e )
         {
@@ -76,9 +50,7 @@ public class CatalogFileDiscoveryStrategy implements FileDiscoveryStrategy
             throw e;
         }
 
-        // Add catalog.json entries at the end to ensure they're processed last
         entries.addAll( catalogEntries );
-
         return entries;
     }
 }

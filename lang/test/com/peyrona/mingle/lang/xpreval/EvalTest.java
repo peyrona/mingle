@@ -46,8 +46,8 @@ public class EvalTest
         @DisplayName("Should evaluate basic numeric literals")
         void testNumericLiterals()
         {
-            test( "12", 12f );
-            test( ".2 + .3", 0.5f );
+            test( "12", 12 );           // Integer literal → Integer
+            test( ".2 + .3", 0.5f );   // Float literals  → Float
             test( "1_000_000 == 1000000", true );
         }
 
@@ -55,28 +55,41 @@ public class EvalTest
         @DisplayName("Should evaluate basic arithmetic operations")
         void testBasicArithmetic()
         {
-            test( "12 + 3", 15f );
-            test( "12 - 3", 9f );
-            test( "12 * 3", 36f );
-            test( "12 / 3", 4f );
-            test( "12 % 200", 24f );
-            test( "12 ^ 3", 1728f );
+            test( "12 + 3",     15  );   // Integer + Integer → Integer
+            test( "12 - 3",      9  );   // Integer - Integer → Integer
+            test( "12 * 3",     36  );   // Integer * Integer → Integer
+            test( "12 / 3",      4f );   // Division always   → Float
+            test( "12 % 200",   24f );   // Modulo always     → Float
+            test( "12 ^ 3"  , 1728f );   // Power always      → Float
         }
 
         @Test
         @DisplayName("Should handle unary operators")
         void testUnaryOperators()
         {
-            test( "-12 + (2*+4) + 22", 18f );
-            test( "(-12 + (+2*4) + 27) / 5", 4.6f );
+            test( "-12 + (2*+4) + 22",       18  );   // Integer path
+            test( "(-12 + (+2*4) + 27) / 5", 4.6f );  // Division forces Float
         }
 
         @Test
         @DisplayName("Should handle string to number conversion")
         void testStringToNumberConversion()
         {
-            test( "\"10\" * 2", 20f );
-            test( "-8 + \"+10\" * -2", -28f );
+            test( "\"10\" * 2",       20  );   // String "10" parsed as Integer
+            test( "-8 + \"+10\" * -2", -28 );  // Same; result is Integer
+        }
+
+        @Test
+        @DisplayName("Integer operands should produce Integer; mixing with Float produces Float")
+        void testIntegerVsFloatPromotion()
+        {
+            test( "5 + 3",    8     );    // Integer + Integer → Integer
+            test( "5 + 3.0",  8.0f  );    // Integer + Float   → Float
+            test( "5.0 + 3",  8.0f  );    // Float   + Integer → Float
+            test( "5 * 3",    15    );    // Integer * Integer → Integer
+            test( "5 * 3.0",  15.0f );    // Integer * Float   → Float
+            test( "6 / 2",    3.0f  );    // Division always   → Float (even both Integer)
+            test( "7 / 2",    3.5f  );    // Fractional result → Float
         }
 
         @Test
@@ -100,42 +113,54 @@ public class EvalTest
         @DisplayName("Should evaluate bitwise AND")
         void testBitwiseAnd()
         {
-            test( "5 & 3", 1f );
+            test( "5 & 3", 1 );   // Bitwise ops always return Integer
         }
 
         @Test
         @DisplayName("Should evaluate bitwise OR")
         void testBitwiseOr()
         {
-            test( "5 | 3", 7f );
+            test( "5 | 3", 7 );
         }
 
         @Test
         @DisplayName("Should evaluate bitwise XOR")
         void testBitwiseXor()
         {
-            test( "5 >< 3", 6f );
+            test( "5 >< 3", 6 );
         }
 
         @Test
         @DisplayName("Should evaluate bitwise NOT")
         void testBitwiseNot()
         {
-            test( "~5", -6f );
+            test( "~5", -6 );
         }
 
         @Test
         @DisplayName("Should evaluate left shift")
         void testLeftShift()
         {
-            test( "5 << 2", 20f );
+            test( "5 << 2", 20 );
         }
 
         @Test
         @DisplayName("Should evaluate right shift")
         void testRightShift()
         {
-            test( "12 >> 2", 3f );
+            test( "12 >> 2", 3 );
+        }
+
+        @Test
+        @DisplayName("Bitwise operations always return Integer, truncating float inputs")
+        void testBitwiseAlwaysReturnInteger()
+        {
+            test( "5.9 & 3.9",   1 );   // Truncated to 5 & 3 = 1 → Integer
+            test( "5.9 | 3.9",   7 );   // 5 | 3 = 7 → Integer
+            test( "5.9 >< 3.9",  6 );   // 5 ^ 3 = 6 → Integer
+            test( "~5.9",       -6 );   // ~5 = -6 → Integer
+            test( "5.9 << 2.9", 20 );   // 5 << 2 = 20 → Integer
+            test( "12.9 >> 2.9", 3 );   // 12 >> 2 = 3 → Integer
         }
     }
 
@@ -168,7 +193,7 @@ public class EvalTest
         @DisplayName("Should evaluate logical expressions with variables")
         void testLogicalWithVariables()
         {
-            test( "(var1 && ! var2) || var3", true,
+            test( "(var1 && ( ! var2) ) || var3", true,
                   new Pair( "var1", true ),
                   new Pair( "var2", false ),
                   new Pair( "var3", true ) );
@@ -278,6 +303,49 @@ public class EvalTest
         }
 
         @Test
+        @DisplayName("Should evaluate NONE quantifier")
+        void testNoneQuantifier()
+        {
+            Function<String,String[]> fn = (t) -> new String[] {"win1", "win2", "win3"};
+            IXprEval xpr;
+
+            // All false - NONE should be true (none are above threshold)
+            xpr = new NAXE().build( "NONE windows == TRUE", null, fn );
+            xpr.set( "win1", false );
+            xpr.set( "win2", false );
+            xpr.set( "win3", false );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+
+            // At least one true - NONE should be false (at least one is above threshold)
+            xpr = new NAXE().build( "NONE windows == TRUE", null, fn );
+            xpr.set( "win1", true );
+            xpr.set( "win2", false );
+            xpr.set( "win3", false );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+
+            // All true - NONE should be false (all are above threshold)
+            xpr = new NAXE().build( "NONE windows == FALSE", null, fn );
+            xpr.set( "win1", true );
+            xpr.set( "win2", true );
+            xpr.set( "win3", true );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+
+            // Mixed - NONE should be false
+            xpr = new NAXE().build( "NONE windows < 80", null, fn );
+            xpr.set( "win1", 90f );
+            xpr.set( "win2", 70f );
+            xpr.set( "win3", 75f );
+            assertEquals( Boolean.FALSE, xpr.eval() );
+
+            // All below threshold - NONE should be true
+            xpr = new NAXE().build( "NONE windows > 80", null, fn );
+            xpr.set( "win1", 60f );
+            xpr.set( "win2", 70f );
+            xpr.set( "win3", 50f );
+            assertEquals( Boolean.TRUE, xpr.eval() );
+        }
+
+        @Test
         @DisplayName("Should evaluate complex quantifier expressions")
         void testComplexQuantifiers()
         {
@@ -286,10 +354,18 @@ public class EvalTest
 
             IXprEval xpr = new NAXE().build( "(! ALL doors == TRUE) && (ANY window == FALSE)", null, fn );
             xpr.set( "door1", false );
-            xpr.set( "door2", true );
-            xpr.set( "win1", true );
-            xpr.set( "win2", false );
+            xpr.set( "door2", true  );
+            xpr.set( "win1" , true  );
+            xpr.set( "win2" , false );
             assertEquals( Boolean.TRUE, xpr.eval() );
+
+
+            xpr = new NAXE().build( "NONE doors == TRUE && NONE window == FALSE", null, fn );
+            xpr.set( "door1", false );
+            xpr.set( "door2", true  );
+            xpr.set( "win1" , true  );
+            xpr.set( "win2" , false );
+            assertEquals( Boolean.FALSE, xpr.eval() );
         }
 
         @Test
@@ -473,10 +549,10 @@ public class EvalTest
         @DisplayName("Should handle mixed string and number operations")
         void testMixedStringNumber()
         {
-            test( "\"12\" + 34", 46f );
-            test( "\"1234\" - 3", 1231f );
-            test( "\"12\" * \"3\"", 36f );
-            test( "\"12\" / \"3\"", 4f );
+            test( "\"12\" + 34",   46   );  // String "12" parsed as Integer
+            test( "\"1234\" - 3", 1231  );  // Same
+            test( "\"12\" * \"3\"", 36  );  // Both strings parsed as Integer
+            test( "\"12\" / \"3\"",  4f  );  // Division always Float
         }
     }
 
@@ -538,7 +614,7 @@ public class EvalTest
         @DisplayName("Should evaluate int function with different bases")
         void testInt()
         {
-            test( "int(\"0b11000\") + 1", 25.0f );
+            test( "int(\"0b11000\") + 1", 25 );  // int() returns Integer; Integer + Integer → Integer
             test( "int(\"0x18ABC\") > 1", true );
         }
 
@@ -1079,10 +1155,10 @@ public class EvalTest
         void testListSplit()
         {
             test( "list():split(\"hello,4.2\"):index(4.2)", 2 );
-            test( "list():split(\"3|5|7|9\",\"|\"):get(2)", 5f );
+            test( "list():split(\"3|5|7|9\",\"|\"):get(2)", 5 );  // "5" parsed as Integer by list.add()
             test( "list():split(\"A string, true, 12\"):get(1)", "A string" );
             test( "list():split(\"A string, true, 12\"):get(2)", true );
-            test( "list():split(\"A string, true, 12\"):get(3)", 12f );
+            test( "list():split(\"A string, true, 12\"):get(3)", 12 );  // "12" parsed as Integer by list.add()
             test( "list():split(\" one, two   , three \", \"/s*,/s*\"):get(2)", "two" );
         }
 
@@ -1109,7 +1185,7 @@ public class EvalTest
         {
             test( "list(1,2,3,4):map(\"x*2\") == list(2,4,6,8)", true );
             test( "list(\"A\",\"B\",\"C\"):map(\"x + \\\"0\\\"\") == list(\"A0\",\"B0\",\"C0\")", true );
-            test( "list(1,2,3,4):reduce(\"x+y\")", 10f );
+            test( "list(1,2,3,4):reduce(\"x+y\")", 10 );  // Integer elements → Integer + Integer → Integer result
             test( "list(\"A\",\"B\",\"C\"):reduce(\"x+y\")", "ABC" );
 
         }
@@ -1221,8 +1297,8 @@ public class EvalTest
         @DisplayName("Should split string into pair")
         void testPairSplit()
         {
-            test( "pair():split(\"name=francisco,age=63\"):get(\"age\")", 63f );
-            test( "pair():split(\"name:francisco;age:63\", \";\", \":\"):get(\"age\")", 63f );
+            test( "pair():split(\"name=francisco,age=63\"):get(\"age\")", 63 );               // "63" parsed as Integer
+            test( "pair():split(\"name:francisco;age:63\", \";\", \":\"):get(\"age\")", 63 );  // Same
         }
 
         @Test
@@ -1251,14 +1327,14 @@ public class EvalTest
         @DisplayName("Should map pair")
         void testPairMap()
         {
-            test( "pair(\"one\",1, \"two\",2, \"three\",3):map(\"x+y\") == pair(\"one\",\"one1.0\", \"two\",\"two2.0\", \"three\",\"three3.0\")", true );
+            test( "pair(\"one\",1, \"two\",2, \"three\",3):map(\"x+y\") == pair(\"one\",\"one1\", \"two\",\"two2\", \"three\",\"three3\")", true );  // Integer.toString() → "1" not "1.0"
         }
 
         @Test
         @DisplayName("Should reduce pair")
         void testPairReduce()
         {
-            test( "pair(\"one\",1, \"two\",2, \"three\",3):reduce(\"x+y\")", 6f );
+            test( "pair(\"one\",1, \"two\",2, \"three\",3):reduce(\"x+y\")", 6 );  // Integer values → Integer result
         }
 
         @Test
@@ -1338,7 +1414,7 @@ public class EvalTest
         @DisplayName("Should convert to string")
         void testToString()
         {
-             test( "pair(\"a\", 1):toString()", "\"a\"=1.0" );
+             test( "pair(\"a\", 1):toString()", "\"a\"=1" );  // Integer.toString() → "1" not "1.0"
         }
 
         @Test
@@ -1681,6 +1757,234 @@ public class EvalTest
 
             sleep( 3500 );
             assertTrue( passed.get(), "Two WITHINs should have executed" );
+        }
+    }
+
+    //------------------------------------------------------------------------//
+    // EDGE DETECTION OPERATOR TESTS
+    //------------------------------------------------------------------------//
+
+    /**
+     * Tests for edge-detection operators: ?>, ?<, ?=, ?!=, ?<>
+     * <p>
+     * Each test uses the multi-step pattern: build the evaluator, drive it through
+     * several value updates, and verify that the operator fires exactly once on the
+     * transition and is silent before and after.
+     */
+    @Nested
+    @DisplayName("Edge Detection Operator Tests")
+    class EdgeDetectionTests
+    {
+        /**
+         * Builds an EvalByAST for the given expression and returns it, failing the test if
+         * preprocessing or AST construction reports errors.
+         */
+        private EvalByAST build( String xpr )
+        {
+            XprPreProc preproc = new XprPreProc( xpr, null );
+
+            if( ! preproc.getErrors().isEmpty() )
+            {
+                preproc.getErrors().forEach( System.out::println );
+                fail( "Expression preprocessing failed: " + xpr );
+            }
+
+            EvalByAST ast = new EvalByAST( preproc.getAsInfix(), null );
+
+            if( ! ast.getErrors().isEmpty() )
+            {
+                ast.getErrors().forEach( System.out::println );
+                fail( "EvalByAST construction failed: " + xpr );
+            }
+
+            return ast;
+        }
+
+        /**
+         * Convenience: call set+eval on a single-variable expression.
+         */
+        private Object eval( EvalByAST ast, String varName, Object value )
+        {
+            itera.incrementAndGet();
+            ast.set( varName, value );
+            return ast.eval();
+        }
+
+        @Test
+        @DisplayName("Cold start: all edge operators return false on the first evaluation")
+        void testColdStart()
+        {
+            // First evaluation after startup — previous value is null — must not fire
+            assertEquals( Boolean.FALSE, eval( build( "temp ?> 20" ),  "temp", 25f ), "?> cold start" );
+            assertEquals( Boolean.FALSE, eval( build( "temp ?< 20" ),  "temp", 15f ), "?< cold start" );
+            assertEquals( Boolean.FALSE, eval( build( "temp ?= 20" ),  "temp", 20f ), "?= cold start" );
+            assertEquals( Boolean.FALSE, eval( build( "temp ?!= 20" ), "temp", 15f ), "?!= cold start" );
+            assertEquals( Boolean.FALSE, eval( build( "temp ?<> 20" ), "temp", 25f ), "?<> cold start" );
+        }
+
+        @Test
+        @DisplayName("?> (RISES): fires exactly once when value crosses above threshold")
+        void testRisesAbove()
+        {
+            EvalByAST ast = build( "temp ?> 20" );
+
+            // Cold start
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 15f ), "below threshold, cold start" );
+            // Still below
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 18f ), "still below" );
+            // Crosses above — edge fires
+            assertEquals( Boolean.TRUE,  eval( ast, "temp", 22f ), "just crossed above" );
+            // Still above — no new edge
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 25f ), "above but no crossing" );
+            // Falls back below, then rises again — second edge
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 18f ), "fell below again" );
+            assertEquals( Boolean.TRUE,  eval( ast, "temp", 21f ), "second rising edge" );
+        }
+
+        @Test
+        @DisplayName("?< (DROPS): fires exactly once when value crosses below threshold")
+        void testDropsBelow()
+        {
+            EvalByAST ast = build( "temp ?< 20" );
+
+            // Cold start (already below threshold — must NOT fire)
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 15f ), "below threshold, cold start" );
+            // Above threshold
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 25f ), "above threshold" );
+            // Crosses below — edge fires
+            assertEquals( Boolean.TRUE,  eval( ast, "temp", 18f ), "just crossed below" );
+            // Still below — no new edge
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 10f ), "still below, no edge" );
+            // Rises above, then drops again — second edge
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 22f ), "above threshold again" );
+            assertEquals( Boolean.TRUE,  eval( ast, "temp", 19f ), "second falling edge" );
+        }
+
+        @Test
+        @DisplayName("?= (BECOMES): fires exactly once when value becomes equal to target")
+        void testBecomes()
+        {
+            EvalByAST ast = build( "door ?= \"open\"" );
+
+            // Cold start — already the value, but no previous exists
+            assertEquals( Boolean.FALSE, eval( ast, "door", "open" ), "cold start at target value" );
+            // Different value
+            assertEquals( Boolean.FALSE, eval( ast, "door", "closed" ), "different value" );
+            // Becomes target — fires
+            assertEquals( Boolean.TRUE,  eval( ast, "door", "open" ), "just became target" );
+            // Stays same
+            assertEquals( Boolean.FALSE, eval( ast, "door", "open" ), "stays at target, no edge" );
+            // Goes away and comes back — fires again
+            assertEquals( Boolean.FALSE, eval( ast, "door", "closed" ), "left target" );
+            assertEquals( Boolean.TRUE,  eval( ast, "door", "open" ), "became target again" );
+        }
+
+        @Test
+        @DisplayName("?= (BECOMES) with boolean: fires when value becomes false")
+        void testBecomesBooleanFalse()
+        {
+            EvalByAST ast = build( "alarm ?= false" );
+
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", true ),  "cold start at true" );
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", true ),  "still true" );
+            assertEquals( Boolean.TRUE,  eval( ast, "alarm", false ), "just became false" );
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", false ), "stays false" );
+        }
+
+        @Test
+        @DisplayName("?!= (LEAVES): fires exactly once when value departs from target")
+        void testLeaves()
+        {
+            EvalByAST ast = build( "alarm ?!= true" );
+
+            // Cold start at a non-target value — no previous
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", false ), "cold start not at target" );
+            // Move to target
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", true ), "at target" );
+            // Leave target — fires
+            assertEquals( Boolean.TRUE,  eval( ast, "alarm", false ), "just left target" );
+            // Still away
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", false ), "still away" );
+            // Return and leave again
+            assertEquals( Boolean.FALSE, eval( ast, "alarm", true  ), "returned to target" );
+            assertEquals( Boolean.TRUE,  eval( ast, "alarm", false ), "left target again" );
+        }
+
+        @Test
+        @DisplayName("?<> (CROSSES): fires on rising and falling crossings")
+        void testCrosses()
+        {
+            EvalByAST ast = build( "count ?<> 100" );
+
+            // Cold start below threshold
+            assertEquals( Boolean.FALSE, eval( ast, "count", 80f  ), "cold start below" );
+            // Rise above — first edge
+            assertEquals( Boolean.TRUE,  eval( ast, "count", 110f ), "crossed above" );
+            // Still above — no edge
+            assertEquals( Boolean.FALSE, eval( ast, "count", 120f ), "still above" );
+            // Drop below — second edge
+            assertEquals( Boolean.TRUE,  eval( ast, "count", 90f  ), "crossed below" );
+            // Still below — no edge
+            assertEquals( Boolean.FALSE, eval( ast, "count", 70f  ), "still below" );
+        }
+
+        @Test
+        @DisplayName("Edge operators compose correctly with &&")
+        void testComposition()
+        {
+            EvalByAST ast = build( "temp ?> 20 && humidity ?< 60" );
+
+            // Cold start for both
+            assertEquals( Boolean.FALSE, eval( ast, "temp",     15f ), "cold start temp" );
+            ast.set( "humidity", 80f );
+
+            // temp crosses above, but humidity hasn't crossed yet
+            assertEquals( Boolean.FALSE, ast.eval(), "temp crossed, humidity not yet" );
+
+            // humidity crosses below — now both should be true simultaneously
+            ast.set( "temp",     22f );
+            ast.set( "humidity", 55f );
+            assertEquals( Boolean.TRUE, ast.eval(), "both cross simultaneously" );
+
+            // Neither crossing on next call
+            ast.set( "temp",     24f );
+            ast.set( "humidity", 50f );
+            assertEquals( Boolean.FALSE, ast.eval(), "no crossing in subsequent call" );
+        }
+
+        @Test
+        @DisplayName("prev() returns previous device value in THEN-style expression")
+        void testPrevFunction()
+        {
+            // Mirrors real Une usage: WHEN evaluator has the device variable (drives set()),
+            // THEN evaluator reads prev("deviceName") via the same-thread ThreadLocal.
+            EvalByAST whenAst = build( "temp ?> 0" );          // "temp" in mapVars; set() works
+            EvalByAST thenAst = build( "prev(\"temp\")" );     // string literal arg; no variable needed
+
+            // Cold start: prev is null
+            whenAst.set( "temp", 15f );                        // threadPrev["temp"] = null
+            assertNull( thenAst.eval(), "cold start returns null" );
+
+            // After second set: prev should be 15
+            whenAst.set( "temp", 22f );                        // threadPrev["temp"] = 15f
+            assertEquals( 15f, thenAst.eval(), "prev() returns previous value" );
+
+            // After third set: prev should be 22
+            whenAst.set( "temp", 30f );                        // threadPrev["temp"] = 22f
+            assertEquals( 22f, thenAst.eval(), "prev() tracks each update" );
+        }
+
+        @Test
+        @DisplayName("?> with exact boundary: value equal to threshold does not fire")
+        void testRisesAboveBoundary()
+        {
+            EvalByAST ast = build( "temp ?> 20" );
+
+            eval( ast, "temp", 15f );          // Cold start
+            // Value reaches exactly the threshold — not strictly above, must not fire
+            assertEquals( Boolean.FALSE, eval( ast, "temp", 20f ), "at threshold — not strictly above" );
+            // Now exceeds — fires
+            assertEquals( Boolean.TRUE,  eval( ast, "temp", 21f ), "just above threshold" );
         }
     }
 
@@ -2233,17 +2537,17 @@ public class EvalTest
         }
 
         @Test
-        @DisplayName("isFutureing() returns correct state")
-        void testIsFutureingState()
+        @DisplayName("isFuturing() returns correct state")
+        void testIsFuturingState()
         {
             IXprEval xpr = new NAXE().build( "var == 7 AFTER 1000", (value) -> {}, null );
 
-            assertFalse( xpr.isFuturing(), "Should not be futureing before eval" );
+            assertFalse( xpr.isFuturing(), "Should not be futuring before eval" );
 
             xpr.eval( "var", 7.0f );
             sleep( 100 );
 
-            assertTrue( xpr.isFuturing(), "Should be futureing after eval starts" );
+            assertTrue( xpr.isFuturing(), "Should be futuring after eval starts" );
 
             sleep( 1200 );
 
@@ -2568,6 +2872,7 @@ public class EvalTest
         total++; if( runTest( "Mixed logical bitwise", () -> test.new BooleanTests().testMixedLogicalBitwise() ) ) passed++; else failed++;
         total++; if( runTest( "ALL quantifier", () -> test.new BooleanTests().testAllQuantifier() ) ) passed++; else failed++;
         total++; if( runTest( "ANY quantifier", () -> test.new BooleanTests().testAnyQuantifier() ) ) passed++; else failed++;
+        total++; if( runTest( "NONE quantifier", () -> test.new BooleanTests().testNoneQuantifier() ) ) passed++; else failed++;
         total++; if( runTest( "Complex quantifiers", () -> test.new BooleanTests().testComplexQuantifiers() ) ) passed++; else failed++;
         total++; if( runTest( "Lazy evaluation", () -> test.new BooleanTests().testLazyEvaluation() ) ) passed++; else failed++;
         total++; if( runTest( "Truthy/Falsy numbers", () -> test.new BooleanTests().testTruthyFalsyNumbers() ) ) passed++; else failed++;
@@ -2585,6 +2890,20 @@ public class EvalTest
         total++; if( runTest( "String concatenation", () -> test.new StringTests().testStringConcatenation() ) ) passed++; else failed++;
         total++; if( runTest( "String subtraction", () -> test.new StringTests().testStringSubtraction() ) ) passed++; else failed++;
         total++; if( runTest( "Mixed string/number", () -> test.new StringTests().testMixedStringNumber() ) ) passed++; else failed++;
+        System.out.println();
+
+        // Edge Operators
+        System.out.println( "--- Edge Detection Operator Tests ---" );
+        total++; if( runTest( "Cold start: all false",     () -> test.new EdgeDetectionTests().testColdStart() ) ) passed++; else failed++;
+        total++; if( runTest( "?> RISES above",            () -> test.new EdgeDetectionTests().testRisesAbove() ) ) passed++; else failed++;
+        total++; if( runTest( "?< DROPS below",            () -> test.new EdgeDetectionTests().testDropsBelow() ) ) passed++; else failed++;
+        total++; if( runTest( "?= BECOMES value",          () -> test.new EdgeDetectionTests().testBecomes() ) ) passed++; else failed++;
+        total++; if( runTest( "?= BECOMES boolean false",  () -> test.new EdgeDetectionTests().testBecomesBooleanFalse() ) ) passed++; else failed++;
+        total++; if( runTest( "?!= LEAVES value",          () -> test.new EdgeDetectionTests().testLeaves() ) ) passed++; else failed++;
+        total++; if( runTest( "?<> CROSSES threshold",     () -> test.new EdgeDetectionTests().testCrosses() ) ) passed++; else failed++;
+        total++; if( runTest( "Composition && edges",      () -> test.new EdgeDetectionTests().testComposition() ) ) passed++; else failed++;
+        total++; if( runTest( "prev() function",           () -> test.new EdgeDetectionTests().testPrevFunction() ) ) passed++; else failed++;
+        total++; if( runTest( "?> exact boundary",         () -> test.new EdgeDetectionTests().testRisesAboveBoundary() ) ) passed++; else failed++;
         System.out.println();
 
         // Math function tests
@@ -2728,45 +3047,45 @@ public class EvalTest
 
         // Advanced temporal operator tests
         System.out.println( "--- Advanced Temporal Operator Tests ---" );
-        total++; if( runTest( "AFTER cancel", () -> test.new AdvancedTemporalOperatorTests().testAfterCancel() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN cancel", () -> test.new AdvancedTemporalOperatorTests().testWithinCancel() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN rapid changes", () -> test.new AdvancedTemporalOperatorTests().testWithinRapidValueChanges() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER cancel",             () -> test.new AdvancedTemporalOperatorTests().testAfterCancel() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN cancel",            () -> test.new AdvancedTemporalOperatorTests().testWithinCancel() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN rapid changes",     () -> test.new AdvancedTemporalOperatorTests().testWithinRapidValueChanges() ) ) passed++; else failed++;
         total++; if( runTest( "WITHIN value oscillation", () -> test.new AdvancedTemporalOperatorTests().testWithinValueOscillation() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER with >", () -> test.new AdvancedTemporalOperatorTests().testAfterWithGreaterThan() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN with <=", () -> test.new AdvancedTemporalOperatorTests().testWithinWithLessOrEqual() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER with arithmetic", () -> test.new AdvancedTemporalOperatorTests().testAfterWithArithmetic() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with >",             () -> test.new AdvancedTemporalOperatorTests().testAfterWithGreaterThan() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with <=",           () -> test.new AdvancedTemporalOperatorTests().testWithinWithLessOrEqual() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with arithmetic",    () -> test.new AdvancedTemporalOperatorTests().testAfterWithArithmetic() ) ) passed++; else failed++;
         total++; if( runTest( "WITHIN arithmetic change", () -> test.new AdvancedTemporalOperatorTests().testWithinWithArithmeticChange() ) ) passed++; else failed++;
-        total++; if( runTest( "Three futures AND", () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithAnd() ) ) passed++; else failed++;
-        total++; if( runTest( "Three futures OR early", () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithOrEarlyResolution() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER with negation", () -> test.new AdvancedTemporalOperatorTests().testAfterWithNegation() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN with AND expr", () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanAnd() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN AND partial fail", () -> test.new AdvancedTemporalOperatorTests().testWithinFailsOnPartialAndChange() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER FALSE->TRUE", () -> test.new AdvancedTemporalOperatorTests().testAfterStartsFalseThenTrue() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER oscillating", () -> test.new AdvancedTemporalOperatorTests().testAfterWithOscillatingValue() ) ) passed++; else failed++;
-        total++; if( runTest( "Short AFTER 100ms", () -> test.new AdvancedTemporalOperatorTests().testShortAfterTimeout() ) ) passed++; else failed++;
-        total++; if( runTest( "Short WITHIN 100ms", () -> test.new AdvancedTemporalOperatorTests().testShortWithinTimeout() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN var isolation", () -> test.new AdvancedTemporalOperatorTests().testWithinMultipleVariablesIsolation() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER with string", () -> test.new AdvancedTemporalOperatorTests().testAfterWithStringComparison() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN string change", () -> test.new AdvancedTemporalOperatorTests().testWithinWithStringValueChange() ) ) passed++; else failed++;
-        total++; if( runTest( "AND mixed results", () -> test.new AdvancedTemporalOperatorTests().testAndWithMixedFutureResults() ) ) passed++; else failed++;
-        total++; if( runTest( "OR mixed results", () -> test.new AdvancedTemporalOperatorTests().testOrWithMixedFutureResults() ) ) passed++; else failed++;
-        total++; if( runTest( "close() shutdown", () -> test.new AdvancedTemporalOperatorTests().testCloseShutdownsExecutor() ) ) passed++; else failed++;
-        total++; if( runTest( "isFutureing() state", () -> test.new AdvancedTemporalOperatorTests().testIsFutureingState() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN immediate FALSE", () -> test.new AdvancedTemporalOperatorTests().testWithinImmediateResolutionOnDifferentValue() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER with function", () -> test.new AdvancedTemporalOperatorTests().testAfterWithFunctionInExpression() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN with min/max", () -> test.new AdvancedTemporalOperatorTests().testWithinWithMinMaxFunctions() ) ) passed++; else failed++;
-        total++; if( runTest( "Nested parens futures", () -> test.new AdvancedTemporalOperatorTests().testNestedParenthesesWithFutures() ) ) passed++; else failed++;
-        total++; if( runTest( "AFTER boolean var", () -> test.new AdvancedTemporalOperatorTests().testAfterWithBooleanVariable() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN boolean flip", () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanVariableFlip() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN starts false", () -> test.new AdvancedTemporalOperatorTests().testWithinStartsWithFalseCondition() ) ) passed++; else failed++;
-        total++; if( runTest( "WITHIN spike regression", () -> test.new AdvancedTemporalOperatorTests().testWithinBriefSpikeDoesNotFireTrue() ) ) passed++; else failed++;
+        total++; if( runTest( "Three futures AND",        () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithAnd() ) ) passed++; else failed++;
+        total++; if( runTest( "Three futures OR early",   () -> test.new AdvancedTemporalOperatorTests().testThreeFuturesWithOrEarlyResolution() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with negation",      () -> test.new AdvancedTemporalOperatorTests().testAfterWithNegation() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with AND expr",     () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanAnd() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN AND partial fail",  () -> test.new AdvancedTemporalOperatorTests().testWithinFailsOnPartialAndChange() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER FALSE->TRUE",        () -> test.new AdvancedTemporalOperatorTests().testAfterStartsFalseThenTrue() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER oscillating",        () -> test.new AdvancedTemporalOperatorTests().testAfterWithOscillatingValue() ) ) passed++; else failed++;
+        total++; if( runTest( "Short AFTER 100ms",        () -> test.new AdvancedTemporalOperatorTests().testShortAfterTimeout() ) ) passed++; else failed++;
+        total++; if( runTest( "Short WITHIN 100ms",       () -> test.new AdvancedTemporalOperatorTests().testShortWithinTimeout() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN var isolation",     () -> test.new AdvancedTemporalOperatorTests().testWithinMultipleVariablesIsolation() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with string",        () -> test.new AdvancedTemporalOperatorTests().testAfterWithStringComparison() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN string change",     () -> test.new AdvancedTemporalOperatorTests().testWithinWithStringValueChange() ) ) passed++; else failed++;
+        total++; if( runTest( "AND mixed results",        () -> test.new AdvancedTemporalOperatorTests().testAndWithMixedFutureResults() ) ) passed++; else failed++;
+        total++; if( runTest( "OR mixed results",         () -> test.new AdvancedTemporalOperatorTests().testOrWithMixedFutureResults() ) ) passed++; else failed++;
+        total++; if( runTest( "close() shutdown",         () -> test.new AdvancedTemporalOperatorTests().testCloseShutdownsExecutor() ) ) passed++; else failed++;
+        total++; if( runTest( "isFuturing() state",       () -> test.new AdvancedTemporalOperatorTests().testIsFuturingState() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN immediate FALSE",   () -> test.new AdvancedTemporalOperatorTests().testWithinImmediateResolutionOnDifferentValue() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER with function",      () -> test.new AdvancedTemporalOperatorTests().testAfterWithFunctionInExpression() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN with min/max",      () -> test.new AdvancedTemporalOperatorTests().testWithinWithMinMaxFunctions() ) ) passed++; else failed++;
+        total++; if( runTest( "Nested parens futures",    () -> test.new AdvancedTemporalOperatorTests().testNestedParenthesesWithFutures() ) ) passed++; else failed++;
+        total++; if( runTest( "AFTER boolean var",        () -> test.new AdvancedTemporalOperatorTests().testAfterWithBooleanVariable() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN boolean flip",      () -> test.new AdvancedTemporalOperatorTests().testWithinWithBooleanVariableFlip() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN starts false",      () -> test.new AdvancedTemporalOperatorTests().testWithinStartsWithFalseCondition() ) ) passed++; else failed++;
+        total++; if( runTest( "WITHIN spike regression",  () -> test.new AdvancedTemporalOperatorTests().testWithinBriefSpikeDoesNotFireTrue() ) ) passed++; else failed++;
         System.out.println();
 
         // Summary
         System.out.println( "==================================================" );
         System.out.println( "                   TEST SUMMARY                   " );
         System.out.println( "==================================================" );
-        System.out.println( "Total categories:  14" );
+        System.out.println( "Total categories:  15" );
         System.out.println( "Total groups:     " + total );
         System.out.println( "Total unit tests: " + itera.intValue() );
         System.out.println( "Passed groups:    " + passed + " (" + (total > 0 ? passed * 100 / total : 0) + "%)" );

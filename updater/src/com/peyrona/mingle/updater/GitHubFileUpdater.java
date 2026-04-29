@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Core logic for checking and updating files from GitHub repository.
- * Simplified version using strategy pattern for better maintainability.
+ * Uses catalog.json for file discovery and SHA hash comparison to detect stale files.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -23,10 +23,11 @@ public class GitHubFileUpdater
     private final BackupManager backupMgr;
     private final boolean       dryRun;
     private final AtomicBoolean abortRequested;
-    private       int filesChecked = 0;
-    private       int filesUpdated = 0;
+    private       int filesChecked     = 0;
+    private       int filesUpdated     = 0;
     private       int filesWouldUpdate = 0;
-    private       int errors = 0;
+    private       int filesSkipped     = 0;
+    private       int errors           = 0;
 
     //------------------------------------------------------------------------//
 
@@ -64,19 +65,23 @@ public class GitHubFileUpdater
 
     /**
      * Checks and updates files in the base directory.
+     *
+     * @param catalogFile Catalog file listing expected file paths and hashes
      */
-    public void checkAndUpdateFiles(File catalogFile)
+    public void checkAndUpdateFiles( File catalogFile )
     {
         UtilSys.getLogger().log( ILogger.Level.INFO, "Starting file check and update process" );
 
         try
         {
-            if (catalogFile == null || !catalogFile.exists()) {
-                UtilSys.getLogger().log(ILogger.Level.SEVERE, "Catalog file not provided or does not exist.");
+            if( catalogFile == null || ! catalogFile.exists() )
+            {
+                UtilSys.getLogger().log( ILogger.Level.SEVERE, "Catalog file not provided or does not exist." );
                 errors++;
                 return;
             }
-            processFiles( catalogFile, new HashFileComparator(), true );
+
+            processFiles( catalogFile, true );
         }
         catch( Exception e )
         {
@@ -89,56 +94,14 @@ public class GitHubFileUpdater
         }
     }
 
-    /**
-     * Checks files using hybrid timestamp + SHA approach (no updates).
-     * Optimized for performance by using timestamps as pre-filter.
-     *
-     * @return Number of files that need updates
-     */
-    public int checkFilesOnly(File catalogFile)
-    {
-        filesChecked = 0;
-        filesWouldUpdate = 0;
-        errors = 0;
-
-        UtilSys.getLogger().log( ILogger.Level.INFO, "Checking files for updates using hybrid timestamp + SHA approach" );
-
-        try
-        {
-            if (catalogFile == null || !catalogFile.exists()) {
-                UtilSys.getLogger().log(ILogger.Level.SEVERE, "Catalog file not provided or does not exist.");
-                errors++;
-                return filesWouldUpdate;
-            }
-            processFiles( catalogFile, new HashFileComparator(), false );
-        }
-        catch( Exception e )
-        {
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Error during hybrid file check process" );
-            errors++;
-        }
-
-        return filesWouldUpdate;
-    }
-
-    /**
-     * Gets the number of files checked during the last operation.
-     *
-     * @return Number of files checked
-     */
-    public int getFilesChecked()
-    {
-        return filesChecked;
-    }
-
     //------------------------------------------------------------------------//
     // PRIVATE METHODS
     //------------------------------------------------------------------------//
 
     /**
-     * Processes files using the specified discovery strategy and comparator.
+     * Processes files using the discovery strategy derived from the catalog.
      */
-    private void processFiles( File catalogFile, FileComparator comparator, boolean performUpdates )
+    private void processFiles( File catalogFile, boolean performUpdates )
     {
         FileDiscoveryStrategy discoveryStrategy = createDiscoveryStrategy( catalogFile );
         List<FileDiscoveryStrategy.FileEntry> fileEntries = discoveryStrategy.discoverFiles();
@@ -151,12 +114,12 @@ public class GitHubFileUpdater
                 break;
             }
 
-            processFile( entry, comparator, performUpdates );
+            processFile( entry, performUpdates );
         }
     }
 
     /**
-     * Creates appropriate discovery strategy based on catalog availability.
+     * Creates the appropriate discovery strategy based on catalog availability.
      */
     private FileDiscoveryStrategy createDiscoveryStrategy( File catalogFile )
     {
@@ -184,20 +147,13 @@ public class GitHubFileUpdater
     }
 
     /**
-     * Processes a single file using the specified comparator.
+     * Processes a single file: fetches remote hash, compares with local, updates if needed.
      */
-    private void processFile( FileDiscoveryStrategy.FileEntry entry, FileComparator comparator, boolean performUpdates )
+    private void processFile( FileDiscoveryStrategy.FileEntry entry, boolean performUpdates )
     {
         if( entry == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "File entry is null, skipping" );
-            errors++;
-            return;
-        }
-
-        if( comparator == null )
-        {
-            UtilSys.getLogger().log( ILogger.Level.WARNING, "File comparator is null for: " + entry.path );
             errors++;
             return;
         }
@@ -211,7 +167,6 @@ public class GitHubFileUpdater
 
         filesChecked++;
 
-        // Log when processing catalog.json to ensure it's last
         if( "catalog.json".equals( entry.path ) )
             UtilSys.getLogger().log( ILogger.Level.INFO, "Processing catalog.json (ensured to be last in update order)" );
 
@@ -226,22 +181,36 @@ public class GitHubFileUpdater
                 return;
             }
 
-            FileComparator.ComparisonContext context = new FileComparator.ComparisonContext( entry.path, entry, localFile, githubInfo );
-            FileComparator.ComparisonResult result = comparator.compare( context );
+            String remoteHash = githubInfo.sha;
 
-            if( result == null )
+            if( remoteHash == null )
             {
-                UtilSys.getLogger().log( ILogger.Level.WARNING, "Comparison result is null for: " + entry.path );
-                errors++;
+                handleFileNeedsUpdate( entry, null, null, githubInfo, performUpdates );
                 return;
             }
 
-            if( result.needsUpdate )  handleFileNeedsUpdate( entry, result, githubInfo, performUpdates );
-            else                      UtilSys.getLogger().log( ILogger.Level.INFO, "File is up to date: " + entry.path + " (" + result.reason + ")" );
+            String  localHash   = HashCalculator.calculateHash( localFile, remoteHash );
+            boolean needsUpdate = (localHash == null || ! localHash.equals( remoteHash ));
+
+            if( ! needsUpdate )
+            {
+                UtilSys.getLogger().log( ILogger.Level.INFO, "File is up to date: " + entry.path + " (hashes match)" );
+            }
+            else if( entry.isProtected && localFile.exists() )
+            {
+                // File differs from remote but belongs to the user — never overwrite
+                String logPrefix = dryRun ? "DRY-RUN: " : "";
+                UtilSys.getLogger().log( ILogger.Level.WARNING,
+                    logPrefix + "Skipping protected file (local has been modified): " + entry.path );
+                filesSkipped++;
+            }
+            else
+            {
+                handleFileNeedsUpdate( entry, localHash, remoteHash, githubInfo, performUpdates );
+            }
         }
         catch( RuntimeException e )
         {
-            // Re-throw runtime exceptions to indicate serious issues
             UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error checking file: " + entry.path );
             errors++;
             throw e;
@@ -254,38 +223,35 @@ public class GitHubFileUpdater
     }
 
     /**
-     * Gets GitHub file information, using cached data from catalog when available.
+     * Gets GitHub file information, using the trusted catalog hash when available
+     * to avoid an API round-trip.
      */
     private GitHubApiClient.GitHubFileResponse getGitHubFileInfo( FileDiscoveryStrategy.FileEntry entry )
     {
         if( entry.expectedHash != null )
         {
-            // Create minimal response object using catalog data
             GitHubApiClient.GitHubFileResponse response = new GitHubApiClient.GitHubFileResponse();
             response.path = entry.path;
-            response.sha = entry.expectedHash;
-            response.lastModified = 0; // No timestamp when using catalog
+            response.sha  = entry.expectedHash;
             UtilSys.getLogger().log( ILogger.Level.INFO, "Using trusted catalog hash for: " + entry.path );
             return response;
         }
-        else
-        {
-            // Fetch from GitHub API
-            return GitHubApiClient.getFileMetadata( entry.path );
-        }
+
+        return GitHubApiClient.getFileMetadata( entry.path );
     }
 
     /**
-     * Handles files that need updates.
+     * Handles a file that needs updating.
      */
-    private void handleFileNeedsUpdate( FileDiscoveryStrategy.FileEntry entry, FileComparator.ComparisonResult result, GitHubApiClient.GitHubFileResponse githubInfo, boolean performUpdates )
+    private void handleFileNeedsUpdate( FileDiscoveryStrategy.FileEntry entry, String localHash, String remoteHash,
+                                        GitHubApiClient.GitHubFileResponse githubInfo, boolean performUpdates )
     {
         String logPrefix = dryRun ? "DRY-RUN: " : "";
 
         UtilSys.getLogger().log( ILogger.Level.INFO, String.format( "%sFile needs update: %s (local: %s, remote: %s)",
                 logPrefix, entry.path,
-                result.localHash != null ? result.localHash : "missing",
-                result.remoteHash != null ? result.remoteHash : "missing" ) );
+                localHash  != null ? localHash  : "missing",
+                remoteHash != null ? remoteHash : "missing" ) );
 
         if( dryRun )
         {
@@ -294,7 +260,6 @@ public class GitHubFileUpdater
         else if( performUpdates )
         {
             File localFile = new File( baseDir, entry.path );
-
             FileUpdateOperation updateOp = new FileUpdateOperation( backupMgr, entry.path, localFile, githubInfo );
 
             if( updateOp.execute() )  filesUpdated++;
@@ -307,41 +272,21 @@ public class GitHubFileUpdater
     }
 
     /**
-     * Cleans up resources and logs operation summary.
+     * Cleans up backup resources and logs the operation summary.
      */
     private void cleanupAndLogSummary()
     {
-        // Cleanup backups (only if not dry run)
         if( ! dryRun && backupMgr != null )
             backupMgr.cleanup();
 
-        // Log summary
         boolean aborted = abortRequested.get();
         String  summary = dryRun
-            ? String.format( "DRY-RUN %s: %d files checked, %d files would be updated, %d errors",
-                             aborted ? "aborted" : "completed", filesChecked, filesWouldUpdate, errors )
-            : String.format( "Process %s: %d files checked, %d files updated, %d errors",
-                             aborted ? "aborted" : "completed", filesChecked, filesUpdated, errors );
+            ? String.format( "DRY-RUN %s: %d files checked, %d would be updated, %d protected skipped, %d errors",
+                             aborted ? "aborted" : "completed", filesChecked, filesWouldUpdate, filesSkipped, errors )
+            : String.format( "Process %s: %d files checked, %d updated, %d protected skipped, %d errors",
+                             aborted ? "aborted" : "completed", filesChecked, filesUpdated, filesSkipped, errors );
 
         UtilSys.getLogger().log( ILogger.Level.INFO, summary );
-
-        // Log cache statistics
         GitHubApiClient.logCacheStatistics();
-    }
-
-    //------------------------------------------------------------------------//
-    // STATIC METHOD
-    //------------------------------------------------------------------------//
-
-    /**
-     * Extracts version from catalog.json content.
-     * Kept for backward compatibility with Updater class.
-     *
-     * @param catalogContent JSON content
-     * @return Version string or null if not found
-     */
-    public static String parseVersionFromCatalog( String catalogContent )
-    {
-        return CatalogParser.parseVersionFromCatalog( catalogContent );
     }
 }

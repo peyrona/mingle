@@ -20,15 +20,15 @@ import java.util.List;
  */
 public final class BackupManager
 {
-    private static final String BACKUP_SUFFIX = ".backup.";
+    private static final String            BACKUP_SUFFIX    = ".backup.";
     private static final DateTimeFormatter TIMESTAMP_FORMAT = DateTimeFormatter.ofPattern( "yyyyMMdd_HHmmss" );
-    private        final File backupDir;
-    private        final List<File> createdBackups = new ArrayList<>();
+    private        final File              backupDir;
+    private        final List<File>        createdBackups   = new ArrayList<>();
 
     //------------------------------------------------------------------------//
 
     /**
-     * Creates a BackupManager with backup directory in the system temp directory.
+     * Creates a BackupManager with a backup directory in the system temp directory.
      */
     public BackupManager()
     {
@@ -50,15 +50,14 @@ public final class BackupManager
      * @param originalFile File to backup
      * @return Backup file if successful, null otherwise
      */
-    public File createBackup(File originalFile)
+    public File createBackup( File originalFile )
     {
-        // Input validation
         if( originalFile == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Original file cannot be null" );
             return null;
         }
-        
+
         if( ! originalFile.exists() || ! originalFile.isFile() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Cannot backup file that does not exist: " + originalFile.getAbsolutePath() );
@@ -67,27 +66,16 @@ public final class BackupManager
 
         try
         {
-            String timestamp = LocalDateTime.now().format( TIMESTAMP_FORMAT );
+            String timestamp    = LocalDateTime.now().format( TIMESTAMP_FORMAT );
             String backupFileName = originalFile.getName() + BACKUP_SUFFIX + timestamp;
-            File backupFile = new File( backupDir, backupFileName );
+            File   backupFile   = new File( backupDir, backupFileName );
 
-            // Create backup with proper error handling
-            try( java.io.InputStream inStream = new java.io.BufferedInputStream( Files.newInputStream( originalFile.toPath() ) );
-                 java.io.OutputStream outStream = new java.io.BufferedOutputStream( Files.newOutputStream( backupFile.toPath() ) ) )
-            {
-                byte[] buffer = new byte[65536]; // 64KB buffer
-                int bytesRead;
-                while( (bytesRead = inStream.read( buffer )) != -1 )
-                {
-                    outStream.write( buffer, 0, bytesRead );
-                }
-            }
+            Files.copy( originalFile.toPath(), backupFile.toPath() );
 
             createdBackups.add( backupFile );
             UtilSys.getLogger().log( ILogger.Level.INFO, "Created backup: " + backupFile.getAbsolutePath() );
 
             return backupFile;
-
         }
         catch( IOException e )
         {
@@ -103,22 +91,21 @@ public final class BackupManager
      * @param originalFile Original file location to restore to
      * @return true if restore successful, false otherwise
      */
-    public boolean restoreFromBackup(File backupFile, File originalFile)
+    public boolean restoreFromBackup( File backupFile, File originalFile )
     {
-        // Input validation
         if( backupFile == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Backup file cannot be null" );
             return false;
         }
-        
+
         if( originalFile == null )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Original file cannot be null" );
             return false;
         }
-        
-        if( !backupFile.exists() || !backupFile.isFile() )
+
+        if( ! backupFile.exists() || ! backupFile.isFile() )
         {
             UtilSys.getLogger().log( ILogger.Level.WARNING, "Backup file does not exist: " + backupFile.getAbsolutePath() );
             return false;
@@ -126,28 +113,14 @@ public final class BackupManager
 
         try
         {
-            // Create parent directories if they don't exist
             File parentDir = originalFile.getParentFile();
-            if( parentDir != null && !parentDir.exists() )
-            {
+            if( parentDir != null && ! parentDir.exists() )
                 parentDir.mkdirs();
-            }
 
-            // Restore from backup with proper buffering
-            try( java.io.InputStream inStream = new java.io.BufferedInputStream( Files.newInputStream( backupFile.toPath() ) );
-                 java.io.OutputStream outStream = new java.io.BufferedOutputStream( Files.newOutputStream( originalFile.toPath() ) ) )
-            {
-                byte[] buffer = new byte[65536]; // 64KB buffer
-                int bytesRead;
-                while( (bytesRead = inStream.read( buffer )) != -1 )
-                {
-                    outStream.write( buffer, 0, bytesRead );
-                }
-            }
+            Files.copy( backupFile.toPath(), originalFile.toPath(), StandardCopyOption.REPLACE_EXISTING );
 
             UtilSys.getLogger().log( ILogger.Level.INFO, "Restored file from backup: " + originalFile.getAbsolutePath() );
             return true;
-
         }
         catch( IOException e )
         {
@@ -161,46 +134,40 @@ public final class BackupManager
      *
      * @return true if cleanup successful, false otherwise
      */
-        public boolean cleanup()
+    public boolean cleanup()
+    {
+        boolean success = true;
+
+        if( backupDir != null && backupDir.exists() && backupDir.isDirectory() )
         {
-            boolean success = true;
-    
-            if( backupDir != null && backupDir.exists() && backupDir.isDirectory() )
+            File[] files = backupDir.listFiles();
+            if( files != null )
             {
-                // Delete all files in the backup directory
-                File[] files = backupDir.listFiles();
-                if( files != null )
+                for( File file : files )
                 {
-                    for( File file : files )
+                    if( file.delete() )
+                        UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup file: " + file.getAbsolutePath() );
+                    else
                     {
-                        if( file.delete() )
-                        {
-                            UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup file: " + file.getAbsolutePath() );
-                        }
-                        else
-                        {
-                            UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup file: " + file.getAbsolutePath() );
-                            success = false;
-                        }
+                        UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup file: " + file.getAbsolutePath() );
+                        success = false;
                     }
                 }
-    
-                // Now, try to delete the directory itself
-                if( backupDir.delete() )
-                {
-                    UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup directory: " + backupDir.getAbsolutePath() );
-                }
-                else
-                {
-                    UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup directory (it might not be empty): " + backupDir.getAbsolutePath() );
-                    success = false;
-                }
             }
-    
-            createdBackups.clear();
-    
-            return success;
+
+            if( backupDir.delete() )
+                UtilSys.getLogger().log( ILogger.Level.INFO, "Deleted backup directory: " + backupDir.getAbsolutePath() );
+            else
+            {
+                UtilSys.getLogger().log( ILogger.Level.WARNING, "Failed to delete backup directory (it might not be empty): " + backupDir.getAbsolutePath() );
+                success = false;
+            }
         }
+
+        createdBackups.clear();
+        return success;
+    }
+
     /**
      * Gets the backup directory.
      *

@@ -17,6 +17,7 @@ import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.Pair;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.CodeError;
@@ -100,7 +101,7 @@ final class Checker
         for( TransUnit tu : tus )
             for( ParseBase cmd : tu.getCommands() )
                 if( cmd instanceof ParseLibrary && cmd.getName() != null )
-                    StdXprFns.registerLibraryName( cmd.getName().text() );
+                    UtilLib.registerLibraryName( cmd.getName().text() );
 
         // Now that all devices had been processed, we have all groups and their members:
         // now we can check RULE's expressions (WHEN, THEN and IF)

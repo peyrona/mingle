@@ -149,7 +149,7 @@ public final class Config implements IConfig
                         String[]  asCli = new String[ jaCli.size() ];
 
                         for( int x = 0; x < jaCli.size(); x++ )
-                            asCli[n] = jaCli.get( x ).asString();
+                            asCli[x] = jaCli.get( x ).asString();
 
                         cli = new UtilCLI( asCli );
 

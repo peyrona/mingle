@@ -49,8 +49,9 @@ public final class CatalogParser
                     hash != null && ! hash.trim().isEmpty() )
                 {
                     CatalogFileEntry entry = new CatalogFileEntry();
-                    entry.path = path.trim();
-                    entry.hash = hash.trim();
+                    entry.path        = path.trim();
+                    entry.hash        = hash.trim();
+                    entry.isProtected = fileObject.getBoolean( "protected", false );
                     entries.add( entry );
                 }
                 else
@@ -105,7 +106,8 @@ public final class CatalogParser
      */
     public static class CatalogFileEntry
     {
-        public String path;
-        public String hash;
+        public String  path;
+        public String  hash;
+        public boolean isProtected;
     }
 }

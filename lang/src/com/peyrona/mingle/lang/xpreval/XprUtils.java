@@ -14,6 +14,7 @@ final class XprUtils
 {
     static final String sALL    = "all";       // must be lower-case
     static final String sANY    = "any";       // must be lower-case
+    static final String sNONE   = "none";      // must be lower-case
     static final String sAFTER  = "after";     // must be lower-case
     static final String sWITHIN = "within";    // must be lower-case
 

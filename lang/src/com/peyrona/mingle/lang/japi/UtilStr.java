@@ -905,8 +905,6 @@ public class UtilStr
                 sw.append( th.getClass().getSimpleName() + sEoL );
 
             th.printStackTrace( pw );
-            // Note: Original code called printStackTrace twice. Preserved for strict adherence to input logic.
-            th.printStackTrace( pw );
 
             return sw.toString();
         }

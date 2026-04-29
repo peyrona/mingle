@@ -1,3 +1,16 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.peyrona.mingle.stick;
 
@@ -111,6 +124,11 @@ public final class Stick
         UtilSys.setConfig( config );
         UtilSys.setLogger( "stick", config );
 
+        if( UtilSys.getRuntime() != null )
+            failed( null, "Only one instance of '"+ getClass().getName() +"' is allowed per JVM" );
+
+        UtilSys.setRuntime( this );
+
         // Creates and assigns a SLF4J Provider to redirect SLF4J logs to Mingle default Logger (I also removed the SLF4J JAR from the Stick project)
         // SLF4J_Adapter.init( logger );
         // System.setProperty( "slf4j.provider", SLF4J_Provider.class.getName() );
@@ -123,7 +141,7 @@ public final class Stick
         drvrMgr  = new DriverManager(  this );
         deviMgr  = new DeviceManager(  this );
         ruleMgr  = new RuleManager(    this );
-        gridMgr  = GridManager.create( config, this, this::failed );
+        gridMgr  = GridManager.create( config, (IRuntime) this, this::failed );
 
         // Loads transpiled code (if any) and adds commands to their managers
 
@@ -558,14 +576,14 @@ public final class Stick
         if( reason != null )
             say( UtilStr.toString( reason ) );
 
+
         // Using this does not work (I do not know why) -->
         //      UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );
 
-        millis = ((millis <= 0) ? 500 : millis);    // I set a minium delay time of 500 to allow any pending tasks to finish
-
         try
         {
-            Thread.sleep( millis );
+            if( millis > 0 )
+                Thread.sleep( millis );
         }
         catch( InterruptedException e )
         {
@@ -573,11 +591,10 @@ public final class Stick
         }
         finally
         {
-            System.exit( exitCode );   // NEXT: --> Do not call 'System.exit( 0 )' to allow to run more than one instace of Stick in same JVM
+            System.exit( exitCode );    // There is a JVM hook that will invoke ::stop()
         }
 
         return this;
-
     }
 
     //------------------------------------------------------------------------//
@@ -661,6 +678,17 @@ public final class Stick
             gridMgr.stop();
 
         srptMgr.stop();    // Last one to trigger SCRIPTs ONSTOP after all is stopped (entities are gone)
+
+        UtilSys.stop();
+
+        try
+        {
+            Thread.sleep( 2500 );   // A long delay time (there is no rush, guys) to allow any pending tasks (if any) to finish
+        }
+        catch( InterruptedException e )
+        {
+            // Nothing to do
+        }
 
         say( "<<<<<<< Stick finished >>>>>>>" );
 

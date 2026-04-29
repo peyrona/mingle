@@ -18,7 +18,7 @@ class DeviceValue
     private final    Chronometer notified = new Chronometer();   // When was the last time the value was modified.
     private volatile Object      value    = null;                // This is its value until first set happens ('null' is not a valid Une value).
     private final    Float       delta;                          // null means ignore delta (do not use 0.0f, use null).
-    private          boolean     bErrSent = false;
+    private volatile boolean     bErrSent = false;                // volatile is enough here: a concurrent race may fire the exception 2-3 times instead of 1; after that the 'true' publishes.
 
     //------------------------------------------------------------------------//
 

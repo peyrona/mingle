@@ -34,7 +34,6 @@ USE AND AS &&
     OR  AS ||
     XOR AS |&
     NOT AS !
-
 #--------------------------------
 
 # Bitwise operators -------------
@@ -42,18 +41,22 @@ USE BAND AS &
     BOR  AS |
     BXOR AS ><
     BNOT AS ~
+#--------------------------------
 
+# Edge-detection operators ------
+# NOTE: do NOT combine these with directional aliases (e.g. "RISES ABOVE 80" is wrong;
+#       write "RISES 80" instead — the direction is already encoded in the operator).
+
+USE RISES   AS ?>    # cur > t  AND prev <= t
+    DROPS   AS ?<    # cur < t  AND prev >= t
+    BECOMES AS ?=    # cur == v AND prev != v
+    LEAVES  AS ?!=   # cur != v AND prev == v
+    CROSSES AS ?<>   # threshold crossed in either direction
 #--------------------------------
 
 # Other operators ---------------
 USE SET AS =
 #--------------------------------
-
-# Funcitons ---------------------
-USE _NL_ AS "\n"   # NewLine -> UNIX: "\n", Windows:"\r\n" (it is OS dependent)
-
-#--------------------------------
-
 
 # Days of week ------------------
 USE MONDAY    AS 1

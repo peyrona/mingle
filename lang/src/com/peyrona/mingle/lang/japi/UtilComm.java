@@ -720,9 +720,9 @@ public class UtilComm
                                         : (nPortParent > -1) ? nPortParent
                                                              : -1);
 
-        if( ! isValidPort4UDP( nPort ) )    // UDP es más amplio pq permite 0
+        if( nPort > -1 && ! isValidPort4UDP( nPort ) )    // -1 means "no port specified"; UDP is broader because it allows 0
         {
-            throw new IllegalArgumentException( "Port is out or bounds" );
+            throw new IllegalArgumentException( "Port is out of bounds" );
         }
 
         return asTemplate[0] +"."+ asTemplate[1] +"."+ asTemplate[2] +"."+ asTemplate[3] +

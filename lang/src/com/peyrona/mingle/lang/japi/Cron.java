@@ -723,12 +723,18 @@ public final class Cron
      */
     private LocalDateTime findNextYearlyOccurrence( LocalDateTime when )
     {
-        int maxYears = 100 * every;  // Safety limit
+        long maxYears = 100L * every;  // Safety limit (long to avoid overflow when 'every' is huge)
         LocalDateTime candidate = when.plusDays( 1 );
 
-        for( int yearOffset = 0; yearOffset < maxYears; yearOffset++ )
+        for( long yearOffset = 0; yearOffset < maxYears; yearOffset++ )
         {
-            int targetYear = startDate.getYear() + (yearOffset * every);
+            long targetYearLong = (long) startDate.getYear() + (yearOffset * (long) every);
+
+            // Stop if beyond LocalDateTime's practical range
+            if( targetYearLong > 9999 )
+                break;
+
+            int targetYear = (int) targetYearLong;
 
             // Skip years before current year
             if( targetYear < candidate.getYear() )

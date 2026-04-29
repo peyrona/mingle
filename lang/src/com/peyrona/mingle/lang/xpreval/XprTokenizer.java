@@ -3,6 +3,7 @@ package com.peyrona.mingle.lang.xpreval;
 
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
 import com.peyrona.mingle.lang.lexer.Lexeme;
@@ -156,7 +157,7 @@ public final class XprTokenizer
 
                 boolean isPrecededByLibraryCall = (n >= 2)
                     && prev     != null && prev.text().equals( String.valueOf( Language.SEND_OP ) )
-                    && prevPrev != null && StdXprFns.isLibraryNamespace( prevPrev.text() );
+                    && prevPrev != null && UtilLib.isLibraryNamespace( prevPrev.text() );
 
                 boolean isAnyFunc = isPrecededByLibraryCall                          ||
                                     StdXprFns.isExtendedType( lex.text()     )       ||

@@ -377,7 +377,22 @@ public final class Lexer
             String sOp = Language.buildRABBO( current, readChar( true ) );
 
             if( sOp.length() > 1 )
+            {
                 skip( 1 );            // To point to next char after the Op. If len == 1, ::offset is already pointing to next char after Op
+
+                // Extra lookahead for 3-char edge operators: ?<> and ?!=
+                if( (sOp.equals( "?<" ) || sOp.equals( "?!" )) && ! isEoF() )
+                {
+                    char next2 = readChar( true );
+
+                    if( (sOp.equals( "?<" ) && next2 == '>') ||
+                        (sOp.equals( "?!" ) && next2 == '=') )
+                    {
+                        skip( 1 );
+                        return sOp + next2;    // "?<>" or "?!="
+                    }
+                }
+            }
 
             return sOp;
         }

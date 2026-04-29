@@ -3,6 +3,7 @@ package com.peyrona.mingle.cil;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.cil.devices.Device;
 import com.peyrona.mingle.cil.devices.DeviceBuilder;
 import com.peyrona.mingle.cil.drivers.Driver;
@@ -13,6 +14,7 @@ import com.peyrona.mingle.cil.rules.Rule;
 import com.peyrona.mingle.cil.rules.RuleBuilder;
 import com.peyrona.mingle.cil.scripts.Script;
 import com.peyrona.mingle.cil.scripts.ScriptBuilder;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICmdEncDecLib;
 import com.peyrona.mingle.lang.interfaces.commands.ICmdKeys;
 import com.peyrona.mingle.lang.interfaces.commands.ICommand;
@@ -38,8 +40,13 @@ public class CilBuilder implements ICmdEncDecLib
     @Override
     public ICommand build( String sJSON )
     {
-        JsonObject jo  = Json.parse( sJSON ).asObject();
-        String     cmd = jo.get( ICmdKeys.CMD_CMD ).asString();      // script | driver | device | rule
+        JsonObject jo = Json.parse( sJSON ).asObject();
+        JsonValue  jv = jo.get( ICmdKeys.CMD_CMD );
+
+        if( jv == null )
+            throw new MingleException( "Malformed command JSON: missing '"+ ICmdKeys.CMD_CMD +"' field" );
+
+        String cmd = jv.asString();    // script | driver | device | rule
 
         switch( cmd )
         {

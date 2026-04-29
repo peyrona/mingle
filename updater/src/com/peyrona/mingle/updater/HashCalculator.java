@@ -137,23 +137,8 @@ public final class HashCalculator
         }
     }
 
-    private static String calculateHashWithAlgorithm(File file, String algorithm) throws IOException, NoSuchAlgorithmException
+    private static String calculateHashWithAlgorithm( File file, String algorithm ) throws IOException, NoSuchAlgorithmException
     {
-        if( file == null )
-        {
-            throw new IllegalArgumentException( "File cannot be null" );
-        }
-        
-        if( algorithm == null || algorithm.trim().isEmpty() )
-        {
-            throw new IllegalArgumentException( "Algorithm cannot be null or empty" );
-        }
-        
-        if( ! file.exists() || ! file.isFile() )
-        {
-            throw new IOException( "File does not exist or is not a regular file: " + file.getAbsolutePath() );
-        }
-
         MessageDigest digest = MessageDigest.getInstance( algorithm );
 
         try( java.io.InputStream inputStream = Files.newInputStream( file.toPath() ) )

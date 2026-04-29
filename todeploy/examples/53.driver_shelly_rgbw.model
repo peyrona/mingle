@@ -1,0 +1,27 @@
+{"transpiler":"MSP Transpiler v.2026-03-26",
+"code-version":"1.0",
+"uid":"44e1c69e-7f05-4aa9-b49e-84e3c4cdc114",
+"generated":"2026-03-27T16:52:32.188287475Z",
+"commands":[
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":30000},"init":null},
+{"cmd":"device","name":"color_timer","driver":"clockdriver","config":{"interval":5000},"init":null},
+{"cmd":"device","name":"color_index","driver":"cellsetdriver","config":{"value":0},"init":null},
+{"cmd":"rule","name":null,"when":"color_timer","then":[{"after":-1,"target":"color_index","value":"( color_index + 1):mod( 5)"}],"if":null},
+{"cmd":"device","name":"my_rgbw","driver":"shellyrgbwpmdriver","config":{"mode":"rgbw","ip":"192.168.7.103","ramp":2000},"init":null},
+{"cmd":"rule","name":null,"when":"my_rgbw","then":[{"after":-1,"target":"console","value":"\"RGB+W LED Strip Status:\""},{"after":-1,"target":"console","value":"\"  Power     : \" + IIF( my_rgbw:get( \"on\" ), \"ON\" , \"OFF\" )"},{"after":-1,"target":"console","value":"\"  Brightness: \" + my_rgbw:get( \"brightness\" ) + \"%\""},{"after":-1,"target":"console","value":"\"  Color     : R = \" + my_rgbw:get( \"red\" ) + \", G = \" + my_rgbw:get( \"green\" ) + \", B = \" + my_rgbw:get( \"blue\" )"}],"if":null},
+{"cmd":"rule","name":null,"when":"color_index == 0","then":[{"after":-1,"target":"my_rgbw","value":"pair():put( \"on\" , true):put( \"red\" , 100):put( \"green\" , 0):put( \"blue\" , 0)"},{"after":-1,"target":"console","value":"\"Color (0): RED\""}],"if":null},
+{"cmd":"rule","name":null,"when":"color_index == 1","then":[{"after":-1,"target":"my_rgbw","value":"pair():put( \"on\" , true):put( \"red\" , 0):put( \"green\" , 100):put( \"blue\" , 0)"},{"after":-1,"target":"console","value":"\"Color (1): GREEN\""}],"if":null},
+{"cmd":"rule","name":null,"when":"color_index == 2","then":[{"after":-1,"target":"my_rgbw","value":"pair():put( \"on\" , true):put( \"red\" , 0):put( \"green\" , 0):put( \"blue\" , 100)"},{"after":-1,"target":"console","value":"\"Color (2): BLUE\""}],"if":null},
+{"cmd":"rule","name":null,"when":"color_index == 3","then":[{"after":-1,"target":"my_rgbw","value":"pair():put( \"on\" , true):put( \"red\" , 100):put( \"green\" , 100):put( \"blue\" , 100):put( \"ramp\" , 4000)"},{"after":-1,"target":"console","value":"\"Color (3): WHITE\""}],"if":null},
+{"cmd":"rule","name":null,"when":"color_index == 4","then":[{"after":-1,"target":"my_rgbw","value":"\"off\""},{"after":-1,"target":"console","value":"\"LED Strip: OFF\""}],"if":null},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"shellyrgbwpmdriver","script":"shellyrgbwpmcontroller"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"shellyrgbwpmcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.lights.shelly.ShellyRGBWPM"}
+]
+}

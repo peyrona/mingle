@@ -37,11 +37,10 @@ public final class Language
                                                                "DRIVER"  , "CONFIG", "REQUIRED",
                                                                "DEVICE"  , "INIT"  ,
                                                                "RULE"    , "WHEN"  , "THEN", "IF",
-                                                               "AFTER"   , "WITHIN", "ANY" , "ALL",
-                                                               "BY"      , "FOR"   , "ONERROR",
-                                                               "LIBRARY" } );   // LIBRARY: declares an external function collection callable in expressions
+                                                               "AFTER"   , "WITHIN", "ANY" , "ALL", "NONE",
+                                                               "LIBRARY" } );
 
-    private static final String sOPERATORS = "+-*/%^=!><&|~:,";    // ':' is send-op and ',' is function arguments separator
+    private static final String sOPERATORS = "+-*/%^=!><&|~:,?";    // ':' is send-op and ',' is function arguments separator; '?' is the edge-detection operator prefix
 
     //------------------------------------------------------------------------//
     // Escape character for Regular Expressions
@@ -347,6 +346,22 @@ public final class Language
                ">=".equals( str );
     }
 
+    /**
+     * Returns true if the given string is one of the edge-detection operators:
+     * {@code ?>}, {@code ?<}, {@code ?=}, {@code ?!=}, {@code ?<>}.
+     *
+     * @param str The string to check.
+     * @return true if str is an edge-detection operator.
+     */
+    public static boolean isEdgeOp( String str )
+    {
+        return "?>".equals( str ) ||
+               "?<".equals( str ) ||
+               "?=".equals( str ) ||
+              "?!=".equals( str ) ||
+              "?<>".equals( str );
+    }
+
     public static boolean isDelimiter( String s )
     {
         return (s != null) && (s.length() == 1) && isDelimiter( s.charAt( 0 ) );
@@ -411,8 +426,16 @@ public final class Language
                         return UtilStr.asStr( charL, charR );
                 break;
 
+            case '?':
+                if( charR == '>' ||     // ?> RISES
+                    charR == '<' ||     // ?< DROPS  (also first char of ?<>)
+                    charR == '=' ||     // ?= BECOMES
+                    charR == '!' )      // ?! partial token for ?!= LEAVES
+                    return UtilStr.asStr( charL, charR );
+                break;
+
             default:
-                return null;    // If flow arrives here, it means that charL is none of: '=' '!' '<' '>' '&' '|', neither an arithmetic one
+                return null;    // If flow arrives here, it means that charL is none of: '=' '!' '<' '>' '&' '|' '?', neither an arithmetic one
         }
 
         return String.valueOf( charL );

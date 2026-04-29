@@ -100,6 +100,9 @@ public final class time
                 {
                     String s = args[0].toString().trim();
 
+                    if( s.isEmpty() )
+                        throw new MingleException( "Invalid time" );
+
                     // Try JSON deserialization first (from serialize().toString())
                     if( s.charAt( 0 ) == '{' )
                     {

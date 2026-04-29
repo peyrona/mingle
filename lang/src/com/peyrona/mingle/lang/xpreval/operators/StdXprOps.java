@@ -57,6 +57,9 @@ public final class StdXprOps
                             @Override
                             protected Number eval( Object... args )
                             {
+                                if( args[0] instanceof Integer )
+                                    return -(Integer) args[0];
+
                                 if( isL( Number.class, args ) )
                                     return (- getNumL( args ));
 
@@ -78,8 +81,12 @@ public final class StdXprOps
                                     return ((Operable) getR( args )).move( getNumL( args ) );           // Note: it does not make sense to add a date to a date or a time to a time
 
                                 Object[] nArgs = toNum( args );
-                                if( nArgs != null )                                                     // e.g.: 10 + 2   or  "10" + 2 (JS-wise)
-                                    return getNumL( nArgs ) + getNumR( nArgs );                         // This 'if' has to be the last one
+                                if( nArgs != null )                                                     // This 'if' has to be the last one  e.g.: 10 + 2   or  "10" + 2 (JS-wise)
+                                {
+                                    if( areAllIntegers( nArgs ) )
+                                        return getIntL( nArgs ) + getIntR( nArgs );
+                                    return getNumL( nArgs ) + getNumR( nArgs );
+                                }
 
                                 return args[0].toString() + args[1].toString();                         // Can not be null
                             }
@@ -109,8 +116,12 @@ public final class StdXprOps
                                 }
 
                                 Object[] nArgs = toNum( args );
-                                if( nArgs != null )                                                     // e.g.: 10 - 2  or  "10" - 2  (JS-wise)
-                                    return getNumL( nArgs ) - getNumR( nArgs );                         // This 'if' has to be the last one
+                                if( nArgs != null )                                                     // This 'if' has to be the last one  e.g.: 10 - 2  or  "10" - 2  (JS-wise)
+                                {
+                                    if( areAllIntegers( nArgs ) )
+                                        return getIntL( nArgs ) - getIntR( nArgs );
+                                    return getNumL( nArgs ) - getNumR( nArgs );
+                                }
 
                                 throw unsupported( args );
                             }
@@ -122,7 +133,12 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )                                                    // e.g.: 10 * 2  or  10 * 2 (JS-wise)
+                                {
+                                    if( areAllIntegers( nArgs ) )
+                                        return getIntL( nArgs ) * getIntR( nArgs );
+
                                     return getNumL( nArgs ) * getNumR( nArgs );
+                                }
 
                                 throw unsupported( args );
                             }
@@ -134,7 +150,14 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )                                                    // e.g.: 10 / 2  or  "10" / 2 (JS-wise)
-                                    return getNumL( nArgs ) / getNumR( nArgs );
+                                {
+                                    float divisor = getNumR( nArgs );
+
+                                    if( divisor == 0f )
+                                        return (getNumL( nArgs ) > 0) ? Float.POSITIVE_INFINITY : Float.NEGATIVE_INFINITY;
+
+                                    return getNumL( nArgs ) / divisor;
+                                }
 
                                 throw unsupported( args );
                             }
@@ -313,7 +336,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )
-                                    return (float) ( ((Float) getNumL( nArgs )).intValue() & ((Float) getNumR( nArgs )).intValue() );
+                                    return ((Number) nArgs[0]).intValue() & ((Number) nArgs[1]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -325,7 +348,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )
-                                    return (float) ( ((Float) getNumL( nArgs )).intValue() | ((Float) getNumR( nArgs )).intValue() );
+                                    return ((Number) nArgs[0]).intValue() | ((Number) nArgs[1]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -337,7 +360,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )
-                                    return (float) ( ((Float) getNumL( nArgs )).intValue() ^ ((Float) getNumR( nArgs )).intValue() );
+                                    return ((Number) nArgs[0]).intValue() ^ ((Number) nArgs[1]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -348,7 +371,7 @@ public final class StdXprOps
                             protected Number eval( Object... args )
                             {
                                 if( isL( Number.class, args ) )
-                                    return (float) ( ~ ((Float) getNumL( args )).intValue() );
+                                    return ~((Number) args[0]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -360,7 +383,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )
-                                    return (float) ( ((Float) getNumL( nArgs )).intValue() >> ((Float) getNumR( nArgs )).intValue() );
+                                    return ((Number) nArgs[0]).intValue() >> ((Number) nArgs[1]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -372,7 +395,7 @@ public final class StdXprOps
                             {
                                 Object[] nArgs = toNum( args );
                                 if( nArgs != null )
-                                    return (float) ( ((Float) getNumL( nArgs )).intValue() << ((Float) getNumR( nArgs )).intValue() );
+                                    return ((Number) nArgs[0]).intValue() << ((Number) nArgs[1]).intValue();
 
                                 throw unsupported( args );
                             }
@@ -399,6 +422,17 @@ public final class StdXprOps
                                 return null;
                             }
                         } );
+
+        // Edge-detection operators (?>, ?<, ?=, ?!=, ?<>) -------------------------------------------------------
+        // Note: their eval() bodies are stubs — actual evaluation is handled in ASTNode::evalEdgeOp(),
+        // where both the current and previous device value can be accessed from the vars map.
+        // These registrations are required so that XprTokenizer recognises the symbols as valid operators.
+
+        tmp.put( "?>",  new Operator<Boolean>( Operator.PRECEDENCE_COMPARISON ) { @Override protected Boolean eval( Object... args ) { return Boolean.FALSE; } } );
+        tmp.put( "?<",  new Operator<Boolean>( Operator.PRECEDENCE_COMPARISON ) { @Override protected Boolean eval( Object... args ) { return Boolean.FALSE; } } );
+        tmp.put( "?=",  new Operator<Boolean>( Operator.PRECEDENCE_COMPARISON ) { @Override protected Boolean eval( Object... args ) { return Boolean.FALSE; } } );
+        tmp.put( "?!=", new Operator<Boolean>( Operator.PRECEDENCE_COMPARISON ) { @Override protected Boolean eval( Object... args ) { return Boolean.FALSE; } } );
+        tmp.put( "?<>", new Operator<Boolean>( Operator.PRECEDENCE_COMPARISON ) { @Override protected Boolean eval( Object... args ) { return Boolean.FALSE; } } );
 
         return Collections.unmodifiableMap( tmp );
     }
@@ -471,6 +505,16 @@ public final class StdXprOps
         return ((Number) args[1]).floatValue();
     }
 
+    private static int getIntL( Object... args )
+    {
+        return (Integer) args[0];
+    }
+
+    private static int getIntR( Object... args )
+    {
+        return (Integer) args[1];
+    }
+
     private static String getStrL( Object... args )
     {
         return args[0].toString();
@@ -492,12 +536,14 @@ public final class StdXprOps
     }
 
     /**
-     * Tries to change all instances of String to its Number.
+     * Tries to convert all args to the most specific numeric type, preserving {@code Integer}
+     * and {@code Float} as-is and parsing {@code String} values as {@code Integer} first,
+     * falling back to {@code Float}.
      * <p>
-     * This is a fail fast method.
+     * This is a fail-fast method.
      *
-     * @param args
-     * @return Converted args or null if any conversion failed.
+     * @param args The arguments to convert.
+     * @return Converted args, or {@code null} if any conversion failed.
      */
     private static Object[] toNum( Object... args )
     {
@@ -507,12 +553,12 @@ public final class StdXprOps
         {
             if( args.length == 1 )   // Faster
             {
-                newArgs[0] = UtilType.toFloat( args[0] );
+                newArgs[0] = toNumber( args[0] );
             }
             else
             {
                 for( int n = 0; n < args.length; n++ )
-                    newArgs[n] = UtilType.toFloat( args[n] );    // This takes care of '_' in case the arg is an string (see this class doc)
+                    newArgs[n] = toNumber( args[n] );
             }
         }
         catch( MingleException me )
@@ -521,6 +567,52 @@ public final class StdXprOps
         }
 
         return newArgs;
+    }
+
+    /**
+     * Converts a single value to the most specific numeric type.
+     * <ul>
+     *   <li>{@code Integer} is returned as-is.</li>
+     *   <li>{@code Float} is returned as-is.</li>
+     *   <li>Other {@code Number} subtypes are converted to {@code Float}.</li>
+     *   <li>{@code String} is parsed as {@code Integer} (no decimal point) or {@code Float}.</li>
+     * </ul>
+     *
+     * @param n The value to convert.
+     * @return An {@code Integer} or {@code Float} representation of the value.
+     * @throws MingleException If the value cannot be interpreted as a number.
+     */
+    private static Number toNumber( Object n )
+    {
+        if( n instanceof Integer )  return (Integer) n;
+        if( n instanceof Float   )  return (Float)   n;
+        if( n instanceof Number  )  return ((Number) n).floatValue();
+
+        if( n instanceof String  )
+        {
+            String s = (String) n;
+            try { return Integer.valueOf( s ); }
+            catch( NumberFormatException ignored ) { }
+            try { return Float.valueOf(   s ); }
+            catch( NumberFormatException ignored ) { }
+        }
+
+        throw new MingleException( "Invalid number \""+ n +'"' );
+    }
+
+    /**
+     * Returns {@code true} if every element in {@code args} is an instance of {@code Integer}.
+     *
+     * @param args The arguments to check.
+     * @return {@code true} when all args are {@code Integer}, {@code false} otherwise.
+     */
+    private static boolean areAllIntegers( Object... args )
+    {
+        for( Object arg : args )
+            if( ! (arg instanceof Integer) )
+                return false;
+
+        return true;
     }
 
     /**
@@ -577,7 +669,7 @@ public final class StdXprOps
         for( Object obj : args )
         {
             String s = obj.getClass().getSimpleName().toLowerCase();
-                   s = "float".equals(s) ? "number" : s;
+            if( "float".equals(s) || "integer".equals(s) )  s = "number";
             sb.append( obj ).append( '[' ).append( s ).append( "], " );
         }
 

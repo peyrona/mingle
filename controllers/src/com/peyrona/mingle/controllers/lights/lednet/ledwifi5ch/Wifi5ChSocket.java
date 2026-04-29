@@ -30,7 +30,7 @@ final class Wifi5ChSocket
 
     //----------------------------------------------------------------------------//
 
-    void write( byte[] bytes ) throws IOException
+    synchronized void write( byte[] bytes ) throws IOException
     {
         if( bytes == null || bytes.length == 0 )
             throw new IllegalArgumentException( "Value is null or empty" );
@@ -58,11 +58,7 @@ final class Wifi5ChSocket
         {
             writer.write( bytes );
             writer.flush();
-
-            synchronized( this )
-            {
-                abLast = Arrays.copyOf( bytes, bytes.length );
-            }
+            abLast = Arrays.copyOf( bytes, bytes.length );
         }
     }
 

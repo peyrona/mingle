@@ -48,10 +48,10 @@ THEN get("ram" ):add( ram:format("##") )
      get("both"):put( time() +" RAM", ram:format("##") )
 
 WHEN cpu >= 0 AND get("cpu"):size() == 5
-THEN console = "{"+ time() +"} CPU "+ get("cpu") + _NL_    # _NL_ --> is replace by --> "\n"
+THEN console = "{"+ time() +"} CPU "+ get("cpu") + "\n"
 
 WHEN ram >= 0 AND get("ram"):size() == 5
-THEN console = "{"+ time() +"} RAM "+ get("ram") + _NL_
+THEN console = "{"+ time() +"} RAM "+ get("ram") + "\n"
 
 WHEN cpu >= 0 AND get("cpu"):size() > 5
 THEN get("cpu"):empty()
@@ -60,7 +60,7 @@ WHEN ram >= 0 AND get("ram"):size() > 5
 THEN get("ram"):empty()
 
 WHEN (cpu >= 0 OR ram >= 0) AND get("both"):size() == 12
-THEN console = "BOTH --> "+ get("both") + _NL_
+THEN console = "BOTH --> "+ get("both") + "\n"
 
 WHEN (cpu >= 0 OR ram >= 0) AND get("both"):size() > 12
 THEN get("both"):empty()

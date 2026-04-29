@@ -6,6 +6,8 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import java.awt.Color;
 import java.awt.Dimension;
+import java.awt.Point;
+import java.awt.Window;
 import java.awt.event.KeyAdapter;
 import java.awt.event.KeyEvent;
 import java.awt.geom.Rectangle2D;
@@ -26,6 +28,7 @@ import javax.swing.BorderFactory;
 import javax.swing.JEditorPane;
 import javax.swing.JPopupMenu;
 import javax.swing.JScrollPane;
+import javax.swing.JWindow;
 import javax.swing.SwingUtilities;
 import javax.swing.text.BadLocationException;
 import javax.swing.text.html.HTMLEditorKit;
@@ -44,7 +47,7 @@ import org.fife.ui.rsyntaxtextarea.RSyntaxTextArea;
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-public final class UneFunctionDocPopup extends JPopupMenu
+public final class UneFunctionDocPopup
 {
     // Path to javadocs ZIP relative to MSP home
     private static final String JAVADOCS_ZIP = "docs/javadocs.zip";
@@ -77,6 +80,10 @@ public final class UneFunctionDocPopup extends JPopupMenu
     private final JEditorPane     editorPane;
     private final JScrollPane     scrollPane;
     private final RSyntaxTextArea editor;
+    // JWindow created lazily on first show (editor must be in a window hierarchy by then).
+    // Using JWindow instead of JPopupMenu avoids Swing's MenuSelectionManager, which
+    // would auto-dismiss the completion-list popup whenever this doc popup appeared.
+    private       JWindow         window;
 
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -119,10 +126,6 @@ public final class UneFunctionDocPopup extends JPopupMenu
         scrollPane.getViewport().setBackground( new Color( 45, 45, 45 ) );
         scrollPane.setPreferredSize( new Dimension( 480, 360 ) );
 
-        add( scrollPane );
-
-        setBackground( new Color( 45, 45, 45 ) );
-
         // Setup keyboard listener
         editorPane.addKeyListener( new KeyAdapter()
         {
@@ -138,20 +141,93 @@ public final class UneFunctionDocPopup extends JPopupMenu
         });
     }
 
+    /**
+     * Hides the documentation window.
+     *
+     * @param visible pass {@code false} to hide; {@code true} has no effect (use the
+     *                {@code showDocumentation} / {@code showDocumentationNextTo} methods to show).
+     */
+    public void setVisible( boolean visible )
+    {
+        if( ! visible && window != null )
+            window.setVisible( false );
+    }
+
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE
 
     /**
-     * Shows the documentation popup for the given function or type.
+     * Shows the documentation popup for the given function or type, positioned below the caret.
      *
-     * @param name     Function or type name (e.g., "pair", "list.get")
-     * @param caretPos Current caret position in editor
-     * @return true if documentation was shown, false if not available
+     * @param name     Function or type name (e.g., "pair", "list.get", "mid(target, from)")
+     * @param caretPos Current caret position in the editor document
+     * @return true if documentation was found and shown, false if not available
      */
     public boolean showDocumentation( String name, int caretPos )
     {
-        if( docsCache != null && docsCache.isEmpty() )    // This means that ::loadDocumentation() was invoked but failed
-            return false;
+        String html = resolveHtml( name );
+        if( html == null ) return false;
+
+        try
+        {
+            Rectangle2D rect      = editor.modelToView2D( caretPos );
+            Point       editorLoc = editor.getLocationOnScreen();
+            int         screenX   = editorLoc.x + (rect != null ? (int) rect.getX() : 10);
+            int         screenY   = editorLoc.y + (rect != null ? (int) rect.getY() + (int) rect.getHeight() : 20);
+            showHtml( html, screenX, screenY );
+        }
+        catch( BadLocationException | RuntimeException exc )
+        {
+            Point editorLoc = editor.getLocationOnScreen();
+            showHtml( html, editorLoc.x + 10, editorLoc.y + 20 );
+        }
+
+        return true;
+    }
+
+    /**
+     * Shows the documentation popup for the given function or type, positioned to the right of
+     * a sibling popup (e.g., the IntelliSense completion list). Falls back to a fixed offset
+     * if screen coordinates cannot be determined.
+     *
+     * @param name    Function or type name (e.g., "pair", "floor")
+     * @param sibling Popup whose right edge defines the x anchor for this popup
+     * @return true if documentation was found and shown, false if not available
+     */
+    public boolean showDocumentationNextTo( String name, JPopupMenu sibling )
+    {
+        String html = resolveHtml( name );
+        if( html == null ) return false;
+
+        try
+        {
+            Point siblingLoc = sibling.getLocationOnScreen();
+            showHtml( html, siblingLoc.x + sibling.getWidth(), siblingLoc.y );
+        }
+        catch( Exception exc )
+        {
+            try
+            {
+                Point editorLoc = editor.getLocationOnScreen();
+                showHtml( html, editorLoc.x + sibling.getWidth() + 10, editorLoc.y + 10 );
+            }
+            catch( Exception ignored ) {}
+        }
+
+        return true;
+    }
+
+    /**
+     * Resolves the HTML documentation for the given name.
+     * Handles: simple names ("floor"), qualified names ("list.get"),
+     * and full signatures ("mid(target, from)").
+     *
+     * @return Combined HTML string, or null if not found or cache unavailable
+     */
+    private String resolveHtml( String name )
+    {
+        if( docsCache != null && docsCache.isEmpty() )    // loadDocumentation() was invoked but failed
+            return null;
 
         try
         {
@@ -160,14 +236,15 @@ public final class UneFunctionDocPopup extends JPopupMenu
         }
         catch( URISyntaxException | IOException exc )
         {
-            docsCache = new HashMap<>();   // Flag indicating that init failed
+            docsCache = new HashMap<>();
             UtilSys.getLogger().log( ILogger.Level.SEVERE, exc, "Failed to load function documentation" );
+            return null;
         }
 
         String key = name.toLowerCase();
         List<DocEntry> entries = docsCache.get( key );
 
-        // If not found, try finding by signature in the name list (e.g., if "mid(target, from)" was passed)
+        // If not found by name, try matching by full signature (e.g., "mid(target, from)")
         if( entries == null )
         {
             for( List<DocEntry> list : docsCache.values() )
@@ -175,87 +252,56 @@ public final class UneFunctionDocPopup extends JPopupMenu
                 for( DocEntry entry : list )
                 {
                     if( entry.signature.equalsIgnoreCase( name ) )
-                    {
-                        showHtml( entry.html, caretPos );
-                        return true;
-                    }
+                        return entry.html;
                 }
             }
-            return false;
+            return null;
         }
 
-        // Combine all matching entries
+        // Combine all matching entries (handles overloaded functions)
         StringBuilder combinedHtml = new StringBuilder( "<html><body>" );
         for( int n = 0; n < entries.size(); n++ )
         {
             String html = entries.get( n ).html;
-            // Strip HTML wrapper tags if present for combining
-            // Handle both simple <html><body> and full <html><head>...</head><body> formats
             int bodyStart = html.indexOf( "<body>" );
             int bodyEnd   = html.lastIndexOf( "</body>" );
 
             if( bodyStart >= 0 && bodyEnd > bodyStart )
-            {
                 html = html.substring( bodyStart + 6, bodyEnd );
-            }
             else
-            {
-                // Fallback: try simple replacement
                 html = html.replace( "<html><body>", "" ).replace( "</body></html>", "" );
-            }
 
             combinedHtml.append( html );
             if( n < entries.size() - 1 )
                 combinedHtml.append( "<hr/>" );
         }
         combinedHtml.append( "</body></html>" );
-
-        showHtml( combinedHtml.toString(), caretPos );
-        return true;
+        return combinedHtml.toString();
     }
 
-    private void showHtml( String html, int caretPos )
+    private void showHtml( String html, int screenX, int screenY )
     {
-        // Set the HTML content
         editorPane.setText( html );
-        editorPane.setCaretPosition( 0 );  // Scroll to top
+        editorPane.setCaretPosition( 0 );
 
-        try    // Show popup at caret position
+        JWindow w = getWindow();
+        w.setSize( scrollPane.getPreferredSize() );
+        w.setLocation( screenX, screenY );
+        w.setVisible( true );
+    }
+
+    /** Returns the lazily-created documentation window. */
+    private JWindow getWindow()
+    {
+        if( window == null )
         {
-            Rectangle2D rect = editor.modelToView2D( caretPos );
-            setPopupSize( scrollPane.getPreferredSize() );
-
-            int x, y;
-
-            if( rect != null )
-            {
-                x = (int) rect.getX();
-                y = (int) rect.getY() + (int) rect.getHeight();
-            }
-            else
-            {
-                // Fallback: show near top-left of editor
-                x = 10;
-                y = 20;
-            }
-
-            show( editor, x, y );
-            SwingUtilities.invokeLater( () -> editorPane.grabFocus() );
+            Window owner = SwingUtilities.getWindowAncestor( editor );
+            window = new JWindow( owner );
+            window.setFocusableWindowState( false );   // never steal focus from the completion list
+            window.add( scrollPane );
+            window.pack();
         }
-        catch( BadLocationException | RuntimeException exc )
-        {
-            // Fallback: try showing at a default position
-            try
-            {
-                setPopupSize( scrollPane.getPreferredSize() );
-                show( editor, 10, 20 );
-                SwingUtilities.invokeLater( () -> editorPane.grabFocus() );
-            }
-            catch( Exception ignored )
-            {
-                // If even fallback fails, nothing more we can do
-            }
-        }
+        return window;
     }
 
     //------------------------------------------------------------------------//
@@ -379,184 +425,168 @@ public final class UneFunctionDocPopup extends JPopupMenu
         cache.computeIfAbsent( key.toLowerCase(), k -> new java.util.ArrayList<>() ).add( entry );
     }
 
+    // NOTE: All HTML parsing below targets the Java 17+ Javadoc output format.
+    // Key differences from the older Java 11 format:
+    //   - Method detail section:  id="method-detail" on a <section> (was <a id="method.detail">)
+    //   - Individual methods:     <section class="detail" id="name(params)"> (was <a id="..."> + <li class="blockList">)
+    //   - Modifier visibility:    <span class="modifiers"> inside <div class="member-signature">
+    //   - Parameter names:        <span class="parameters"> (was <pre class="methodSignature">)
+    //   - Method summary:         id="method-summary" on a <section> with <div class="summary-table"> (was <a id="method.summary"> + <table>)
+    //   - Class heading:          <h1 class="title"> (was <h2 class="title">)
+
     private static String cleanupHtml( String html )
     {
-        // Extract just the main content using simple string parsing (no regex)
         StringBuilder cleaned = new StringBuilder();
-        cleaned.append( "<html><head><style>" );
-        cleaned.append( "body { font-family: sans-serif; }" );
-        cleaned.append( "</style></head><body>" );
+        cleaned.append( "<html><head><style>body { font-family: sans-serif; }</style></head><body>" );
 
-        // Extract class title using indexOf
+        // Class title — Java 17 uses <h1 class="title">, look for any <h1..h4 containing class="title"
         int titleStart = html.indexOf( "class=\"title\"" );
-
         if( titleStart > 0 )
         {
-            int h2Start = html.lastIndexOf( "<h2", titleStart );
-            int h2End = html.indexOf( "</h2>", titleStart );
-
-            if( h2Start > 0 && h2End > h2Start )
+            int hStart = html.lastIndexOf( "<h", titleStart );
+            int hEnd   = html.indexOf( ">", hStart );                // end of opening tag
+            if( hStart > 0 && hEnd > hStart )
             {
-                cleaned.append( html.substring( h2Start, h2End + 5 ) );
+                String tag    = html.substring( hStart + 1, hStart + 3 );   // e.g. "h1"
+                int    closeH = html.indexOf( "</" + tag + ">", hEnd );
+                if( closeH > hEnd )
+                    cleaned.append( html, hStart, closeH + tag.length() + 3 );  // include </hN>
             }
         }
 
-        // Extract first description block
+        // First class-level description block
         int blockStart = html.indexOf( "<div class=\"block\">" );
-
         if( blockStart > 0 )
         {
             int blockEnd = html.indexOf( "</div>", blockStart );
-
             if( blockEnd > blockStart )
-            {
-                cleaned.append( html.substring( blockStart, blockEnd + 6 ) );
-            }
+                cleaned.append( html, blockStart, blockEnd + 6 );
         }
 
-        // Extract method summary table
-        int methodSummaryStart = html.indexOf( "<a id=\"method.summary\">" );
-
+        // Method summary — Java 17 uses <div class="summary-table …"> inside id="method-summary"
+        int methodSummaryStart = html.indexOf( "id=\"method-summary\"" );
         if( methodSummaryStart > 0 )
         {
-            int tableStart = html.indexOf( "<table", methodSummaryStart );
-            int tableEnd = html.indexOf( "</table>", tableStart );
-
-            if( tableStart > 0 && tableEnd > tableStart )
+            int divStart = html.indexOf( "<div class=\"summary-table", methodSummaryStart );
+            if( divStart > 0 )
             {
-                cleaned.append( "<h3>Methods</h3>" );
-                cleaned.append( html.substring( tableStart, tableEnd + 8 ) );
+                // Find matching </div> by tracking nesting depth
+                int depth  = 0;
+                int divEnd = -1;
+                int scan   = divStart;
+                while( scan < html.length() )
+                {
+                    int open  = html.indexOf( "<div", scan );
+                    int close = html.indexOf( "</div>", scan );
+                    if( close < 0 ) break;
+                    if( open > 0 && open < close ) { depth++; scan = open + 4; }
+                    else                           { if( depth == 0 ) { divEnd = close; break; }
+                                                     depth--; scan = close + 6; }
+                }
+                if( divEnd > divStart )
+                {
+                    cleaned.append( "<h3>Methods</h3>" );
+                    cleaned.append( html, divStart, divEnd + 6 );
+                }
             }
         }
 
         cleaned.append( "</body></html>" );
-
         return cleaned.toString();
     }
 
     private static void extractMethodDocs( Map<String, List<DocEntry>> cache, String typeName, String html )
     {
-        // Find the method.detail section using simple string parsing (no regex to avoid StackOverflow)
-        int methodDetailStart = html.indexOf( "<a id=\"method.detail\">" );
-
+        // Java 17: method detail section is a <section> with id="method-detail"
+        int methodDetailStart = html.indexOf( "id=\"method-detail\"" );
         if( methodDetailStart < 0 )
             return;
 
-        // Find all method anchors like <a id="methodName(...)">
         int pos = methodDetailStart;
 
         while( true )
         {
-            // Find next method anchor
-            int anchorStart = html.indexOf( "<a id=\"", pos );
-
-            if( anchorStart < 0 || anchorStart < pos )
+            // Each method lives in: <section class="detail" id="methodName(params)">
+            int sectionStart = html.indexOf( "<section class=\"detail\" id=\"", pos );
+            if( sectionStart < 0 )
                 break;
 
-            // Extract method name from anchor id (between <a id=" and the opening parenthesis)
-            int idStart = anchorStart + 7;  // Length of '<a id="'
-            int parenPos = html.indexOf( "(", idStart );
+            int idStart = sectionStart + 28;    // length of '<section class="detail" id="'
+            int idEnd   = html.indexOf( "\"", idStart );
+            if( idEnd < 0 )
+                break;
 
-            if( parenPos < 0 || parenPos > idStart + 100 )  // Sanity check
+            String anchorId = html.substring( idStart, idEnd );
+
+            // IDs look like "methodName(fully.qualified.Params,...)"
+            int parenPos = anchorId.indexOf( "(" );
+            if( parenPos < 0 )
             {
-                pos = anchorStart + 7;
+                pos = sectionStart + 28;
                 continue;
             }
 
-            String methodName = html.substring( idStart, parenPos );
+            String methodName = anchorId.substring( 0, parenPos );
 
-            // Skip non-method anchors (like "method.detail", "constructor.detail", etc.)
             if( methodName.contains( "." ) || methodName.equals( typeName ) )
             {
-                pos = parenPos;
+                pos = sectionStart + 28;
                 continue;
             }
 
-            // Find the <li class="blockList"> that contains this method's content.
-            // The distance limit must accommodate long method signatures with multiple parameters
-            // (e.g., "mid(java.lang.Object,java.lang.Object,java.lang.Object)" adds ~104 chars).
-            int liStart = html.indexOf( "<li class=\"blockList\">", anchorStart );
-
-            if( liStart < 0 || liStart > anchorStart + 200 )
-            {
-                pos = anchorStart + 7;
-                continue;
-            }
-
-            // Find the closing </li> for this method - it's followed by </ul> and then next <a id=
-            // The method content ends at </li></ul> before the next anchor
-            int nextAnchor = html.indexOf( "<a id=\"", liStart + 10 );
-            int liEnd;
-
-            if( nextAnchor > 0 )
-            {
-                // Find the </ul> before the next anchor
-                liEnd = html.lastIndexOf( "</ul>", nextAnchor );
-
-                if( liEnd < liStart )
-                    liEnd = nextAnchor;
-            }
-            else
-            {
-                // Last method - find </section>
-                liEnd = html.indexOf( "</section>", liStart );
-            }
-
-            if( liEnd < 0 )
+            // Find the closing </section> — method sections are flat (no nested <section>)
+            int sectionEnd = html.indexOf( "</section>", idEnd );
+            if( sectionEnd < 0 )
                 break;
 
-            // Extract method content (from <li> to </ul>)
-            String methodContent = html.substring( liStart, liEnd );
+            String sectionContent = html.substring( sectionStart, sectionEnd );
 
-            // For StdXprFns, only include protected methods (skip public, private, etc.)
-            // Extended types (date, time, list, pair) have public methods that should be included
+            // For StdXprFns only keep protected methods; extended types are all public
             if( "StdXprFns".equals( typeName ) )
             {
-                int sigStart = methodContent.indexOf( "<pre class=\"methodSignature\">" );
-                if( sigStart >= 0 )
+                int modStart = sectionContent.indexOf( "<span class=\"modifiers\">" );
+                if( modStart >= 0 )
                 {
-                    int sigEnd = methodContent.indexOf( "</pre>", sigStart );
-                    if( sigEnd > sigStart )
+                    int modEnd = sectionContent.indexOf( "</span>", modStart );
+                    if( modEnd > modStart )
                     {
-                        String methodSig = methodContent.substring( sigStart + 29, sigEnd );
-                        if( ! methodSig.startsWith( "protected" ) )
+                        String mods = sectionContent.substring( modStart + 24, modEnd )
+                                                    .replaceAll( "<[^>]*>", "" ).trim();
+                        if( ! mods.contains( "protected" ) )
                         {
-                            pos = liEnd;
+                            pos = sectionEnd;
                             continue;
                         }
                     }
                 }
             }
 
-            // Build method documentation HTML
-            String parameters = extractParamsFromContent( methodContent );
             String displayName = methodName.substring( 0, 1 ).toLowerCase() + methodName.substring( 1 );
-            String signature = displayName + "(" + parameters + ")";
-            String methodHtml = buildMethodHtml( typeName, displayName, parameters, methodContent );
+            String parameters  = extractParamsFromSection( sectionContent );
+            String signature   = displayName + "(" + parameters + ")";
+            String methodHtml  = buildMethodHtml( typeName, displayName, parameters, sectionContent );
 
             DocEntry entry = new DocEntry( displayName, signature, methodHtml );
-
-            // Cache with both "typename.methodname" and just "methodname"
             addDoc( cache, typeName + "." + displayName, entry );
             addDoc( cache, displayName, entry );
 
-            pos = liEnd;
+            pos = sectionEnd;
         }
     }
 
-    private static String extractParamsFromContent( String methodContent )
+    /** Extracts human-readable parameter names from the Java 17 {@code <span class="parameters">} element. */
+    private static String extractParamsFromSection( String sectionContent )
     {
-        int sigStart = methodContent.indexOf( "<pre class=\"methodSignature\">" );
-        if( sigStart >= 0 )
-        {
-            int sigEnd = methodContent.indexOf( "</pre>", sigStart );
-            if( sigEnd > sigStart )
-            {
-                String sig = methodContent.substring( sigStart + 29, sigEnd );
-                return extractParams( sig );
-            }
-        }
-        return "";
+        // Java 17: <span class="parameters">(<Type>&nbsp;name, ...)</span>
+        int paramStart = sectionContent.indexOf( "<span class=\"parameters\">" );
+        if( paramStart < 0 )
+            return "";
+
+        int paramEnd = sectionContent.indexOf( "</span>", paramStart );
+        if( paramEnd <= paramStart )
+            return "";
+
+        return extractParams( sectionContent.substring( paramStart + 25, paramEnd ) );
     }
 
     private static String buildMethodHtml( String typeName, String methodName, String parameters, String methodContent )
@@ -565,45 +595,34 @@ public final class UneFunctionDocPopup extends JPopupMenu
         html.append( "<html><body>" );
 
         String displayType = typeName.equals( "StdXprFns" ) ? "Function" : typeName;
+        html.append( "<h3>" ).append( displayType ).append( ":" )
+            .append( methodName ).append( "(" ).append( parameters ).append( ")</h3>" );
 
-        html.append( "<h3>" ).append( displayType ).append( ":" ).append( methodName ).append( "(" ).append( parameters ).append( ")</h3>" );
-
-        // Extract method description
+        // Description block
         int blockStart = methodContent.indexOf( "<div class=\"block\">" );
-
         if( blockStart >= 0 )
         {
             int blockEnd = methodContent.indexOf( "</div>", blockStart );
-
             if( blockEnd > blockStart )
-            {
-                String block = methodContent.substring( blockStart, blockEnd + 6 );
-                html.append( block );
-            }
+                html.append( methodContent, blockStart, blockEnd + 6 );
         }
 
-        // Extract parameters and return info
-        int dlStart = methodContent.indexOf( "<dl>" );
-
+        // Parameters / returns / throws — Java 17 uses <dl class="notes">
+        int dlStart = methodContent.indexOf( "<dl" );
         if( dlStart >= 0 )
         {
             int dlEnd = methodContent.indexOf( "</dl>", dlStart );
-
             if( dlEnd > dlStart )
-            {
-                String dl = methodContent.substring( dlStart, dlEnd + 5 );
-                html.append( dl );
-            }
+                html.append( methodContent, dlStart, dlEnd + 5 );
         }
 
         html.append( "</body></html>" );
-
         return html.toString();
     }
 
     private static String extractParams( String sig )
     {
-        int openParen = sig.indexOf( '(' );
+        int openParen  = sig.indexOf( '(' );
         int closeParen = sig.lastIndexOf( ')' );
         if( openParen < 0 || closeParen <= openParen )
             return "";
@@ -612,14 +631,16 @@ public final class UneFunctionDocPopup extends JPopupMenu
         if( paramsPart.isEmpty() )
             return "";
 
-        // Use regex to remove HTML tags and entities, then split by comma
-        paramsPart = paramsPart.replaceAll( "<[^>]*>", "" ).replaceAll( "&nbsp;", " " ).replaceAll( "&#8203;", "" );
-        String[] parts = paramsPart.split( "," );
-        StringBuilder sb = new StringBuilder( " " );
+        // Strip HTML tags and entities, then reduce to just parameter names
+        paramsPart = paramsPart.replaceAll( "<[^>]*>", "" )
+                               .replaceAll( "&nbsp;",  " " )
+                               .replaceAll( "&#8203;", "" )
+                               .replaceAll( "\n",      " " );
+        String[]      parts = paramsPart.split( "," );
+        StringBuilder sb    = new StringBuilder( " " );
         for( int n = 0; n < parts.length; n++ )
         {
             String p = parts[n].trim();
-            // Get the last word (the parameter name)
             int lastSpace = p.lastIndexOf( ' ' );
             if( lastSpace >= 0 )
                 p = p.substring( lastSpace + 1 );

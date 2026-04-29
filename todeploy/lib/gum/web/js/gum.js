@@ -607,6 +607,7 @@ var gum =
     _loadAllScripts_ : function()
     {
         const aThirdPartyLibs = [  // 3rd party libs (do not change the order for chart.js and dependencies)
+                                    "/gum/lib/gridstack_v7.2.3.all.js",   // Only needed by grid layout, but is better to have it here
                                     "/gum/lib/chart_v4.4.1.min.js",
                                     "/gum/lib/date-fns_v4.1.0.min.js",
                                     "/gum/lib/chartjs-adapter-date-fns_v3.0.0.min.js",

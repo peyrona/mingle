@@ -16,6 +16,7 @@ package com.peyrona.mingle.lang.japi;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import java.io.File;
 import java.io.IOException;
 import java.net.MalformedURLException;
@@ -67,6 +68,7 @@ public final class UtilSys
     public  static final boolean            isFsWritable = isFileSystemWritable();    // Has to be after getHomeDir()
     private static       ILogger            logger       = null;
     private static       IConfig            config       = null;
+    private static volatile IRuntime        runtime      = null;
     private static final long               nAtStart     = System.currentTimeMillis();    // To calculate millis since the application started (see ::elapsed())
     private static final Set<URI>           lstLoaded    = Collections.synchronizedSet( new HashSet<>() );  // Sync is enought because JARs are only added
     private static final Map<Object,Object> mapStorage   = new ConcurrentHashMap<>();                       // Used by ::put(...), ::get(...) and ::del(...)
@@ -75,7 +77,7 @@ public final class UtilSys
 
     static
     {
-        if( ! isAtLeastJava11() )
+        if( ! isAtLeastJava17() )
         {
             System.err.println( "Java version at: "+ UtilSys.getJavaHome() +'\n'+
                                 "is "+ System.getProperty( "java.version" ) +". But minimum needed is Java 11.\n"+
@@ -84,6 +86,17 @@ public final class UtilSys
         }
     }
 
+    //------------------------------------------------------------------------//
+
+    public static void stop()
+    {
+        Executor.pool.shutdownNow();
+        logger  = null;
+        config  = null;
+        runtime = null;
+        mapStorage.clear();
+    }
+    
     //------------------------------------------------------------------------//
 
     /**
@@ -134,6 +147,26 @@ public final class UtilSys
     public static File getEtcDir()
     {
         return new File( fHomeDir, "etc" );
+    }
+
+    /**
+     * Returns the current runtime instance, or null if not yet initialized.
+     *
+     * @return the runtime instance, or null if not initialized
+     */
+    public static IRuntime getRuntime()
+    {
+        return runtime;
+    }
+
+    /**
+     * Sets the runtime instance. Intended to be called by the execution engine at startup.
+     *
+     * @param rt The runtime to register.
+     */
+    public static void setRuntime( IRuntime rt )
+    {
+        runtime = rt;
     }
 
     /**
@@ -386,12 +419,12 @@ public final class UtilSys
      *
      * @return True if the version of the JVM is 11 or above.
      */
-    public static boolean isAtLeastJava11()
+    public static boolean isAtLeastJava17()
     {
         String version = System.getProperty( "java.version" );
                version = version.charAt(0) + (Character.isDigit( version.charAt(1) ) ? version.substring(1,2) : "");
 
-        return Integer.parseInt( version ) >= 11;
+        return Integer.parseInt( version ) >= 17;
     }
 
     /**
@@ -727,6 +760,7 @@ public final class UtilSys
         private Consumer<Exception> error = null;
 
         //------------------------------------------------------------------------//
+        // PRIVATE CONSTRUCTOR
 
         private Executor( boolean fromPool )
         {

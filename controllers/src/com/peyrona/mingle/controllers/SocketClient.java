@@ -120,7 +120,7 @@ public final class SocketClient
         if( isFaked() || isInvalid() )
             return;
 
-        if( ! client.isConnected() )
+        if( client == null || ! client.isConnected() )
         {
             sendWriteError( value, new IOException( "Not connected" ) );
             return;

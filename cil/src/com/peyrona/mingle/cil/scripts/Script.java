@@ -159,7 +159,8 @@ public final class      Script
             }
             catch( Exception exc )
             {
-                // Nothing to do
+                String sCause = UtilStr.toStringBrief( exc );
+                getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Error executing onStop for \""+ name() +"\": "+ sCause, exc ) );
             }
         }
 
@@ -175,25 +176,29 @@ public final class      Script
         if( ! canExecute() )
             return;
 
-        UtilSys.executor( true )
-               .name( getClass().getSimpleName() +':'+ name() )
-               .execute( () ->
+        Runnable task = () ->
+                        {
+                            try
                             {
-                                try
-                                {
-                                    langMgr.execute( name(), getRuntime() );
-                                }
-                                catch( Exception exc )
-                                {
-                                    String sCause = UtilStr.toStringBrief( exc );
-                                    getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Error executing \""+ name() + "\": "+ sCause, exc ) );
-                                }
-
-                                // Can not do following becasue an ONSTART type script can also be invoked by rules later during execution
-                                // if( isOnStart && ! isOnStop )
-                                //     stop();
+                                langMgr.execute( name(), getRuntime() );
                             }
-                       );
+                            catch( Exception exc )
+                            {
+                                String sCause = UtilStr.toStringBrief( exc );
+                                getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Error executing \""+ name() + "\": "+ sCause, exc ) );
+                            }
+
+                            // Can not do following becasue an ONSTART type script can also be invoked by rules later during execution
+                            // if( isOnStart && ! isOnStop )
+                            //     stop();
+                        };
+
+        if( isPreStart || isOnStart )
+            task.run();                 // can not run inside a thread because we needed to guarrantee that after Script::start() method is invoked, all script actions had been accomplished
+        else
+            UtilSys.executor( true )
+                   .name( getClass().getSimpleName() +':'+ name() )
+                   .execute( task );
     }
 
     @Override
@@ -282,6 +287,7 @@ public final class      Script
         {
             prepared = null;
             getRuntime().log( ILogger.Level.SEVERE, '"'+ langName +"\": language not available" );
+            return;
         }
 
         if( isInline )    // ::asFrom has only one item (the source code) and the code is already compiled and checked that it is error free

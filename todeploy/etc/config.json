@@ -66,19 +66,9 @@
                                     "download": [{"local" : "file://{*home.lib*}r-23.0.11.jar",
                                                   "remote": "https://repo1.maven.org/maven2/org/graalvm/r/r/23.0.11/r-23.0.11.jar"}] },
                                    # Native shared libraries (.so / .dll / .dylib) via JNA.
-                                   # "C", "Rust", and "Native" are aliases for the same runtime.
-                                   # jna-5.14.0.jar (~1.5 MB) is downloaded automatically on first use.
-                                   {"name": "C"         , "class": "com.peyrona.mingle.candi.jna.NativeRT",
-                                    "uris": ["file://{*home.lib*}candi.jar",
-                                             "file://{*home.lib*}jna-5.14.0.jar"],
-                                    "download": [{"local" : "file://{*home.lib*}jna-5.14.0.jar",
-                                                  "remote": "https://repo1.maven.org/maven2/net/java/dev/jna/jna/5.14.0/jna-5.14.0.jar"}] },
-                                   {"name": "Rust"      , "class": "com.peyrona.mingle.candi.jna.NativeRT",
-                                    "uris": ["file://{*home.lib*}candi.jar",
-                                             "file://{*home.lib*}jna-5.14.0.jar"] },
                                    {"name": "Native"    , "class": "com.peyrona.mingle.candi.jna.NativeRT",
                                     "uris": ["file://{*home.lib*}candi.jar",
-                                             "file://{*home.lib*}jna-5.14.0.jar"] } ]
+                                             "file://{*home.lib*}jna-5.18.1.jar"] } ]
     },
 
     # Monitoring (HTTP Server and ExEn Bridge) module.

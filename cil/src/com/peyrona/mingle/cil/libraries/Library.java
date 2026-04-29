@@ -19,6 +19,7 @@ import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.commands.ILibrary;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import java.io.IOException;
@@ -74,6 +75,14 @@ public final class      Library
      */
     private ICandi.ILanguage  langMgr;
 
+    /**
+     * Class loader backing the registered Java library class. Must live as long as
+     * the class is registered in {@link UtilLib} — closing it invalidates any later
+     * reflection/resource lookup that needs to resolve types from the JAR. Set during
+     * {@link #start} for Java libraries, closed on {@link #stop}.
+     */
+    private URLClassLoader    javaLoader;
+
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE CONSTRUCTOR
 
@@ -128,7 +137,22 @@ public final class      Library
     @Override
     public void stop()
     {
-        StdXprFns.unregisterLibrary( name() );
+        UtilLib.unregisterLibrary( name() );
+
+        if( javaLoader != null )
+        {
+            try
+            {
+                javaLoader.close();
+            }
+            catch( IOException ex )
+            {
+                getRuntime().log( ILogger.Level.WARNING,
+                                  "Library '"+ name() +"': error closing class loader: "+ ex.getMessage() );
+            }
+
+            javaLoader = null;
+        }
 
         langMgr = null;
 
@@ -170,7 +194,9 @@ public final class      Library
                                                      catch( java.net.MalformedURLException e ) { throw new RuntimeException( e ); } } )
                                       .toArray( java.net.URL[]::new );
 
-        try( URLClassLoader loader = new URLClassLoader( aURLs, getClass().getClassLoader() ) )
+        javaLoader = new URLClassLoader( aURLs, getClass().getClassLoader() );
+
+        try
         {
             List<String> matches = new ArrayList<>();
 
@@ -205,6 +231,7 @@ public final class      Library
                 }
                 catch( IOException ex )
                 {
+                    closeJavaLoaderQuietly();
                     runtime.exit( 0, 1, "Library '"+ name() +"': cannot read JAR '"+ path +"': "+ ex.getMessage() );
                     return;
                 }
@@ -212,29 +239,45 @@ public final class      Library
 
             if( matches.isEmpty() )
             {
+                closeJavaLoaderQuietly();
                 runtime.exit( 0, 1, "Library '"+ name() +"': no class with simple name '"+ name() +"' found in "+ java.util.Arrays.toString( asFrom ) );
                 return;
             }
 
             if( matches.size() > 1 )
             {
+                closeJavaLoaderQuietly();
                 runtime.exit( 0, 1, "Library '"+ name() +"': ambiguous — multiple classes match name '"+ name() +"': "+ matches );
                 return;
             }
 
-            Class<?> clazz = loader.loadClass( matches.get(0) );
+            // Load, init and register — loader stays open until stop() so later
+            // expression-time reflection can still resolve types from the JAR.
+            Class<?> clazz = javaLoader.loadClass( matches.get(0) );
 
             callInitIfPresent( clazz, runtime );
 
-            StdXprFns.registerLibrary( name(), clazz );
-        }
-        catch( IOException ex )
-        {
-            runtime.exit( 0, 1, "Library '"+ name() +"': I/O error loading JAR(s): "+ ex.getMessage() );
+            UtilLib.registerLibrary( name(), clazz );
         }
         catch( ClassNotFoundException ex )
         {
+            closeJavaLoaderQuietly();
             runtime.exit( 0, 1, "Library '"+ name() +"': class not found after scan: "+ ex.getMessage() );
+        }
+    }
+
+    /**
+     * Closes {@link #javaLoader} best-effort on error paths in {@link #loadJavaLibrary}
+     * to avoid leaking file descriptors when {@link IRuntime#exit} returns instead of
+     * hard-terminating the JVM.
+     */
+    private void closeJavaLoaderQuietly()
+    {
+        if( javaLoader != null )
+        {
+            try { javaLoader.close(); }
+            catch( IOException ignored ) { }
+            javaLoader = null;
         }
     }
 
@@ -291,7 +334,7 @@ public final class      Library
         langMgr.bind( name(), prepared );
         langMgr.configure( name(), config );
 
-        StdXprFns.registerScriptLibrary( name(), langMgr );
+        UtilLib.registerScriptLibrary( name(), langMgr );
 
         runtime.log( ILogger.Level.INFO,
                      "Library '"+ name() +"' ("+ langName +") loaded successfully." );

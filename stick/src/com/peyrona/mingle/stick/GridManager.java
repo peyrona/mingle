@@ -122,55 +122,55 @@ final class GridManager
                        BiConsumer<Exception,String> onFailure,
                        Runnable                     voidThread )
     {
-        if( gridMgr != null )
-        {
-            // If this is a Grid Node (and it is valid), devices in other nodes (referenced in this Stick) have to be identified.
-            // Such devices can be only in Rule's WHEN and IF clauses.
-
-            for( ICommand cmd : rt.all( "rules" ) )
-            {
-                IXprEval eval4When = rt.newXprEval().build( ((IRule) cmd).getWhen(), (r) -> {}, rt::getGroupMemberNames );
-
-                for( String sName : eval4When.getVars().keySet() )
-                {
-                    if( deviMgr.named( sName ) == null )          // If device manager does not have a device with this name,
-                        deviMgr.createRemoteDevice( sName );      // it is because that device exists in another ExEn.
-                }
-
-                if( ((IRule) cmd).getIf() != null )
-                {
-                    IXprEval eval4If = rt.newXprEval().build( ((IRule) cmd).getIf(), (r) -> {}, rt::getGroupMemberNames );
-
-                    for( String sName : eval4If.getVars().keySet() )
-                    {
-                        if( deviMgr.named( sName ) == null )      // If device manager does not have a device with this name,
-                            deviMgr.createRemoteDevice( sName );  // it is because that device exists in another ExEn.
-                    }
-                }
-            }
-
-            // After external devices are identified, the grid can be started
-
-            try
-            {
-                gridMgr.start();
-                System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
-            }
-            catch( MingleException me )
-            {
-                onFailure.accept( null, "One or more communications ports are already in use" );
-            }
-            catch( Exception exc )
-            {
-                onFailure.accept( exc, "It looks like there is another ExEn running using same config" );
-            }
-        }
-        else
+        if( gridMgr == null )
         {
             if( deviMgr.isEmpty() && ruleMgr.isEmpty() && srptMgr.isEmpty() )
                 onFailure.accept( null, "Useless ExEn: no Devices, no Rules, no Scripts and no communications" );
 
             voidThread.run();
+
+            return;
+        }
+
+        // If this is a Grid Node (and it is valid), devices in other nodes (referenced in this Stick) have to be identified.
+        // Such devices can be only in Rule's WHEN and IF clauses.
+
+        for( ICommand cmd : rt.all( "rules" ) )
+        {
+            IXprEval eval4When = rt.newXprEval().build( ((IRule) cmd).getWhen(), (r) -> {}, rt::getGroupMemberNames );
+
+            for( String sName : eval4When.getVars().keySet() )
+            {
+                if( deviMgr.named( sName ) == null )          // If device manager does not have a device with this name,
+                    deviMgr.createRemoteDevice( sName );      // it is because that device exists in another ExEn.
+            }
+
+            if( ((IRule) cmd).getIf() != null )
+            {
+                IXprEval eval4If = rt.newXprEval().build( ((IRule) cmd).getIf(), (r) -> {}, rt::getGroupMemberNames );
+
+                for( String sName : eval4If.getVars().keySet() )
+                {
+                    if( deviMgr.named( sName ) == null )      // If device manager does not have a device with this name,
+                        deviMgr.createRemoteDevice( sName );  // it is because that device exists in another ExEn.
+                }
+            }
+        }
+
+        // After external devices are identified, the grid can be started
+
+        try
+        {
+            gridMgr.start();
+            System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
+        }
+        catch( MingleException me )
+        {
+            onFailure.accept( null, "One or more communications ports are already in use" );
+        }
+        catch( Exception exc )
+        {
+            onFailure.accept( exc, "It looks like there is another ExEn running using same config" );
         }
     }
 

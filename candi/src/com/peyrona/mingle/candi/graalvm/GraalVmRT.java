@@ -593,11 +593,5 @@ public abstract class GraalVmRT implements ICandi.ILanguage
             this.callName = callName;
             this.context  = context;
         }
-
-        /** Releases the persistent GraalVM {@link Context}. */
-        void close()
-        {
-            context.close();
-        }
     }
 }

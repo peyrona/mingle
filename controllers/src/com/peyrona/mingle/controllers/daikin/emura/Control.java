@@ -1,15 +1,27 @@
+/*
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 
 package com.peyrona.mingle.controllers.daikin.emura;
 
 import com.peyrona.mingle.controllers.ControllerBase;
-import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import com.peyrona.mingle.lang.japi.RateMonitor;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.lexer.Language;
+import com.peyrona.mingle.lang.messages.MsgChangeActuator;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
 import java.io.IOException;
 import java.util.Locale;
@@ -41,8 +53,8 @@ public final class   Control
     private final static short T_TARGET  = 4;
     private final static short H_TARGET  = 5;
 
-    private       Talker      talker  = null;
-    private final RateMonitor monitor = new RateMonitor( 5, 3000 );
+    private          Talker talker  = null;
+    private volatile long   lastEvt = System.currentTimeMillis();
 
     //------------------------------------------------------------------------//
 
@@ -118,18 +130,25 @@ public final class   Control
             for( Object key : ((pair) oRequest).keys() )
                 faked.put( key, ((pair) oRequest).get( key ) );
 
-            sendReaded( faked );
+            sendChanged( faked );
         }
         else
         {
             if( checkOfClass( oRequest, pair.class ) )
             {
-                if( monitor.notifyTooFast() )
+                long    now  = System.currentTimeMillis();
+                boolean post = (now - lastEvt) < 2500;
+
+                if( post )
                 {
-                    sendWriteError( oRequest, new MingleException( "Too many write requests per second" ) );
+                    MsgChangeActuator message = new MsgChangeActuator( getDeviceName(), oRequest );
+
+                    getRuntime().bus().post( message, 2500 );
                 }
                 else
                 {
+                    lastEvt = now;    // Only advance the gate when a write actually goes through
+
                     try
                     {
                         String sNewState = talker.write( encode( (pair) oRequest ) );

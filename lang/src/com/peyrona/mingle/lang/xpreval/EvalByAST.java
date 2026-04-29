@@ -4,6 +4,7 @@ package com.peyrona.mingle.lang.xpreval;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilType;
@@ -104,7 +105,7 @@ final class EvalByAST
 
             for( XprToken xt : lstInfix )
             {
-                if( xt.isType( XprToken.VARIABLE ) && ! StdXprFns.isLibraryNamespace( xt.text() ) )
+                if( xt.isType( XprToken.VARIABLE ) && ! UtilLib.isLibraryNamespace( xt.text() ) )
                     mapVars.put( xt.text(), null );
             }
 
@@ -171,7 +172,7 @@ final class EvalByAST
         return lstErrors;    // Can not be unmodifiable
     }
 
-    boolean isFutureing()
+    boolean isFuturing()
     {
         return (executor != null) &&
                (executor.getActiveCount() > 0);
@@ -182,7 +183,15 @@ final class EvalByAST
         if( ! mapVars.containsKey( name ) )
             return false;
 
-        assert value != null;    // Do not move
+        if( value == null )
+            throw new MingleException( "Variable '"+ name +"' cannot be set to null" );
+
+        // Capture the old value before overwriting so that edge operators and prev() can read it.
+        // Stored via ThreadLocal (StdXprFns.setPreviousValue) — NOT in mapVars — to avoid polluting
+        // the hasAllVars stream check with null sentinel values on cold start.
+        Object oldValue = mapVars.get( name );
+
+        StdXprFns.setPreviousValue( name, oldValue );    // Readable by evalEdgeOp() and prev() on the same thread
 
         mapVars.put( name, value );
 
@@ -225,7 +234,7 @@ final class EvalByAST
         }
         else                    // The expression has futures --------------------------------------------------------------------------------
         {                       // A future always resolves to boolean
-            if( ! isFutureing() )
+            if( ! isFuturing() )
             {
                 root.reset();
 
@@ -363,8 +372,9 @@ final class EvalByAST
             }
             else
             {
-                return Language.isBooleanOp( token.text() ) ||
-                       Language.isRelationalOp( token.text() );
+                return Language.isBooleanOp( token.text() )    ||
+                       Language.isRelationalOp( token.text() ) ||
+                       Language.isEdgeOp( token.text() );
             }
         }
 
@@ -434,26 +444,20 @@ final class EvalByAST
             currentMaxDelay = delay;
         }
 
-        // #10: Detect WITHIN nested inside AFTER (semantically confusing)
         if( node.isAfter() && insideWithin )
             lstErrors.add( new CodeError( "AFTER nested inside WITHIN: the AFTER delay may exceed the enclosing WITHIN window", node.token() ) );
 
         if( node.isWithin() && insideAfter )
             lstErrors.add( new CodeError( "WITHIN nested inside AFTER: the enclosing AFTER may expire before the WITHIN window completes", node.token() ) );
 
-        // #6: AFTER/WITHIN sub-expression without variables is pointless
         if( node.isAfter() || node.isWithin() )
         {
             if( ! hasVariables( node.left() ) )
                 lstErrors.add( new CodeError( node.token().text().toUpperCase() +" sub-expression has no variables: the delay is pointless", node.token() ) );
         }
 
-        // #2: Type compatibility for numeric-only operators with constant operands
-        // #3: Division by zero on constants (mod, floor, ceiling)
-        bValid &= validateOperatorTypes( node );
-
-        // #4: Method receiver type checking (':' operator)
-        bValid &= validateMethodReceiver( node );
+        bValid &= validateOperatorTypes(  node );
+        bValid &= validateMethodReceiver( node );  // Method receiver type checking (':' operator)
 
         boolean nowInsideAfter  = insideAfter  || node.isAfter();
         boolean nowInsideWithin = insideWithin || node.isWithin();
@@ -833,7 +837,7 @@ final class EvalByAST
                 case XprToken.VARIABLE:
                     stack.add( new ASTNode().token( token ) );
 
-                    if( token.isType( XprToken.VARIABLE ) && ! StdXprFns.isLibraryNamespace( token.text() ) )
+                    if( token.isType( XprToken.VARIABLE ) && ! UtilLib.isLibraryNamespace( token.text() ) )
                         mapVars.put( token.text(), null );
                     break;
 

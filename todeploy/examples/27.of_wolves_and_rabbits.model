@@ -1,9 +1,9 @@
-{"transpiler":"MSP Transpiler v.2026-03-22",
+{"transpiler":"MSP Transpiler v.2026-03-26",
 "code-version":"1.0",
-"uid":"35dc18c2-1ddb-4e9b-ae9f-e78667df1505",
-"generated":"2026-03-22T23:02:47.129972668Z",
+"uid":"28c0a690-c8fb-413e-adbd-37baf1e095c2",
+"generated":"2026-03-27T16:52:19.673395708Z",
 "commands":[
-{"cmd":"script","name":null,"language":"une","onstart":true,"onstop":false,"prestart":false,"prestop":false,"inline":true,"from":["put( \"day\" , 0)\n put( \"gate\" , pair())\n\n console = \"════════════════════════════════════════════════════\" \n console = \"            Of Wolves and Rabbits\" \n console = \"            A Tale Told in Rules\" \n console = \"════════════════════════════════════════════════════\" \n console = \"\\n\" \n console = \"The meadow awakens. Spring is in the air.\" \n console = \"Sixty rabbits graze contentedly in the tall grass,\" \n console = \"unaware that eight wolves watch from the tree line.\" \n console = \"\\n\""],"call":null},
+{"cmd":"script","name":null,"language":"une","onstart":true,"onstop":false,"prestart":false,"prestop":false,"inline":true,"from":["put( \"day\" , 0)\n put( \"gate\" , pair())\n\n console = \"════════════════════════════════════════════════════\" \n console = \"             Of Wolves and Rabbits\" \n console = \"             A Tale Told in Rules\" \n console = \"════════════════════════════════════════════════════\" \n console = \"\\n\" \n console = \"The meadow awakens. Spring is in the air.\" \n console = \"Sixty rabbits graze contentedly in the tall grass,\" \n console = \"unaware that eight wolves watch from the tree line.\" \n console = \"\\n\""],"call":null},
 {"cmd":"device","name":"day_tick","driver":"clockdriver","config":{"interval":2000},"init":null},
 {"cmd":"device","name":"rabbits","driver":"cellsetdriver","config":{"value":60},"init":null},
 {"cmd":"device","name":"wolves","driver":"cellsetdriver","config":{"value":8},"init":null},

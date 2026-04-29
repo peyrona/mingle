@@ -1,8 +1,9 @@
 package com.peyrona.mingle.lang.xpreval.functions;
 
 import com.peyrona.mingle.lang.MingleException;
-import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.ILogger;
+import com.peyrona.mingle.lang.interfaces.commands.ICommand;
+import com.peyrona.mingle.lang.interfaces.commands.IRule;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilReflect;
@@ -53,207 +54,14 @@ public final class StdXprFns
     private static final Class[] THREE_CLASS_ARRAY = { Object.class, Object.class, Object.class };
 
     // ThreadLocal for rule-scoped triggered device info (WHEN sets it, THEN reads it on same thread)
-    private static final ThreadLocal<pair> threadTriggered = ThreadLocal.withInitial( () -> new pair() );
+    private static final ThreadLocal<pair>              threadTriggered = ThreadLocal.withInitial( () -> new pair() );
+
+    // ThreadLocal for previous device values: populated by EvalByAST.set() so that prev() is available
+    // in both WHEN and THEN clause evaluators running on the same thread.
+    private static final ThreadLocal<Map<String,Object>> threadPrev     = ThreadLocal.withInitial( HashMap::new );
 
     // Single instance for MethodHandle invocations (protected methods are instance methods)
     private static final StdXprFns INSTANCE = new StdXprFns();
-
-    // LIBRARY command registry: maps library name (lower-case) → loaded class
-    // Phase 1 (transpile-time): name registered with Void.class sentinel so the tokenizer accepts LibraryName:fn()
-    // Phase 2 (runtime): Void.class replaced by the real class so invokeLibrary() can dispatch via reflection (Java path)
-    private static final ConcurrentHashMap<String,Class<?>>           libraryRegistry    = new ConcurrentHashMap<>();
-
-    // Script-based library registry: maps library name (lower-case) → ILanguage runtime
-    // Used by the GraalVM path (Python, JavaScript, Ruby …): invokeLibrary() delegates to
-    // ILanguage.invokeFunction() instead of Java reflection when an entry exists here.
-    private static final ConcurrentHashMap<String,ICandi.ILanguage>   scriptLangRegistry = new ConcurrentHashMap<>();
-
-    //------------------------------------------------------------------------//
-    // LIBRARY REGISTRY
-
-    /**
-     * Registers a library name at transpile time so the expression tokenizer accepts
-     * {@code LibraryName:functionName()} syntax without a class yet being loaded.
-     *
-     * @param sName Library name as declared in the LIBRARY Une command (case-insensitive).
-     */
-    public static void registerLibraryName( String sName )
-    {
-        if( UtilStr.isNotEmpty( sName ) )
-            libraryRegistry.putIfAbsent( sName.toLowerCase(), Void.class );
-    }
-
-    /**
-     * Registers a library name together with its loaded class at runtime.
-     * Called by LibraryManager after loading the library JAR/module.
-     *
-     * @param sName  Library name as declared in the LIBRARY Une command (case-insensitive).
-     * @param clazz  The loaded class whose public methods will be dispatched by {@link #invokeLibrary}.
-     */
-    public static void registerLibrary( String sName, Class<?> clazz )
-    {
-        if( UtilStr.isNotEmpty( sName ) && clazz != null )
-            libraryRegistry.put( sName.toLowerCase(), clazz );
-    }
-
-    /**
-     * Registers a script-based library (Python, JavaScript, Ruby, C via JNA …) so that
-     * {@link #invokeLibrary} can delegate function calls to the language runtime.
-     * <p>
-     * Called by {@link com.peyrona.mingle.cil.libraries.Library} at startup after the
-     * module has been loaded via {@link ICandi.ILanguage#bind}. The entry is written to
-     * {@link #scriptLangRegistry} for actual dispatch, and a {@code Void.class} sentinel is
-     * also added to {@link #libraryRegistry} (if not already present) so that
-     * {@link #isLibraryNamespace} returns {@code true} at runtime — even when stick.jar
-     * runs as a separate JVM from the transpiler and {@link #registerLibraryName} was never
-     * called in this process.
-     *
-     * @param sName   Library name as declared in the LIBRARY Une command (case-insensitive).
-     * @param langMgr The {@link ICandi.ILanguage} runtime that has the module bound to it.
-     */
-    public static void registerScriptLibrary( String sName, ICandi.ILanguage langMgr )
-    {
-        if( UtilStr.isNotEmpty( sName ) && langMgr != null )
-        {
-            String key = sName.toLowerCase();
-            libraryRegistry.putIfAbsent( key, Void.class );   // ensure isLibraryNamespace() returns true at runtime
-            scriptLangRegistry.put( key, langMgr );
-        }
-    }
-
-    /**
-     * Returns true if the given name is a registered library namespace.
-     * Used by the expression tokenizer and AST evaluator to distinguish library calls
-     * from device variable references.
-     *
-     * @param sName Name to test.
-     * @return true if the name was registered via {@link #registerLibraryName} or {@link #registerLibrary}.
-     */
-    public static boolean isLibraryNamespace( String sName )
-    {
-        return UtilStr.isNotEmpty( sName ) && libraryRegistry.containsKey( sName.toLowerCase() );
-    }
-
-    /**
-     * Removes a library from the registry. Called when a Library command is stopped.
-     *
-     * @param sName Library name to remove (case-insensitive).
-     */
-    public static void unregisterLibrary( String sName )
-    {
-        if( UtilStr.isNotEmpty( sName ) )
-        {
-            String key = sName.toLowerCase();
-
-            libraryRegistry.remove( key );
-            scriptLangRegistry.remove( key );
-            libraryInstances.entrySet().removeIf( e -> e.getKey().getSimpleName().equalsIgnoreCase( sName ) );
-        }
-    }
-
-    /**
-     * Invokes a function from a registered library.
-     * <p>
-     * Before invocation, Une extended types in {@code aoArgs} are marshalled to their Java native
-     * equivalents ({@code list}→{@code java.util.List}, {@code pair}→{@code java.util.Map},
-     * {@code date}→{@code java.time.LocalDate}, {@code time}→{@code java.time.LocalTime}).
-     * The return value is marshalled back from Java native types to Une types using the same mapping.
-     *
-     * @param sLib   Library name (case-insensitive).
-     * @param sFn    Function name to invoke.
-     * @param aoArgs Arguments to pass (may be null or empty).
-     * @return The function result, marshalled to the appropriate Une type.
-     * @throws MingleException if the library is not fully loaded yet, or if the function is not found,
-     *                         or if invocation fails.
-     */
-    public static Object invokeLibrary( String sLib, String sFn, Object... aoArgs )
-    {
-        Class<?> clazz = libraryRegistry.get( sLib.toLowerCase() );
-
-        if( clazz == null )
-            throw new MingleException( "Library \""+ sLib +"\" is not registered."
-                                     + " Declare a LIBRARY command before using it in rules." );
-
-        // Script-based library path (Python, JavaScript, Ruby … via GraalVM)
-        if( clazz == Void.class )
-        {
-            ICandi.ILanguage langMgr = scriptLangRegistry.get( sLib.toLowerCase() );
-
-            if( langMgr == null )
-                throw new MingleException( "Library \""+ sLib +"\" is not loaded yet."
-                                         + " Ensure the LIBRARY command started successfully." );
-
-            Object[] marshalledArgs = marshallArgsIn( aoArgs );
-
-            try
-            {
-                return marshallResultOut( langMgr.invokeFunction( sLib, sFn, marshalledArgs ) );
-            }
-            catch( Exception ex )
-            {
-                throw new MingleException( "Library \""+ sLib +"\" function \""+ sFn
-                                         + "\": "+ ex.getMessage(), ex );
-            }
-        }
-
-        Object[] marshalledArgs  = marshallArgsIn( aoArgs );
-        int      nArgs           = (marshalledArgs == null) ? 0 : marshalledArgs.length;
-        Class[]  aParamType;
-
-        switch( nArgs )
-        {
-            case 0:  aParamType = EMPTY_CLASS_ARRAY; break;
-            case 1:  aParamType = ONE_CLASS_ARRAY;   break;
-            case 2:  aParamType = TWO_CLASS_ARRAY;   break;
-            case 3:  aParamType = THREE_CLASS_ARRAY; break;
-            default:
-                aParamType = new Class[ nArgs ];
-                Arrays.fill( aParamType, Object.class );
-                break;
-        }
-
-        MethodHandle handle = getMethod( clazz, sFn, aParamType, marshalledArgs );
-
-        try
-        {
-            Object result;
-
-            // Static methods: no target instance needed — invoke with null as first arg and rely on MethodHandle
-            // For instance methods a no-arg constructor is used to obtain an instance (stateless library pattern)
-            Object target = getOrCreateTarget( clazz, sFn, nArgs );
-
-            if( marshalledArgs == null || marshalledArgs.length == 0 )
-            {
-                result = (target == null) ? handle.invoke() : handle.invoke( target );
-            }
-            else
-            {
-                switch( marshalledArgs.length )
-                {
-                    case 1: result = (target == null) ? handle.invoke( marshalledArgs[0] )
-                                                      : handle.invoke( target, marshalledArgs[0] ); break;
-                    case 2: result = (target == null) ? handle.invoke( marshalledArgs[0], marshalledArgs[1] )
-                                                      : handle.invoke( target, marshalledArgs[0], marshalledArgs[1] ); break;
-                    case 3: result = (target == null) ? handle.invoke( marshalledArgs[0], marshalledArgs[1], marshalledArgs[2] )
-                                                      : handle.invoke( target, marshalledArgs[0], marshalledArgs[1], marshalledArgs[2] ); break;
-                    default:
-                        Object[] allArgs = (target == null) ? marshalledArgs
-                                                            : prependTarget( target, marshalledArgs );
-                        result = handle.invokeWithArguments( allArgs );
-                        break;
-                }
-            }
-
-            return marshallResultOut( result );
-        }
-        catch( Throwable exc )
-        {
-            MingleException me = new MingleException( "Error executing library function " +
-                                                       toInvocation( clazz, sFn, marshalledArgs ), exc.getCause() );
-            UtilSys.getLogger().log( ILogger.Level.SEVERE, me );
-            throw me;
-        }
-    }
 
     //------------------------------------------------------------------------//
     // PUBLIC INTERFACE (NON STATIC)
@@ -423,6 +231,34 @@ public final class StdXprFns
     {
         threadTriggered.get().put( "name" , devName  )
                              .put( "value", devValue );
+    }
+
+    /**
+     * Records the previous value of a device so that the {@code prev()} function can
+     * return it during the evaluation of WHEN and THEN clauses on the same thread.
+     * <p>
+     * Called by {@code EvalByAST.set()} before the new value overwrites the old one.
+     *
+     * @param devName   The device name.
+     * @param prevValue The value the device held before the current update (may be {@code null}
+     *                  on the first evaluation — cold-start).
+     */
+    public static void setPreviousValue( String devName, Object prevValue )
+    {
+        threadPrev.get().put( devName, prevValue );
+    }
+
+    /**
+     * Returns the previous value of the named device as recorded by the most recent
+     * {@link com.peyrona.mingle.lang.xpreval.EvalByAST#set} call on the current thread.
+     * Used by edge-detection operators in {@code ASTNode.evalEdgeOp()}.
+     *
+     * @param devName The device name.
+     * @return The previous value, or {@code null} on cold start (no prior value recorded yet).
+     */
+    public static Object getPreviousValue( String devName )
+    {
+        return threadPrev.get().get( devName );
     }
 
     //------------------------------------------------------------------------//
@@ -1288,16 +1124,6 @@ public final class StdXprFns
         return UtilStr.trim( string.toString() );
     }
 
-//    blank()
-//    {
-//
-//    }
-//
-//    isBlank()
-//    {
-//
-//    }
-
     /**
      * Reverses the string representation of an object.
      * <p>
@@ -1775,6 +1601,28 @@ public final class StdXprFns
     // MISCELLANEOUS FUNCTIONS
 
     /**
+     * Returns the previous value of the named device, i.e. the value it held immediately before
+     * the current evaluation cycle began.
+     * <p>
+     * On the first evaluation after startup (cold start), there is no prior value and this
+     * function returns {@code null}. User expressions that call {@code prev()} should guard
+     * against {@code null} if a cold-start result matters.
+     * <p>
+     * Example:
+     * <ul>
+     *    <li><code>prev(temperature)</code> returns the temperature reading from the previous cycle</li>
+     * </ul>
+     *
+     * @param devName The device name (passed as a string or variable reference).
+     * @return The previous value, or {@code null} if no previous value exists yet.
+     */
+    @SuppressWarnings("unused")
+    protected Object prev( Object devName )
+    {
+        return threadPrev.get().get( devName.toString() );
+    }
+
+    /**
      * Returns the current time in milliseconds elapsed since January 1, 1970 UTC.
      * <p>
      * Note that while the unit of time of the return value is a millisecond, the
@@ -1962,7 +1810,7 @@ public final class StdXprFns
     @SuppressWarnings("unused")
     protected Object exit()
     {
-        System.exit( 0 );    // The Runtime.getRuntime().addShutdownHook( ... ) will be invoked
+        UtilSys.getRuntime().exit( 0 );
         return "";
     }
 
@@ -2133,6 +1981,56 @@ public final class StdXprFns
         return UtilSys.del( key );
     }
 
+    /**
+     * Enables the RULE with the given name so it reacts to device changes.
+     * <p>
+     * This function is intended to be used in a THEN clause:
+     * <pre>THEN enable("my_rule")</pre>
+     *
+     * @param ruleName The name of the RULE to enable (case-insensitive).
+     * @return {@code true} if the rule was found and enabled, {@code false} otherwise.
+     */
+    @SuppressWarnings("unused")
+    protected boolean enable( Object ruleName )
+    {
+        IRule rule = getRule( ruleName );
+
+        if( rule != null )
+            rule.enable();
+
+        return (rule != null);
+    }
+
+    /**
+     * Disables the RULE with the given name so it ignores device changes without removing it.
+     * <p>
+     * This function is intended to be used in a THEN clause:
+     * <pre>THEN disable("my_rule")</pre>
+     *
+     * @param ruleName The name of the RULE to disable (case-insensitive).
+     * @return {@code true} if the rule was found and disabled, {@code false} otherwise.
+     */
+    @SuppressWarnings("unused")
+    protected boolean disable( Object ruleName )
+    {
+        IRule rule = getRule( ruleName );
+
+        if( rule != null )
+            rule.disable();
+
+        return (rule != null);
+    }
+
+    private static IRule getRule( Object ruleName )
+    {
+        if( ruleName == null || UtilSys.getRuntime() == null )
+            return null;
+
+        ICommand cmd = UtilSys.getRuntime().get( ruleName.toString() );
+
+        return (cmd instanceof IRule) ? (IRule) cmd : null;
+    }
+
     //------------------------------------------------------------------------//
     // PRIVATE CONSTRUCTOR
 
@@ -2183,134 +2081,6 @@ public final class StdXprFns
         }
 
         return UtilStr.removeLast( sb, 1 ).append( ')' ).toString();
-    }
-
-    //------------------------------------------------------------------------//
-    // LIBRARY HELPERS (private)
-    //------------------------------------------------------------------------//
-
-    /**
-     * Marshalls Une extended types in the argument array to their Java native equivalents so that
-     * library methods written without LANG dependencies can receive standard Java types.
-     * Primitives (Number, String, Boolean) pass through unchanged.
-     *
-     * @param aoArgs Original argument array (may be null).
-     * @return A new array with marshalled values, or null if aoArgs was null or empty.
-     */
-    private static Object[] marshallArgsIn( Object[] aoArgs )
-    {
-        if( aoArgs == null || aoArgs.length == 0 )
-            return null;
-
-        Object[] result = new Object[ aoArgs.length ];
-
-        for( int n = 0; n < aoArgs.length; n++ )
-            result[n] = marshallIn( aoArgs[n] );
-
-        return result;
-    }
-
-    private static Object marshallIn( Object o )
-    {
-        if( o instanceof list )
-        {
-            return ((list) o).asList();
-        }
-        if( o instanceof pair )
-        {
-            pair               p = (pair) o;
-            Map<Object,Object> m = new HashMap<>();
-
-            for( Object k : p.keys().asList() )
-                m.put( k, p.get( k ) );
-
-            return m;
-        }
-        if( o instanceof date ) return ((date) o).asLocalDate();
-        if( o instanceof time ) return ((time) o).asLocalTime();
-        return o;    // Number, String, Boolean, null → pass through
-    }
-
-    /**
-     * Marshalls a library function return value from Java native types back to Une extended types.
-     *
-     * @param result Raw return value from the library method (may be null).
-     * @return The appropriate Une type, or the original value if no mapping applies.
-     */
-    private static Object marshallResultOut( Object result )
-    {
-        if( result == null )
-            return null;
-
-        if( result instanceof java.util.List )
-        {
-            return new list( ((java.util.List<?>) result).toArray() );
-        }
-        if( result instanceof java.util.Map )
-        {
-            pair p = new pair();
-
-            for( Map.Entry<?,?> e : ((java.util.Map<?,?>) result).entrySet() )
-                p.put( e.getKey(), e.getValue() );
-
-            return p;
-        }
-        if( result instanceof java.time.LocalDate ) return new date( result.toString() );
-        if( result instanceof java.time.LocalTime ) return new time( result.toString() );
-        return result;
-    }
-
-    /**
-     * Returns a target instance for a library method invocation.
-     * Static methods need no target (returns null); instance methods get a shared instance
-     * created via the no-arg constructor, cached per class.
-     *
-     * @param clazz  Library class.
-     * @param sFn    Method name (for error reporting only).
-     * @param nArgs  Argument count (for method lookup).
-     * @return null for static methods, or a cached instance for instance methods.
-     */
-    private static final ConcurrentHashMap<Class<?>,Object> libraryInstances = new ConcurrentHashMap<>();
-
-    private static Object getOrCreateTarget( Class<?> clazz, String sFn, int nArgs )
-    {
-        // Find the method to determine if it is static
-        java.lang.reflect.Method found = null;
-
-        for( java.lang.reflect.Method m : clazz.getMethods() )
-        {
-            if( m.getName().equalsIgnoreCase( sFn ) &&
-                (m.isVarArgs() || m.getParameterCount() == nArgs) )
-            {
-                found = m;
-                break;
-            }
-        }
-
-        if( found == null || java.lang.reflect.Modifier.isStatic( found.getModifiers() ) )
-            return null;    // Static: no instance needed
-
-        // Instance method: get or create a shared instance
-        return libraryInstances.computeIfAbsent( clazz, c ->
-        {
-            try
-            {
-                return c.getDeclaredConstructor().newInstance();
-            }
-            catch( Exception e )
-            {
-                throw new MingleException( "Library class \"" + c.getSimpleName() +
-                                           "\" has no accessible no-arg constructor for instance methods.", e );
-            }
-        } );
-    }
-
-    private static Object[] prependTarget( Object target, Object[] args )
-    {
-        Object[] result = new Object[ args.length + 1 ];
-        result[0] = target;
-        System.arraycopy( args, 0, result, 1, args.length );
-        return result;
     }
 
     //------------------------------------------------------------------------//
@@ -2378,9 +2148,9 @@ public final class StdXprFns
 
             final MapKey other = (MapKey) obj;
 
-            return this.hashCode == other.hashCode              &&
-                   Objects.equals( this.clazz  , other.clazz  ) &&
-                   Objects.equals( this.fnName , other.fnName ) &&
+            return this.hashCode == other.hashCode               &&
+                   Objects.equals( this.clazz  , other.clazz   ) &&
+                   Objects.equals( this.fnName , other.fnName  ) &&
                    Arrays.equals(  this.aParams, other.aParams );
         }
     }

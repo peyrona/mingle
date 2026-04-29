@@ -241,9 +241,10 @@ final class XprToken implements ITokenable
         {
             switch( type )
             {
-                case BOOLEAN: value = UtilType.toBoolean( text ); break;
-                case NUMBER : value = UtilType.toFloat(   text ); break;
-                case STRING : value = text;                       break;
+
+                case STRING : value = text; break;
+                case BOOLEAN:
+                case NUMBER : value = UtilType.toUneBasics( text ); break;
                 default     : throw new MingleException( MingleException.SHOULD_NOT_HAPPEN );
             }
         }

@@ -32,6 +32,41 @@ if( ! Array.prototype.last )
                             };
 };
 
+if( ! Array.prototype.at )
+{
+    Object.defineProperty( Array.prototype, 'at',
+    {
+        value: function( index )
+        {
+            // 1. Handle null/undefined this (for generic use)
+            if( this == null )
+                throw new TypeError('Array.prototype.at called on null or undefined');
+
+            // 2. Convert this to an object
+            const O = Object( this );
+
+            // 3. Get the length property (coerced to integer)
+            const len = Math.trunc( Math.max( 0, Number( O.length) ) ) || 0;
+
+            // 4. Convert index to integer (using Math.trunc to emulate ToIntegerOrInfinity)
+            let idx = Math.trunc( Number( index ) );
+
+            // 5. Handle negative index
+            if( idx < 0 ) idx += len;
+
+            // 6. If index out of range, return undefined
+            if( idx < 0 || idx >= len ) return undefined;
+
+            // 7. Otherwise, return the element at that index
+            return O[idx];
+        },
+
+        writable: true,
+        configurable: true,
+        enumerable: false
+    } );
+}
+
 // Strings -------------------------------------------------------------------------------------------
 
 if( ! String.prototype.includes )

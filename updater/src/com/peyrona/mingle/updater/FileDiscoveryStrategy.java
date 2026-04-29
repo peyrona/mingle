@@ -27,13 +27,20 @@ public interface FileDiscoveryStrategy
      */
     class FileEntry
     {
-        public final String path;
-        public final String expectedHash;
-        
+        public final String  path;
+        public final String  expectedHash;
+        public final boolean isProtected;
+
         public FileEntry( String path, String expectedHash )
         {
-            this.path = path;
+            this( path, expectedHash, false );
+        }
+
+        public FileEntry( String path, String expectedHash, boolean isProtected )
+        {
+            this.path         = path;
             this.expectedHash = expectedHash;
+            this.isProtected  = isProtected;
         }
     }
 }

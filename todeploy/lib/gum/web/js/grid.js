@@ -684,7 +684,7 @@ var grid =
                     '<li><b>Allow resizing</b> — enables resizing cards by dragging their corners.</li>'            +
                     '<li><b>Hide/Show scrollbar</b> — toggles the scrollbar on cards with an inner grid.</li>'      +
                 '</ul>'                                                                                             +
-                '<p style="margin-top:6px;">These settings are saved in this computer.</p>',
+                '<p style="margin-top:6px;">These settings are saved only in this computer.</p>',
                 'Dashboard help'
             );
         } );

@@ -227,7 +227,14 @@ public final class UtilType
     {
         if( oUneValue instanceof String  )  return Json.value( (String ) oUneValue );
         if( oUneValue instanceof Boolean )  return Json.value( (Boolean) oUneValue );
-        if( oUneValue instanceof Number  )  return Json.value( ((Number) oUneValue).floatValue() );
+
+        if( oUneValue instanceof Number  )
+        {
+            if( oUneValue instanceof Integer ) return Json.value( ((Number) oUneValue).intValue()  );
+            if( oUneValue instanceof Long    ) return Json.value( ((Number) oUneValue).longValue() );
+
+            return Json.value( ((Number) oUneValue).floatValue() );
+        }
 
         if( UtilSys.getConfig().newXprEval().isExtendedDataType( oUneValue ) )
             return (JsonObject) ((ExtraType) oUneValue).serialize();
@@ -243,10 +250,6 @@ public final class UtilType
      */
     public static Object toUne( Lexeme lex )
     {
-        if( lex.isBoolean() )  return toBoolean( lex.text() );
-        if( lex.isString()  )  return lex.text();
-        if( lex.isNumber()  )  return toFloat( lex.text() );
-
         if( lex.isExtendedDataType() )
         {
             try
@@ -254,6 +257,10 @@ public final class UtilType
                 return UtilJson.toUneType( UtilJson.parse( lex.text() ) );
             }
             catch( MingleException ioe ) { /* Nothing to do */ }
+        }
+        else
+        {
+            return toUneBasics( lex.text() );
         }
 
         return null;
@@ -359,7 +366,20 @@ public final class UtilType
         }
 
         if( Language.isNumber( str ) )                            // Numbers can have 1 char length
-            return toFloat( str );
+        {
+            try
+            {
+                if( str.indexOf( '.' ) > -1 )
+                    return Float.valueOf( str );
+
+                return Integer.valueOf( str );
+            }
+            catch( NumberFormatException nfe )
+            {
+                try  { return Long.valueOf( str ); }
+                catch( NumberFormatException e2 ) { throw NaN( str ); }
+            }
+        }
 
         return text;     // We have to assume it is a String that did not come with its quotes (have to return the original, not the trimmed)
     }

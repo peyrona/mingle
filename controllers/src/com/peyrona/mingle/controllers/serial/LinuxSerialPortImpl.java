@@ -1045,13 +1045,10 @@ public final class LinuxSerialPortImpl implements ISerialClient
 
         while( (termPos = findTerminator( buffer )) >= 0 )
         {
-            if( termPos > 0 )
-            {
-                byte[] buf  = buffer.buf();
-                String line = new String( buf, 0, termPos, encoding );
-                listener.onMessage( line );
-                linesRead++;
-            }
+            byte[] buf  = buffer.buf();
+            String line = new String( buf, 0, termPos, encoding );
+            listener.onMessage( line );
+            linesRead++;
 
             // Keep data after the terminator in the buffer
             int    afterTerm = termPos + terminatorBytes.length;

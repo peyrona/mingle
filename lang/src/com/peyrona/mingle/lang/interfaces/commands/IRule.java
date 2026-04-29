@@ -30,6 +30,23 @@ public interface IRule extends ICommand
     }
 
     /**
+     * Enables this rule so it reacts to device changes.
+     */
+    void enable();
+
+    /**
+     * Disables this rule so it ignores device changes without removing it.
+     */
+    void disable();
+
+    /**
+     * Returns true if this rule is currently enabled.
+     *
+     * @return true if this rule is currently enabled.
+     */
+    boolean isEnabled();
+
+    /**
      * Evaluates the rule if it is affected by the device.
      * <p>
      * If WHEN clause is satisfied (the expression returns true), the IF clause (if any) will be evaluated.<br>

@@ -42,11 +42,12 @@ public final class      Rule
     // Developers that add Rules at runtime do it at their own risk because all
     // checks are done at transpiled time: a big power comes with a big responsability.
 
-    private final List<IAction> then;     // Original actions (before expanding device's groups if any). Used to serialize Actions.
-    private       IXprEval      when;     // Compiled sWhen: null when sWhen has errors
-    private       IXprEval      _if_;     // Compiled sIf: null when sIf has errors or it was not provided
-    private       String        sWhen;    // To be used temporarely
-    private       String        sIf;      // To be used temporarely
+    private final    List<IAction> then;        // Original actions (before expanding device's groups if any). Used to serialize Actions.
+    private volatile IXprEval     when;        // Compiled sWhen: null when sWhen has errors — volatile because writes are sync'd by stop()/start() but reads happen from EventBus, Dispatcher and caller threads without holding the monitor.
+    private volatile IXprEval     _if_;        // Compiled sIf: null when sIf has errors or it was not provided — see note on 'when'.
+    private          String       sWhen;       // To be used temporarely
+    private          String       sIf;         // To be used temporarely
+    private volatile boolean      enabled = true;
 
     private final Dispatcher<Object[]> onDeviceChangedTask;    // Using Object[] for speed (instead of using Pair<>())
 
@@ -66,7 +67,13 @@ public final class      Rule
             {
                 StdXprFns.setTriggeredBy( (String) change[0], change[1] );    // Must be set before eval: THEN actions may call getTriggeredBy()
 
-                IXprEval xpr = ((_if_ != null && _if_.isFuturing()) ? _if_ : when);
+                // Read volatile fields once — stop() can null them concurrently.
+                IXprEval xprIf   = _if_;
+                IXprEval xprWhen = when;
+                IXprEval xpr     = ((xprIf != null && xprIf.isFuturing()) ? xprIf : xprWhen);
+
+                if( xpr == null )    // Rule was stopped between queueing and dispatching
+                    return;
 
                 xpr.eval( (String) change[0],    // Device name
                                    change[1] );  // Device value
@@ -108,8 +115,10 @@ public final class      Rule
         Consumer<Object> onSolved = (result) -> {
                                                     if( canTriggerWhen( result ) )
                                                     {
-                                                        if( _if_ == null )  _trigger_();
-                                                        else                _if_.eval();
+                                                        IXprEval xprIfLocal = _if_;    // Read volatile once: stop() can null it concurrently.
+
+                                                        if( xprIfLocal == null )  _trigger_();
+                                                        else                      xprIfLocal.eval();
                                                     }
 
                                                     if( result != null )
@@ -161,9 +170,32 @@ public final class      Rule
     }
 
     @Override
+    public void enable()
+    {
+        enabled = true;
+    }
+
+    @Override
+    public void disable()
+    {
+        enabled = false;
+    }
+
+    @Override
+    public boolean isEnabled()
+    {
+        return enabled;
+    }
+
+    @Override
     public IRule eval( String devName, Object devValue )
     {
-        if( when != null )                                                    // when == null -> rule has errors (remember: rules can be added on the fly)
+        if( ! enabled )
+            return this;
+
+        IXprEval xprWhen = when;                                              // Read volatile once: stop() can null it concurrently.
+
+        if( xprWhen != null )                                                 // when == null -> rule has errors or was stopped (rules can be added on the fly)
             onDeviceChangedTask.add( new Object[] { devName, devValue } );    // Need to create a new reference to put it into the queue
 
         // To create a new reference for every call is not aproblem beacuse modern JVMs handle small, short-lived Object[2] allocations very efficiently.
@@ -174,7 +206,12 @@ public final class      Rule
     @Override
     public IRule trigger( boolean bForce )     // To be used by another RULE or by an SCRIPT
     {
-        if( when == null )
+        if( ! enabled )
+            return this;
+
+        IXprEval xprWhen = when;    // Read volatile once: stop() can null it concurrently.
+
+        if( xprWhen == null )
         {
             getRuntime().log( ILogger.Level.SEVERE, "RULE "+ name() +" can not be triggered because it has errors" );
             return this;
@@ -192,7 +229,7 @@ public final class      Rule
                 return this;
             }
 
-            Object result = when.eval();
+            Object result = xprWhen.eval();
 
             if( (result != null) && (result instanceof Boolean) && ((Boolean) result) )
                 _trigger_();
@@ -204,13 +241,15 @@ public final class      Rule
     @Override
     public String getWhen()
     {
-        return (when == null) ? sWhen : when.toString();
+        IXprEval x = when;
+        return (x == null) ? sWhen : x.toString();
     }
 
     @Override
     public String getIf()
     {
-        return (_if_ == null) ? sIf : _if_.toString();
+        IXprEval x = _if_;
+        return (x == null) ? sIf : x.toString();
     }
 
     @Override
@@ -278,15 +317,22 @@ public final class      Rule
     {
         if( getRuntime().isLoggable( ILogger.Level.RULE ) )
         {
-            IXprEval eval = ((_if_ != null && _if_.isFuturing()) ? _if_ : when);    // IF always contains a var, but WHEN could contain no var
-            String   expr = eval.toString();
+            // Read volatile fields once — stop() can null them concurrently.
+            IXprEval xprIf   = _if_;
+            IXprEval xprWhen = when;
+            IXprEval eval    = ((xprIf != null && xprIf.isFuturing()) ? xprIf : xprWhen);    // IF always contains a var, but WHEN could contain no var
+
+            if( eval == null )    // Rule was stopped between consumer queueing and this log
+                return;
+
+            String expr = eval.toString();
 
             for( Map.Entry<String,Object> entry : eval.getVars().entrySet() )
             {
                 expr = expr.replace( entry.getKey(), entry.getKey() +'{'+ entry.getValue() +'}' );
             }
 
-            getRuntime().log( ILogger.Level.RULE, name() +" ["+ ((eval == when) ? "WHEN" : "IF") +" -> "+ expr +']' );
+            getRuntime().log( ILogger.Level.RULE, name() +" ["+ ((eval == xprWhen) ? "WHEN" : "IF") +" -> "+ expr +']' );
         }
     }
 

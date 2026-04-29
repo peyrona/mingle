@@ -93,7 +93,7 @@ public final class pair
         {
             String s = ((String) items[0]).trim();
 
-            if( s.charAt( 0 ) == '{' )
+            if( ! s.isEmpty() && s.charAt( 0 ) == '{' )
             {
                 try
                 {
@@ -835,8 +835,12 @@ public final class pair
     @Override
     public pair deserialize( JsonObject json )
     {
-        JsonValue  jv = json.get( "data" );
-        JsonObject jo = jv.isObject() ? jv.asObject() : null;
+        JsonValue jv = json.get( "data" );
+
+        if( jv == null || ! jv.isObject() )
+            throw new MingleException( "Invalid serialized pair: missing or non-object 'data' field" );
+
+        JsonObject jo = jv.asObject();
 
         empty();
 

@@ -75,7 +75,10 @@ public final class LednetWifi5Ch
             return;
 
         if( newValue == null )
+        {
             sendGenericError( ILogger.Level.SEVERE, "Value to write can not be null" );
+            return;
+        }
 
         if( newValue instanceof Boolean )
             newValue = new pair( "power", newValue );
@@ -94,8 +97,11 @@ public final class LednetWifi5Ch
     @Override
     public void stop()
     {
-        device.dispose();
-        device = null;
+        if( device != null )
+        {
+            device.dispose();
+            device = null;
+        }
 
         super.stop();
     }

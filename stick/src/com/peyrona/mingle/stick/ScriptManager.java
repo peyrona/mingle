@@ -53,7 +53,7 @@ final class   ScriptManager
         forEach( script ->
                 {
                     if( script.isPreStop() )
-                        script.execute();     // Direct execution - entities are still available
+                        script.execute();     // Direct execution (no threaded) - entities are still available
                 } );
     }
 

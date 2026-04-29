@@ -1,0 +1,19 @@
+{"transpiler":"MSP Transpiler v.2026-04-20",
+"code-version":"1.0",
+"uid":"fe9d12a1-e918-40aa-8d63-ebd06883293d",
+"generated":"2026-04-20T12:32:54.491928026Z",
+"commands":[
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":2000},"init":null},
+{"cmd":"device","name":"motion_sensor","driver":"systemmonitordriver","config":{"metric":"cpu","interval":2000},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":"arm_alarm","when":"( clock:mod( 2 * 6000)) < 6000","then":[{"after":-1,"target":"console","value":"\"[ Alarm ARMED   ]\""},{"after":-1,"target":"enable( \"motion_alert\" )","value":null}],"if":null},
+{"cmd":"rule","name":"disarm_alarm","when":"( clock:mod( 2 * 6000)) >= 6000","then":[{"after":-1,"target":"console","value":"\"[ Alarm DISARMED ]\""},{"after":-1,"target":"disable( \"motion_alert\" )","value":null}],"if":null},
+{"cmd":"rule","name":"motion_alert","when":"motion_sensor > 5","then":[{"after":-1,"target":"console","value":"\"!! MOTION DETECTED: CPU=\" + motion_sensor + \"% !!\""}],"if":null},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

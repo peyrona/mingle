@@ -112,6 +112,9 @@ public final class date
                 {
                     String s = args[0].toString().trim();
 
+                    if( s.isEmpty() )
+                        throw new MingleException( "Invalid date" );
+
                     // Try JSON deserialization first (from serialize().toString())
                     if( s.charAt( 0 ) == '{' )
                     {

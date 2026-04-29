@@ -25,7 +25,6 @@ import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import java.util.Map;
 import java.util.Random;
-import java.util.concurrent.ScheduledFuture;
 import java.util.function.Consumer;
 
 /**
@@ -43,8 +42,7 @@ import java.util.function.Consumer;
 public final class   RPiGpioPin
              extends ControllerBase
 {
-    private ScheduledFuture timer = null;
-    private IPin            pin   = null;
+    private IPin pin = null;
 
     //------------------------------------------------------------------------//
     // PUBLIC SCOPE
@@ -73,15 +71,15 @@ public final class   RPiGpioPin
 
         if( isValid() && isFaked() )    // isFaked() is initialized by super:start(...)
         {
-            timer = UtilSys.executor( false )
-                           .name( getClass().getName() )
-                           .delay( 5000l )    // After 5 secs (initial delay)
-                           .rate( 3000l )     // every 3 secs
-                           .execute( () ->
-                                    {
-                                        if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
-                                            sendReaded( pin.read() );                               // a new random value
-                                    } );
+            UtilSys.executor( false )
+                   .name( getClass().getName() )
+                   .delay( 5000l )    // After 5 secs (initial delay)
+                   .rate( 3000l )     // every 3 secs
+                   .execute( () ->
+                                {
+                                    if( pin.isInput() && (new Random().nextInt( 100 ) > 65) )   // 2/3 of times, it does not send
+                                        sendReaded( pin.read() );                               // a new random value
+                                } );
         }
 
         return isValid();
@@ -93,11 +91,7 @@ public final class   RPiGpioPin
         if( pin != null )
             pin.cleanup();
 
-        if( timer != null )
-            timer.cancel( true );
-
-        pin   = null;
-        timer = null;
+        pin = null;
 
         WiringPi.cleanup();
 

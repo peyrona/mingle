@@ -2,6 +2,7 @@
 package com.peyrona.mingle.controllers.lights.shelly;
 
 import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.controllers.lights.LightCtrlBase;
@@ -40,10 +41,10 @@ import java.util.concurrent.CompletionStage;
  * <p>
  * Configuration parameters:
  * <ul>
- *   <li>ip      : IP address of the Shelly device (required). E.g.: "192.168.1.100"</li>
- *   <li>channel : Channel ID, usually 0 (optional, default: 0)</li>
- *   <li>interval: Polling interval in milliseconds for status updates (optional, default: 5000)</li>
- *   <li>timeout : HTTP request timeout in seconds (optional, default: 10)</li>
+ *   <li>ip     : IP address of the Shelly device (required). E.g.: "192.168.1.100"</li>
+ *   <li>channel: Channel ID, usually 0 (optional, default: 0)</li>
+ *   <li>mode   : Device mode: "rgbw", "rgb" or "white". By default "rgbw"</li>
+ *   <li>ramp   : Default transition duration in milliseconds for writes that don't specify a transition (optional, default: 0)</li>
  * </ul>
  * <p>
  * Write accepts:
@@ -58,7 +59,7 @@ import java.util.concurrent.CompletionStage;
  *       <li>"green" (0-100): Green channel percentage</li>
  *       <li>"blue" (0-100): Blue channel percentage</li>
  *       <li>"white" (0-100): White channel percentage</li>
- *       <li>"transition" (seconds): Transition duration</li>
+ *       <li>"transition" (seconds): Per-write fade duration (overrides default ramp)</li>
  *     </ul>
  *   </li>
  * </ul>
@@ -80,13 +81,14 @@ public final class ShellyRGBWPM
     // Configuration keys
     private static final String KEY_IP      = "ip";
     private static final String KEY_CHANNEL = "channel";
-    private static final String KEY_TYPE    = "type";
+    private static final String KEY_MODE    = "mode";
+    private static final String KEY_RAMP    = "ramp";
 
     // Device generation constants
-    private static final short GEN1 = 1;
-    private static final short GEN2 = 2;
+    private static final int GEN1 = 1;
+    private static final int GEN2 = 2;
 
-    // Device types
+    // Device types (configured via "mode" config key)
     private static final String TYPE_RGBW  = "rgbw";
     private static final String TYPE_RGB   = "rgb";
     private static final String TYPE_WHITE = "white";
@@ -98,14 +100,15 @@ public final class ShellyRGBWPM
     // WebSocket source ID used to register for Gen2 notifications
     private static final String WS_SOURCE = "mingle";
 
-    private HttpClient httpClient = null;
+    private volatile HttpClient httpClient      = null;
+    private volatile Thread    reconnectThread = null;
     private URI        rpcUri     = null;
-    private String     baseUrl    = null;       // Base URL without path (e.g. "http://192.168.1.100")
-    private short      deviceGen  = GEN2;       // Default assumption
-    private String     deviceType = TYPE_RGBW;  // Mingle device type
-    private String     deviceMode = MODE_COLOR; // Hardware operating mode
+    private String     baseUrl    = null;        // Base URL without path (e.g. "http://192.168.1.100")
+    private volatile int     deviceGen  = GEN2;       // Default assumption
+    private volatile String  deviceType = TYPE_RGBW;  // Mingle device type
+    private volatile String  deviceMode = MODE_COLOR; // Hardware operating mode
     private pair       fakeState  = null;
-    private WebSocket  webSocket  = null;       // Gen2 WebSocket for push notifications
+    private volatile WebSocket webSocket  = null;     // Gen2 WebSocket for push notifications
 
     //------------------------------------------------------------------------//
 
@@ -136,8 +139,11 @@ public final class ShellyRGBWPM
             int channel = ((Number) deviceConf.getOrDefault( KEY_CHANNEL, 0f )).intValue();
             set( KEY_CHANNEL, Math.max( 0, channel ) );
 
-            deviceType = deviceConf.getOrDefault( KEY_TYPE, TYPE_RGBW ).toString().toLowerCase();
-            set( KEY_TYPE, deviceType );
+            deviceType = deviceConf.getOrDefault( KEY_MODE, TYPE_RGBW ).toString().toLowerCase();
+            set( KEY_MODE, deviceType );
+
+            int ramp = ((Number) deviceConf.getOrDefault( KEY_RAMP, 0 )).intValue();
+            set( KEY_RAMP, Math.max( 0, ramp ) );
 
             setValid( true );
         }
@@ -157,7 +163,7 @@ public final class ShellyRGBWPM
             return true;
 
         if( getHttpClient() == null )
-            sendGenericError( ILogger.Level.SEVERE, "No route to: "+ getClass().getSimpleName() +", at: "+ get( KEY_IP ) );
+            sendGenericError( ILogger.Level.SEVERE, "No route to: " + getClass().getSimpleName() + ", at: " + get( KEY_IP ) );
 
         return true;
     }
@@ -165,6 +171,12 @@ public final class ShellyRGBWPM
     @Override
     public void stop()
     {
+        Thread t = reconnectThread;
+        if( t != null )
+        {
+            reconnectThread = null;
+            t.interrupt();
+        }
         closeWebSocket();
         httpClient = null;
         super.stop();
@@ -196,7 +208,8 @@ public final class ShellyRGBWPM
             else
             {
                 JsonObject request = new JsonObject();
-                           request.add( "id", 1 );
+                           request.add( "id",     1 );
+                           request.add( "src",    WS_SOURCE );
                            request.add( "method", "Light.GetStatus" );
                            request.add( "params", new JsonObject().add( "id", channel ) );
 
@@ -212,8 +225,9 @@ public final class ShellyRGBWPM
             else
             {
                 JsonObject request = new JsonObject();
-                           request.add( "id", 1 );
-                           request.add( "method", "RGBW.GetStatus" );
+                           request.add( "id",     1 );
+                           request.add( "src",    WS_SOURCE );
+                           request.add( "method", getRpcNamespace() + ".GetStatus" );
                            request.add( "params", new JsonObject().add( "id", 0 ) );
 
                 sendRpcRequest( request.toString(), false );
@@ -272,31 +286,99 @@ public final class ShellyRGBWPM
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE — RPC helpers
+
+    /**
+     * Returns the Gen2 RPC namespace for the current device type/profile.
+     * <p>
+     * Maps Mingle device types to Shelly Gen2 component namespaces:
+     * <ul>
+     *   <li>{@code "white"} → {@code "Light"} (independent white channels)</li>
+     *   <li>{@code "rgb"}   → {@code "RGB"} (red, green, blue — no white)</li>
+     *   <li>{@code "rgbw"}  → {@code "RGBW"} (red, green, blue, white)</li>
+     * </ul>
+     *
+     * @return The RPC namespace string (e.g. "RGBW.Set", "Light.GetStatus").
+     */
+    private String getRpcNamespace()
+    {
+        if( TYPE_WHITE.equals( deviceType ) )
+            return "Light";
+        else if( TYPE_RGB.equals( deviceType ) )
+            return "RGB";
+        else
+            return "RGBW";
+    }
+
+    /**
+     * Returns the Gen2 component key used in {@code NotifyStatus} params and
+     * {@code Shelly.GetStatus} result to identify the relevant component.
+     * <p>
+     * Examples: {@code "light:0"}, {@code "rgb:0"}, {@code "rgbw:0"}.
+     *
+     * @return The component key string.
+     */
+    private String getComponentKey()
+    {
+        int channel = (int) get( KEY_CHANNEL );
+
+        if( TYPE_WHITE.equals( deviceType ) )
+            return "light:" + channel;
+        else if( TYPE_RGB.equals( deviceType ) )
+            return "rgb:0";
+        else
+            return "rgbw:0";
+    }
+
+    /**
+     * Returns the component ID to use in RPC params for the current device type.
+     * <p>
+     * For {@code Light} components the channel is configurable (0-3), while
+     * {@code RGB} and {@code RGBW} components always use id 0.
+     *
+     * @return The numeric component ID.
+     */
+    private int getComponentId()
+    {
+        return TYPE_WHITE.equals( deviceType ) ? (int) get( KEY_CHANNEL ) : 0;
+    }
+
+    //------------------------------------------------------------------------//
     // PRIVATE SCOPE — Auxiliary functions
 
     private HttpClient getHttpClient()
     {
         if( httpClient == null )
         {
+            boolean created;
+
             synchronized( this )
             {
-                httpClient = HttpClient.newBuilder()
-                                       .connectTimeout( Duration.ofSeconds( 7 ) )
-                                       .build();
+                created = (httpClient == null);
+
+                if( created )
+                    httpClient = HttpClient.newBuilder()
+                                           .connectTimeout( Duration.ofSeconds( 7 ) )
+                                           .build();
             }
 
-            if( UtilComm.isReachable( (String) get( KEY_IP ) ) )
+            // Post-construction init runs only in the thread that created the client,
+            // preventing duplicate detectGeneration()/connectWebSocket() calls.
+            if( created )
             {
-                detectGeneration();
-
-                if( deviceGen == GEN2 )
-                    connectWebSocket();
-            }
-            else
-            {
-                synchronized( this )
+                if( UtilComm.isReachable( (String) get( KEY_IP ) ) )
                 {
-                    httpClient = null;
+                    detectGeneration();
+
+                    if( deviceGen == GEN2 )
+                        connectWebSocket();
+                }
+                else
+                {
+                    synchronized( this )
+                    {
+                        httpClient = null;
+                    }
                 }
             }
         }
@@ -309,6 +391,14 @@ public final class ShellyRGBWPM
 
     /**
      * Detects the device generation and operating mode by querying the device.
+     * <p>
+     * Queries {@code /shelly} and inspects the {@code gen} field:
+     * <ul>
+     *   <li>{@code gen >= 2} (as number or string) → Gen2+ (JSON-RPC)</li>
+     *   <li>Otherwise → Gen1 (plain REST)</li>
+     * </ul>
+     * If the request fails entirely, defaults to Gen2 as a safe fallback since
+     * most modern Shelly devices are Gen2+.
      */
     private void detectGeneration()
     {
@@ -322,22 +412,37 @@ public final class ShellyRGBWPM
                                               .build();
 
             HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString() );
-            JsonObject root = Json.parse( response.body() ).asObject();
+            String     body = response.body();
+            JsonObject root = Json.parse( body ).asObject();
 
             JsonValue gen = root.get( "gen" );
 
-            if( gen != null && gen.isNumber() && gen.asInt() >= 2 )
+            if( gen != null )
             {
-                deviceGen = GEN2;
-                rpcUri    = new URI( baseUrl + "/rpc" );
-                detectGen2Mode();
+                // Gen2+ may report gen as a number (2) or as a string ("2")
+                int genNum = -1;
+
+                if( gen.isNumber() )
+                    genNum = gen.asInt();
+                else if( gen.isString() )
+                {
+                    try { genNum = Integer.parseInt( gen.asString() ); }
+                    catch( NumberFormatException ignored ) { /* keep -1 */ }
+                }
+
+                if( genNum >= 2 )
+                {
+                    deviceGen = GEN2;
+                    rpcUri    = new URI( baseUrl + "/rpc" );
+                    detectGen2Mode();
+                    return;
+                }
             }
-            else
-            {
-                deviceGen = GEN1;
-                rpcUri    = null;   // Gen1 does not use /rpc
-                detectGen1Mode();
-            }
+
+            // Gen1 or unknown gen value
+            deviceGen = GEN1;
+            rpcUri    = null;
+            detectGen1Mode();
         }
         catch( Exception exc )
         {
@@ -375,7 +480,15 @@ public final class ShellyRGBWPM
     }
 
     /**
-     * Detects Gen2 mode by checking available components in GetStatus.
+     * Detects Gen2 profile by checking available components in Shelly.GetStatus.
+     * <p>
+     * The Shelly Plus RGBW PM exposes different components depending on its profile:
+     * <ul>
+     *   <li>{@code rgbw:0} present → rgbw profile</li>
+     *   <li>{@code rgb:0} present → rgb profile</li>
+     *   <li>{@code light:0} present → light profile (4 independent white channels)</li>
+     * </ul>
+     * If no known component is found, falls back to the user-configured {@code deviceType}.
      */
     private void detectGen2Mode()
     {
@@ -385,17 +498,31 @@ public final class ShellyRGBWPM
             HttpRequest request = HttpRequest.newBuilder().uri( uri ).timeout( Duration.ofSeconds( 5 ) ).GET().build();
             HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString() );
 
-            JsonObject root = Json.parse( response.body() ).asObject();
+            JsonObject root   = Json.parse( response.body() ).asObject();
             JsonObject result = root.get( "result" ).asObject();
 
             if( result.get( "rgbw:0" ) != null )
+            {
                 deviceMode = MODE_COLOR;
-            else
+            }
+            else if( result.get( "rgb:0" ) != null )
+            {
+                deviceMode = MODE_COLOR;
+            }
+            else if( result.get( "light:0" ) != null )
+            {
                 deviceMode = MODE_WHITE;
+            }
+            else
+            {
+                // Fallback to user-configured mode
+                deviceMode = TYPE_WHITE.equals( deviceType ) ? MODE_WHITE : MODE_COLOR;
+            }
         }
         catch( Exception exc )
         {
-            deviceMode = MODE_COLOR; // Default
+            // Fallback to user-configured mode
+            deviceMode = TYPE_WHITE.equals( deviceType ) ? MODE_WHITE : MODE_COLOR;
         }
     }
 
@@ -424,12 +551,11 @@ public final class ShellyRGBWPM
                                      {
                                          webSocket = ws;
                                          // Send initial request with 'src' to register for notifications
-                                         int channel = (int) get( KEY_CHANNEL );
                                          JsonObject req = new JsonObject();
                                                     req.add( "id",     1 );
                                                     req.add( "src",    WS_SOURCE );
-                                                    req.add( "method", MODE_WHITE.equals( deviceMode ) ? "Light.GetStatus" : "RGBW.GetStatus" );
-                                                    req.add( "params", new JsonObject().add( "id", MODE_WHITE.equals( deviceMode ) ? channel : 0 ) );
+                                                    req.add( "method", getRpcNamespace() + ".GetStatus" );
+                                                    req.add( "params", new JsonObject().add( "id", getComponentId() ) );
                                          ws.sendText( req.toString(), true );
                                      } )
                       .exceptionally( ex ->
@@ -481,9 +607,8 @@ public final class ShellyRGBWPM
             if( params == null || ! params.isObject() )
                 return;
 
-            int     channel = (int) get( KEY_CHANNEL );
-            String  key     = MODE_WHITE.equals( deviceMode ) ? "light:" + channel : "rgbw:0";
-            JsonValue status = params.asObject().get( key );
+            String     key     = getComponentKey();
+            JsonValue  status  = params.asObject().get( key );
 
             if( status == null || ! status.isObject() )
                 return;
@@ -502,11 +627,13 @@ public final class ShellyRGBWPM
     /**
      * Parses a Gen2 status object (used by both RPC responses and WebSocket notifications).
      * <p>
-     * Extracts power state, brightness, color values (converting 0-255 to 0-100 percentages),
-     * and power consumption.
+     * The Gen2 API returns color data as an {@code rgb} array {@code [r, g, b]} where each
+     * value is in the range 0-255. This method converts those to 0-100 percentages.
+     * Brightness is already returned as a percentage (0-100) by the device.
+     * White (for RGBW) is returned as 0-255 and also converted to percentage.
      *
-     * @param res The JSON object containing RGBW status fields.
-     * @return A pair with normalized status values.
+     * @param res The JSON object containing RGBW/RGB/Light status fields.
+     * @return A pair with normalized status values (all percentages 0-100).
      */
     private pair parseGen2StatusObject( JsonObject res )
     {
@@ -516,37 +643,28 @@ public final class ShellyRGBWPM
         if( output != null )
             result.put( "on", output.asBoolean() );
 
-        if( MODE_WHITE.equals( deviceMode ) || TYPE_WHITE.equals( deviceType ) )
-        {
-            // For independent white channels, "brightness" is the primary value.
-            // In Color mode, this comes from the "white" property of the rgbw component.
-            // In White mode, it comes from the "brightness" property of the light component.
-            JsonValue val = res.get( MODE_WHITE.equals( deviceMode ) ? "brightness" : "white" );
+        // Brightness is returned as a percentage (0-100) by all Gen2 components (Light, RGB, RGBW).
+        JsonValue brightness = res.get( "brightness" );
+        if( brightness != null )
+            result.put( "brightness", brightness.asFloat() );
 
-            if( val != null )
+        // Color channels: only present in RGB and RGBW components (not Light).
+        if( ! TYPE_WHITE.equals( deviceType ) )
+        {
+            // Gen2 returns colors as an "rgb" array [r, g, b] with values 0-255.
+            JsonValue rgb = res.get( "rgb" );
+            if( rgb != null && rgb.isArray() )
             {
-                float fVal = val.asFloat();
-                result.put( "brightness", MODE_WHITE.equals( deviceMode ) ? fVal : deviceToPercent( fVal ) );
+                JsonArray rgbArr = rgb.asArray();
+                if( rgbArr.size() >= 1 )
+                    result.put( "red",   deviceToPercent( rgbArr.get( 0 ).asFloat() ) );
+                if( rgbArr.size() >= 2 )
+                    result.put( "green", deviceToPercent( rgbArr.get( 1 ).asFloat() ) );
+                if( rgbArr.size() >= 3 )
+                    result.put( "blue",  deviceToPercent( rgbArr.get( 2 ).asFloat() ) );
             }
-        }
-        else
-        {
-            JsonValue brightness = res.get( "brightness" );
-            if( brightness != null )
-                result.put( "brightness", brightness.asFloat() );
 
-            JsonValue red = res.get( "red" );
-            if( red != null )
-                result.put( "red", deviceToPercent( red.asFloat() ) );
-
-            JsonValue green = res.get( "green" );
-            if( green != null )
-                result.put( "green", deviceToPercent( green.asFloat() ) );
-
-            JsonValue blue = res.get( "blue" );
-            if( blue != null )
-                result.put( "blue", deviceToPercent( blue.asFloat() ) );
-
+            // White channel (RGBW only): returned as 0-255, convert to percentage.
             if( TYPE_RGBW.equals( deviceType ) )
             {
                 JsonValue white = res.get( "white" );
@@ -650,13 +768,16 @@ public final class ShellyRGBWPM
             if( httpClient == null )
                 return;   // Controller has been stopped
 
-            new Thread( () ->
+            Thread t = new Thread( () ->
             {
                 try { Thread.sleep( 5000 ); } catch( InterruptedException ignored ) { Thread.currentThread().interrupt(); return; }
 
                 if( httpClient != null && webSocket == null )
                     connectWebSocket();
-            }, "Shelly-WS-Reconnect-" + getDeviceName() ).start();
+            }, "Shelly-WS-Reconnect-" + getDeviceName() );
+
+            reconnectThread = t;
+            t.start();
         }
     }
 
@@ -766,7 +887,13 @@ public final class ShellyRGBWPM
     // PRIVATE SCOPE — Gen2 HTTP RPC
 
     /**
-     * Builds the RGBW.Set JSON-RPC command from the input value (Gen2).
+     * Builds the appropriate Gen2 JSON-RPC Set command from the input value.
+     * <p>
+     * The method name is determined by {@link #getRpcNamespace()}:
+     * {@code Light.Set}, {@code RGB.Set}, or {@code RGBW.Set}.
+     * <p>
+     * Color values are sent as a single {@code rgb} array {@code [r, g, b]} with values
+     * in the device range 0-255 (converted from the Mingle 0-100 percentage range).
      */
     private String buildSetCommand( Object value ) throws IllegalArgumentException
     {
@@ -775,50 +902,55 @@ public final class ShellyRGBWPM
         if( parsed.isEmpty() )
             throw new IllegalArgumentException( "Invalid value type. Expected String, Number, or pair." );
 
-        int        channel = (int) get( KEY_CHANNEL );
-        JsonObject params  = new JsonObject();
-                   params.add( "id", MODE_WHITE.equals( deviceMode ) ? channel : 0 );
+        JsonObject params = new JsonObject();
+                   params.add( "id", getComponentId() );
 
         if( parsed.hasKey( "on" ) )
             params.add( "on", (boolean) parsed.get( "on" ) );
 
-        if( MODE_WHITE.equals( deviceMode ) )
+        if( TYPE_WHITE.equals( deviceType ) )
         {
             if( parsed.hasKey( "brightness" ) )
-                params.add( "brightness", ((Number) parsed.get( "brightness" ) ).intValue() );
+                params.add( "brightness", ((Number) parsed.get( "brightness" )).intValue() );
         }
-        else // MODE_COLOR
+        else
         {
-            if( TYPE_WHITE.equals( deviceType ) )
+            if( parsed.hasKey( "brightness" ) )
+                params.add( "brightness", ((Number) parsed.get( "brightness" )).intValue() );
+
+            // Gen2 API expects colors as an "rgb" array [r, g, b] with values 0-255.
+            boolean hasAnyColor = parsed.hasKey( "red" ) || parsed.hasKey( "green" ) || parsed.hasKey( "blue" );
+            if( hasAnyColor )
             {
-                if( parsed.hasKey( "brightness" ) )
-                    params.add( "white", percentToDevice( ((Number) parsed.get( "brightness" )).intValue() ) );
+                int r = parsed.hasKey( "red" )   ? percentToDevice( ((Number) parsed.get( "red" )).intValue() )   : 0;
+                int g = parsed.hasKey( "green" ) ? percentToDevice( ((Number) parsed.get( "green" )).intValue() ) : 0;
+                int b = parsed.hasKey( "blue" )  ? percentToDevice( ((Number) parsed.get( "blue" )).intValue() )  : 0;
+                params.add( "rgb", new JsonArray().add( r ).add( g ).add( b ) );
             }
-            else
-            {
-                if( parsed.hasKey( "brightness" ) )
-                    params.add( "brightness", ((Number) parsed.get( "brightness" ) ).intValue() );
 
-                if( parsed.hasKey( "red" ) )
-                    params.add( "red", percentToDevice( ((Number) parsed.get( "red" )).intValue() ) );
-
-                if( parsed.hasKey( "green" ) )
-                    params.add( "green", percentToDevice( ((Number) parsed.get( "green" )).intValue() ) );
-
-                if( parsed.hasKey( "blue" ) )
-                    params.add( "blue", percentToDevice( ((Number) parsed.get( "blue" )).intValue() ) );
-
-                if( TYPE_RGBW.equals( deviceType ) && parsed.hasKey( "white" ) )
-                    params.add( "white", percentToDevice( ((Number) parsed.get( "white" )).intValue() ) );
-            }
+            if( TYPE_RGBW.equals( deviceType ) && parsed.hasKey( "white" ) )
+                params.add( "white", percentToDevice( ((Number) parsed.get( "white" )).intValue() ) );
         }
 
+        // Transition: per-write "transition" (seconds) takes precedence over default "ramp" (millis)
+        float transitionSecs;
         if( parsed.hasKey( "transition" ) )
-            params.add( "transition_duration", ((Number) parsed.get( "transition" )).floatValue() );
+        {
+            transitionSecs = ((Number) parsed.get( "transition" )).floatValue();
+        }
+        else
+        {
+            int ramp = ((Number) get( KEY_RAMP )).intValue();
+            transitionSecs = ramp / 1000f;  // from millis to secs
+        }
+
+        if( transitionSecs > 0 )
+            params.add( "transition_duration", transitionSecs );
 
         JsonObject request = new JsonObject();
-                   request.add( "id", 1 );
-                   request.add( "method", MODE_WHITE.equals( deviceMode ) ? "Light.Set" : "RGBW.Set" );
+                   request.add( "id",     1 );
+                   request.add( "src",    WS_SOURCE );
+                   request.add( "method", getRpcNamespace() + ".Set" );
                    request.add( "params", params );
 
         return request.toString();
@@ -915,6 +1047,11 @@ public final class ShellyRGBWPM
      * Maps normalized values to Gen1 parameters:
      * {@code turn=on/off}, {@code gain=0-100}, {@code red/green/blue/white=0-255},
      * {@code transition=milliseconds}.
+     * <p>
+     * <b>Important:</b> On Gen1 devices, {@code gain} is the master brightness multiplier
+     * for all color channels. If colors (red/green/blue/white) are set without specifying
+     * brightness, {@code gain=100} is sent as a default — without it the LED output would
+     * remain dark if the device's current gain was 0.
      *
      * @param value The write value (String, Number, or pair).
      * @return The URL path with query string (e.g. "/color/0?turn=on&red=255&gain=50").
@@ -981,6 +1118,19 @@ public final class ShellyRGBWPM
                     first = false;
                 }
 
+                boolean hasAnyColor = parsed.hasKey( "red" ) || parsed.hasKey( "green" )
+                                   || parsed.hasKey( "blue" ) || parsed.hasKey( "white" );
+
+                // gain is the master brightness multiplier on Gen1 /color/0 endpoint.
+                // If colors are being set but no gain was specified, default to 100
+                // to ensure the LED strip is actually visible.
+                if( hasAnyColor && ! parsed.hasKey( "brightness" ) )
+                {
+                    if( ! first ) sb.append( '&' );
+                    sb.append( "gain=100" );
+                    first = false;
+                }
+
                 Object red = parsed.get( "red", null );
                 if( red != null )
                 {
@@ -1015,12 +1165,15 @@ public final class ShellyRGBWPM
             }
         }
 
-        Object transition = parsed.get( "transition", null );
-        if( transition != null )
+        Object oRamp = parsed.get( "transition", null );
+        int    nRamp = (oRamp instanceof Number) ? ((Number) parsed.get( "transition" )).intValue()
+                                                 : ((Number) get( KEY_RAMP )).intValue();
+        if( nRamp > 0 )
         {
-            if( ! first ) sb.append( '&' );
-            // Gen1 uses milliseconds; input is in seconds
-            sb.append( "transition=" ).append( (int) (((Number) transition).floatValue() * 1000) );
+            if( ! first )
+                sb.append( '&' );
+
+            sb.append( "transition=" ).append( nRamp );
         }
 
         return sb.toString();
@@ -1072,7 +1225,8 @@ public final class ShellyRGBWPM
         }
         catch( Exception exc )
         {
-            sendGenericError( ILogger.Level.WARNING, "Error parsing Shelly Gen1 response: " + exc.getMessage() );
+            sendGenericError( ILogger.Level.WARNING, "Error parsing Shelly Gen1 response: " + exc.getMessage()
+                             + " — raw: " + responseBody.substring( 0, Math.min( responseBody.length(), 200 ) ) );
         }
     }
 
@@ -1082,6 +1236,10 @@ public final class ShellyRGBWPM
      * Maps Gen1 fields to standard keys:
      * {@code "ison" → "on"}, {@code "gain" → "brightness"},
      * and converts color values from 0-255 to 0-100 percentages.
+     * <p>
+     * Also handles Gen2 backward-compatible responses from the {@code /color/0} endpoint,
+     * which uses {@code "brightness"} instead of {@code "gain"} and returns colors as
+     * individual 0-255 fields (same as Gen1).
      *
      * @param json The raw JSON response string.
      * @return A pair with normalized status values.
@@ -1113,12 +1271,22 @@ public final class ShellyRGBWPM
             }
             else
             {
-                // Brightness: Gen1 uses "gain" (0-100)
+                // Brightness: Gen1 uses "gain" (0-100).
+                // Gen2 /color/0 compat endpoint uses "brightness" (0-100).
+                // Prefer "gain" for true Gen1, fall back to "brightness" for Gen2 compat.
                 JsonValue gain = root.get( "gain" );
                 if( gain != null )
+                {
                     result.put( "brightness", gain.asFloat() );
+                }
+                else
+                {
+                    JsonValue brightness = root.get( "brightness" );
+                    if( brightness != null )
+                        result.put( "brightness", brightness.asFloat() );
+                }
 
-                // Color values: Gen1 returns 0-255, convert to percentage
+                // Color values: both Gen1 and Gen2 /color/0 return 0-255, convert to percentage
                 JsonValue red = root.get( "red" );
                 if( red != null )
                     result.put( "red", deviceToPercent( red.asFloat() ) );
@@ -1139,8 +1307,10 @@ public final class ShellyRGBWPM
                 }
             }
 
-            // Power consumption
+            // Power consumption: Gen1 uses "power", Gen2 uses "apower"
             JsonValue power = root.get( "power" );
+            if( power == null )
+                power = root.get( "apower" );  // Gen2 compat fallback
             if( power != null )
                 result.put( "power", power.asFloat() );
         }

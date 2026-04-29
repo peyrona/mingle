@@ -52,7 +52,7 @@ final class Menu
             if( option.isBlank() )
             {
                 showMainMenu();
-                option = UtilUI.readInput( " Select option and press [Enter]: " );
+                option = UtilUI.readInput( " Select option and press [Enter]: " ).toLowerCase();
             }
 
             System.out.println( "" );
@@ -287,7 +287,7 @@ final class Menu
             if( ! showServiceMenu( gumSelected, stickSelected ) )
                 break;
 
-            String choice = UtilUI.readInput( "Select an option: " );
+            String choice = UtilUI.readInput( "Select an option: " ).toLowerCase();
 
             if( choice.isBlank() )
                 break;
@@ -476,7 +476,7 @@ final class Menu
             }
 
             System.out.println( "-----------------------------------------------" );
-            String choice = UtilUI.readInput( " Select tool or [Enter] to go back: " );
+            String choice = UtilUI.readInput( " Select tool or [Enter] to go back: " ).toLowerCase();
 
             if( choice.isEmpty() )
                 return;
@@ -869,7 +869,7 @@ final class Menu
             System.out.println( " I - Stick...........Debug mode (JPDA port 8800)" );
             System.out.println( " C - Stick...........Profiling mode (VisualVM)" );
             System.out.println( " K - Stick...........Resident mode (nohup)" );
-            System.out.println( " A - Tape .......Transpiler" );
+            System.out.println( " A - Tape........Transpiler" );
             System.out.println( " L - List/Kill...Manage JVM processes" );
             System.out.println( " V - View Logs...Output from running tools" );
         }

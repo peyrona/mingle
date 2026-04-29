@@ -28,8 +28,8 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.Collections;
-import java.util.Map;
 import java.util.HashMap;
+import java.util.Map;
 
 /**
  * This class uses JNA to access natively needed C functions in WiringPi library.<br>
@@ -490,7 +490,7 @@ final class WiringPi
             if( UtilStr.contains( model, "Pi 3", "Pi 4" ) )
                 return;
 
-            throw new MingleException( model +" is not supported. Only Pi 3 and 4 are" );
+            throw new MingleException( model +" is not supported. Only Pi 3 and 4 are. " );
         }
     }
 

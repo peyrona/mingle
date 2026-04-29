@@ -258,6 +258,19 @@ public final class Orchestrator
 
         jvmOptions.add( xmx );
 
+        // Suggest Serial GC for small heaps
+        int xmxMB = parseMemoryMB( xmx );
+
+        if( xmxMB <= 128 )
+        {
+            System.out.println();
+            System.out.println( "NOTE: For heaps of 128 MB or less, the Serial GC (-XX:+UseSerialGC) is recommended." );
+            System.out.println( "       It has the smallest memory footprint and reduces GC pause overhead." );
+
+            if( UtilUI.confirm( "Add -XX:+UseSerialGC to JVM options?" ) )
+                jvmOptions.add( "-XX:+UseSerialGC" );
+        }
+
         // Prompt for custom configuration file
         String configFile = UtilUI.readInput( "Configuration file path (or [Enter] for default 'config.json'): " );
 
@@ -331,6 +344,21 @@ public final class Orchestrator
         }
 
         return process.isAlive();
+    }
+
+    /**
+     * Parses a JVM memory flag like "-Xms128m" or "-Xmx2g" into megabytes.
+     *
+     * @param jvmFlag A memory flag already normalized by {@link #checkUnit(String)}.
+     * @return The value in megabytes.
+     */
+    private static int parseMemoryMB( String jvmFlag )
+    {
+        String numeric = jvmFlag.replaceAll( "^-Xm[sx]", "" ).toLowerCase();
+        char   unit    = numeric.charAt( numeric.length() - 1 );
+        double value   = Double.parseDouble( numeric.substring( 0, numeric.length() - 1 ) );
+
+        return (int) (unit == 'g' ? value * 1024 : value);
     }
 
     /**

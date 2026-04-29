@@ -4,6 +4,7 @@ package com.peyrona.mingle.lang.xpreval;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.CodeError;
 import com.peyrona.mingle.lang.lexer.Language;
@@ -276,14 +277,14 @@ final class ASTNode
             case XprToken.OPERATOR:
                 if( token.isText( Language.SEND_OP ) )
                 {
-                    if( hasAllVars )
+                    if( hasAllVars && left.token != null && right.token != null )
                     {
-                        if( StdXprFns.isLibraryNamespace( left.token.text() ) )
+                        if( UtilLib.isLibraryNamespace( left.token.text() ) )
                         {
                             // Library call: LibName:fn(args) — left is a namespace, not a value
                             Object[] aoArgs = right.toArray( vars, hasAllVars );
 
-                            return StdXprFns.invokeLibrary( left.token.text(), right.token.text(), aoArgs );
+                            return UtilLib.invokeLibrary( left.token.text(), right.token.text(), aoArgs );
                         }
                         else
                         {
@@ -344,6 +345,10 @@ final class ASTNode
                         }
                     }
                 }
+                else if( Language.isEdgeOp( token.text() ) )   // Edge-detection operators: ?>, ?<, ?=, ?!=, ?<>
+                {
+                    return evalEdgeOp( token.text(), left, right, vars, hasAllVars );
+                }
                 else   // Any other operator (if one or more vars are not initialized, ops.eval(...) returns 'null')
                 {
                     Object value = StdXprOps.eval( token.text(),
@@ -379,6 +384,78 @@ final class ASTNode
         }
 
         return null;
+    }
+
+    /**
+     * Evaluates an edge-detection operator ({@code ?>}, {@code ?<}, {@code ?=}, {@code ?!=},
+     * {@code ?<>}).
+     * <p>
+     * These operators fire {@code true} exactly once — on the evaluation where the device
+     * value crosses the threshold in the specified direction. On every subsequent evaluation
+     * where the condition remains satisfied they return {@code false}.
+     * <p>
+     * Cold-start rule: if no previous value has been recorded yet (first evaluation after
+     * startup), all edge operators return {@code false} to avoid spurious firings on restart.
+     *
+     * @param op          The operator symbol.
+     * @param left        The left-hand operand node (must resolve to a device name variable).
+     * @param right       The right-hand operand node (the threshold / comparison value).
+     * @param vars        The current variable map (contains current and sentinel prev values).
+     * @param hasAllVars  Whether all variables in the expression have been initialised.
+     * @return {@code Boolean.TRUE} when the edge condition is met, {@code Boolean.FALSE}
+     *         otherwise, or {@code null} if the expression cannot yet be resolved.
+     */
+    private Object evalEdgeOp( String op, ASTNode left, ASTNode right,
+                                Map<String,Object> vars, boolean hasAllVars )
+    {
+        if( left.token() == null || ! left.token().isType( XprToken.VARIABLE ) )
+            return Boolean.FALSE;    // Edge operators require a device variable on the left
+
+        String devName   = left.token().text();
+        Object curValue  = vars.get( devName );
+        Object prevValue = StdXprFns.getPreviousValue( devName );
+
+        if( curValue == null )
+            return null;             // Device not yet initialised
+
+        if( prevValue == null )
+            return Boolean.FALSE;    // Cold start: no previous value recorded yet
+
+        Object threshold = right.eval( vars, hasAllVars );
+
+        if( threshold == null )
+            return null;             // Threshold not yet known
+
+        switch( op )
+        {
+            case "?>":  return compareValues( curValue, threshold ) > 0  && compareValues( prevValue, threshold ) <= 0;
+            case "?<":  return compareValues( curValue, threshold ) < 0  && compareValues( prevValue, threshold ) >= 0;
+            case "?=":  return  equalValues( curValue, threshold )       && ! equalValues( prevValue, threshold );
+            case "?!=": return ! equalValues( curValue, threshold )      &&   equalValues( prevValue, threshold );
+            case "?<>": return (compareValues( curValue, threshold ) > 0  && compareValues( prevValue, threshold ) <= 0)
+                            || (compareValues( curValue, threshold ) < 0  && compareValues( prevValue, threshold ) >= 0);
+            default:    return Boolean.FALSE;
+        }
+    }
+
+    /** Compares two values using the same numeric-coercing rules as the standard operators. */
+    private static int compareValues( Object a, Object b )
+    {
+        // Reuse the existing > and < operators for type-safe, numeric-coercing comparison.
+        Boolean gt = (Boolean) StdXprOps.eval( ">", a, b );
+
+        if( Boolean.TRUE.equals( gt ) )
+            return 1;
+
+        Boolean lt = (Boolean) StdXprOps.eval( "<", a, b );
+
+        return Boolean.TRUE.equals( lt ) ? -1 : 0;
+    }
+
+    /** Checks equality using the same rules as the standard == operator. */
+    private static boolean equalValues( Object a, Object b )
+    {
+        return Boolean.TRUE.equals( StdXprOps.eval( "==", a, b ) );
     }
 
     ASTNode reset()

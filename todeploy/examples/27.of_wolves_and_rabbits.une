@@ -176,7 +176,7 @@ THEN get("gate"):put( "w_last", 1 )
 # ─── The endings ──────────────────────────────────────────────────────────────────────────────────────────────────────────────────
 
 WHEN wolves IS 0 AND rabbits IS 0     # Extinction: both species gone
-THEN console = _NL_
+THEN console = "\n"
      console = "════════════════════════════════════════════════════"
      console = "               S I L E N C E"
      console = "════════════════════════════════════════════════════"
@@ -187,7 +187,7 @@ THEN console = _NL_
 
 WHEN wolves IS 0 AND rabbits > 0 AND get("gate"):get("rabbits_win", 0) IS 0    # Upset: wolves vanish first
 THEN get("gate"):put( "rabbits_win", 1 )
-     console = _NL_
+     console = "\n"
      console = "════════════════════════════════════════════════════"
      console = "          T H E   W A R R E N   W I N S"
      console = "════════════════════════════════════════════════════"

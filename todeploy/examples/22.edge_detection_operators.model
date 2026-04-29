@@ -1,0 +1,25 @@
+{"transpiler":"MSP Transpiler v.2026-04-23",
+"code-version":"1.0",
+"uid":"91fe8cb3-66c0-4a93-be44-1c109db765d4",
+"generated":"2026-04-23T09:35:27.060546674Z",
+"commands":[
+{"cmd":"device","name":"cpu","driver":"systemmonitordriver","config":{"metric":"cpu","interval":2000},"init":null},
+{"cmd":"device","name":"clock","driver":"clockdriver","config":{"interval":3000},"init":null},
+{"cmd":"device","name":"door","driver":"cellsetdriver","config":{"value":false},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"clock","then":[{"after":-1,"target":"door","value":"rand( 0, 1) > 0.5"}],"if":null},
+{"cmd":"rule","name":"cpu_hot","when":"cpu ?> 75","then":[{"after":-1,"target":"console","value":"\"RISES  : cpu just went above \" + 75 + \"% (now \" + cpu + \"%)\""}],"if":null},
+{"cmd":"rule","name":"cpu_idle","when":"cpu ?< 20","then":[{"after":-1,"target":"console","value":"\"DROPS  : cpu just went below \" + 20 + \"% (now \" + cpu + \"%)\""}],"if":null},
+{"cmd":"rule","name":"cpu_crosses_mid","when":"cpu ?<> 50","then":[{"after":-1,"target":"console","value":"\"CROSSES: cpu just crossed \" + 50 + \"% (was \" + prev( \"cpu\" ) + \"%, now \" + cpu + \"%)\""}],"if":null},
+{"cmd":"rule","name":"door_opened","when":"door ?= true","then":[{"after":-1,"target":"console","value":"\"BECOMES: door just opened\""}],"if":null},
+{"cmd":"rule","name":"door_closed","when":"door ?!= true","then":[{"after":-1,"target":"console","value":"\"LEAVES : door just closed\""}],"if":null},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"clockdriver","script":"clockcontroller"},
+{"cmd":"driver","name":"cellsetdriver","script":"cellsetcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"clockcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.SystemClock"},
+{"cmd":"script","name":"cellsetcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.CellSet"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

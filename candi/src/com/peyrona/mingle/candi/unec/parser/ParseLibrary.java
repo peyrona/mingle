@@ -17,6 +17,7 @@ import com.peyrona.mingle.candi.unec.transpiler.UnecTools;
 import com.peyrona.mingle.lang.interfaces.IXprEval;
 import com.peyrona.mingle.lang.japi.CommandSerializer;
 import com.peyrona.mingle.lang.japi.Pair;
+import com.peyrona.mingle.lang.japi.UtilLib;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
 import com.peyrona.mingle.lang.lexer.Language;
@@ -81,7 +82,7 @@ public final class ParseLibrary extends ParseBase
         name = findName();
 
         if( name != null )
-            StdXprFns.registerLibraryName( name.text() );   // Phase 1: must happen during doCommands()
+            UtilLib.registerLibraryName( name.text() );   // Phase 1: must happen during doCommands()
                                                              // so subsequent ParseRule tokenization sees
                                                              // this name as a library namespace.
 

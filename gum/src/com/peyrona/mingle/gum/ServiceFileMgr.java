@@ -9,6 +9,7 @@ import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Comparator;
@@ -50,6 +51,7 @@ import javax.servlet.http.HttpServletResponse;
 final class ServiceFileMgr extends ServiceBase
 {
     private static final HmacAuthenticator hmacAuthenticator = new HmacAuthenticator();
+    private static final String            RESERVED_PREFIX   = "_";
 
     private final File fRoot;
 
@@ -73,7 +75,13 @@ final class ServiceFileMgr extends ServiceBase
 
         if( sFile != null )
         {
-            sendText( UtilIO.getAsText( resolveSecurePath(sFile) ) );
+            File   fTarget  = resolveSecurePath( sFile );
+            String mimeType = detectMimeType( fTarget );
+
+            if( isTextMimeType( mimeType ) )
+                sendText( UtilIO.getAsText( fTarget ) );
+            else
+                sendBinary( Files.readAllBytes( fTarget.toPath() ), mimeType );
         }
         else
         {
@@ -136,6 +144,9 @@ final class ServiceFileMgr extends ServiceBase
         File   fParent = UtilStr.isEmpty( sParent ) ? fRoot : resolveSecurePath( sParent );
         File   fTarget = resolveSecurePath( new File(fParent, sName).getPath() );
 
+        if( sName.startsWith( RESERVED_PREFIX ) )
+            throw new IOException( "Names starting with '"+ RESERVED_PREFIX +"' are reserved" );
+
         if( "dir".equalsIgnoreCase( sType ) )
         {
             UtilIO.mkdirs( fTarget );
@@ -168,6 +179,9 @@ final class ServiceFileMgr extends ServiceBase
         File fOld = resolveSecurePath( asString( "old", "" ) );
         File fNew = resolveSecurePath( asString( "new", "" ) );
 
+        if( fNew.getName().startsWith( RESERVED_PREFIX ) )
+            throw new IOException( "Names starting with '"+ RESERVED_PREFIX +"' are reserved" );
+
         if( ! fOld.renameTo( fNew ) )
             throw new IOException( "Error renaming ["+ fOld +"] to ["+ fNew +']' );
 
@@ -196,6 +210,60 @@ final class ServiceFileMgr extends ServiceBase
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
 
+    /**
+     * File extensions that are always served as UTF-8 text regardless of what
+     * {@link Files#probeContentType} may return (or not return) for them.
+     */
+    private static final java.util.Set<String> TEXT_EXTENSIONS = java.util.Set.of(
+        "bat", "cfg", "conf", "csv", "css", "h", "htm", "html", "ini",
+        "java", "js", "json", "log", "md", "model", "ps1", "py", "r",
+        "sh", "sql", "tex", "toml", "ts", "txt", "une", "xml", "yaml", "yml"
+    );
+
+    /**
+     * Returns the MIME type for the given file.
+     * Known text extensions always map to {@code text/plain}.
+     * For everything else, {@link Files#probeContentType} is tried first;
+     * unknown types fall back to {@code application/octet-stream}.
+     *
+     * @param file The file whose MIME type is to be determined.
+     * @return A non-null MIME type string.
+     */
+    private String detectMimeType( File file )
+    {
+        String name = file.getName().toLowerCase();
+        int    dot  = name.lastIndexOf( '.' );
+        String ext  = (dot >= 0) ? name.substring( dot + 1 ) : "";
+
+        if( TEXT_EXTENSIONS.contains( ext ) )
+            return "text/plain";
+
+        try
+        {
+            String mimeType = Files.probeContentType( file.toPath() );
+            return (mimeType != null) ? mimeType : "application/octet-stream";
+        }
+        catch( IOException e )
+        {
+            return "application/octet-stream";
+        }
+    }
+
+    /**
+     * Returns {@code true} when the MIME type indicates a text-based format
+     * that can be safely transmitted with UTF-8 character encoding.
+     *
+     * @param mimeType A non-null MIME type string.
+     * @return {@code true} for text MIME types; {@code false} for binary ones.
+     */
+    private boolean isTextMimeType( String mimeType )
+    {
+        return mimeType.startsWith( "text/"                   ) ||
+               mimeType.equals(    "application/json"         ) ||
+               mimeType.equals(    "application/xml"          ) ||
+               mimeType.equals(    "application/javascript"   );
+    }
+
     private boolean validateRequest() throws IOException
     {
         String result = hmacAuthenticator.validateRequest( request );
@@ -206,33 +274,46 @@ final class ServiceFileMgr extends ServiceBase
         return result == null;
     }
 
-    private File resolveSecurePath( String relativePath ) throws IOException
+    private File resolveSecurePath( String path ) throws IOException
     {
         // Normalize and validate input first
-        if( relativePath == null || relativePath.trim().isEmpty() )
+        if( path == null || path.trim().isEmpty() )
             throw new IOException( "Path cannot be null or empty" );
 
-        // Reject dangerous patterns upfront
-        if( relativePath.contains( ".." )  ||
-            relativePath.contains( "//" )  ||
-            relativePath.contains( "\\" )  ||
-            relativePath.startsWith( "/" ) ||
-            relativePath.contains( "\0" ) )
-        {
-            throw new IOException( "Path traversal attempt detected: " + relativePath );
-        }
+        if( path.contains( "\0" ) )
+            throw new IOException( "Path cannot contain null characters" );
 
-        File userFile = new File( relativePath );
+        File   userFile = new File( path );
+        String relativePath;
 
         if( userFile.isAbsolute() )
-            throw new IOException( "Absolute paths are not allowed." );
+        {
+            File canonicalPath = userFile.getCanonicalFile();
+            File rootCanonical = fRoot.getCanonicalFile();
+
+            if( ! canonicalPath.getPath().startsWith( rootCanonical.getPath() ) )
+                throw new IOException( "Absolute path is outside allowed root: " + path );
+
+            relativePath = rootCanonical.toPath().relativize( canonicalPath.toPath() ).toString();
+        }
+        else
+        {
+            if( path.contains( ".." )  ||
+                path.contains( "//" )  ||
+                path.contains( "\\" )  ||
+                path.startsWith( "/" ) )
+            {
+                throw new IOException( "Path traversal attempt detected: " + path );
+            }
+
+            relativePath = path;
+        }
 
         File finalPath     = new File( fRoot, relativePath ).getCanonicalFile();
         File rootCanonical = fRoot.getCanonicalFile();
 
-        // More robust check using String comparison after canonicalization
         if( ! finalPath.getPath().startsWith( rootCanonical.getPath() ) )
-            throw new IOException( "Path traversal attempt detected: " + relativePath );
+            throw new IOException( "Path traversal attempt detected: " + path );
 
         return finalPath;
     }

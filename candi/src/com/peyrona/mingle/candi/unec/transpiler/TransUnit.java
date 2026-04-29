@@ -298,6 +298,71 @@ public final class TransUnit
             }
         }
 
+        // Expand parameterized template invocations.
+        // This runs AFTER simple USE replacement (so param values can be USE-defined aliases)
+        // and BEFORE ParseUse.clean() (so mapTemplates is still populated).
+        //
+        // Note: splitByCommand groups statements by blank lines, so consecutive one-liner
+        // template invocations (e.g. "SLOT a = 0\nSLOT b = 1") land in the same group.
+        // We therefore rebuild lstLexByCmd: groups that start with a template name are
+        // split by single-delimiter and each sub-invocation is expanded into its own group.
+
+        if( ParseUse.hasTemplates() )
+        {
+            List<List<Lexeme>> rebuilt = new ArrayList<>( lstLexByCmd.size() );
+
+            for( List<Lexeme> lexemes : lstLexByCmd )
+            {
+                String key = lexemes.get(0).text();
+
+                if( ParseInclude.is( key ) || ParseUse.is( key ) || ParseUse.findTemplate( key ) == null )
+                {
+                    rebuilt.add( lexemes );    // Not a template invocation: keep as-is
+                    continue;
+                }
+
+                // The group starts with a template name.
+                // Split by single-line delimiter to handle consecutive invocations on adjacent lines.
+                for( List<Lexeme> sub : UnecTools.splitByDelimiter( lexemes ) )
+                {
+                    if( sub.isEmpty() )
+                        continue;
+
+                    ParseUse.ParsedTemplate tmpl = ParseUse.findTemplate( sub.get(0).text() );
+
+                    if( tmpl == null )
+                    {
+                        rebuilt.add( sub );    // Not a template; keep sub-group as-is
+                        continue;
+                    }
+
+                    List<Lexeme> expanded = tmpl.expand( sub );
+
+                    if( expanded != null )
+                    {
+                        // Re-apply USE replacements to the expanded tokens.
+                        // Template expansion tokens bypass the initial doUses() pass because
+                        // they are produced from the stored expansion template, not the source stream.
+                        if( UtilColls.isNotEmpty( lstUse ) )
+                            for( ParseUse replacer : lstUse )
+                                replacer.doUses( expanded );
+
+                        rebuilt.add( expanded );
+                    }
+                    else
+                    {
+                        lstLexerErr.add( new CodeError(
+                            "Template '" + sub.get(0).text() + "': invocation does not match the expected pattern",
+                            sub.get(0) ) );
+                        rebuilt.add( sub );
+                    }
+                }
+            }
+
+            lstLexByCmd.clear();
+            lstLexByCmd.addAll( rebuilt );
+        }
+
         ParseUse.clean();    // To free RAM
 
         // In this second phase all other commands (except INCLUDE and USE) are processed

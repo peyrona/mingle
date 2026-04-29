@@ -11,6 +11,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+
 package com.peyrona.mingle.candi.jna;
 
 import com.peyrona.mingle.candi.Prepared;
@@ -18,14 +19,14 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ICandi;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
+import com.sun.jna.Function;
+import com.sun.jna.NativeLibrary;
 import java.io.File;
 import java.net.URI;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
-import com.sun.jna.Function;
-import com.sun.jna.NativeLibrary;
 
 /**
  * {@link ICandi.ILanguage} implementation that loads native shared libraries
@@ -285,12 +286,14 @@ public final class NativeRT implements ICandi.ILanguage
 
         switch( value.trim().toLowerCase() )
         {
-            case "float":                   return float.class;
-            case "int":   case "integer":   return int.class;
-            case "long":                    return long.class;
-            case "string":                  return String.class;
-            case "void":                    return void.class;
-            case "double": default:         return double.class;
+            case "float"  :  return float.class;
+            case "int"    :
+            case "integer":  return int.class;
+            case "long"   :  return long.class;
+            case "string" :  return String.class;
+            case "void"   :  return void.class;
+            case "double" :
+            default:         return double.class;
         }
     }
 

@@ -273,6 +273,9 @@ public final class UtilColls
      */
     public static String toString( List list )
     {
+        if( list == null )
+            return "";
+
         return toString( list.toArray() );
     }
 

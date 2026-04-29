@@ -116,8 +116,8 @@ public final class UneEditorPane extends RTextScrollPane
         // Strings (green)
         scheme.getStyle( Token.LITERAL_STRING_DOUBLE_QUOTE ).foreground = new Color( 206, 145, 120 );
 
-        // Operators (orange/gold)
-        scheme.getStyle( Token.OPERATOR ).foreground = new Color( 212, 212, 212 );
+        // Operators / word aliases: SET, IS, EQUALS, RISES, etc. (soft pink)
+        scheme.getStyle( Token.OPERATOR ).foreground = new Color( 220, 170, 180 );
 
         // Preprocessor directives: INCLUDE, USE (peach)
         scheme.getStyle( Token.PREPROCESSOR ).foreground = new Color( 197, 134, 192 );
