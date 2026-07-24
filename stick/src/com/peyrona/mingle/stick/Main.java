@@ -53,13 +53,17 @@ public final class Main
                 IConfig  config  = new Config().load( sCfgURI ).setCliArgs( as );
                 String[] asModel = getModels( cli, config );
 
-                compareAndUpdateModels( config, asModel );
+                compareAndUpdateModels( config, asModel );                       // One-time startup check (refreshes the local copy of HTTP/S models)
 
-                Pair<String,String> pair  = loadFirstValidModel( asModel );
+                String[] asLoad = localizeModelsForLoading( config, asModel );   // When polling is on, load (and thus watch) the local copy of HTTP/S models
+
+                Pair<String,String> pair  = loadFirstValidModel( asLoad );
                 String              sName = pair == null ? null : pair.getKey();
                 String              sJSON = pair == null ? null : pair.getValue();
 
                 stick = new Stick( sJSON, config ).start( sName );
+
+                scheduleModelUpdateChecks( config, asModel );                    // Periodically re-check HTTP/S models; a download overwrites the local file, which the watcher hot-reloads
             }
             catch( Exception exc )
             {
@@ -197,20 +201,16 @@ public final class Main
             {
                 if( isHttpUri( sModelName ) )
                 {
-                    String sLocalPath = getLocalPathFromHttpUri( sModelName );
+                    String sLocalPath     = getLocalPathFromHttpUri( sModelName );
+                    String sRemoteContent = UtilIO.getAsText( sModelName );        // Fetched once and reused for both the age check and the write
 
-                    if( isRemoteNewer( sModelName, sLocalPath ) )
+                    if( (sRemoteContent != null) && isRemoteNewer( sRemoteContent, sLocalPath ) )
                     {
-                        String sRemoteContent = UtilIO.getAsText( sModelName );
+                        UtilIO.newFileWriter()
+                              .setFile( sLocalPath )
+                              .replace( sRemoteContent );
 
-                        if( sRemoteContent != null )
-                        {
-                            UtilIO.newFileWriter()
-                                  .setFile( sLocalPath )
-                                  .replace( sRemoteContent );
-
-                            System.err.println( "Updated local model: "+ sLocalPath +" (from "+ sModelName +")" );
-                        }
+                        System.err.println( "Updated local model: "+ sLocalPath +" (from "+ sModelName +")" );
                     }
                 }
             }
@@ -219,6 +219,112 @@ public final class Main
                 exc.printStackTrace( System.err );
             }
         }
+    }
+
+    //-----------------------------------------------------------------------//
+    // PERIODIC HTTP/S MODEL UPDATE CHECK
+    //
+    // Local model files are hot-reloaded by Stick's file watcher. These helpers add the remote
+    // (HTTP/S) counterpart: periodically download a newer version over the local model file, which
+    // the watcher then hot-reloads. Enabled by "exen.update_models_interval" (minutes; 0 = startup only).
+    //-----------------------------------------------------------------------//
+
+    /**
+     * Whether periodic HTTP/S model-update polling is enabled (and possible).
+     *
+     * @param config The application configuration.
+     * @return {@code true} when the file system is writable, {@code exen.update_models} is on and
+     *         {@code exen.update_models_interval} is greater than zero.
+     */
+    private static boolean isModelPollingEnabled( IConfig config )
+    {
+        return UtilSys.isFsWritable
+            && config.get( "exen", "update_models", false )
+            && updateIntervalMinutes( config ) > 0;
+    }
+
+    /**
+     * Returns the configured interval, in minutes, between HTTP/S model-update checks.
+     *
+     * @param config The application configuration.
+     * @return The interval in minutes (0 means "only at startup").
+     */
+    private static int updateIntervalMinutes( IConfig config )
+    {
+        return config.get( "exen", "update_models_interval", 0 );
+    }
+
+    /**
+     * When polling is enabled, replaces every HTTP/S model URI by its already-downloaded local copy
+     * path (when that copy exists), so Stick loads -- and therefore watches -- the local file. The
+     * periodic check later overwrites that file and the watcher hot-reloads it.
+     * <p>
+     * When polling is disabled the array is returned unchanged, preserving the default behaviour of
+     * loading HTTP/S models live from their URL.
+     *
+     * @param config  The application configuration.
+     * @param asModel The resolved model URIs.
+     * @return The model URIs to actually load (a copy; the input array is not modified).
+     */
+    private static String[] localizeModelsForLoading( IConfig config, String[] asModel )
+    {
+        if( ! isModelPollingEnabled( config ) )
+            return asModel;
+
+        String[] asLoad = asModel.clone();
+
+        for( int i = 0; i < asLoad.length; i++ )
+        {
+            try
+            {
+                if( isHttpUri( asLoad[i] ) )
+                {
+                    String sLocal = getLocalPathFromHttpUri( asLoad[i] );
+
+                    if( new File( sLocal ).exists() )    // Downloaded by compareAndUpdateModels (now or in a previous run)
+                        asLoad[i] = sLocal;
+                }
+            }
+            catch( Exception exc )
+            {
+                // Keep the original URI for this entry
+            }
+        }
+
+        return asLoad;
+    }
+
+    /**
+     * When polling is enabled and at least one model is an HTTP/S URI, schedules a recurring task that
+     * re-runs {@link #compareAndUpdateModels(IConfig, String[])}. Each run downloads a newer version
+     * over the local model file; Stick's file watcher then hot-reloads it.
+     *
+     * @param config  The application configuration.
+     * @param asModel The original (HTTP/S) model URIs to check -- NOT the localized ones.
+     */
+    private static void scheduleModelUpdateChecks( IConfig config, String[] asModel )
+    {
+        if( ! isModelPollingEnabled( config ) )
+            return;
+
+        boolean bHasHttp = false;
+
+        for( String sModel : asModel )
+        {
+            try                                   { bHasHttp |= isHttpUri( sModel ); }
+            catch( Exception exc )                { /* not an HTTP/S URI */ }
+        }
+
+        if( ! bHasHttp )    // Nothing remote to poll: avoid a useless recurring task
+            return;
+
+        long millis = updateIntervalMinutes( config ) * 60_000L;
+
+        UtilSys.executor( true )
+               .name( "ModelUpdateChecker" )
+               .delay( millis )
+               .rate(  millis )
+               .execute( () -> compareAndUpdateModels( config, asModel ) );
     }
 
     /**
@@ -279,19 +385,20 @@ public final class Main
     }
 
     /**
-     * Compares the "generated" timestamp of a remote model (at {@code httpUri})
+     * Compares the "generated" timestamp of an already-downloaded remote model
      * with a local model file to determine if the remote one is newer.
      * <p>
-     * This method fetches the remote model content to perform the check.
+     * The remote content is received already fetched (by the caller), so the
+     * remote model is downloaded only once per check.
      *
-     * @param httpUri The URI of the remote model to check.
+     * @param sRemoteContent The already-downloaded content of the remote model.
      * @param localPath The file path to the local model for comparison.
      * @return {@code true} if the remote model is newer, the local file does
      *         not exist, or the local file has no valid timestamp. Returns
      *         {@code false} if they are the same age, the local is newer, or
      *         if a comparison cannot be made.
      */
-    private static boolean isRemoteNewer( String httpUri, String localPath )
+    private static boolean isRemoteNewer( String sRemoteContent, String localPath )
     {
         try
         {
@@ -300,7 +407,7 @@ public final class Main
             if( ! localFile.exists() )
                 return true;              // Local doesn't exist, download remote
 
-            String sRemoteGenerated = extractModelTimestamp( UtilIO.getAsText( httpUri ) );
+            String sRemoteGenerated = extractModelTimestamp( sRemoteContent );
 
             if( sRemoteGenerated == null )
                 return false;             // Can't compare, don't update

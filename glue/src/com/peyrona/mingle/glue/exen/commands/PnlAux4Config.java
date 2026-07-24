@@ -4,6 +4,7 @@ package com.peyrona.mingle.glue.exen.commands;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.gswing.GButton;
 import com.peyrona.mingle.lang.japi.UtilColls;
+import com.peyrona.mingle.lang.lexer.Language;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.util.HashMap;
@@ -107,21 +108,28 @@ public final class PnlAux4Config extends javax.swing.JPanel
         }
     }
 
-    public String getSourceCode()
+    public String getSourceCode( String indent )
     {
         Map<String,Object> map = getConfig();
 
         if( UtilColls.isEmpty( map ) )
             return "";
 
-        StringBuilder sb = new StringBuilder( 512 );
+        String        pairIndent = indent + "\t";
+        StringBuilder sb         = new StringBuilder( 512 );
 
         for( Map.Entry<String,Object> entry : map.entrySet() )
         {
-            // FIXME: hacerlo
+            String sKey = entry.getKey();
+            String sVal = (entry.getValue() != null) ? entry.getValue().toString().trim() : "";
+
+            if( ! (Language.isBooleanOp( sVal ) || Language.isNumber( sVal )) )
+                sVal = Language.toString( sVal );
+
+            sb.append( '\n' ).append( pairIndent ).append( sKey ).append( " SET " ).append( sVal );
         }
 
-        return "\n\tCONFIG "+ sb.toString();
+        return '\n' + indent + "CONFIG" + sb;
     }
 
     //------------------------------------------------------------------------//

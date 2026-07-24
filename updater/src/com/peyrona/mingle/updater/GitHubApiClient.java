@@ -95,6 +95,9 @@ public final class GitHubApiClient
 
         applyRateLimiting();
 
+        if( Thread.currentThread().isInterrupted() )
+            return null;
+
         HttpURLConnection connection = null;
 
         try
@@ -162,6 +165,9 @@ public final class GitHubApiClient
 
         applyRateLimiting();
 
+        if( Thread.currentThread().isInterrupted() )
+            return false;
+
         HttpURLConnection connection = null;
 
         try
@@ -174,7 +180,8 @@ public final class GitHubApiClient
                 return false;
             }
 
-            Files.createDirectories( targetPath.getParent() );
+            if( targetPath.getParent() != null )
+                Files.createDirectories( targetPath.getParent() );
 
             try( InputStream  inputStream  = new BufferedInputStream( connection.getInputStream() );
                  OutputStream outputStream = Files.newOutputStream( targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING ) )
@@ -233,6 +240,9 @@ public final class GitHubApiClient
 
         applyRateLimiting();
 
+        if( Thread.currentThread().isInterrupted() )
+            return false;
+
         HttpURLConnection connection = null;
 
         try
@@ -248,7 +258,8 @@ public final class GitHubApiClient
                 return false;
             }
 
-            Files.createDirectories( targetPath.getParent() );
+            if( targetPath.getParent() != null )
+                Files.createDirectories( targetPath.getParent() );
 
             try( InputStream  inputStream  = new BufferedInputStream( connection.getInputStream() );
                  OutputStream outputStream = Files.newOutputStream( targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING ) )
@@ -302,6 +313,9 @@ public final class GitHubApiClient
 
         applyRateLimiting();
 
+        if( Thread.currentThread().isInterrupted() )
+            return false;
+
         HttpURLConnection connection = null;
 
         try
@@ -317,7 +331,8 @@ public final class GitHubApiClient
                 return false;
             }
 
-            Files.createDirectories( targetPath.getParent() );
+            if( targetPath.getParent() != null )
+                Files.createDirectories( targetPath.getParent() );
 
             try( InputStream  inputStream  = new BufferedInputStream( connection.getInputStream() );
                  OutputStream outputStream = Files.newOutputStream( targetPath, StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING ) )
@@ -383,6 +398,7 @@ public final class GitHubApiClient
                 catch( InterruptedException e )
                 {
                     Thread.currentThread().interrupt();
+                    return;   // abort requested — do not update lastApiCallTime; caller checks interrupt flag
                 }
             }
 
@@ -392,6 +408,9 @@ public final class GitHubApiClient
 
     private static HttpURLConnection executeWithRetry( URL url, String filePath ) throws IOException
     {
+        if( Thread.currentThread().isInterrupted() )
+            return null;
+
         long backoffTime = 2000;
 
         for( int attempt = 0; attempt < MAX_RETRIES; attempt++ )
@@ -576,7 +595,13 @@ public final class GitHubApiClient
                 return cached.metadata;
             }
 
-            metadataCache.remove( filePath, cached );
+            // Remove atomically: LinkedHashMap wrapped in synchronizedMap does not make the
+            // two-arg remove(key, value) atomic, so we must synchronize explicitly.
+            synchronized( metadataCache )
+            {
+                if( metadataCache.get( filePath ) == cached )
+                    metadataCache.remove( filePath );
+            }
         }
 
         cacheMisses.incrementAndGet();

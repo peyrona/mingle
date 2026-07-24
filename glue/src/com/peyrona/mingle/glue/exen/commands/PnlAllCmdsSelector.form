@@ -354,7 +354,7 @@
     </Component>
     <Component class="javax.swing.JButton" name="btnDriverShow">
       <Properties>
-        <Property name="toolTipText" type="java.lang.String" value="Create new item"/>
+        <Property name="toolTipText" type="java.lang.String" value="Show highlighted item"/>
         <Property name="focusPainted" type="boolean" value="false"/>
       </Properties>
       <AuxValues>
@@ -363,7 +363,7 @@
     </Component>
     <Component class="javax.swing.JButton" name="btnDriverNew">
       <Properties>
-        <Property name="toolTipText" type="java.lang.String" value="Edit highlighted item"/>
+        <Property name="toolTipText" type="java.lang.String" value="Create new item"/>
         <Property name="focusPainted" type="boolean" value="false"/>
       </Properties>
       <AuxValues>
@@ -545,7 +545,7 @@
     </Container>
     <Component class="javax.swing.JButton" name="btnLibraryDel">
       <Properties>
-        <Property name="toolTipText" type="java.lang.String" value="Create new item"/>
+        <Property name="toolTipText" type="java.lang.String" value="Remove highlighted item"/>
         <Property name="focusPainted" type="boolean" value="false"/>
       </Properties>
       <AuxValues>
@@ -554,7 +554,7 @@
     </Component>
     <Component class="javax.swing.JButton" name="btnLibraryEdit">
       <Properties>
-        <Property name="toolTipText" type="java.lang.String" value="Create new item"/>
+        <Property name="toolTipText" type="java.lang.String" value="Edit highlighted item"/>
         <Property name="focusPainted" type="boolean" value="false"/>
       </Properties>
       <AuxValues>

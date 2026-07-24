@@ -15,6 +15,7 @@ import com.peyrona.mingle.network.NetworkConfig;
 import com.peyrona.mingle.network.socket.SocketClient;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.zip.ZipException;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.Executors;
@@ -157,10 +158,15 @@ public class CommBridge extends WebSocketAdapter
     private static final ConcurrentHashMap<Session, Object> sessionLocks = new ConcurrentHashMap<>();
 
     /**
-     * Set of ExEn addresses currently being connected to, to prevent duplicate connection attempts.
+     * Map of ExEn addresses currently being connected to, with a per-key queue of pending
+     * outbound payloads. While a connection is being established, additional payloads for the
+     * same key are appended to the queue and flushed by the connecting thread once the TCP
+     * connection is up. Replaces the previous boolean dedupe, which silently dropped every
+     * payload after the first one and produced visible races on dashboards that fire several
+     * requests at the same ExEn during the WebSocket-open window.
      * Key format: session.hashCode() + ":" + exenAddress.toString()
      */
-    private static final ConcurrentHashMap<String, Boolean> pendingConnections = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, Queue<String>> pendingConnections = new ConcurrentHashMap<>();
 
     // Scheduled cleanup of dead WebSocket references
     private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor( r ->
@@ -224,6 +230,14 @@ public class CommBridge extends WebSocketAdapter
             if( exenAddress == null )
             {
                 sendErrorToClient( session, "Missing or invalid ExEn address" );
+                return;
+            }
+
+            // Enforce remote-access subnet binding: a client that reached Gum via a remote-access grant
+            // may only talk to ExEns on the subnet where its presence was proven. No-op unless enabled.
+            if( ! isTargetAllowedByGrant( session, exenAddress ) )
+            {
+                sendErrorToClient( session, exenAddress, "Remote access is limited to your own location" );
                 return;
             }
 
@@ -320,13 +334,28 @@ public class CommBridge extends WebSocketAdapter
     {
         String pendingKey = getPendingKey( session, exenAddress );
 
-        // Prevent duplicate connection attempts (race condition fix)
-        if( pendingConnections.putIfAbsent( pendingKey, Boolean.TRUE ) != null )
+        // Try to claim the connection slot. If another thread is already connecting for this key,
+        // append the payload to its queue so it gets flushed once the connection is established
+        // (instead of being silently dropped).
+        Queue<String> ourQueue = new ConcurrentLinkedQueue<>();
+
+        if( initialPayload != null )
+            ourQueue.offer( initialPayload );
+
+        Queue<String> existing = pendingConnections.putIfAbsent( pendingKey, ourQueue );
+
+        if( existing != null )
         {
+            if( initialPayload != null )
+                existing.offer( initialPayload );
+
             if( logger.isLoggable( ILogger.Level.INFO ) )
-                logger.log( Level.INFO, "Connection already in progress for: " + exenAddress );
+                logger.log( Level.INFO, "Connection already in progress for: " + exenAddress + " — payload queued" );
+
             return;
         }
+
+        final Queue<String> pendingQueue = ourQueue;
 
         // Execute connection in background thread using UtilSys ThreadPool
         UtilSys.executor( true )
@@ -360,10 +389,17 @@ public class CommBridge extends WebSocketAdapter
                                 if( logger.isLoggable( ILogger.Level.INFO ) )
                                     logger.log( Level.INFO, "Added ExEn client for session " + session + " → " + exenAddress );
 
-                                // 3. Send the initial message if provided
-                                if( initialPayload != null && client.isConnected() )
+                                // 3. Drain every payload that piled up in the queue while we were connecting.
+                                //    The finally{} block below removes pendingQueue from pendingConnections after
+                                //    this drain completes, so any payload offered during the drain is still picked up
+                                //    here. Once the entry is removed, later callers will instead find the now-connected
+                                //    client via findExEnClient and send directly, never hitting this code path again.
+                                if( client.isConnected() )
                                 {
-                                    client.send( initialPayload );
+                                    String payload;
+
+                                    while( (payload = pendingQueue.poll()) != null )
+                                        client.send( payload );
                                 }
                             }
                             catch( Exception me )
@@ -871,6 +907,22 @@ public class CommBridge extends WebSocketAdapter
         {
             logError( "Error during periodic cleanup", e );
         }
+    }
+
+    /**
+     * Enforces the remote-access grant's target scoping when it is active.
+     * <p>
+     * Delegates to {@link RemoteGrant#mayReach(AccessContext, String)}: an off-LAN granted client may
+     * only reach ExEns on the subnet its grant authorizes, while on-LAN clients and clients without a
+     * valid grant are not restricted. Returns {@code true} (no restriction) whenever the grant is inactive.
+     *
+     * @param session     the WebSocket session (provides access to the HTTP upgrade request)
+     * @param exenAddress the requested ExEn address
+     * @return {@code true} if the target is allowed, {@code false} if the request must be rejected
+     */
+    private static boolean isTargetAllowedByGrant( Session session, JsonObject exenAddress )
+    {
+        return RemoteGrant.get().mayReach( AccessContext.of( session ), normalizeAddress( exenAddress ) );
     }
 
     private static JsonObject extractExEnAddress( JsonObject messageJson )

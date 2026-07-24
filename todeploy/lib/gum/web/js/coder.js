@@ -74,46 +74,50 @@ class Coder {
         applyButton.addEventListener('click', () => this._applyChanges());
         this._containerElement.appendChild(applyButton);
 
-        // Basic styling for the editors (can be moved to CSS file)
-        const style = document.createElement('style');
-        style.textContent = `
-            .code-editor-group {
-                margin-bottom: 15px;
-            }
-            .code-editor {
-                width: 100%;
-                min-height: 200px;
-                padding: 10px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
-                font-size: 14px;
-                line-height: 1.5;
-                resize: vertical; /* Allow vertical resizing */
-                box-sizing: border-box; /* Include padding and border in the element's total width and height */
-            }
-            .html-editor {
-                background-color: #f8f8f8;
-                color: #333;
-            }
-            .js-editor {
-                background-color: #f0f0f0;
-                color: #222;
-            }
-            .apply-changes-button {
-                padding: 10px 20px;
-                background-color: #007bff;
-                color: white;
-                border: none;
-                border-radius: 5px;
-                cursor: pointer;
-                font-size: 16px;
-            }
-            .apply-changes-button:hover {
-                background-color: #0056b3;
-            }
-        `;
-        this._containerElement.appendChild(style); // Append style to container to keep it self-contained
+        // Inject the stylesheet once per page, identified by a sentinel id.
+        if( ! document.getElementById('coder-styles') )
+        {
+            const style = document.createElement('style');
+            style.id = 'coder-styles';
+            style.textContent = `
+                .code-editor-group {
+                    margin-bottom: 15px;
+                }
+                .code-editor {
+                    width: 100%;
+                    min-height: 200px;
+                    padding: 10px;
+                    border: 1px solid #ccc;
+                    border-radius: 4px;
+                    font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, Courier, monospace;
+                    font-size: 14px;
+                    line-height: 1.5;
+                    resize: vertical;
+                    box-sizing: border-box;
+                }
+                .html-editor {
+                    background-color: #f8f8f8;
+                    color: #333;
+                }
+                .js-editor {
+                    background-color: #f0f0f0;
+                    color: #222;
+                }
+                .apply-changes-button {
+                    padding: 10px 20px;
+                    background-color: #007bff;
+                    color: white;
+                    border: none;
+                    border-radius: 5px;
+                    cursor: pointer;
+                    font-size: 16px;
+                }
+                .apply-changes-button:hover {
+                    background-color: #0056b3;
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
 
     /**

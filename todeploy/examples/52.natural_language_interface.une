@@ -1,19 +1,22 @@
 #==================================================================================================================================
 # This example demonstrates natural language control of a Mingle application via Telegram and an LLM.
 #
-# The 'LLM' device takes its context from the 'context' device.(which reads it froma  file).
+# The 'chatbot' device takes its context from the 'context' device (which reads it from a file).
+#
+# Devices declare the groups they belong to (INIT groups SET "..."): the 'agent' device includes
+# each device's groups in the LLM context, so category requests such as "Switch off all lights"
+# resolve to one action per group member.
 #
 # Flow:
-#   1. User sends a free-text message to the Telegram bot (e.g. "Switch the kitchen light off").
-#   2. The device 'telegram' recevies it and dispatch a message announcing it has a new value.
-#   3. The only rule in this app is triggered and it modifies the estate of device 'agent'
-#   4. The rule dispatches what was recevied from device 'telegram' to the device 'agent'
-#   5. The device 'agent' dispatches it to device 'llm' along with the model estate (all devices
-#      names and values) and waits for the llm to answer.
-#   6. Once 'llm' replies (a JSON array of actions), the 'agent':
-#         6.1  Validates each one of these actions,
-#         6.2. Posts the corresponding messages to the EventBus
-#         6.3. Echoes the raw LLM response back to the user ('log' is 'console').
+#   1. The user sends a free-text message to the Telegram bot (e.g. "Switch the kitchen light off").
+#   2. The device 'telegram' receives it and dispatches a message announcing it has a new value.
+#   3. The only rule in this app is triggered and assigns the received text to the device 'agent'.
+#   4. The device 'agent' forwards it to the device 'chatbot' along with a snapshot of the runtime
+#      state (all device names and values, plus rules and scripts) and waits for the LLM answer.
+#   5. Once 'chatbot' replies (a JSON array of actions), the 'agent':
+#         5.1. Validates each one of these actions,
+#         5.2. Posts the corresponding messages to the EventBus,
+#         5.3. Posts the raw LLM response to the 'log' device ('console' in this example).
 #
 # Prerequisites:
 #   - A Telegram bot token and the chat id where messages will be sent/received.
@@ -35,7 +38,7 @@ INCLUDE "{*home*}../balata/nl_test_defs.une"  # DO NOT FORGET TO DELETE THIS LIN
 
 # USE LLM_URI     AS ""    # Replace with your provider, e.g. "https://api.openai.com/v1/chat/completions"
 #     LLM_API_KEY AS ""    # Replace with your API key
-#     LLM_MODEL   AS ""    # Replace with your model "gpt-4o-mini", "gpt-4", "gpt-3.5-turbo", etc.
+#     LLM_MODEL   AS ""    # Replace with your model. e.g. "gpt-4o-mini", "claude-opus-4.8", "GML-5.2", etc.
 #     IM_CHAT     AS ""    # Replace with your Telegram chat ID
 #     IM_TOKEN    AS ""    # Replace with your Telegram chat token
 
@@ -74,15 +77,16 @@ DEVICE chatbot
 DEVICE agent
     DRIVER AgentNLDriver
     CONFIG
-        transformer SET "chatbot"   # Delegate LLM calls to the 'chatbot' MCP device
-        log         SET "console"   # To echo the raw LLM response back to the Telegram user (optional)
+        transformer SET "chatbot"            # Delegate LLM calls to the 'chatbot' MCP device
+        log         SET "console"            # Device where the raw LLM response is posted (optional)
+        exclude     SET "telegram,context"   # Infrastructure devices to hide from the LLM context (optional)
 
 
-# Squence triggered by this RULE:
+# Sequence triggered by this RULE:
 #    1. A message arrives from Telegram IM to the DEVICE 'telegram' changing its value
-#    2. The new 'telegram's device value is assigned to the DEVICE 'agent'
+#    2. The new value of the DEVICE 'telegram' is assigned to the DEVICE 'agent'
 #    3. DEVICE 'agent' sends this telegram value to the DEVICE 'chatbot'
-#    4. DEVICE 'agent' is notified (via Bus hook) when the 'chatbot' has an answer (has changed it value)
+#    4. DEVICE 'agent' is notified (via Bus hook) when the 'chatbot' has an answer (has changed its value)
 #    5. DEVICE 'agent' analyzes the answer from the transformer and posts as many messages as needed into
 #       the Bus to accomplish all user's requests (those that were understood, obviously).
 
@@ -99,12 +103,16 @@ DEVICE alarm
             value SET OFF
 
 DEVICE light_kitchen
+    INIT
+        groups SET "lights"
     DRIVER CellSetDriver
         CONFIG
             value SET OFF
 
 
 DEVICE light_bedroom
+    INIT
+        groups SET "lights"
     DRIVER CellSetDriver
         CONFIG
             value SET OFF

@@ -14,7 +14,6 @@
 
 USE LIMIT AS 80    # This defines a name (word 'LIMIT') that will be replaced everywhere by the number 80
 
-
 DEVICE CPU
     INIT
         groups = "metric"

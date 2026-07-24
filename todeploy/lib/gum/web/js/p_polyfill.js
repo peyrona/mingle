@@ -128,29 +128,3 @@ if( ! String.prototype.replaceAll )
     };
 }
 
-if( ! String.prototype.splice )
-{
-    /**
-     * The splice() method changes the content of a string by removing a range of
-     * characters and/or adding new characters.
-     *
-     * @this {String}
-     * @param {number} start Index at which to start changing the string.
-     * @param {number} delCount An integer indicating the number of old chars to remove.
-     * @param {string} newSubStr The String that is spliced in.
-     * @return {string} A new string with the spliced substring.
-     */
-    String.prototype.splice = function(start, delCount, newSubStr)
-    {
-        if( this === null || this === undefined )
-            throw new TypeError();
-
-        let string = String(this);
-        let length = string.length;
-        let startIndex = start < 0 ? Math.max( length + start, 0 ) : Math.min( start, length );
-        let deleteCount = delCount < 0 ? 0 : Math.min( delCount, length - startIndex );
-        let insertStr = newSubStr === undefined ? '' : String(newSubStr);
-
-        return string.slice( 0, startIndex ) + insertStr + string.slice( startIndex + deleteCount );
-    };
-}

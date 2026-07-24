@@ -111,15 +111,17 @@ public abstract class   BaseServer4IP
 
         try
         {
+            serverExec.shutdown();
+
             if( ! serverExec.awaitTermination( 3, TimeUnit.SECONDS ) )
                 serverExec.shutdownNow();
 
-            log( ILogger.Level.INFO, "WebSocket server stopped" );
+            log( ILogger.Level.INFO, getClass().getSimpleName() + " stopped" );
         }
         catch( InterruptedException ie )
         {
             serverExec.shutdownNow();
-            log( ILogger.Level.INFO, "WebSocket server stop interrupted" );
+            log( ILogger.Level.INFO, getClass().getSimpleName() + " stop interrupted" );
         }
         finally
         {

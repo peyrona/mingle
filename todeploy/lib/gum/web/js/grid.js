@@ -584,7 +584,10 @@ var grid =
                         '</li>';
 
         if( bIncludeScrollbar )
-            sMenu += '<li class="grid-card-opts-scroll">Hide scrollbar</li>';
+        {
+            const sScrollIcon = this._getCheckboxIcon_( true );   // default: scrollbar visible (checked)
+            sMenu += '<li class="grid-card-opts-scroll"><i class="ti ' + sScrollIcon + ' grid-card-opts-icon"></i>Show scrollbar</li>';
+        }
 
         sMenu += '<li class="grid-card-opts-help">Help</li></ul>';
 
@@ -603,7 +606,9 @@ var grid =
             if( this._lsGet_( 'gum-card-scroll-' + cardId ) === '0' )
             {
                 $(parentEl).find('> .grid-stack-item-content').addClass( 'no-scroll' );
-                $(parentEl).find( '.grid-card-opts-scroll' ).text( 'Show scrollbar' );
+                $(parentEl).find( '.grid-card-opts-scroll .grid-card-opts-icon' )
+                           .removeClass( 'ti-square-check' )
+                           .addClass( 'ti-square' );
             }
         }
     },
@@ -663,7 +668,9 @@ var grid =
 
             $content.toggleClass( 'no-scroll' );
 
-            $(this).text( hiding ? 'Show scrollbar' : 'Hide scrollbar' );
+            $(this).find( '.grid-card-opts-icon' )
+                   .removeClass( 'ti-square-check ti-square' )
+                   .addClass( grid._getCheckboxIcon_( ! hiding ) );
 
             grid._lsSet_( 'gum-card-scroll-' + cardId, hiding ? '0' : '1' );
 

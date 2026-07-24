@@ -67,8 +67,9 @@ public class GitHubFileUpdater
      * Checks and updates files in the base directory.
      *
      * @param catalogFile Catalog file listing expected file paths and hashes
+     * @return true if no errors occurred, false otherwise
      */
-    public void checkAndUpdateFiles( File catalogFile )
+    public boolean checkAndUpdateFiles( File catalogFile )
     {
         UtilSys.getLogger().log( ILogger.Level.INFO, "Starting file check and update process" );
 
@@ -78,7 +79,7 @@ public class GitHubFileUpdater
             {
                 UtilSys.getLogger().log( ILogger.Level.SEVERE, "Catalog file not provided or does not exist." );
                 errors++;
-                return;
+                return false;
             }
 
             processFiles( catalogFile, true );
@@ -92,6 +93,8 @@ public class GitHubFileUpdater
         {
             cleanupAndLogSummary();
         }
+
+        return errors == 0;
     }
 
     //------------------------------------------------------------------------//
@@ -212,8 +215,7 @@ public class GitHubFileUpdater
         catch( RuntimeException e )
         {
             UtilSys.getLogger().log( ILogger.Level.SEVERE, e, "Runtime error checking file: " + entry.path );
-            errors++;
-            throw e;
+            throw e;   // counted once by checkAndUpdateFiles catch block
         }
         catch( Exception e )
         {

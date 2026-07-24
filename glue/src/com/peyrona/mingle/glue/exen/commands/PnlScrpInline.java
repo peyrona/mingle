@@ -39,7 +39,7 @@ final class PnlScrpInline extends PnlCmdBase
             try
             {
                 UtilJson json   = new UtilJson( cmdCodec.unbuild( script ) );
-                boolean  bInli  = json.getBoolean( ICmdKeys.SCRIPT_INLINE   );
+                boolean  bInline  = json.getBoolean( ICmdKeys.SCRIPT_INLINE   );
                 String   sCall  = json.getString(  ICmdKeys.SCRIPT_CALL     );
                 String   sLang  = json.getString(  ICmdKeys.SCRIPT_LANGUAGE );
                 String[] asFrom = UtilType.convertArray( UtilJson.toArray( json.getArray( ICmdKeys.SCRIPT_FROM ) ), String.class );
@@ -47,7 +47,7 @@ final class PnlScrpInline extends PnlCmdBase
                 txtName.setText( script.name() );
                 cmbLanguage.setSelectedIndex( JTools.getIndexForItem( cmbLanguage.getModel(), item -> item.toString().equalsIgnoreCase( sLang ) ) );
                 txtCall.setText( sCall );
-                radGroupFrom.setSelected( (bInli ? radCode : radURI).getModel(), true );
+                radGroupFrom.setSelected( (bInline ? radCode : radURI).getModel(), true );
 
                      if( json.getBoolean( ICmdKeys.SCRIPT_PRESTART ) )  cmbWhen.setSelectedIndex( 1 );
                 else if( json.getBoolean( ICmdKeys.SCRIPT_ONSTART  ) )  cmbWhen.setSelectedIndex( 2 );
@@ -55,8 +55,8 @@ final class PnlScrpInline extends PnlCmdBase
                 else if( json.getBoolean( ICmdKeys.SCRIPT_ONSTOP   ) )  cmbWhen.setSelectedIndex( 4 );
                 else                                                    cmbWhen.setSelectedIndex( 0 );
 
-                if( bInli )
-                    code.setText( asFrom[0] );
+                if( bInline )
+                    code.setText( asFrom.length > 0 ? asFrom[0] : "" );
                 else
                     txtURI.setText( UtilColls.toString( asFrom ) );
             }
@@ -115,8 +115,10 @@ final class PnlScrpInline extends PnlCmdBase
         if( cmbWhen.getSelectedIndex() > 0 )
             sWhen = "\n\t"+ cmbWhen.getSelectedItem().toString().toUpperCase();
 
+        Object oLang = cmbLanguage.getSelectedItem();
+
         return "SCRIPT "  + txtName.getText().trim() +
-               "\n\tLANGUAGE "+ cmbLanguage.getSelectedItem() +
+               (oLang == null ? "" : "\n\tLANGUAGE "+ oLang) +
                (sCall.isEmpty() ? "" : "\n\tCALL \""+ sCall +'"') +
                sWhen +
                "\n\tFROM "+ sFrom;
@@ -212,7 +214,7 @@ final class PnlScrpInline extends PnlCmdBase
 
         jLabel1.setText("LANGUAGE");
 
-        cmbLanguage.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Java", "Javascript", "Python", "Une" }));
+        cmbLanguage.setModel(new javax.swing.DefaultComboBoxModel<>());
 
         jLabel2.setText("Name");
 

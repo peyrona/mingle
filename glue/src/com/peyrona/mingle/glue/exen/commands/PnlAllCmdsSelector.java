@@ -16,6 +16,8 @@ import com.peyrona.mingle.lang.japi.ExEnComm;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import java.awt.Component;
+import java.awt.Cursor;
+import java.awt.Window;
 import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.time.LocalDate;
@@ -27,7 +29,6 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import javax.swing.Icon;
-import javax.swing.JButton;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import jiconfont.icons.font_awesome.FontAwesome;
@@ -61,12 +62,6 @@ public class PnlAllCmdsSelector
         this.cmdWise    = new CommandWise();      // Don't move: has to be here
 
         initComponents();
-
-        for( Component btn : JTools.getOfClass( this, JButton.class ) )
-        {
-            JButton jb = (JButton) btn;
-            jb = new GButton();
-        }
 
         ltbScrDrv  = new GList<>( lstScrDri  );
         ltbScrInl  = new GList<>( lstScrInl  );
@@ -131,9 +126,7 @@ public class PnlAllCmdsSelector
 
         sb.append( "INCLUDE \"file://{*home.inc*}basic-drivers.une\"\n" )
           .append( "        \"file://{*home.inc*}standard-replaces.une\"\n" )
-          .append( "#************************************\n" )   // TODO: find all drivers inside 'include' folder
-          .append( "# Add here any other needed include *\n" )
-          .append( "#************************************\n\n" );
+          .append( "# Add INCLUDE lines for any additional drivers used above\n\n" );
 
         sb.append( "#>>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<" );
 
@@ -222,8 +215,8 @@ public class PnlAllCmdsSelector
 
         String sErr = null;
 
-             if( (clazz == IRule.class  ) && cmdWise.getDevices().isEmpty() ) sErr = "Can not create a RULE when the list of DEVICES is empty";
-        else if( (clazz == IDevice.class) && cmdWise.getDrivers().isEmpty() ) sErr = "Can not create a DEVICE when the list of DRIVERS is empty";
+             if( (clazz == IRule.class  ) && cmd == null && cmdWise.getDevices().isEmpty() ) sErr = "Can not create a RULE when the list of DEVICES is empty";
+        else if( (clazz == IDevice.class) && cmd == null && cmdWise.getDrivers().isEmpty() ) sErr = "Can not create a DEVICE when the list of DRIVERS is empty";
 
         if( sErr != null )
         {
@@ -232,6 +225,9 @@ public class PnlAllCmdsSelector
         }
 
         boolean isInlineScrip = (clazz == IScript.class) && (isEditable == true);   // Because Scripts for Drivers are not editable (this is a weak way to check it but it works)
+
+        Window wnd = SwingUtilities.getWindowAncestor( this );
+        wnd.setCursor( Cursor.getPredefinedCursor( Cursor.WAIT_CURSOR ) );
 
              if( clazz == IDriver.class  )  panel = new PnlDriver(     (IDriver)  cmd, cmdWise );
         else if( clazz == ILibrary.class )  panel = new PnlLibrary(    (ILibrary) cmd, cmdWise );
@@ -265,7 +261,10 @@ public class PnlAllCmdsSelector
                                 };
         }
 
-        new Dlg4Cmd( title +" Editor", panel, al ).setVisible( true );
+        Dlg4Cmd dlg = new Dlg4Cmd( title +" Editor", panel, al );
+                dlg.packIt();
+                dlg.setVisible();
+        wnd.setCursor( Cursor.getDefaultCursor() );
     }
 
     private GList getListBoxFor( ICommand cmd )
@@ -463,10 +462,10 @@ public class PnlAllCmdsSelector
         lblDrivers.setFont(new java.awt.Font("Ubuntu", 1, 13)); // NOI18N
         lblDrivers.setText("Drivers");
 
-        btnDriverShow.setToolTipText("Create new item");
+        btnDriverShow.setToolTipText("Show highlighted item");
         btnDriverShow.setFocusPainted(false);
 
-        btnDriverNew.setToolTipText("Edit highlighted item");
+        btnDriverNew.setToolTipText("Create new item");
         btnDriverNew.setFocusPainted(false);
 
         btnDriverClone.setToolTipText("Clone highlighted item");
@@ -515,10 +514,10 @@ public class PnlAllCmdsSelector
         lstLibrary.setVisibleRowCount(12);
         spLibrary.setViewportView(lstLibrary);
 
-        btnLibraryDel.setToolTipText("Create new item");
+        btnLibraryDel.setToolTipText("Remove highlighted item");
         btnLibraryDel.setFocusPainted(false);
 
-        btnLibraryEdit.setToolTipText("Create new item");
+        btnLibraryEdit.setToolTipText("Edit highlighted item");
         btnLibraryEdit.setFocusPainted(false);
 
         btnLibraryNew.setToolTipText("Create new item");

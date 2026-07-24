@@ -71,18 +71,14 @@ final class PnlDriver extends PnlCmdBase
     private void initComponents()
     {
 
-        jLabel4 = new javax.swing.JLabel();
         jLabel1 = new javax.swing.JLabel();
         txtName = new javax.swing.JTextField();
         jLabel2 = new javax.swing.JLabel();
         txtScript = new javax.swing.JTextField();
 
-        jLabel4.setText("jLabel4");
-
         jLabel1.setText("Driver Name");
 
         txtName.setEditable(false);
-        txtName.setFocusTraversalPolicyProvider(true);
         txtName.setName("ControlName"); // NOI18N
 
         jLabel2.setText("Script name");
@@ -122,7 +118,6 @@ final class PnlDriver extends PnlCmdBase
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
-    private javax.swing.JLabel jLabel4;
     private javax.swing.JTextField txtName;
     private javax.swing.JTextField txtScript;
     // End of variables declaration//GEN-END:variables

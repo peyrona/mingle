@@ -55,7 +55,8 @@ final class ServiceBoard extends ServiceBase
 
     private static volatile String                   sMasterPwd        = null;
     private static final    OneToMany<String,String> mapPwd2Boards     = new OneToMany<>();      // key=Pwd, value=Boards[]. Internally, a 'OneToMany' is a: Map<K,List<V>>
-    private static final    HmacAuthenticator        hmacAuthenticator = new HmacAuthenticator();
+    // NOTE: API authentication (IP scope / remote-access grant / HMAC) is enforced centrally by
+    //       HttpServer.AuthenticationFilter before any request reaches this service.
 
     //------------------------------------------------------------------------//
     // PACKAGE SCOPE
@@ -71,9 +72,6 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doGet() throws IOException
     {
-        if( ! validateRequest() )
-            return;
-
         if( mapPwd2Boards.isEmpty() )
         {
             synchronized( mapPwd2Boards )
@@ -117,9 +115,6 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPost() throws IOException    // UPDATE  (used to update master password and also to update dashboard contents)
     {
-        if( ! validateRequest() )
-            return;
-
         asJSON( (JsonObject jo) ->
                 {
                     UtilJson   uj = new UtilJson( jo );
@@ -158,9 +153,6 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doPut() throws IOException    // NEW  (used to create a new dashboard)
     {
-        if( ! validateRequest() )
-            return;
-
         String sBoardName  = asString( "name"   );
         String sLayoutType = asString( "layout" );
         File   fBoardDir   = getBoardFolder( sBoardName );      // The folder name is the same as board name (".html" is not part of the name)
@@ -207,9 +199,6 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doDelete() throws IOException   // Client takes care that only users with master password can invoke this
     {
-        if( ! validateRequest() )
-            return;
-
         String name = asString( "name" );
 
         UtilIO.delete( getBoardFolder( name ) );   // Deletes the folder (containing 'board.html' and any other files/folders (like the images folder)
@@ -234,16 +223,6 @@ final class ServiceBoard extends ServiceBase
             sMasterPwd = UtilSys.getConfig().get( "monitoring", "master_password", "" );
 
         return sMasterPwd.equals( (pwd == null ? "" : pwd) ) || isFromLocalhost();
-    }
-
-    private boolean validateRequest() throws IOException
-    {
-        String result = hmacAuthenticator.validateRequest( request );
-
-        if( result != null )    // null == valid
-            sendError( result, HttpServletResponse.SC_UNAUTHORIZED );
-
-        return result == null;
     }
 
     private static void initBoardsMap() throws IOException

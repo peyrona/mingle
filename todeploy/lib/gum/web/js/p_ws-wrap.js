@@ -30,12 +30,12 @@ class WebSocketWrap
             throw "Error: URI is undefined";
 
         this.URI       = uri;
-        this.websocket = null;           // La instancia de WebSocket que esta clase encapsula
-        this.onOpen    = new Array();    // Funciones invocadas cuando se conecta con el servidor
-        this.onClose   = new Array();    // Funciones invocadas cuando se desconecta con el servidor
-        this.onMessage = new Array();    // Funciones invocadas cuando se recibe un mensaje desde el servidor
-        this.onError   = new Array();    // Funciones invocadas cuando se produce un error en el cliente
-        this.logger    = new Array();    // Funciones invocadas para hacer logging en el cliente
+        this.websocket = null;           // The WebSocket instance wrapped by this class
+        this.onOpen    = new Array();    // Callbacks invoked on successful connection
+        this.onClose   = new Array();    // Callbacks invoked on disconnection
+        this.onMessage = new Array();    // Callbacks invoked when a message is received from the server
+        this.onError   = new Array();    // Callbacks invoked when a client-side error occurs
+        this.logger    = new Array();    // Callbacks invoked for client-side logging
 
         // Heartbeat properties for connection health monitoring
         this.pingIntervalId  = null;
@@ -73,7 +73,7 @@ class WebSocketWrap
                 this.startHeartbeat();
 
                 for( let n = 0; n < this.onOpen.length; n++ )
-                    this.onOpen[n]( event.data );
+                    this.onOpen[n]( event );
             };
 
         this.websocket.onclose = ( event ) =>

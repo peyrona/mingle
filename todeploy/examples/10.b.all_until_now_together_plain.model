@@ -1,0 +1,21 @@
+{"transpiler":"MSP Transpiler v.2026-04-30",
+"code-version":"1.0",
+"uid":"bc97a83c-95a9-4888-861f-d51b07dafff1",
+"generated":"2026-05-05T14:11:36.120642097Z",
+"commands":[
+{"cmd":"device","name":"cpu","driver":"systemmonitordriver","config":{"metric":"cpu","interval":1000},"init":{"groups":"metric"}},
+{"cmd":"device","name":"ram","driver":"systemmonitordriver","config":{"metric":"jvmram","interval":3000},"init":{"groups":"metric"}},
+{"cmd":"device","name":"disk","driver":"systemmonitordriver","config":{"metric":"disk","interval":30000},"init":{"groups":"metric"}},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"cpu > 80 || ram > 80 || disk > 80","then":[{"after":-1,"target":"console","value":"\"At least one metric is above 80%\""}],"if":null},
+{"cmd":"rule","name":null,"when":"cpu > 80 && ram > 80 && disk > 80","then":[{"after":-1,"target":"console","value":"\"Danger! All metrics are above 80%\""}],"if":null},
+{"cmd":"rule","name":null,"when":"ANY metric > 80","then":[{"after":-1,"target":"console","value":"\"At least one metric is above 80% (using ANY)\""}],"if":null},
+{"cmd":"rule","name":null,"when":"ALL metric > 80","then":[{"after":-1,"target":"console","value":"\"Danger! All metrics are above 80% (using ALL)\""}],"if":null},
+{"cmd":"rule","name":"i_am_a_rule","when":"true","then":[{"after":-1,"target":"console","value":"\"At least one metric is above 80% (using indirect invocation)\""}],"if":null},
+{"cmd":"rule","name":null,"when":"ANY metric > 80","then":[{"after":-1,"target":"i_am_a_rule","value":null}],"if":null},
+{"cmd":"driver","name":"systemmonitordriver","script":"systemmonitorcontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"systemmonitorcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.sysmon.SystemMonitor"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

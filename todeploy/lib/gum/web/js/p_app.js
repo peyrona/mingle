@@ -35,7 +35,7 @@ var p_app =
         let sMsg = "JS internal error at "+ sURL +" [lin:"+ nLine +",col:"+ nCol +"]<br>"+ sMessage + sErr;
 
         if( p_base.isMobile() )
-            console.log( tile +': '+ sMsg.replace( /<br\s*\/?>/gi, '\n' ) );
+            console.log( 'Gum: '+ sMsg.replace( /<br\s*\/?>/gi, '\n' ) );
         else
             this.alert( sMsg, "Error" );
 
@@ -81,14 +81,14 @@ var p_app =
         else
         {
             let sErr408 = (xhr.status !== 408) ? ""   // 408 --> request timed out
-                                               : "Server not avaibale.<br>Please check your Internet connection and try again.<br>";
+                                               : "Server not available.<br>Please check your Internet connection and try again.<br>";
 
             let msg = sErr408 +
                       "<br>Server response: "+ ((! xhr) ? "Unknown" : (xhr.responseText || "No response")) +
                       "<br>Status: "+ xhr.status + " - "+ xhr.statusText;
 
             if( p_base.isMobile() )
-                console.log( tile +': '+ msg.replace( /<br\s*\/?>/gi, '\n' ) );
+                console.log( 'Gum: '+ msg.replace( /<br\s*\/?>/gi, '\n' ) );
             else
                 this.alert( msg, String( title ), fnOnClosed );
         }
@@ -106,7 +106,7 @@ var p_app =
         if( p_base.isString( error ) )
         {
             if( p_base.isMobile() )
-                console.log( tile +': '+ error.replace( /<br\s*\/?>/gi, '\n' ) );
+                console.log( 'Gum: '+ error.replace( /<br\s*\/?>/gi, '\n' ) );
             else
                 this.alert( error, String( title ), fnOnClosed );
 
@@ -149,7 +149,7 @@ var p_app =
         let msg = props.join('\n');
 
         if( p_base.isMobile() )
-            console.log( tile +': '+ msg.replace( /<br\s*\/?>/gi, '\n' ) );
+            console.log( 'Gum: '+ msg.replace( /<br\s*\/?>/gi, '\n' ) );
         else
             this.alert( msg, String( title ), fnOnClosed );
     },
@@ -198,7 +198,10 @@ var p_app =
         let self   = this;
         let millis = parseInt( nMinutes ) * 60 * 1000;
 
-        $(document).on( 'keyup click touch scroll', () => self.nLastUserActionTime = Date.now() );
+        // Use a fixed namespace so re-calling this function replaces the previous listener instead of stacking.
+        $(document).off( '.sessionTimeout' )
+                   .on( 'keyup.sessionTimeout click.sessionTimeout touch.sessionTimeout scroll.sessionTimeout',
+                        () => self.nLastUserActionTime = Date.now() );
 
         let id = setInterval( () =>
                                 {
@@ -245,12 +248,12 @@ var p_app =
     },
 
     /**
-     * Muestra un mensaje de alerta con texto HTML en una dialog de JQuery modal,
-     * y si se pasa fnOnClose, ejecuta esa función tras cerrar la dialog.
+     * Displays an HTML alert message in a modal jQuery dialog.
+     * If fnOnClosed is provided, it is called after the dialog is dismissed.
      *
-     * @param {String} msg
-     * @param {String} title
-     * @param {Function} fnOnClosed
+     * @param {String}   msg       Message body (HTML allowed).
+     * @param {String}   title     Dialog title.
+     * @param {Function} fnOnClosed Callback invoked after the dialog closes.
      */
     alert : function( msg, title, fnOnClosed )
     {
@@ -359,10 +362,10 @@ var p_app =
     },
 
     /**
-     * Muestra un indicador de "carga en proceso".
+     * Displays a loading spinner overlay.
      *
-     * @param {type} element Si es null, se aplica a toda la pantalla.
-     * @returns {String} Un UUID que identifica al element que hace la animación.
+     * @param {type} element Target element. If null, applies to the full page.
+     * @returns {String} A UUID that identifies this loading animation instance (pass to hideLoading).
      */
     showLoading : function( element )
     {
@@ -514,7 +517,8 @@ var p_app =
 
         $(element).text( p_base.time2String( new Date(), 'hh:mm' ) );
 
-        setInterval( () => $(element).text( p_base.time2String( new Date(), 'hh:mm' ) ), 10 * 1000 );
+        const intervalId = setInterval( () => $(element).text( p_base.time2String( new Date(), 'hh:mm' ) ), 10 * 1000 );
+        $(element).data( 'clockIntervalId', intervalId );
     },
 
     //--------------------------------------------------------------------------//
@@ -663,7 +667,6 @@ var p_app =
         let self = this;
 
         $.ajax( {
-                  async  : false,     // Must be sync.
                   type   : "GET",
                   url    : p_base.doURL( sServerFile ),
                   error  : (xhr)  => self.showAjaxError( xhr ),

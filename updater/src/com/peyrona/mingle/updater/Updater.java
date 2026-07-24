@@ -58,6 +58,7 @@ public final class Updater
             abortRequested.set( true );
 
             Thread t = workingThread;
+            
             if( t != null )
                 t.interrupt();   // Wake up any Thread.sleep() in rate-limiting
         }
@@ -129,8 +130,8 @@ public final class Updater
             }
 
             // Get remote catalog version
-            String remoteVersion  = null;
-            tempRemoteCatalog     = File.createTempFile( "remote_catalog", ".json" );
+            String remoteVersion = null;
+            tempRemoteCatalog    = File.createTempFile( "remote_catalog", ".json" );
 
             if( GitHubApiClient.downloadFileFromRoot( "catalog.json", tempRemoteCatalog.toPath() ) )
             {
@@ -219,11 +220,12 @@ public final class Updater
             UtilSys.getLogger().log( ILogger.Level.INFO, "Base directory: " + UtilSys.fHomeDir.getAbsolutePath() );
 
             GitHubFileUpdater updater = new GitHubFileUpdater( UtilSys.fHomeDir, bDryRun, abortRequested );
-            updater.checkAndUpdateFiles( catalogFile );
+            boolean success = updater.checkAndUpdateFiles( catalogFile );
 
-            UtilSys.getLogger().log( ILogger.Level.INFO, "Updater completed successfully" + (bDryRun ? " (DRY-RUN MODE)" : "") );
+            UtilSys.getLogger().log( success ? ILogger.Level.INFO : ILogger.Level.WARNING,
+                "Updater " + (success ? "completed successfully" : "completed with errors") + (bDryRun ? " (DRY-RUN MODE)" : "") );
 
-            return true;
+            return success;
         }
         catch( Exception e )
         {

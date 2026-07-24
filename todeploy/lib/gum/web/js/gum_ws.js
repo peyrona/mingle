@@ -42,9 +42,11 @@ var gum_ws =
             sessionStorage.setItem('gum_tab_id', tabId);
         }
 
-        // Use the tab ID as part of the WebSocket path, not just query parameter
-        const wsUrl = "ws://" + location.host + "/gum/bridge/" + tabId;
-        this.socket = new WebSocketWrap( p_base.addCacheBuster( wsUrl ) );
+        // Use the tab ID as part of the WebSocket path, not just query parameter.
+        // Match ws/wss to the page protocol so the connection works over both HTTP and HTTPS.
+        const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl    = wsScheme + "://" + location.host + "/gum/bridge/" + tabId;
+        this.socket    = new WebSocketWrap( wsUrl );
         this.socket.addOnMessage( (msg) => gum_ws._onMessageReceived_( msg ) );
         this.socket.addOnOpen( () =>
                                {

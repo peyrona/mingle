@@ -48,16 +48,16 @@ final class PnlLibrary extends PnlCmdBase
     protected String getSourceCode()
     {
         return "LIBRARY "  + txtName.getText().trim() +
-               "\n\tLANGUAGE "+ txtLang.getText() +
+               "\n\tLANGUAGE "+ txtLang.getText().trim() +
                 fromClause2Code( txtFrom.getText() ) +
-                config.getSourceCode();
+                config.getSourceCode( "\t" );
 
     }
 
     @Override
     protected String getTranspiled()
     {
-        return null;    // Scripts themselves can not be changed on the fly
+        return null;    // Libraries can not be changed on the fly
     }
 
     //------------------------------------------------------------------------//

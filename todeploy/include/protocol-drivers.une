@@ -66,7 +66,7 @@ DRIVER MCPDriver                              # MCP (Model Context Protocol) dri
 DRIVER AgentNLDriver                          # Natural language interaction driver — delegates LLM calls to an MCP DEVICE
     SCRIPT AgentNLController
     CONFIG
-        transformer AS string REQUIRED        # Name of the DEVICE which valuethat to use for LLM calls
+        transformer AS string REQUIRED        # Name of the MCP DEVICE used for LLM calls
         log         AS string                 # Name of a DEVICE where the raw LLM response is posted. By default empty
         exclude     AS string                 # Comma-separated names (devices, rules, scripts) to exclude from the LLM context. By default empty
 

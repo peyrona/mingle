@@ -26,9 +26,14 @@ import java.time.Duration;
  * HTTP transaction is in-flight at any given time, preventing command collisions
  * on the single-threaded Emura firmware.
  * <p>
- * Uses Java&nbsp;11's {@link HttpClient} with built-in connection pooling and
- * automatic keep-alive, avoiding the overhead of opening a new TCP connection
- * per request.
+ * Uses Java&nbsp;11's {@link HttpClient} forced to HTTP/1.1, the only protocol
+ * the Emura firmware speaks. That firmware does not honour HTTP keep-alive
+ * reliably: it silently closes idle pooled connections, so a request that happens
+ * to reuse a just-closed connection fails with
+ * {@code "HTTP/1.1 header parser received no bytes"} / {@link java.io.EOFException}
+ * before any response byte is read. Every transaction is therefore retried a few
+ * times ({@link #MAX_ATTEMPTS}): the failed attempt evicts the dead connection
+ * from the pool, so the retry succeeds on a freshly opened one.
  *
  * @author Francisco José Morero Peyrona
  *
@@ -41,6 +46,16 @@ final class Talker
 
     /** Timeout for receiving the full HTTP response body. */
     private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds( 30 );
+
+    /**
+     * Number of attempts for a single HTTP transaction. The Emura adapter closes
+     * idle keep-alive connections, so a request reusing a just-closed pooled
+     * connection fails at once; the next attempt then succeeds on a fresh one.
+     */
+    private static final int MAX_ATTEMPTS = 3;
+
+    /** Pause between retry attempts (the single-threaded Emura firmware needs a breather). */
+    private static final Duration RETRY_PAUSE = Duration.ofMillis( 300 );
 
     private static final String USER_AGENT = "Java Daikin Emura Controller";
 
@@ -73,6 +88,7 @@ final class Talker
         }
 
         httpClient = HttpClient.newBuilder()
+                               .version( HttpClient.Version.HTTP_1_1 )    // The Emura firmware only speaks HTTP/1.1
                                .connectTimeout( CONNECT_TIMEOUT )
                                .build();
     }
@@ -127,20 +143,13 @@ final class Talker
                                          .header( "User-Agent", USER_AGENT )
                                          .POST( HttpRequest.BodyPublishers.ofString( values, StandardCharsets.UTF_8 ) )
                                          .build();
-        try
-        {
-            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
 
-            if( response.statusCode() != 200 )
-                throw new IOException( "HTTP response code=" + response.statusCode() );
+        HttpResponse<String> response = send( request );
 
-            return read();
-        }
-        catch( InterruptedException ie )
-        {
-            Thread.currentThread().interrupt();
-            throw new IOException( "HTTP request interrupted", ie );
-        }
+        if( response.statusCode() != 200 )
+            throw new IOException( "HTTP response code=" + response.statusCode() );
+
+        return read();
     }
 
     //------------------------------------------------------------------------//
@@ -161,19 +170,76 @@ final class Talker
                                          .header( "User-Agent", USER_AGENT )
                                          .GET()
                                          .build();
+
+        HttpResponse<String> response = send( request );
+
+        if( response.statusCode() != 200 )
+            throw new IOException( "HTTP response code=" + response.statusCode() + " from " + uri );
+
+        String sBody = response.body();
+
+        if( UtilStr.isEmpty( sBody ) || ! sBody.startsWith( "ret=OK" ) )
+            throw new IOException( "Invalid response from Emura: " + sBody );
+
+        return sBody;
+    }
+
+    /**
+     * Sends a request, transparently retrying transient connection failures.
+     * <p>
+     * The Emura's WiFi adapter does not honour HTTP keep-alive reliably: it closes
+     * idle pooled connections, so a request reusing a just-closed connection fails
+     * with {@code "HTTP/1.1 header parser received no bytes"} /
+     * {@link java.io.EOFException} before any response byte arrives. That failure
+     * evicts the dead connection from the pool, so retrying succeeds on a freshly
+     * opened one. Retrying is always safe here: reads are idempotent and writes
+     * send the AC's full absolute state, so re-applying it yields the same result.
+     * <p>
+     * Only the transport call is retried; status-code and body validation are done
+     * by the callers so a genuinely malformed request is not retried.
+     *
+     * @param request the request to send.
+     * @return the HTTP response.
+     * @throws IOException if every attempt fails (the last failure is propagated).
+     */
+    private HttpResponse<String> send( HttpRequest request ) throws IOException
+    {
+        IOException last = null;
+
+        for( int attempt = 1; attempt <= MAX_ATTEMPTS; attempt++ )
+        {
+            try
+            {
+                return httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
+            }
+            catch( IOException ioe )
+            {
+                last = ioe;
+
+                if( attempt < MAX_ATTEMPTS )
+                    pause();
+            }
+            catch( InterruptedException ie )
+            {
+                Thread.currentThread().interrupt();
+                throw new IOException( "HTTP request interrupted", ie );
+            }
+        }
+
+        throw last;
+    }
+
+    /**
+     * Sleeps for {@link #RETRY_PAUSE} between two HTTP attempts, converting an
+     * interruption into an {@link IOException} so callers deal with one checked type.
+     *
+     * @throws IOException if the thread is interrupted while pausing.
+     */
+    private void pause() throws IOException
+    {
         try
         {
-            HttpResponse<String> response = httpClient.send( request, HttpResponse.BodyHandlers.ofString( StandardCharsets.UTF_8 ) );
-
-            if( response.statusCode() != 200 )
-                throw new IOException( "HTTP response code=" + response.statusCode() + " from " + uri );
-
-            String sBody = response.body();
-
-            if( UtilStr.isEmpty( sBody ) || ! sBody.startsWith( "ret=OK" ) )
-                throw new IOException( "Invalid response from Emura: " + sBody );
-
-            return sBody;
+            Thread.sleep( RETRY_PAUSE.toMillis() );
         }
         catch( InterruptedException ie )
         {

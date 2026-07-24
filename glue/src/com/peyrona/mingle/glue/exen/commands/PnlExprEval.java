@@ -50,6 +50,7 @@ final class PnlExprEval extends javax.swing.JPanel
                                                          .hideLineNumbers()
                                                          .setRows( 12 )
                                                          .setColumns( 102 );
+    private java.awt.Font originalResultFont;
 
     //------------------------------------------------------------------------//
 
@@ -59,6 +60,8 @@ final class PnlExprEval extends javax.swing.JPanel
     PnlExprEval()
     {
         initComponents();
+
+        originalResultFont = lblResult.getFont();
 
         btnTest.setMnemonic(  KeyEvent.VK_E );    // Evaluate
         btnClear.setMnemonic( KeyEvent.VK_D );    // Delete, Swipe, Erase
@@ -83,6 +86,7 @@ final class PnlExprEval extends javax.swing.JPanel
 
     private void showResult( String sResult )
     {
+        lblResult.setFont( originalResultFont );
         lblResult.setForeground( Color.green.darker() );
         lblResult.setText( sResult );
 
@@ -100,7 +104,7 @@ final class PnlExprEval extends javax.swing.JPanel
         else
         {
             lblResult.setForeground( Color.red.darker() );
-            lblResult.setFont( lblResult.getFont().deriveFont( lblResult.getFont().getSize() - 2.0f ) );
+            lblResult.setFont( originalResultFont.deriveFont( originalResultFont.getSize() - 2.0f ) );
             lblResult.setText( sError );
         }
     }
@@ -194,11 +198,11 @@ final class PnlExprEval extends javax.swing.JPanel
 
     private void btnTestActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnTestActionPerformed
     {//GEN-HEADEREND:event_btnTestActionPerformed
-        String sXxpr = pnlEditor.getText();
+        String sXpr = pnlEditor.getText();
 
         lblResult.setText( null );
 
-        if( new XprTokenizer( sXxpr ).hasFuture() )
+        if( new XprTokenizer( sXpr ).hasFuture() )
         {
             showError( "Can not evaluate expressions with futures (AFTER or WITHIN)" );
             return;
@@ -227,7 +231,7 @@ final class PnlExprEval extends javax.swing.JPanel
                                                     return list2Ret.toArray( String[]::new );
                                                 };
 
-        IXprEval expr = UtilSys.getConfig().newXprEval().build( sXxpr, (Consumer) null, fnGroupWise );
+        IXprEval expr = UtilSys.getConfig().newXprEval().build( sXpr, (Consumer) null, fnGroupWise );
 
         if( ! expr.getErrors().isEmpty() )
         {
@@ -255,13 +259,13 @@ final class PnlExprEval extends javax.swing.JPanel
         }
         catch( Exception exc )
         {
-            showError( exc.getMessage() );
+            showError( exc.getMessage() != null ? exc.getMessage() : exc.getClass().getSimpleName() );
         }
     }//GEN-LAST:event_btnTestActionPerformed
 
     private void btnClearActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnClearActionPerformed
     {//GEN-HEADEREND:event_btnClearActionPerformed
-        pnlEditor.setText( null );
+        pnlEditor.setText( "" );
         lblResult.setText( "..." );
         pnlEditor.grabFocus();
     }//GEN-LAST:event_btnClearActionPerformed

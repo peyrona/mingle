@@ -8,9 +8,7 @@ import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.ILogger.Level;
-import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilComm;
-import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -25,7 +23,6 @@ import java.net.Inet4Address;
 import java.net.InetAddress;
 import java.net.NetworkInterface;
 import java.net.SocketException;
-import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
 import java.security.KeyStore;
 import java.time.LocalDateTime;
@@ -82,6 +79,7 @@ final class HttpServer
     HttpServer( String host, int httpPort, String allowed, int timeout, int httpsPort, String keystorePath, String keystorePassword ) throws Exception
     {
         ServerConfig.setClientIPScope( allowed );    // Store in shared configuration
+        RemoteGrant.get();                           // Initialise the off-LAN remote-access grant (warns at startup if misconfigured)
 
         host     = UtilStr.isEmpty( host ) ? "localhost" : host.toLowerCase();
         httpPort = UtilUnit.setBetween( 1, httpPort , 65535 );
@@ -208,9 +206,7 @@ final class HttpServer
                               context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
         // Configure session management for this context
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -234,9 +230,7 @@ final class HttpServer
                               context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
         // Configure session management for this context
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -260,9 +254,7 @@ final class HttpServer
                               context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
         // Configure session management for this context
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -286,9 +278,7 @@ final class HttpServer
                               context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
         // Configure session management for this context
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -314,9 +304,7 @@ final class HttpServer
                               context.setContextPath( "/gum/ws" );
 
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -335,9 +323,7 @@ final class HttpServer
                               context.setContextPath( "/gum/bridge" );
 
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -355,10 +341,14 @@ final class HttpServer
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
                               context.setContextPath( "/gum/upload" );
 
+        // Accept a POST to the bare context path "/gum/upload" (no trailing slash). By default Jetty
+        // answers such a request with a 302 redirect to "/gum/upload/" at the context scope, before the
+        // servlet runs; a client following that redirect on a POST drops the multipart body, so the
+        // upload silently fails. Enabling this makes both "/gum/upload" and "/gum/upload/" reach the servlet.
+        context.setAllowNullPathInfo( true );
+
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -386,10 +376,13 @@ final class HttpServer
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
                               context.setContextPath( "/gum/login" );
 
+        // Accept a POST to the bare context path "/gum/login" (no trailing slash). Otherwise Jetty answers
+        // with a 302 to "/gum/login/" before the servlet runs; a client following that on a POST turns it
+        // into a GET and drops the JSON body, so login silently fails. (Same fix as "/gum/upload".)
+        context.setAllowNullPathInfo( true );
+
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -405,9 +398,7 @@ final class HttpServer
                               context.setContextPath( "/gum/logout" );
 
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -435,9 +426,7 @@ final class HttpServer
                               context.setContextPath( contextPath );
 
         // Configure session management
-        SessionHandler sessionHandler = new SessionHandler();
-                       sessionHandler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
-                       sessionHandler.getSessionCookieConfig().setName( "_Mingle_Gum_" );
+        SessionHandler sessionHandler = newSessionHandler( timeout );
 
         context.setSessionHandler( sessionHandler );
 
@@ -452,6 +441,48 @@ final class HttpServer
 
     //------------------------------------------------------------------------//
     // PRIVATE STATIC METHODS
+
+    /**
+     * Builds a {@link SessionHandler} with a consistently hardened session cookie: fixed name,
+     * {@code HttpOnly}, and {@code SameSite=Lax}. Since Gum runs without HTTPS, {@code SameSite}
+     * is the practical defence against a malicious page riding an authenticated session (CSRF).
+     *
+     * @param timeout Session inactivity timeout in seconds; {@code 0} (or less) means never expire.
+     * @return A configured session handler.
+     */
+    private static SessionHandler newSessionHandler( int timeout )
+    {
+        SessionHandler handler = new SessionHandler();
+                       handler.setMaxInactiveInterval( timeout > 0 ? timeout : -1 );
+
+        javax.servlet.SessionCookieConfig cfg = handler.getSessionCookieConfig();
+                                          cfg.setName( "_Mingle_Gum_" );
+                                          cfg.setHttpOnly( true );
+                                          cfg.setComment( org.eclipse.jetty.http.HttpCookie.SAME_SITE_LAX_COMMENT );   // Jetty 9.4 reads this magic comment to emit "SameSite=Lax"
+
+        return handler;
+    }
+
+    /**
+     * Whether the request's real socket peer is inside the trusted {@code monitoring.allow} scope.
+     * Uses {@link HttpServletRequest#getRemoteAddr()} only — never {@code X-Forwarded-For} — so it
+     * cannot be spoofed by a header.
+     *
+     * @param request The incoming request.
+     * @return {@code true} if the real client address is on the trusted LAN (localhost included).
+     */
+    private static boolean isRealClientOnLan( HttpServletRequest request )
+    {
+        try
+        {
+            return UtilComm.isClientAllowed( ServerConfig.getClientIPScope(),
+                                             InetAddress.getByName( request.getRemoteAddr() ) );
+        }
+        catch( Exception e )
+        {
+            return false;
+        }
+    }
 
     /**
      * Resolves the host address to display in startup messages.
@@ -593,6 +624,16 @@ final class HttpServer
         {
             try
             {
+                // Password login accepts a plaintext credential; without HTTPS it must never travel
+                // off-LAN. Off-LAN clients authenticate via the remote-access grant (or HMAC), not here.
+                if( ! isRealClientOnLan( request ) )
+                {
+                    response.setStatus( HttpServletResponse.SC_FORBIDDEN );
+                    response.setContentType( "application/json" );
+                    response.getWriter().write( "{\"error\":\"Login is only available from the local network\"}" );
+                    return;
+                }
+
                 String contentType = request.getContentType();
 
                 if( contentType != null && contentType.startsWith( "application/json" ) )
@@ -683,10 +724,12 @@ final class HttpServer
         {
             String sMasterPwd = UtilSys.getConfig().get( "monitoring", "master_password", "" );
 
+            // No master password configured: any credential is accepted (this endpoint is already
+            // restricted to the local network). Otherwise the supplied password must match exactly.
             if( UtilStr.isEmpty( sMasterPwd ) )
                 return true;
 
-            return "admin".equalsIgnoreCase( password );
+            return sMasterPwd.equals( password );
         }
     }
 
@@ -927,7 +970,14 @@ final class HttpServer
     public static class AuthenticationFilter implements javax.servlet.Filter
     {
         private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/user-files/_mgr", "/gum/user-files" };
-        private static final String[] asPublicFileExt = { "model", "html", "js", "css", "png", "jpg", "jpeg", "svg", "ico", "map" };
+
+        // Gum's own bundled UI that lives *under* a private prefix and must still load without a session
+        // (its own operations authenticate separately). Only the File-Manager UI qualifies. The trailing
+        // slash is required so an uploaded file merely named "_mgr..." cannot borrow the exemption.
+        private static final String[] asPublicUiSubPaths = { "/gum/user-files/_mgr/" };
+
+        /** Single shared validator: HMAC is verified here, at the choke point, for every private path. */
+        private static final HmacAuthenticator hmacAuth = new HmacAuthenticator();
 
         //------------------------------------------------------------------------//
 
@@ -953,6 +1003,9 @@ final class HttpServer
                 boolean     isAllowed = false;
                 HttpSession session   = null;
 
+                AccessContext       ctx    = AccessContext.of( httpRequest, httpResponse );
+                RemoteGrant         grant = RemoteGrant.get();
+
                 try
                 {
                     session = httpRequest.getSession( false );
@@ -961,6 +1014,11 @@ final class HttpServer
                 {
                     logger.log( ILogger.Level.WARNING, "Session access failed: " + e.getMessage() );
                 }
+
+                // Whether the client is on the trusted LAN right now. Evaluated only for protected paths;
+                // public static files short-circuit below and never need this check.
+                boolean privatePath = ! isPublicPath( target );
+                boolean onLan       = privatePath && isClientAllowed( ctx.clientIp() );
 
                 if( session != null && session.getAttribute( KEY_USER_ID ) != null )
                 {
@@ -971,11 +1029,11 @@ final class HttpServer
                     // Session was authenticated by HmacAuthenticator (used by external clients)
                     isAllowed = true;
                 }
-                else if( isPublicPath( target ) )
+                else if( ! privatePath )
                 {
-                    isAllowed = true;
+                    isAllowed = true;     // Public resource (html/js/css/images/...)
                 }
-                else if( isClientAllowed( httpRequest ) )
+                else if( onLan )
                 {
                     try
                     {
@@ -989,9 +1047,33 @@ final class HttpServer
                         logger.log( ILogger.Level.WARNING, "Session creation failed: " + e.getMessage() );
                     }
                 }
-                else if( isHmacEnabled() )
-                {                          // HMAC is configured: let the request reach HmacAuthenticator for validation
+                else if( grant.isEnabled() && isAdmittedByGrant( grant, ctx ) )
+                {
+                    // Off-LAN client admitted by the remote-access grant (proven to have been on the trusted
+                    // LAN recently). No session is persisted, so the grant is re-checked on every request.
                     isAllowed = true;
+                }
+                else if( isHmacEnabled() )
+                {
+                    // HMAC configured: the request itself must carry a valid signature (used by the
+                    // off-LAN File Manager). This is the single API-authentication choke point — the
+                    // downstream servlets no longer re-validate, so every private path is covered here.
+                    isAllowed = (hmacAuth.validateRequest( httpRequest ) == null);
+                }
+
+                // Let the policy record on-LAN presence (e.g. issue/refresh a grant) ONLY while the client is
+                // genuinely on the trusted LAN right now — never from a lingering off-LAN session — so any
+                // issued grant lapses the configured time after the client truly leaves the LAN.
+                if( onLan && grant.isEnabled() )
+                {
+                    try
+                    {
+                        grant.onTrusted( ctx );
+                    }
+                    catch( Exception e )
+                    {
+                        logger.log( ILogger.Level.WARNING, e, "Remote-access grant failed to record on-LAN presence" );
+                    }
                 }
 
                 if( isAllowed )
@@ -1047,50 +1129,31 @@ final class HttpServer
             if( path.contains( ".." ) || path.contains( "//" ) )
                 return false;
 
-            if( UtilColls.contains( asPublicFileExt, UtilIO.getExtension( path ).toLowerCase() ) )   // Returns just the extension (not including) the '.')
-                return true;
+            // Gum's own bundled File-Manager UI lives under the /gum/user-files private prefix but is app
+            // code, not user content, so it stays publicly loadable (its file operations authenticate via HMAC).
+            for( String p : asPublicUiSubPaths )
+            {
+                if( path.startsWith( p ) )
+                    return true;
+            }
 
+            // User-content areas (served files, dashboards) and the API/WS endpoints require authentication
+            // — even for .html/.js/.svg. This is what stops an *uploaded* page from being served anonymously
+            // (and running as script) from Gum's own origin. On-LAN / granted / HMAC clients still reach them.
             for( String p : asPrivatePaths )
             {
                 if( path.startsWith( p ) )
                     return false;
             }
 
-            return true;
+            return true;   // Gum's own static UI assets under /gum/
         }
 
-        private boolean isClientAllowed( HttpServletRequest request )
+        private boolean isClientAllowed( InetAddress ip )
         {
-            String      xForwardedFor = request.getHeader( "X-Forwarded-For" );
-            InetAddress clientIP      = null;
-
-            if( (xForwardedFor != null) && (! xForwardedFor.isEmpty()) )
-            {
-                try
-                {
-                    String s = xForwardedFor.split( "," )[0].trim();
-                    clientIP = InetAddress.getByName( s );
-                }
-                catch( UnknownHostException ex )
-                {
-                    // Nothing to do: clientIP is already null
-                }
-            }
-            else
-            {
-                try
-                {
-                    clientIP = InetAddress.getByName( request.getRemoteAddr() );
-                }
-                catch( UnknownHostException ex )
-                {
-                    // Nothing to do
-                }
-            }
-
             try
             {
-                return UtilComm.isClientAllowed( ServerConfig.getClientIPScope(), clientIP );
+                return UtilComm.isClientAllowed( ServerConfig.getClientIPScope(), ip );
             }
             catch( SocketException ex )
             {
@@ -1098,6 +1161,28 @@ final class HttpServer
             }
 
             return false;
+        }
+
+        /**
+         * Asks the remote-access grant whether an off-LAN request is admitted, failing closed: any
+         * exception thrown by the grant is logged and treated as a denial.
+         *
+         * @param grant the shared remote-access grant
+         * @param ctx   the request context
+         * @return {@code true} only if the grant explicitly admits the request
+         */
+        private boolean isAdmittedByGrant( RemoteGrant grant, AccessContext ctx )
+        {
+            try
+            {
+                return grant.isAdmitted( ctx );
+            }
+            catch( Exception e )
+            {
+                logger.log( ILogger.Level.WARNING, e, "Remote-access grant failed; denying access" );
+
+                return false;
+            }
         }
 
         private boolean isHmacEnabled()

@@ -94,12 +94,6 @@ public class GDialog extends JDialog
     }
 
     @Override
-    public void pack()
-    {
-        super.pack();
-    }
-
-    @Override
     public void setVisible( boolean b )
     {
         if( b )
@@ -108,9 +102,15 @@ public class GDialog extends JDialog
         super.setVisible( b );
     }
 
+    public GDialog packIt()
+    {
+        pack();
+        return this;
+    }
+
     public GDialog setVisible()
     {
-        setVisible( true );
+        super.setVisible( true );
         return this;
     }
 

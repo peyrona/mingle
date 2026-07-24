@@ -33,6 +33,7 @@ import com.peyrona.mingle.lang.interfaces.commands.IScript;
 import com.peyrona.mingle.lang.interfaces.exen.IEventBus;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.Config;
+import com.peyrona.mingle.lang.japi.UtilIO;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilSys;
 import com.peyrona.mingle.lang.japi.UtilUnit;
@@ -46,14 +47,17 @@ import com.peyrona.mingle.lang.xpreval.functions.StdXprFns;
 import com.peyrona.mingle.lang.xpreval.functions.list;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * This class provides the execution environment where the transpiled Une code is executed.<br>
@@ -83,8 +87,10 @@ public final class Stick
     private final    DriverManager  drvrMgr;
     private final    DeviceManager  deviMgr;
     private final    RuleManager    ruleMgr;
-    private volatile boolean        keepRun = true;
-    private volatile boolean        bExited = false;
+    private volatile boolean        keepRun    = true;
+    private volatile boolean        bExited    = false;
+    private volatile String         sModelJSON = null;     // Last successfully-loaded model JSON: the baseline for hot-reload diffing
+    private          BusListener    busListener;           // Kept so its device->driver cache can be cleared on hot-reload
 
     //----------------------------------------------------------------------------//
     // CONSTRUCTOR
@@ -127,7 +133,7 @@ public final class Stick
         if( UtilSys.getRuntime() != null )
             failed( null, "Only one instance of '"+ getClass().getName() +"' is allowed per JVM" );
 
-        UtilSys.setRuntime( this );
+        UtilSys.setRuntime( Stick.this );
 
         // Creates and assigns a SLF4J Provider to redirect SLF4J logs to Mingle default Logger (I also removed the SLF4J JAR from the Stick project)
         // SLF4J_Adapter.init( logger );
@@ -145,6 +151,7 @@ public final class Stick
 
         // Loads transpiled code (if any) and adds commands to their managers
 
+        this.sModelJSON = sModelJSON;     // Remember the model as the baseline for future hot-reloads
         addModel( sModelJSON );
 
         // By using a hook we maximize the possibilities the finalization code will be
@@ -175,11 +182,13 @@ public final class Stick
      */
     public Stick start( String sModelName )
     {
+        final String sModelPath = sModelName;     // The real path/URI, kept before sModelName is overwritten below for display only
+
         say( "Stick: An 'Execution Environment' (ExEn) for the 'Mingle Standard Platform' (MSP).\n" +
              "       Version "+ UtilSys.getVersion( getClass() ) );   // Do not move this: for clarity, the best is to start with this message
 
         if( UtilStr.isMeaningless( sModelName ) )
-            sModelName = deviMgr.isEmpty() ? "None" : "Unknown";    // "None" means that no model was provided. "Unknown" means that a model was provided but its name is unknown
+            sModelName = deviMgr.isEmpty() ? "None" : "Unknown";      // "None" means that no model was provided. "Unknown" means that a model was provided but its name is unknown
         else
             sModelName = sModelName.trim();
 
@@ -238,7 +247,8 @@ public final class Stick
         // Prepare and start the Event Bus
         // When ExEn Grid, those ExEns connecting later will loose events launched by those ExEns that started earlier: this is the expected behaviour.
 
-        eventBus.add( new BusListener() )
+        busListener = new BusListener();
+        eventBus.add( busListener )
                 .start();
 
         //------------------------------------------------------------------------//
@@ -263,6 +273,11 @@ public final class Stick
                 log( ILogger.Level.WARNING, '"'+ sDownDevice +"\" device does not exist; downtimed task not initiated" );
             }
         }
+
+        //------------------------------------------------------------------------//
+        // Watch the local model file: if it is replaced on disk, hot-reload the model
+
+        startModelWatcher( sModelPath );
 
         return this;
     }
@@ -296,7 +311,7 @@ public final class Stick
                 m |= classMask( s );
 
                 if( m == (1 | 2 | 4 | 8 | 16) )
-                    break;                 // early exit if everything requested
+                    break;    // early exit if everything requested
             }
 
             mask = m;
@@ -305,11 +320,11 @@ public final class Stick
         // Fast-path when only one bit is set
         if( Integer.bitCount( mask ) == 1 )
         {
-            if( (mask &  1) != 0 ) return deviMgr.getAll().toArray( ICommand[]::new );
-            if( (mask &  2) != 0 ) return drvrMgr.getAll().toArray( ICommand[]::new );
-            if( (mask &  4) != 0 ) return srptMgr.getAll().toArray( ICommand[]::new );
-            if( (mask &  8) != 0 ) return ruleMgr.getAll().toArray( ICommand[]::new );
-         /* else */                return librMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  1) != 0 )  return deviMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  2) != 0 )  return drvrMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  4) != 0 )  return srptMgr.getAll().toArray( ICommand[]::new );
+            if( (mask &  8) != 0 )  return ruleMgr.getAll().toArray( ICommand[]::new );
+         /* if( (mask & 16) != 0 )*/return librMgr.getAll().toArray( ICommand[]::new );
         }
 
         // Generic case
@@ -337,9 +352,7 @@ public final class Stick
         cmd = ruleMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = srptMgr.named( sName );  if( cmd != null ) return cmd;
         cmd = drvrMgr.named( sName );  if( cmd != null ) return cmd;
-        cmd = librMgr.named( sName );
-
-        return cmd;   // Either the command or null
+        cmd = librMgr.named( sName );                    return cmd;   // Either the command or null
     }
 
     @Override
@@ -398,12 +411,17 @@ public final class Stick
 
             eventBus.pause();
 
-            IDevice device = (IDevice) command;
+            try
+            {
+                IDevice device = (IDevice) command;
 
-            if( drvrMgr.add( device ) )
-                deviMgr.add( device );
-
-            eventBus.resume();
+                if( drvrMgr.add( device ) )
+                    deviMgr.add( device );
+            }
+            finally
+            {
+                eventBus.resume();     // Always balance pause(), even if add() throws, or the bus stays paused forever
+            }
 
             // When adding multiple commands, sortByType() ensures prerequisites come first
             // (Script before Driver, Driver before Device), so no orphan cleanup is needed.
@@ -431,29 +449,34 @@ public final class Stick
 
         for( ICommand command : sortByType( list, true ) )
         {
+            boolean bOK = false;
+
             eventBus.pause();
 
-            boolean bOK;
-
-                 if( command instanceof ILibrary )  bOK = librMgr.remove( (ILibrary) command );
-            else if( command instanceof IDriver  )  bOK = drvrMgr.remove( (IDriver)  command );
-            else if( command instanceof IScript  )  bOK = srptMgr.remove( (IScript)  command );
-            else if( command instanceof IRule    )  bOK = ruleMgr.remove( (IRule)    command );
-            else
+            try
             {
-                IDevice device = (IDevice) command;
+                     if( command instanceof ILibrary )  bOK = librMgr.remove( (ILibrary) command );
+                else if( command instanceof IDriver  )  bOK = drvrMgr.remove( (IDriver)  command );
+                else if( command instanceof IScript  )  bOK = srptMgr.remove( (IScript)  command );
+                else if( command instanceof IRule    )  bOK = ruleMgr.remove( (IRule)    command );
+                else
+                {
+                    IDevice device = (IDevice) command;
 
-                bOK = deviMgr.remove( device ) &&
-                      drvrMgr.remove( device );     // This method removes the driver if it is not needed anymore (has no more devices)
+                    bOK = deviMgr.remove( device ) &&
+                          drvrMgr.remove( device );     // This method removes the driver if it is not needed anymore (has no more devices)
+                }
+
+                if( bOK )
+                {
+                    drvrMgr.clean();
+                    srptMgr.clean();
+                }
             }
-
-            if( bOK )
+            finally
             {
-                drvrMgr.clean();
-                srptMgr.clean();
+                eventBus.resume();     // Always balance pause(), even if a manager throws, or the bus stays paused forever
             }
-
-            eventBus.resume();
 
             allOK &= bOK;
         }
@@ -576,7 +599,6 @@ public final class Stick
         if( reason != null )
             say( UtilStr.toString( reason ) );
 
-
         // Using this does not work (I do not know why) -->
         //      UtilSys.execute( getClass().getName(), millis, () -> System.exit( 0 ) );
 
@@ -642,6 +664,374 @@ public final class Stick
         msg += "\nCan not continue. Check logs.\n\n"+ UtilStr.toString( exc );
 
         exit( 0, 1, msg );    // ::stop() is always invoked by a System hook
+    }
+
+    //------------------------------------------------------------------------//
+    // MODEL HOT-RELOAD
+    // Watches the local model file and swaps the running model when the file is replaced on disk.
+    //------------------------------------------------------------------------//
+
+    /**
+     * If the model was loaded from a single local file, starts watching it: when that file is
+     * replaced on disk, the running model is hot-swapped for the new one (see ::onModelFileChanged).
+     * <p>
+     * Does nothing when there is no model, or the model is remote (http/s) or a wildcard matching
+     * several files: in those cases there is no single local file to watch.
+     *
+     * @param sModelPath The model path/URI Stick was started with.
+     */
+    private void startModelWatcher( String sModelPath )
+    {
+        File fModel = resolveLocalModelFile( sModelPath );
+
+        if( fModel == null )
+        {
+            log( ILogger.Level.INFO, "Model live-reload disabled: the model is not a single local file" );
+            return;
+        }
+
+        UtilIO.FileMonitor.watch( fModel )
+                          .onModified( path -> onModelFileChanged( fModel ) )
+                          .onCreated(  path -> onModelFileChanged( fModel ) );    // An atomic replace ("mv new model") shows up as CREATE or MODIFY
+        // No ::onDeleted handler on purpose: a transient delete during a replace is ignored; the following re-create reloads.
+
+        log( ILogger.Level.INFO, "Watching model file for changes: "+ fModel );
+    }
+
+    /**
+     * Resolves the model path into a single existing local file, or null when it can not be watched
+     * (no model, a remote http/s URI, or a wildcard/glob that matches several files).
+     *
+     * @param sModelPath The model path/URI.
+     * @return The local file to watch, or null.
+     */
+    private File resolveLocalModelFile( String sModelPath )
+    {
+        if( UtilStr.isMeaningless( sModelPath ) )
+            return null;
+
+        try
+        {
+            List<URI> lstURI = UtilIO.expandPath( sModelPath );    // Resolves {*macros*} and glob patterns
+
+            if( lstURI.size() != 1 )                               // 0 == nothing matched; > 1 == a wildcard: nothing single to watch
+                return null;
+
+            URI uri = lstURI.get( 0 );
+
+            return UtilIO.isLocalFile( uri ) ? new File( uri ) : null;
+        }
+        catch( Exception exc )
+        {
+            return null;
+        }
+    }
+
+    /**
+     * Invoked (off the dispatcher thread, by the file monitor) when the watched model file is
+     * created or modified. Reads, validates and -- if it is a genuinely new and valid model --
+     * hot-reloads it. Any problem (a read during a partial write, an invalid model, ...) is handled
+     * by simply keeping the current model running.
+     *
+     * @param fModel The watched model file.
+     */
+    private void onModelFileChanged( File fModel )
+    {
+        if( bExited || ! keepRun )      // Stick is shutting down
+            return;
+
+        String sNewJSON;
+
+        try
+        {
+            sNewJSON = UtilIO.getAsText( fModel );
+        }
+        catch( IOException ioe )         // The writer may still be replacing the file: a later event will arrive
+        {
+            return;
+        }
+
+        if( UtilStr.isEmpty( sNewJSON ) || sNewJSON.equals( sModelJSON ) )    // Empty/partial, or a duplicate event for unchanged content
+            return;
+
+        List<ICommand> lstNew = buildModelSafe( sNewJSON );
+
+        if( lstNew == null )             // Invalid/unparseable model: keep the current one running
+        {
+            log( ILogger.Level.WARNING, "New model file is invalid; keeping the current model. File: "+ fModel );
+            return;
+        }
+
+        try
+        {
+            reload( lstNew, sNewJSON );
+        }
+        catch( Throwable th )            // Never let a reload failure escape (it would stop the file monitor thread)
+        {
+            log( ILogger.Level.SEVERE, th );
+        }
+    }
+
+    /**
+     * Builds the commands of a model JSON, catching <b>every</b> error so a faulty replacement file
+     * can never stop the running ExEn. Unlike ::addModel, this method never routes errors to
+     * ::failed (which would call System.exit).
+     *
+     * @param sJSON The model JSON to build.
+     * @return The list of built commands, or null if the model is invalid.
+     */
+    private List<ICommand> buildModelSafe( String sJSON )
+    {
+        try
+        {
+            List<ICommand> lstCmds = new ArrayList<>();
+            ICmdEncDecLib  builder = config.newCILBuilder();
+            JsonObject     joModel = Json.parse( sJSON ).asObject();
+
+            if( ! "1.0".equals( joModel.getString( "code-version", "unknown" ) ) )
+                return null;
+
+            for( JsonValue jv : joModel.get( "commands" ).asArray() )
+            {
+                ICommand cmd = builder.build( jv.toString() );
+
+                if( cmd != null )       // INCLUDE/USE build to null and are not runtime commands
+                    lstCmds.add( cmd );
+            }
+
+            return lstCmds;
+        }
+        catch( Throwable th )           // ParseException, MingleException, ... anything: the model is simply rejected
+        {
+            log( ILogger.Level.WARNING, th );
+            return null;
+        }
+    }
+
+    /**
+     * Hot-swaps the running model for a new one. The whole operation is atomic with respect to
+     * message dispatch (the EventBus is paused throughout). A minimal dependency-aware diff is
+     * attempted first; a full swap is used for risky changes (see ::mustFullSwap) and as the
+     * self-healing recovery path on any diff error.
+     *
+     * @param lstNew The new model's commands (already built and validated).
+     * @param sJSON  The new model JSON (becomes the next baseline on success).
+     */
+    private void reload( List<ICommand> lstNew, String sJSON )
+    {
+        eventBus.pause();
+
+        try
+        {
+            if( mustFullSwap( sJSON ) )
+            {
+                applyFullSwap( lstNew );
+            }
+            else
+            {
+                try
+                {
+                    applyDiff( lstNew, sJSON );
+                }
+                catch( Throwable th )       // Any diff problem: rebuild everything from scratch (full swap is self-healing)
+                {
+                    log( ILogger.Level.WARNING, "Model diff-reload failed; doing a full reload. Cause: "+ UtilStr.toString( th ) );
+                    applyFullSwap( lstNew );
+                }
+            }
+
+            reconcile( lstNew );                                  // Re-add anything (e.g. an emptied driver) removed by a cascade/clean()
+            busListener.clearDriverCache();                       // Cached drivers may have been stopped and replaced
+            sModelJSON = sJSON;                                   // Commit the new baseline only after a successful reload
+
+            if( isGridNode() )
+                GridManager.identifyRemoteDevices( this, deviMgr );
+
+            log( ILogger.Level.INFO, "Model hot-reloaded from disk" );
+        }
+        finally
+        {
+            eventBus.resume();
+        }
+    }
+
+    /**
+     * Tears down every command and rebuilds the model from scratch. Idempotent with respect to any
+     * partial state, so it is also the recovery path when a diff fails. The bus is assumed paused.
+     *
+     * @param lstNew The new model's commands.
+     */
+    private void applyFullSwap( List<ICommand> lstNew )
+    {
+        remove( all() );
+        add( lstNew.toArray( ICommand[]::new ) );
+    }
+
+    /**
+     * Decides whether the diff must be skipped in favour of a full swap. This is the case when any
+     * LIBRARY is added, removed or changed: libraries are foundational (their functions can be used
+     * anywhere) and tracing their dependents is not worth the complexity.
+     *
+     * @param sNewJSON The new model JSON.
+     * @return true if a full swap must be performed instead of a diff.
+     */
+    private boolean mustFullSwap( String sNewJSON )
+    {
+        return ! parseDefs( sModelJSON, "library" ).equals( parseDefs( sNewJSON, "library" ) );
+    }
+
+    /**
+     * Minimal dependency-aware reload: removes the old instances of every SCRIPT/DRIVER/DEVICE whose
+     * definition changed (plus those that transitively depend on a changed command), and of every
+     * RULE (rules are cheap and may be anonymous, so they are always replaced wholesale). It does
+     * <b>not</b> add anything: ::reconcile (invoked right after, by ::reload) re-adds, in dependency
+     * order, every new-model command that is missing -- including any driver left empty by removing
+     * its last device. Commands left untouched keep running: unchanged drivers do not reconnect.
+     * The bus is assumed paused.
+     *
+     * @param lstNew   The new model's commands.
+     * @param sNewJSON The new model JSON.
+     */
+    private void applyDiff( List<ICommand> lstNew, String sNewJSON )
+    {
+        Map<String,JsonObject> oldDefs = parseDefs( sModelJSON, "script", "driver", "device" );
+        Map<String,JsonObject> newDefs = parseDefs( sNewJSON  , "script", "driver", "device" );
+
+        // 1) Keys ("type name") whose own definition was added, removed or changed
+
+        Set<String> changed = new HashSet<>();
+
+        for( Map.Entry<String,JsonObject> e : oldDefs.entrySet() )
+            if( ! e.getValue().equals( newDefs.get( e.getKey() ) ) )    // removed (null) or changed
+                changed.add( e.getKey() );
+
+        for( Map.Entry<String,JsonObject> e : newDefs.entrySet() )
+            if( ! e.getValue().equals( oldDefs.get( e.getKey() ) ) )    // added (null) or changed
+                changed.add( e.getKey() );
+
+        Set<String> changedScripts = namesOfType( changed, "script" );
+        Set<String> changedDrivers = namesOfType( changed, "driver" );
+        Set<String> changedDevices = namesOfType( changed, "device" );
+
+        // 2) Cascade in dependency order, using the NEW model's relationships:
+        //    a Driver whose Script changed must restart; a Device whose Driver changed must restart.
+
+        for( ICommand cmd : lstNew )
+            if( (cmd instanceof IDriver) && changedScripts.contains( lc( ((IDriver) cmd).getScriptName() ) ) )
+                changedDrivers.add( cmd.name().toLowerCase() );
+
+        for( ICommand cmd : lstNew )
+            if( (cmd instanceof IDevice) && changedDrivers.contains( lc( ((IDevice) cmd).getDriverName() ) ) )
+                changedDevices.add( cmd.name().toLowerCase() );
+
+        // 3) Remove the old instances of all changed Scripts/Drivers/Devices, plus every Rule
+
+        Set<String> restart = new HashSet<>();
+        restart.addAll( changedScripts );
+        restart.addAll( changedDrivers );
+        restart.addAll( changedDevices );
+
+        List<ICommand> toRemove = new ArrayList<>();
+
+        for( String name : restart )
+        {
+            ICommand old = get( name );
+
+            if( old != null )            // null when it is a pure addition (there is no old instance)
+                toRemove.add( old );
+        }
+
+        Collections.addAll( toRemove, all( "rules" ) );
+
+        if( ! toRemove.isEmpty() )
+            remove( toRemove.toArray( ICommand[]::new ) );
+    }
+
+    /**
+     * Ensures the runtime contains every command of the new model: re-adds (in dependency order, as
+     * ::add sorts internally) any command that is currently missing -- whether because it changed,
+     * was just introduced, or was collaterally removed by a clean() pass. The bus is assumed paused.
+     *
+     * @param lstNew The new model's commands.
+     */
+    private void reconcile( List<ICommand> lstNew )
+    {
+        List<ICommand> missing = new ArrayList<>();
+
+        for( ICommand cmd : lstNew )
+        {
+            if( get( cmd.name() ) == null )
+                missing.add( cmd );
+        }
+
+        if( ! missing.isEmpty() )
+            add( missing.toArray( ICommand[]::new ) );
+    }
+
+    /**
+     * Parses a model JSON and returns the commands of the requested type(s) indexed by a
+     * "type + name" key (name lower-cased). Commands with no name (e.g. anonymous rules) are skipped.
+     *
+     * @param sJSON  The model JSON (may be null or empty).
+     * @param asType The command types to include (e.g. "device", "driver", "script", "library").
+     * @return A map keyed by "type name" (a single space between) whose values are the command JsonObjects.
+     */
+    private static Map<String,JsonObject> parseDefs( String sJSON, String... asType )
+    {
+        Map<String,JsonObject> map = new HashMap<>();
+
+        if( UtilStr.isEmpty( sJSON ) )
+            return map;
+
+        Set<String> setTypes = Set.of( asType );
+
+        for( JsonValue jv : Json.parse( sJSON ).asObject().get( "commands" ).asArray() )
+        {
+            JsonObject jo   = jv.asObject();
+            String     type = jo.getString( "cmd", "" );
+
+            if( ! setTypes.contains( type ) )
+                continue;
+
+            JsonValue jvName = jo.get( "name" );
+
+            if( jvName == null || jvName.isNull() )     // Anonymous (e.g. a rule): not diffable by name
+                continue;
+
+            map.put( type +' '+ jvName.asString().toLowerCase(), jo );
+        }
+
+        return map;
+    }
+
+    /**
+     * Extracts, from a set of "type + name" keys, the plain (lower-cased) names of a given type.
+     *
+     * @param typedKeys Keys as produced by ::parseDefs ("type name").
+     * @param type      The type whose names are wanted.
+     * @return The set of plain names of that type.
+     */
+    private static Set<String> namesOfType( Set<String> typedKeys, String type )
+    {
+        String      prefix = type +' ';
+        Set<String> names  = new HashSet<>();
+
+        for( String key : typedKeys )
+            if( key.startsWith( prefix ) )
+                names.add( key.substring( prefix.length() ) );
+
+        return names;
+    }
+
+    /**
+     * Null-safe lower-case helper.
+     *
+     * @param s The string (may be null).
+     * @return The lower-cased string, or null.
+     */
+    private static String lc( String s )
+    {
+        return (s == null) ? null : s.toLowerCase();
     }
 
     // There is a hook that invokes this method on JMV exiting
@@ -865,6 +1255,17 @@ public final class Stick
         {
             msgHandler.get( message.getClass() )
                       .handle( message );    // If there is no handler for the messsage, a null point exc is triggered: this is intended
+        }
+
+        /**
+         * Clears the cached device-name -&gt; driver associations: needed after a model hot-reload,
+         * because cached drivers may have been stopped and replaced by new instances.
+         * <p>
+         * Must be invoked only while the EventBus is paused (the cache is read by the dispatcher thread).
+         */
+        void clearDriverCache()
+        {
+            driver4device.clear();
         }
 
         //------------------------------------------------------------------------//

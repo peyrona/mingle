@@ -17,9 +17,9 @@ var p_base =
     //------------------------------------------------------------------------//
 
     /**
-     * Devuelve true si la variable pasada ha sido declarada y no es null.
+     * Returns true if the passed variable has been declared and is not null.
      *
-     * @param {type} aVar
+     * @param {any} aVar
      * @returns {Boolean}
      */
     isDefined : function( aVar )
@@ -28,7 +28,7 @@ var p_base =
     },
 
     /**
-     * Devuelve true si la variable pasada no ha sido declarada o es null.
+     * Returns true if the passed variable has not been declared or is null.
      *
      * @param {any} aVar
      * @returns {Boolean}
@@ -107,7 +107,7 @@ var p_base =
 
     isFunction : function( aVar )
     {
-        return this.isDefined( aVar ) && (typeof aVar === 'function');    // JQuery dice que NO se use $.isFunction(), sino q se haga así
+        return this.isDefined( aVar ) && (typeof aVar === 'function');    // jQuery recommends typeof check over the deprecated $.isFunction()
     },
 
     isArray : function( aVar )
@@ -128,14 +128,14 @@ var p_base =
     },
 
     /**
-     * Devuelve true is la variable pasada es undefined o si es NaN o si la length
-     * del trim() es cero o si es un array con 0 elementos o si es un objeto con
-     * 0 keys.<br>
-     * Sólo se aceptan variables de tipo: undefined, null, string, array, number
-     * y Object. Cualquier otro tipo devolverá un resutado inesperado.
+     * Returns true if the passed variable is undefined, NaN, an empty/whitespace-only
+     * string, an empty array, or an object with zero keys.
+     * <br>
+     * Accepted types: undefined, null, string, array, number, Object.
+     * Any other type will return an unexpected result.
      *
-     * @param {any} aVar La variable a comprobar.
-     * @returns {Boolean} true si está vacía o false en caso contrario.
+     * @param {any} aVar The variable to check.
+     * @returns {Boolean} true if empty, false otherwise.
      */
     isEmpty : function( aVar )
     {
@@ -369,7 +369,7 @@ var p_base =
             // Check if we have nested arrays
             if( (aoB[n] instanceof Array) && (aoA[n] instanceof Array) )
             {
-                if( ! aoB[n].equals( aoA[n] ) )  // recurse into the nested arrays
+                if( ! this.arraysAreEqual( aoB[n], aoA[n] ) )  // recurse into the nested arrays
                     return false;
             }
             else if( aoB[n] !== aoA[n] )
@@ -404,7 +404,7 @@ var p_base =
         if( (! this.isArray( aoA )) )
             throw "First parameter is not an array";
 
-        if( (! this.isArray( aoA )) )
+        if( (! this.isArray( aoB )) )
             throw "Second parameter is not an array";
 
         if( arguments.length > 2 )
@@ -480,7 +480,7 @@ var p_base =
                 let itemThis = bIgnoreCase ? aSorted[n  ].toLocaleLowerCase() : aSorted[n  ];
                 let itemNext = bIgnoreCase ? aSorted[n+1].toLocaleLowerCase() : aSorted[n+1];
 
-                if( itemThis == itemNext )      // Better to use == instead of ===
+                if( itemThis == itemNext )      // String comparison: == and === are equivalent here
                     aDups.push( itemNext );
             }
         }
@@ -662,7 +662,7 @@ var p_base =
                     let as = aVar.match( /(\d+)/g );
                     aVar = new Date( as[0], as[1]-1, as[2] );   // months are 0-based
                 }
-                catch( error )     // Si no es una fecha en formato de string, quizás sean mills pero como cadena: p.ej. "6789124545565"
+                catch( error )     // Not a parseable date string — might be a numeric timestamp as string, e.g. "6789124545565"
                 {
                     aVar = (this.isNumber( aVar ) ? new Date( Number.parseInt( aVar ) ) : null);
                 }
@@ -698,7 +698,7 @@ var p_base =
 
     isWeekend : function( date )
     {
-        let nDoW = date.getDay();    // Devuelve el día de la semana (0 - 6)
+        let nDoW = date.getDay();    // Returns day of week (0 = Sunday … 6 = Saturday)
 
         return (nDoW === 0 || nDoW === 6);
     },
@@ -754,21 +754,20 @@ var p_base =
     },
 
     /**
-     * Convierte la fecha pasada a cadena en el formato indicado por el segundo
-     * parámetro.
+     * Converts the passed date to a string using the given format template.
      * <ul>
-     *    <li>Si no se pasa la fecha o es null, se utiliza: new Date().</li>
-     *    <li>Si el formato no se pasa o es null, se utilizará el del locale del navegador.</li>
-     *    <li>Los caracteres reconocidos para el formato son: 'y', 'm' y 'd' (es case-sensitive)</li>
-     *    <li>Se usan 2 dígitos para el mes y para el día</li>
-     *    <li>Los meses y días tienen que aparecer duplicados: 'mm' y 'dd'</li>
-     *    <li>Si aparece 'yy' se usarán 2 dígitos para el año, si aparece 'yyyy' se usarán 4</li>
-     *    <li>Sólo se reemplaza la primera ocurrencia de los caracteres especiales</li>
-     *    <li>Cualquiera otros caracteres que aparezcan en el formato permanecerán inalterados</li>
+     *    <li>If date is omitted or null, new Date() is used.</li>
+     *    <li>If format is omitted or null, the browser locale format is used.</li>
+     *    <li>Recognised format tokens are: 'y', 'm', 'd' (case-sensitive)</li>
+     *    <li>Month and day always use 2 digits</li>
+     *    <li>Tokens must be doubled: 'mm' and 'dd'</li>
+     *    <li>'yy' produces a 2-digit year; 'yyyy' produces a 4-digit year</li>
+     *    <li>Only the first occurrence of each token is replaced</li>
+     *    <li>Any other characters in the format string are kept as-is</li>
      * </ul>
      *
-     * @param {Date} date Un dato de tipo fecha.
-     * @param {String} sFormat La platilla para dar formato; por defecto el del locale del navegador.
+     * @param {Date}   date    A Date value.
+     * @param {String} sFormat Format template; defaults to the browser locale format.
      * @returns {String}
      */
     date2String : function( date, sFormat )
@@ -796,19 +795,18 @@ var p_base =
     },
 
     /**
-     * Convierte la hora de la fecha pasada a una cadena siguiendo el formato
-     * indicado por el segundo parámetro.
+     * Converts the time portion of the passed date to a string using the given format template.
      * <ul>
-     *    <li>Si no se pasa la fecha o es null, se utiliza: new Date().</li>
-     *    <li>Si el formato no se pasa o es null, se utilizará el del locale del navegador.</li>
-     *    <li>Los caracteres reconocidos para el formato son: 'h', 'm' y 's' (es case-sensitive)</li>
-     *    <li>Se usan 2 caracteres para la hora, los minutos y los segundos (p.ej. hh:mm:ss)</li>
-     *    <li>Sólo se reemplaza la primera ocurrencia de los caracteres especiales</li>
-     *    <li>Cualquiera otros caracteres que aparezcan en el formato permanecerán inalterados</li>
+     *    <li>If date is omitted or null, new Date() is used.</li>
+     *    <li>If format is omitted or null, the browser locale format is used.</li>
+     *    <li>Recognised format tokens are: 'h', 'm', 's' (case-sensitive)</li>
+     *    <li>Hours, minutes, and seconds always use 2 digits (e.g. hh:mm:ss)</li>
+     *    <li>Only the first occurrence of each token is replaced</li>
+     *    <li>Any other characters in the format string are kept as-is</li>
      * </ul>
      *
-     * @param {Date} date Un dato de tipo fecha.
-     * @param {String} sFormat La plantilla para dar formato; por defecto la deel locale del navegador.
+     * @param {Date}   date    A Date value.
+     * @param {String} sFormat Format template; defaults to the browser locale format.
      * @returns {String}
      */
     time2String : function( date, sFormat )
@@ -831,12 +829,10 @@ var p_base =
     },
 
     /**
-     * Convierte la fecha pasada a cadena en el formato ISO para fechas
+     * Converts the passed date to an ISO date string (yyyy-mm-dd).
      *
-     * @param {aVar} date Un dato de tipo fecha, cadena o numérico (milisegundos).
-     *                    Si está vacío, se usará new Date().
-     *
-     * @returns {@var;format|String}
+     * @param {Date|String|Number} date A Date, ISO string, or millisecond timestamp. Defaults to new Date().
+     * @returns {String} Date in yyyy-mm-dd format.
      */
     date2ISO : function( date )
     {
@@ -891,10 +887,11 @@ var p_base =
     },
 
     /**
-     * Convierte una cadena a número. La cadena puede tener símbolos no numéricos como '€'.
-     * @param {String}    sAmount Cadena a convertir.
-     * @param {String}    sLocale Locale a usar (por defecto el del navegador).
-     * @param {type} sAmount
+     * Converts a locale-formatted string to a number. The string may contain non-numeric
+     * symbols such as currency signs (e.g. '€').
+     *
+     * @param {String} sAmount String to convert.
+     * @param {String} sLocale Locale to use for parsing (defaults to browser locale).
      * @returns {Number}
      */
     string2Number : function( sAmount, sLocale )
@@ -908,22 +905,22 @@ var p_base =
 
         var cThousandSep = (12345.6789).toLocaleString( sLocale ).match( /12(.*)345/ )[1];
         var cDecimalSep  = (12345.6789).toLocaleString( sLocale ).match( /345(.*)67/ )[1];
-// SELL: mejorarlo (p.ej. el '-' sólo puede estar al principio o al final, sólo puede haber 1 '.', etc)
-        sAmount = sAmount.split( cThousandSep ).join( '' );                                    // Elimina el separador de millares
-        sAmount = (cDecimalSep === '.') ? sAmount : sAmount.split( cDecimalSep ).join( '.' );  // Cambia  el separador decimal por '.'
-        sAmount = sAmount.replace( /[^0-9.-]/g, '' );                                          // Elimina lo q no sean números, '.' o '-'
+// TODO: improve (e.g. '-' only at start/end, at most one '.', etc.)
+        sAmount = sAmount.split( cThousandSep ).join( '' );                                    // Remove thousand separators
+        sAmount = (cDecimalSep === '.') ? sAmount : sAmount.split( cDecimalSep ).join( '.' );  // Normalise decimal separator to '.'
+        sAmount = sAmount.replace( /[^0-9.-]/g, '' );                                          // Strip anything that is not a digit, '.' or '-'
 
         return Number( sAmount );
     },
 
     /**
-     * Devuelve la cantidad (float) pasada como cadena formateada como moneda (con
-     * 2 decimales). Se utiliza el locale del navegador.
+     * Formats the passed number as a currency string with 2 decimal places,
+     * using the browser locale by default.
      *
-     * @param {Number}    nAmount     Cantidad a formatear (como número).
-     * @param {String}    sLocale     Locale a usar (por defecto el del navegador).
-     * @param {Boolean}   bWithSymbol Inlcude or not the currency symbol for passed locale (by default, true).
-     * @returns {String}  La cantidad formateada como moneda (con símbolo o sin él).
+     * @param {Number}  nAmount     Amount to format.
+     * @param {String}  sLocale     Locale to use (defaults to browser locale).
+     * @param {Boolean} bWithSymbol Whether to append the currency symbol (default: true).
+     * @returns {String} The amount formatted as currency.
      */
     toCurrency : function( nAmount, sLocale, bWithSymbol )
     {
@@ -944,7 +941,7 @@ var p_base =
      */
     formatNumber : function( sAmount, sLocale )
     {
-        // SELL: hay q buscar el símbolo del locale (habrá algún fichero .json q tenga todos)
+        // TODO: derive the locale thousand separator from a locale data file instead of via toLocaleString heuristic
         sLocale = this.isUndefined( sLocale ) ? this.getBrowserLocale() : sLocale;
 
         let cThousandSep = (12345.6789).toLocaleString( sLocale ).match( /12(.*)345/ )[1];
@@ -953,7 +950,7 @@ var p_base =
         let sIntPart     = sAmount.substring( 0, nDotPos );
         let sDecPart     = sAmount.substring( nDotPos + 1 );
 
-        sIntPart = sIntPart.replace( /\B(?=(\d{3})+(?!\d))/g, cThousandSep );      // Pone un "." por cada 3 dígitos (separador de miles)
+        sIntPart = sIntPart.replace( /\B(?=(\d{3})+(?!\d))/g, cThousandSep );      // Insert thousand separators every 3 digits
 
         return sIntPart + cDecimalSep + sDecPart;
     },
@@ -1043,11 +1040,11 @@ var p_base =
     },
 
     /**
-     * Analiza el FORM pasado buscando los INPUT (cualquier tipo) que éste contiene y devuelve un JSON
-     * en el que las keys son el 'name' de cada INPUT y los 'values' son su valor.
+     * Inspects the given form (or container) and returns a JSON object where each key
+     * is the 'name' attribute of an INPUT element and each value is the field's current value.
      *
-     * @param {HTMLElement} form div, form o lo que sea.
-     * @return {JSON} En el que las keys son el 'name' del INPUT y los values son su valor.
+     * @param {HTMLElement} form The form, div, or any container element.
+     * @return {Object} Map of INPUT name → value.
      */
     getFormFields : function( form = null )
     {
@@ -1078,7 +1075,7 @@ var p_base =
         return obj;
     },
 
-    getFieldValue : function( elem )   // TODO: pensar en si hay q hacer escapeString o no y qué habría q hacer para q esta func y su contraria funcionases de la mejor forma posible
+    getFieldValue : function( elem )   // TODO: decide whether escapeString is needed here and ensure this function and its inverse are consistent
     {
         function isNumber( val )
         {
@@ -1091,7 +1088,7 @@ var p_base =
 
         switch( elem.type )
         {
-            case "password":                                  // Nada que hacer: una passwrod puede tener de todo
+            case "password":                                  // No sanitization: a password may contain any characters
                 break;
 
             case "email":
@@ -1102,12 +1099,12 @@ var p_base =
             case "time":
             case "url":
             case "week":
-                value = this.escapeStr( elem.value.trim() );  // Lo mejor es hacerlo aquí y no más tarde en cada acceso
+                value = this.escapeStr( elem.value.trim() );  // Sanitize once here rather than at every call site
                 break;
 
-            case "hidden":                                    // Aunque al server le llegue como string, yo puedo usarlo en el cliente como número; para p.ej. hacer validaciones
+            case "hidden":                                    // Even though the server receives a string, treat numeric values as numbers for client-side validation
                 value = this.escapeStr( elem.value.trim() );
-                if( isNumber( value ) )                       // Los ids (q son hidden muchas veces) son casi siempre numéricos
+                if( isNumber( value ) )                       // Hidden fields (often IDs) are usually numeric
                 {
                     let bDec  = (value.indexOf('.') > 0);
                     value = (value.length > 0) ? (bDec ? parseFloat(value) : parseInt(value)) : null;
@@ -1115,7 +1112,7 @@ var p_base =
                 break;
 
             case "range":
-            case "number":                                    // Aunque al server le llegue como string, yo puedo usarlo en el cliente para p.ej. hacer validaciones
+            case "number":                                    // Even though the server receives a string, parse to a number for client-side validation
                 value = elem.value.trim();
                 let bDec = (value.indexOf('.') > 0);
                 value = (value.length > 0) ? (bDec ? parseFloat(value) : parseInt(value)) : null;
@@ -1123,20 +1120,20 @@ var p_base =
 
             case "date":
             case "datetime-local":
-             // value = this.toDate( elem.value );            --> Esto sería lo lógico, pero los input type="date" devuelven la fecha como String en formato ISO
-                value = elem.value;                           // (puto HTML) y mis apps por tanto las tienen que usar en ese mismo formato (no voy a ir contracorriente).
+             // value = this.toDate( elem.value );            --> The logical choice, but input[type=date] returns an ISO string, not a Date object.
+                value = elem.value;                           // Keep it as a string; changing this would break all callers that expect ISO format.
                 break;
 
             case "checkbox":
                 value = elem.checked;
                 break;
 
-            case "radio":                                     // Si un grupo de radios no tiene ninguno seleccionado, lo ignoro (HTML hace lo mismo)
+            case "radio":                                     // If no radio in the group is selected, ignore it (same behaviour as HTML forms)
                 if( elem.checked )
                     value = this.escapeStr( elem.value.trim() );
                 break;
 
-            case "select-one":                                // Comprobado q se llama así (si el 'value' está vacío, devuelve el 'text')
+            case "select-one":                                // Verified: this is the actual type string (if 'value' is empty, falls back to 'text')
                 if( elem.selectedIndex >= 0 )
                 {
                     value = elem.options[ elem.selectedIndex ].value.trim();
@@ -1176,7 +1173,7 @@ var p_base =
 
     setFieldValue : function( field, value )
     {
-        field = this.get( field );    // Para admitir tanto Elements puros como de JQuery
+        field = this.get( field );    // Accept both plain DOM elements and jQuery objects
 
         switch( field.type.toLowerCase() )
         {
@@ -1190,7 +1187,7 @@ var p_base =
             case "week":
             case "hidden":
                 value = (this.isString( value ) ? value.trim() : value);
-                $(field).val( this.escapeStr( value ) );          // Lo mejor es hacerlo aquí y no más tarde en cada acceso
+                $(field).val( this.escapeStr( value ) );          // Sanitize once here rather than at every call site
                 break;
 
             case "password":
@@ -1223,7 +1220,7 @@ var p_base =
                     $(field).filter('[value='+ value.trim() +']').prop( 'checked', true );
                 break;
 
-            case "select-one":    // Comprobado q se llama así
+            case "select-one":    // Verified: this is the actual type string returned by the browser
                 value = (value === null ? "null" : value);       // Sometimes I use "null" for an OPTION value
 
                 if( ! this.isString( value ) )

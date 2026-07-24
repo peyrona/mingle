@@ -280,7 +280,7 @@ class GadgetEditorHelperMultiExEn extends GadgetEditorHelper
         throw "This should not happen";
     }
 
-    // Esta clase no necesita añadir nada más.
+    // This class needs no further overrides.
     // _fillForm_()
     // {
     //     super._fillForm_();

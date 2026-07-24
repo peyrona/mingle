@@ -4,6 +4,7 @@ package com.peyrona.mingle.glue.exen.commands;
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.candi.unec.parser.ParseRule;
 import com.peyrona.mingle.glue.JTools;
 import com.peyrona.mingle.glue.codeditor.UneEditorTabContent.UneEditorPane;
@@ -36,6 +37,7 @@ final class PnlRule extends PnlCmdBase
 {
     private static final String                sGROUP_SUFFIX   = " (group)";
     private        final GList<String>         ltbThen;
+    private        final GList<String>         ltbUseAs;
     private        final ListSelectionListener ltbThenListener = (ListSelectionEvent evt) -> selectedChangedInActionsListBox();
     private              boolean               isStarting      = true;
     private        final UneEditorPane         codeWhen        = UneEditorUnit.newEditor( "" ).setRows( 5 ).hideLineNumbers();
@@ -49,9 +51,12 @@ final class PnlRule extends PnlCmdBase
 
         initComponents();
 
-        ltbThen = new GList<>( lstThen ).setSorted( false );
+        ltbThen  = new GList<>( lstThen  ).setSorted( false );
+        ltbUseAs = new GList<>( lstUseAs ).setSorted( false );
 
-        if( initExtra() && (rule != null) )
+        initExtra( rule == null );
+
+        if( rule != null )
         {
             JsonObject joRule = Json.parse( cmdCodec.unbuild( rule ) ).asObject();
 
@@ -61,13 +66,25 @@ final class PnlRule extends PnlCmdBase
 
             for( int n = 0; n < jaActs.size(); n++ )            // Fills the ListBox that shows all the actions.
             {
-                JsonObject joAction = jaActs.get( n ).asObject();
+                JsonObject joRaw   = jaActs.get( n ).asObject();
+                String     sTarget = joRaw.get( "target" ).asString();
+                JsonValue  jvValue = joRaw.get( "value" );
+                long       nAfter  = joRaw.getLong( "after", 0 );
+                String     sValue  = jvValue.isNull() ? "" : jvValue.toString();
 
-                long   nAfter  = joAction.getLong( "after", 0 );
-                String sValue  = joAction.get( "value" ).isNull() ? "" : joAction.get( "value" ).toString();
-                String caption = joAction.get( "target" ).asString() +
+                // "method" is a UI-only key not persisted by CommandSerializer; infer it on load
+                String sMethod = (jvValue.isNull() && !cmdWise.isScript( sTarget ) && !cmdWise.isRule( sTarget ))
+                               ? "expr" : "value";
+
+                String caption = sTarget +
                                  (sValue.isEmpty() ? "" : (" = "+ sValue)) +
                                  ((nAfter > 0) ? (" AFTER "+ nAfter) : "");
+
+                JsonObject joAction = Json.object()
+                                         .add( "target", sTarget )
+                                         .add( "method", sMethod )
+                                         .add( "value" , jvValue )
+                                         .add( "after" , nAfter  );
 
                 ltbThen.add( caption, joAction );
             }
@@ -101,10 +118,16 @@ final class PnlRule extends PnlCmdBase
 
         actions = UtilStr.removeLast( actions, sSep.length() );
 
+        StringBuilder uses = new StringBuilder();
+
+        for( int n = 0; n < ltbUseAs.getAll().size(); n++ )
+            uses.append( n == 0 ? "\n\tUSE " : ",\n\t     " ).append( ltbUseAs.get( n ) );
+
         return (name.isEmpty() ? "" : ("RULE "+ name +"\n\t"))+
                "WHEN "+ codeWhen.getText().trim() +"\n\t" +
                "THEN "+ actions +
-               (sIF.isEmpty() ? "" : ("\n\tIF "+ sIF));
+               (sIF.isEmpty() ? "" : ("\n\tIF "+ sIF)) +
+               uses;
     }
 
     @Override
@@ -119,7 +142,7 @@ final class PnlRule extends PnlCmdBase
 
     //------------------------------------------------------------------------//
 
-    private boolean initExtra()
+    private void initExtra( boolean isNew )
     {
         PnlCmdBase.setJTextIsUneName( txtName );
 
@@ -129,8 +152,15 @@ final class PnlRule extends PnlCmdBase
 
         btnNAXE.setIcon( IconFontSwing.buildIcon( FontAwesome.CALCULATOR, 16, JTools.getIconColor() ) );
 
-        btnThenAdd.setIcon(  IconFontSwing.buildIcon( FontAwesome.PLUS , 16, JTools.getIconColor() ) );
-        btnThenDel.setIcon(  IconFontSwing.buildIcon( FontAwesome.TRASH, 16, JTools.getIconColor() ) );
+        btnThenAdd.setIcon(   IconFontSwing.buildIcon( FontAwesome.PLUS , 16, JTools.getIconColor() ) );
+        btnThenDel.setIcon(   IconFontSwing.buildIcon( FontAwesome.TRASH, 16, JTools.getIconColor() ) );
+        btnUseAdd.setIcon(    IconFontSwing.buildIcon( FontAwesome.PLUS , 16, JTools.getIconColor() ) );
+        btnUseDelUse.setIcon( IconFontSwing.buildIcon( FontAwesome.TRASH, 16, JTools.getIconColor() ) );
+
+        lstBtn2Check4Changes.add( btnUseAdd    );
+        lstBtn2Check4Changes.add( btnUseDelUse );
+
+        ltbUseAs.onPicked( (list) -> selectedChangedInUsePairsListBox() );
 
         sp4EditorWhen.setViewportView( codeWhen );
         sp4EditorIf.setViewportView(   codeIf   );
@@ -158,10 +188,8 @@ final class PnlRule extends PnlCmdBase
         radGroupThen.add( radThenExpr   );
         radThenAction.setSelected( true );
 
-        if( (cmbThenScriptOrRule.getItemCount() == 0) || (cmbThenActionActuatorName.getItemCount() == 0) )
+        if( isNew && ((cmbThenScriptOrRule.getItemCount() == 0) || (cmbThenActionActuatorName.getItemCount() == 0)) )
             JTools.alert( "Prior to create a RULE you must create\nat least one SCRIPT and one DEVICE" );
-
-        return (cmbThenScriptOrRule.getItemCount() > 0);
     }
 
     private void updateSelectedItemInActionsListbox()
@@ -281,7 +309,6 @@ final class PnlRule extends PnlCmdBase
     {
 
         radGroupThen = new javax.swing.ButtonGroup();
-        jPanel1 = new javax.swing.JPanel();
         jLabel2 = new javax.swing.JLabel();
         txtName = new javax.swing.JTextField();
         pnlWHEN = new javax.swing.JPanel();
@@ -305,19 +332,14 @@ final class PnlRule extends PnlCmdBase
         pnlIF = new javax.swing.JPanel();
         sp4EditorIf = new javax.swing.JScrollPane();
         btnNAXE = new javax.swing.JButton();
-        pnlIF1 = new javax.swing.JPanel();
-        jLabel3 = new javax.swing.JLabel();
-
-        javax.swing.GroupLayout jPanel1Layout = new javax.swing.GroupLayout(jPanel1);
-        jPanel1.setLayout(jPanel1Layout);
-        jPanel1Layout.setHorizontalGroup(
-            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 100, Short.MAX_VALUE)
-        );
-        jPanel1Layout.setVerticalGroup(
-            jPanel1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 100, Short.MAX_VALUE)
-        );
+        pnlUseAs = new javax.swing.JPanel();
+        txtUseName = new javax.swing.JTextField();
+        lblUseAs = new javax.swing.JLabel();
+        txtUseExpr = new javax.swing.JTextField();
+        btnUseAdd = new javax.swing.JButton();
+        btnUseDelUse = new javax.swing.JButton();
+        jScrollPane2 = new javax.swing.JScrollPane();
+        lstUseAs = new javax.swing.JList<>();
 
         jLabel2.setText("Name");
 
@@ -542,29 +564,62 @@ final class PnlRule extends PnlCmdBase
             }
         });
 
-        pnlIF1.setBorder(javax.swing.BorderFactory.createTitledBorder(" USE ... AS ..."));
+        pnlUseAs.setBorder(javax.swing.BorderFactory.createTitledBorder(" USE ... AS ..."));
 
-        jLabel3.setText("TODO");
+        lblUseAs.setText("AS");
 
-        javax.swing.GroupLayout pnlIF1Layout = new javax.swing.GroupLayout(pnlIF1);
-        pnlIF1.setLayout(pnlIF1Layout);
-        pnlIF1Layout.setHorizontalGroup(
-            pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 721, Short.MAX_VALUE)
-            .addGroup(pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                .addGroup(pnlIF1Layout.createSequentialGroup()
-                    .addGap(0, 0, Short.MAX_VALUE)
-                    .addComponent(jLabel3)
-                    .addGap(0, 0, Short.MAX_VALUE)))
+        lstUseAs.setSelectionMode(javax.swing.ListSelectionModel.SINGLE_SELECTION);
+        jScrollPane2.setViewportView(lstUseAs);
+
+        btnUseAdd.addActionListener(new java.awt.event.ActionListener()
+        {
+            public void actionPerformed(java.awt.event.ActionEvent evt)
+            {
+                btnUseAddActionPerformed(evt);
+            }
+        });
+
+        btnUseDelUse.addActionListener(new java.awt.event.ActionListener()
+        {
+            public void actionPerformed(java.awt.event.ActionEvent evt)
+            {
+                btnUseDelUseActionPerformed(evt);
+            }
+        });
+
+        javax.swing.GroupLayout pnlUseAsLayout = new javax.swing.GroupLayout(pnlUseAs);
+        pnlUseAs.setLayout(pnlUseAsLayout);
+        pnlUseAsLayout.setHorizontalGroup(
+            pnlUseAsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(pnlUseAsLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(pnlUseAsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+                    .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                    .addGroup(pnlUseAsLayout.createSequentialGroup()
+                        .addComponent(txtUseName, javax.swing.GroupLayout.PREFERRED_SIZE, 120, javax.swing.GroupLayout.PREFERRED_SIZE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(lblUseAs)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(txtUseExpr, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(btnUseAdd)
+                        .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                        .addComponent(btnUseDelUse)))
+                .addContainerGap())
         );
-        pnlIF1Layout.setVerticalGroup(
-            pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-            .addGap(0, 81, Short.MAX_VALUE)
-            .addGroup(pnlIF1Layout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
-                .addGroup(pnlIF1Layout.createSequentialGroup()
-                    .addGap(0, 33, Short.MAX_VALUE)
-                    .addComponent(jLabel3)
-                    .addGap(0, 34, Short.MAX_VALUE)))
+        pnlUseAsLayout.setVerticalGroup(
+            pnlUseAsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.LEADING)
+            .addGroup(pnlUseAsLayout.createSequentialGroup()
+                .addContainerGap()
+                .addGroup(pnlUseAsLayout.createParallelGroup(javax.swing.GroupLayout.Alignment.BASELINE)
+                    .addComponent(txtUseName, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(lblUseAs)
+                    .addComponent(txtUseExpr, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                    .addComponent(btnUseAdd)
+                    .addComponent(btnUseDelUse))
+                .addPreferredGap(javax.swing.LayoutStyle.ComponentPlacement.RELATED)
+                .addComponent(jScrollPane2, javax.swing.GroupLayout.DEFAULT_SIZE, 60, Short.MAX_VALUE)
+                .addContainerGap())
         );
 
         javax.swing.GroupLayout layout = new javax.swing.GroupLayout(this);
@@ -583,7 +638,7 @@ final class PnlRule extends PnlCmdBase
                     .addComponent(pnlIF, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(pnlWHEN, javax.swing.GroupLayout.Alignment.TRAILING, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                     .addComponent(pnlTHEN, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
-                    .addComponent(pnlIF1, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
+                    .addComponent(pnlUseAs, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE))
                 .addContainerGap())
         );
         layout.setVerticalGroup(
@@ -601,7 +656,7 @@ final class PnlRule extends PnlCmdBase
                 .addGap(18, 18, 18)
                 .addComponent(pnlIF, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, Short.MAX_VALUE)
                 .addGap(18, 18, 18)
-                .addComponent(pnlIF1, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
+                .addComponent(pnlUseAs, javax.swing.GroupLayout.PREFERRED_SIZE, javax.swing.GroupLayout.DEFAULT_SIZE, javax.swing.GroupLayout.PREFERRED_SIZE)
                 .addContainerGap())
         );
     }// </editor-fold>//GEN-END:initComponents
@@ -678,25 +733,65 @@ final class PnlRule extends PnlCmdBase
         onRadioThenSelected();
     }//GEN-LAST:event_radThenExprActionPerformed
 
+    private void btnUseAddActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnUseAddActionPerformed
+    {//GEN-HEADEREND:event_btnUseAddActionPerformed
+        String sName = txtUseName.getText().trim();
+        String sExpr = txtUseExpr.getText().trim();
+
+        if( sName.isEmpty() || sExpr.isEmpty() )
+        {
+            JTools.alert( "Both a name and an expression are required" );
+            return;
+        }
+
+        ltbUseAs.add( sName +" AS "+ sExpr );
+    }//GEN-LAST:event_btnUseAddActionPerformed
+
+    private void btnUseDelUseActionPerformed(java.awt.event.ActionEvent evt)//GEN-FIRST:event_btnUseDelUseActionPerformed
+    {//GEN-HEADEREND:event_btnUseDelUseActionPerformed
+        ltbUseAs.remove();
+    }//GEN-LAST:event_btnUseDelUseActionPerformed
+
+    //------------------------------------------------------------------------//
+
+    private void selectedChangedInUsePairsListBox()
+    {
+        String sSelected = ltbUseAs.getSelected();
+
+        if( sSelected == null )
+            return;
+
+        int nAs = sSelected.indexOf( " AS " );
+
+        if( nAs > -1 )
+        {
+            txtUseName.setText( sSelected.substring( 0, nAs ) );
+            txtUseExpr.setText( sSelected.substring( nAs + 4 ) );
+        }
+    }
+
     //------------------------------------------------------------------------//
 
     // Variables declaration - do not modify//GEN-BEGIN:variables
     private javax.swing.JButton btnNAXE;
     private javax.swing.JButton btnThenAdd;
     private javax.swing.JButton btnThenDel;
+    private javax.swing.JButton btnUseAdd;
+    private javax.swing.JButton btnUseDelUse;
     private javax.swing.JComboBox<String> cmbAfterTimeUnit;
     private javax.swing.JComboBox<String> cmbThenActionActuatorName;
     private javax.swing.JComboBox<String> cmbThenScriptOrRule;
     private javax.swing.JLabel jLabel1;
     private javax.swing.JLabel jLabel2;
-    private javax.swing.JLabel jLabel3;
     private javax.swing.JLabel jLabel7;
-    private javax.swing.JPanel jPanel1;
     private javax.swing.JScrollPane jScrollPane1;
+    private javax.swing.JScrollPane jScrollPane2;
+    private javax.swing.JLabel lblUseAs;
     private javax.swing.JList<String> lstThen;
+    private javax.swing.JList<String> lstUseAs;
     private javax.swing.JPanel pnlIF;
-    private javax.swing.JPanel pnlIF1;
     private javax.swing.JPanel pnlTHEN;
+    private javax.swing.JPanel pnlUseAs;
     private javax.swing.JPanel pnlWHEN;
     private javax.swing.ButtonGroup radGroupThen;
     private javax.swing.JRadioButton radThenAction;
@@ -708,5 +803,7 @@ final class PnlRule extends PnlCmdBase
     private javax.swing.JTextField txtName;
     private javax.swing.JTextField txtThenActionActuatorValue;
     private javax.swing.JTextField txtThenExpr;
+    private javax.swing.JTextField txtUseExpr;
+    private javax.swing.JTextField txtUseName;
     // End of variables declaration//GEN-END:variables
 }

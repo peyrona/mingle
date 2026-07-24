@@ -1,0 +1,14 @@
+{"transpiler":"MSP Transpiler v.2026-06-21",
+"code-version":"1.0",
+"uid":"d9ad61f0-73d4-42b6-89af-3591bcec6028",
+"generated":"2026-06-21T06:00:17.313092597Z",
+"commands":[
+{"cmd":"device","name":"weather","driver":"openmeteodriver","config":{"latitude":36.6666,"longitude":-4.8888},"init":null},
+{"cmd":"device","name":"console","driver":"outputdriver","config":null,"init":null},
+{"cmd":"rule","name":null,"when":"weather","then":[{"after":-1,"target":"console","value":"\"WEATHER FORECAST AT LATITUDE = 36.6666 and LONGITUDE = - 4.8888\" + \"Temperature   : \" + weather:get( \"temperature\" ) + \"ºC\" + \"Feels like    : \" + weather:get( \"temperature_feel\" ) + \"ºC\" + \"Clouds        : \" + weather:get( \"clouds\" ) + \"%\" + \"Humidity      : \" + weather:get( \"humidity\" ):floor() + \"%\" + \"Precipitation : \" + weather:get( \"precipitation\" ):floor() + \"%\" + \"Pressure      : \" + weather:get( \"pressure\" ):floor() + \" hPa\" + \"Wind speed    : \" + weather:get( \"windspeed\" ):floor() + \" km/h\" + \"Wind direction: \" + weather:get( \"wind_direction\" ):floor() + \" degrees\" + \"Raw data      : \" + weather"},{"after":-1,"target":"exit()","value":null}],"if":null},
+{"cmd":"driver","name":"openmeteodriver","script":"openmeteocontroller"},
+{"cmd":"driver","name":"outputdriver","script":"outputstreamcontroller"},
+{"cmd":"script","name":"openmeteocontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.WeatherOpenMeteo"},
+{"cmd":"script","name":"outputstreamcontroller","language":"java","onstart":false,"onstop":false,"prestart":false,"prestop":false,"inline":false,"from":["file://{*home.lib*}controllers.jar"],"call":"com.peyrona.mingle.controllers.OutputStream"}
+]
+}

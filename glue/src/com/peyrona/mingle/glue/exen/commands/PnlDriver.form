@@ -1,13 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 
 <Form version="1.5" maxVersion="1.9" type="org.netbeans.modules.form.forminfo.JPanelFormInfo">
-  <NonVisualComponents>
-    <Component class="javax.swing.JLabel" name="jLabel4">
-      <Properties>
-        <Property name="text" type="java.lang.String" value="jLabel4"/>
-      </Properties>
-    </Component>
-  </NonVisualComponents>
   <AuxValues>
     <AuxValue name="FormSettings_autoResourcing" type="java.lang.Integer" value="0"/>
     <AuxValue name="FormSettings_autoSetComponentName" type="java.lang.Boolean" value="false"/>
@@ -65,7 +58,6 @@
     <Component class="javax.swing.JTextField" name="txtName">
       <Properties>
         <Property name="editable" type="boolean" value="false"/>
-        <Property name="focusTraversalPolicyProvider" type="boolean" value="true"/>
         <Property name="name" type="java.lang.String" value="ControlName" noResource="true"/>
       </Properties>
     </Component>

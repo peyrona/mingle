@@ -15,21 +15,21 @@ import javax.net.ssl.SSLServerSocket;
 import javax.net.ssl.SSLServerSocketFactory;
 
 /**
-
  * SSL-enabled socket server implementation.
-
  * This class provides secure socket communication using SSL/TLS.
-
  *
-
  * @author Francisco José Morero Peyrona
  *
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
  */
-
 final class SSLSocketServer
       extends BaseServer4IP
 {
+    // Held so stop() can close the socket and unblock accept() — which ignores Thread.interrupt()
+    private final AtomicReference<ServerSocket> serverSocketRef = new AtomicReference<>( null );
+
+    //------------------------------------------------------------------------//
+
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
@@ -44,6 +44,24 @@ final class SSLSocketServer
         return super.run( new ServerThread( latch, errorRef ), latch, errorRef );
     }
 
+    @Override
+    public INetServer stop()
+    {
+        // Set isStopping BEFORE closing the socket so the SocketException thrown by
+        // accept() is suppressed in handleConnectionError() rather than reported as an error.
+        isStopping.set( true );
+
+        ServerSocket ss = serverSocketRef.get();
+
+        if( ss != null )
+        {
+            try { ss.close(); }
+            catch( IOException ioe ) { /* ignore */ }
+        }
+
+        return super.stop();
+    }
+
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
@@ -52,9 +70,6 @@ final class SSLSocketServer
     {
         return UtilComm.MINGLE_DEFAULT_SOCKET_PORT_SSL;
     }
-
-    //------------------------------------------------------------------------//
-    // PRIVATE SCOPE
 
     //------------------------------------------------------------------------//
     // INNER CLASS
@@ -85,7 +100,8 @@ final class SSLSocketServer
 
                 try( ServerSocket ss = createServerSocket( getPort(), ssf ) )
                 {
-                    ss.setReuseAddress(true);
+                    ss.setReuseAddress( true );
+                    serverSocketRef.set( ss );
                     latch.countDown();
 
                     while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
@@ -122,10 +138,16 @@ final class SSLSocketServer
                 }
             }
             catch( Exception e )
-
             {
-                errRef.set( e );
-                latch.countDown();
+                if( latch.getCount() > 0 )
+                {
+                    errRef.set( e );
+                    latch.countDown();
+                }
+            }
+            finally
+            {
+                serverSocketRef.set( null );
             }
         }
 
@@ -133,9 +155,9 @@ final class SSLSocketServer
 
         private ServerSocket createServerSocket( int nPort, SSLServerSocketFactory sslSocketFactory ) throws IOException
         {
-            SSLServerSocket sslServerSocket = (SSLServerSocket) sslSocketFactory.createServerSocket(nPort);
-                            sslServerSocket.setReuseAddress(true);
-                            sslServerSocket.setEnabledProtocols(new String[]{"TLSv1.2", "TLSv1.3"});
+            SSLServerSocket sslServerSocket = (SSLServerSocket) sslSocketFactory.createServerSocket( nPort );
+                            sslServerSocket.setReuseAddress( true );
+                            sslServerSocket.setEnabledProtocols( new String[]{"TLSv1.2", "TLSv1.3"} );
 
             return sslServerSocket;
         }
@@ -149,7 +171,9 @@ final class SSLSocketServer
             {
                 clientRef.set( newClient );
                 add( newClient );
-                notifyConnected( newClient );
+                // notifyConnected() is NOT called here explicitly: SocketClient.connect() already
+                // fires onConnected on the default listener, which routes to notifyConnected().
+                // Calling it again here would double-fire the event.
             }
         }
 
@@ -163,7 +187,7 @@ final class SSLSocketServer
             closeSocket( socket );
         }
 
-        private void closeSocket(Socket socket)
+        private void closeSocket( Socket socket )
         {
             if( socket != null )
             {

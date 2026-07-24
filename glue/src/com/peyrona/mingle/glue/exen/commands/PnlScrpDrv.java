@@ -71,10 +71,12 @@ final class PnlScrpDrv extends PnlCmdBase
         String sCall = txtCall.getText().trim();
         String sFrom = txtFrom.getText().trim();
 
+        Object oLang = cmbLanguage.getSelectedItem();
+
         return "SCRIPT "  + txtName.getText().trim() +
-               "\n\tLANGUAGE "+ cmbLanguage.getSelectedItem() +
+               (oLang == null ? "" : "\n\tLANGUAGE "+ oLang) +
                (sCall.isEmpty() ? "" : "\n\tCALL \""+ sCall +'"')+
-               "\n\tFROM \""+ sFrom +'"';
+               (sFrom.isEmpty() ? "" : "\n\tFROM \""+ sFrom +'"');
     }
 
     @Override
@@ -107,7 +109,7 @@ final class PnlScrpDrv extends PnlCmdBase
 
         jLabel1.setText("LANGUAGE");
 
-        cmbLanguage.setModel(new javax.swing.DefaultComboBoxModel<>(new String[] { "Java", "Javascript", "Python", "Une" }));
+        cmbLanguage.setModel(new javax.swing.DefaultComboBoxModel<>());
 
         jLabel2.setText("Name");
 

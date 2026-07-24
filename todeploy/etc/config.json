@@ -31,7 +31,10 @@
       "downtimed_interval"     : 180,      # Seconds between invocations to find downtimed devices (0 to disable). By default 0.
       "downtimed_report_device": null,     # The name of the device that will contain the list of downtimed devices
       "model"                  : null,     # Local or remote (http/s) file (or array of files: first valid will be used) to be executed. By default null.
-      "update_models"          : true,     # Update local model if a more recent one was retrieved from HTTP. By default, true.
+      "update_models"          : true,     # When the model is an HTTP/S URL, replace the local copy whenever the remote's "generated" timestamp is newer (needs a writable disk). By default, true.
+      "update_models_interval" : 0,        # Minutes between HTTP/S checks for a newer model version (0 = only at startup). A newer version is
+                                           # downloaded over the local model file, which is then hot-reloaded automatically. NOTE: local model files
+                                           # are always watched and hot-reloaded on change, so this polling is only needed for remote (HTTP/S) models.
       "allow_native_code"      : true,     # Allow executing code in other languages, besides Une (drivers are an exception). By default true.
       "languages"              : [ {"name": "Une"       , "class": "com.peyrona.mingle.candi.unescript.UneScriptRT", "uris": ["file://{*home.lib*}candi.jar"] },
                                    {"name": "Java"      , "class": "com.peyrona.mingle.candi.javac.JavaRT"         , "uris": ["file://{*home.lib*}candi.jar"] },
@@ -80,9 +83,15 @@
       "timeout"        : 1800,                   # Session timeout in seconds (by default 1800 == 30 mins), Use 0 to last forever
       "allow"          : "intranet",             # "allow": "local", "subnet" (192.168.7.*), "intranet" (192.168.*.*), "any". Default is "intranet"
       "user_base"      : null,                   # Folder for Dashboards and static content (served via HTTP/S). By default "{*home*}/etc/gum_user_base"
-      "shared_secret"  : null,                   # HMAC shared secret for API authentication. If null, authentication is disabled.
+      "shared_secret"  : null,                   # HMAC shared secret for API authentication AND for signing remote-access grants. If null/empty both are disabled.
       "hmac_tolerance" : 60,                     # Accept timestamps within ±N seconds. Default: 60
       "master_password": null,                   # To access dahsboards as admin (new, del, etc) and to access file manger. To allow all users: null
+
+      "remote_grant_ttl"        : 0,             # Off-LAN remote access: a device seen on the trusted LAN ("allow" scope) keeps access for this many
+                                                 # hours after it leaves the LAN. 0 (default) disables off-LAN access entirely. Requires a non-empty
+                                                 # "shared_secret" (used to sign the grant cookie).
+      "remote_grant_bind_subnet": false,         # When true, a granted client may only reach ExEns on the /24 subnet where its presence was proven.
+
       "proxies"        : []                      # Reverse-proxy routes. Each entry: { "path": "/gum/proxy/rpi", "target": "http://192.168.7.9:8080" }
                                                  # "path"   - context path on this server (must be unique and start with /gum/proxy/)
                                                  # "target" - base URL of the downstream server to forward requests to

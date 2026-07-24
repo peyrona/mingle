@@ -26,6 +26,6 @@ ACTUATOR console
 
 
 WHEN clock
-    THEN console SET "Clock value is: "+ clock +" (it is updated every: {*_INTERVAL_*})"   # Inside string must be sourrounded by {*...*}
+THEN console SET "Clock value is: "+ clock +" (it is updated every: {*_INTERVAL_*})"   # Inside string must be sourrounded by {*...*}
 
 # >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

@@ -44,6 +44,9 @@ final class Dlg4Cmd extends GDialog
                                                           .setRows( 12 )
                                                           .setColumns( 102 );
 
+    private JButton btnOK;
+    private boolean initialized = false;
+
     //------------------------------------------------------------------------//
 
     public Dlg4Cmd( String title, JPanel pnlCentral, ActionListener onApplyChanges )
@@ -81,10 +84,10 @@ final class Dlg4Cmd extends GDialog
 
     private JPanel getSouthPanel( boolean bShowChangesBtn )
     {
-        JButton btnOK = new JButton( "Apply changes" );
-                btnOK.setToolTipText( "Add or replace this command to the associated ExEn" );
-                btnOK.addActionListener( getActionOnOk() );
-btnOK.setEnabled( false );   // FIXME: habilatarlo cuando las ediciones estén terminadas
+        btnOK = new JButton( "Apply changes" );
+        btnOK.setToolTipText( "Add or replace this command to the associated ExEn" );
+        btnOK.setEnabled( false );
+        btnOK.addActionListener( getActionOnOk() );
 
         JToggleButton btnHideShow = new JToggleButton( "Command" );
                       btnHideShow.setToolTipText( "Hide/Show the Une source code that represents this command" );
@@ -111,6 +114,11 @@ btnOK.setEnabled( false );   // FIXME: habilatarlo cuando las ediciones estén t
     private void updateTxtCommand( JPanel pnlCentral )
     {
         pnlEditor.setText( ((PnlCmdBase) pnlCentral).getSourceCode() );
+
+        if( initialized )
+            btnOK.setEnabled( true );
+        else
+            initialized = true;
     }
 
     private void prepareOnControlsChanged( JPanel pnlCentral )

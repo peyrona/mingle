@@ -62,7 +62,10 @@ class GumGadget
         if( p_base.isNotEmpty( props ) )
         {
             for( const key in props )
-                this[key] = props[key];
+            {
+                if( ! key.startsWith('_') )    // Skip private/runtime fields that distill() excludes
+                    this[key] = props[key];
+            }
 
             if( p_base.isNotEmpty( this.style ) )
                 new GadgetStyle( this );    // This applies all styles to ::getContainer()
@@ -85,7 +88,7 @@ class GumGadget
             // Following propeties are needed by Grid layout (when using Free layout they will be ignored)
             // (they can be rewritten by subclasses)
 
-            // TODO: añadir las props que se necesiten
+            // TODO: add any grid-layout-specific properties here
         }
     }
 
@@ -199,15 +202,18 @@ class GumGadget
         if( ! p_base.isArray( asExclude ) )
             throw "Must be an array of strings";
 
-        asExclude.push( "id"           );
-        asExclude.push( "_$container_" );
-        asExclude.push( "_sValue_"     );
-        asExclude.push( "_isEditing_"  );
-        asExclude.push( "_isChanged_"  );
-        asExclude.push( "_hasErrors_"  );
-        asExclude.push( "aListenerIds"   );
-        asExclude.push( "fnOnEditEnd"    );
-        asExclude.push( "_devValueType_" );
+        // Work on a copy to avoid mutating the caller's array.
+        const excluded = [ ...asExclude,
+                           "id",
+                           "_$container_",
+                           "_sValue_",
+                           "_isEditing_",
+                           "_isChanged_",
+                           "_hasErrors_",
+                           "aListenerIds",
+                           "fnOnEditEnd",
+                           "_devValueType_" ];
+        asExclude = excluded;
 
         let props = {};
 

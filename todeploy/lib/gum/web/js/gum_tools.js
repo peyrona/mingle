@@ -158,11 +158,11 @@ var gt =
 
             event.target.value = "";   // Now that I have all data, I can reset the event. This is needed to allow uploading same file again (needed if user reduced its size: file size is checked by the server)
 
-            $.ajax( { url        : "/gum/upload",
+            $.ajax( { url        : "/gum/upload/",
                       type       : "POST",
                       data       : formData,
-                      contentType: false,         // Este y el siguiente hay que ponerlos a false, lo dice aquí:
-                      processData: false,         // https://developer.mozilla.org/es/docs/Web/Guide/Usando_Objetos_FormData
+                      contentType: false,         // Required for FormData: let the browser set the multipart boundary
+                      processData: false,         // Required for FormData: prevent jQuery from URL-encoding the payload
                       error      : (xhr) => p_app.showAjaxError( xhr ),
                       complete   : ()    => p_app.hideLoading( uid ),
                       success    : fnOnOK } );
@@ -206,7 +206,7 @@ var gt =
             fnOnOk = () => {};
 
         p_app.confirm( 'Delete "'+ sImage +'"?',
-                        function()        // NOTA: los DELETE exigen q los params se pasen en la URL.
+                        function()        // NOTE: DELETE requests require parameters in the URL, not the body.
                         {
                             let url = new URL( window.location.origin +'/gum/ws/images' );    // Can not use here: p_base.doURL(...). Because the URL contains the name of the board.
                                 url.searchParams.set( 'board', gum.getDashboardName() );

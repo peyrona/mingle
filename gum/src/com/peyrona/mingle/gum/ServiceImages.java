@@ -40,7 +40,13 @@ final class ServiceImages extends ServiceBase
 
     static File getImageFile( String sBoardName, String sImageName ) throws IOException
     {
-        return new File( getImagesDir( sBoardName ), sImageName );
+        File dir  = getImagesDir( sBoardName );                                    // board name sanitized inside getBoardDir
+        File file = new File( dir, Util.sanitizeFileName( sImageName ) ).getCanonicalFile();
+
+        if( ! file.getPath().startsWith( dir.getCanonicalFile().getPath() ) )      // Defence in depth against traversal
+            throw new IOException( "Invalid image name: " + sImageName );
+
+        return file;
     }
 
     //------------------------------------------------------------------------//
@@ -116,6 +122,8 @@ final class ServiceImages extends ServiceBase
     {
         if( UtilStr.endsWith( sBoardName, ".html" ) )
             sBoardName = UtilStr.removeLast( sBoardName, 5 );
+
+        sBoardName = Util.sanitizeFileName( sBoardName );          // Neutralise path traversal ("..", "/", ...)
 
         return new File( Util.getBoardsDir(), sBoardName );        // Board folder inside 'dashboards' folder
     }

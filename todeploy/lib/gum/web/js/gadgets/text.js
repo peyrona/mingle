@@ -139,7 +139,10 @@ class GumText extends GumGadget
                     if( xResolved === null || xResolved === undefined )
                         return;
 
-                    let sTxt = self.label.replace( /\{\*device\*\}/gi, xResolved.toString() );
+                    // Escape the device value before injecting into the HTML label template
+                    // so that malicious HTML in a device value cannot execute as markup.
+                    const safeValue = $('<span>').text( xResolved.toString() ).html();
+                    let sTxt = self.label.replace( /\{\*device\*\}/gi, safeValue );
 
                     if( self.rows === 1 )    // It is a <label></label>
                     {

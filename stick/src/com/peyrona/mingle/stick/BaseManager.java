@@ -83,6 +83,9 @@ abstract class BaseManager<T extends ICommand>
      */
     T named( String name )
     {
+        if( name == null )        // e.g. a grid RemoteDevice has no driver name; guards against map.get(null)/name.toLowerCase() NPE
+            return null;
+
         T t = map.get( name );    // Most probably this will work
 
         if( t != null )

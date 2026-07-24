@@ -31,11 +31,9 @@ import java.util.Set;
  * <p>
  * Configuration parameters:
  * <ul>
- *   <li>mcp: Name of the MCP DEVICE to use for LLM calls (required)</li>
- *   <li>system: Static system prompt prefix injected before the NL guide (optional)</li>
- *   <li>context: Name of a DEVICE whose current value is appended to the system prompt (optional)</li>
+ *   <li>transformer: Name of the MCP DEVICE to use for LLM calls (required)</li>
  *   <li>log: Name of a DEVICE where the raw LLM text response is posted on each invocation (optional)</li>
- *   <li>exclude: Comma-separated names of devices to hide from the LLM context (optional)</li>
+ *   <li>exclude: Comma-separated names of devices, rules and scripts to hide from the LLM context (optional)</li>
  * </ul>
  * <p>
  * Write accepts:
@@ -59,9 +57,9 @@ public final class AgentNL
        extends ControllerBase
 {
     // Configuration keys
-    private static final String KEY_MCP     = "mcp";     // The value of this key is never null because it is declared as REQUIRED in DRIVER declaration
-    private static final String KEY_LOG     = "log";
-    private static final String KEY_EXCLUDE = "exclude";
+    private static final String KEY_TRANSFORMER = "transformer";  // The value of this key is never null because it is declared as REQUIRED in DRIVER declaration
+    private static final String KEY_LOG         = "log";
+    private static final String KEY_EXCLUDE     = "exclude";
 
     private IEventBus.Listener busListener = null;
 
@@ -99,7 +97,7 @@ public final class AgentNL
         if( isInvalid() || (! super.start( rt )) )
             return false;
 
-        checkDevice( (String) get( KEY_MCP ) );    // Declared as REQUIRED
+        checkDevice( (String) get( KEY_TRANSFORMER ) );    // Declared as REQUIRED
 
         if( get( KEY_LOG ) != null )
             checkDevice( (String) get( KEY_LOG ) );
@@ -110,7 +108,7 @@ public final class AgentNL
                             {
                                 MsgDeviceChanged m = (MsgDeviceChanged) msg;
 
-                                if( m.name.equals( get( KEY_MCP ) ) )
+                                if( m.name.equals( get( KEY_TRANSFORMER ) ) )
                                     handleMcpResponse( m.value );
                             };
 
@@ -163,7 +161,7 @@ public final class AgentNL
         }
         else
         {
-            getRuntime().bus().post( new MsgChangeActuator( (String) get( KEY_MCP ), msg ) );
+            getRuntime().bus().post( new MsgChangeActuator( (String) get( KEY_TRANSFORMER ), msg ) );
         }
     }
 
@@ -172,6 +170,9 @@ public final class AgentNL
 
     /**
      * Builds a live snapshot of the runtime state for inclusion in the user message.
+     * Each device line reports its name, value type, current value and the groups it
+     * belongs to ("none" when it belongs to no group), so the LLM can resolve category
+     * requests like "switch off all lights" by matching devices per group.
      * Infrastructure devices (this device, the MCP device, the log device if configured,
      * and any devices listed in the {@code exclude} config key) are excluded from the
      * listing so they are not exposed to the LLM.
@@ -180,7 +181,7 @@ public final class AgentNL
     {
         Set<String> excluded = new HashSet<>();        // Devices to not be sent to the LLM: they part of the Agent.
                     excluded.add( getDeviceName() );
-                    excluded.add( (String) get( KEY_MCP ) );
+                    excluded.add( (String) get( KEY_TRANSFORMER ) );
 
         if( get( KEY_LOG ) != null )
             excluded.add( get( KEY_LOG ).toString() );
@@ -190,17 +191,19 @@ public final class AgentNL
 
         StringBuilder ctx = new StringBuilder()
                          .append( "**Available widgets**:\n" )
-                         .append( "- Devices (name | type | current_value ):\n" );
+                         .append( "- Devices (name | type | current_value | groups):\n" );
 
         for( ICommand cmd : getRuntime().all( "device" ) )
         {
             if( ! excluded.contains( cmd.name() ) )
             {
-                IDevice dev = (IDevice) cmd;
+                IDevice dev    = (IDevice) cmd;
+                String  groups = String.join( ",", dev.groups() );
 
                 ctx.append( "+ "  ).append( dev.name() )
                    .append( " | " ).append( dev.value() == null ? "unknown" : dev.value().getClass().getSimpleName() )
                    .append( " | " ).append( dev.value() )
+                   .append( " | " ).append( groups.isEmpty() ? "none" : groups )
                    .append( '\n' );
             }
         }

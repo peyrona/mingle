@@ -536,7 +536,12 @@ class GumButton extends GumGadget
                     }
                     else if( dev.action === "open_url" )
                     {
-                        window.open( dev.value, '_blank' );
+                        // Restrict to http/https to block javascript: and data: schemes.
+                        const url = dev.value || '';
+                        if( /^https?:\/\//i.test( url ) )
+                            window.open( url, '_blank', 'noopener,noreferrer' );
+                        else
+                            console.warn( 'Gum button: blocked unsafe URL:', url );
                     }
                     else
                     {

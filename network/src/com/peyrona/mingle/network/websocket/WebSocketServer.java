@@ -24,6 +24,9 @@ import org.java_websocket.server.DefaultSSLWebSocketServerFactory;
 public final class WebSocketServer
              extends BaseServer4IP
 {
+    // Held so stop() can call mingleWSServer.stop() to actually terminate the Java-WebSocket threads
+    private final AtomicReference<MingleWebSocketServer> mingleWSServer = new AtomicReference<>( null );
+
     //------------------------------------------------------------------------//
     // CONSTRUCTOR
 
@@ -55,6 +58,26 @@ public final class WebSocketServer
 
         // 3. Delegate execution and waiting to BaseServer4IP
         return super.run( runner, latch, errorRef );
+    }
+
+    @Override
+    public INetServer stop()
+    {
+        MingleWebSocketServer server = mingleWSServer.getAndSet( null );
+
+        if( server != null )
+        {
+            try
+            {
+                server.stop();
+            }
+            catch( InterruptedException ie )
+            {
+                Thread.currentThread().interrupt();
+            }
+        }
+
+        return super.stop();
     }
 
     //------------------------------------------------------------------------//
@@ -214,11 +237,10 @@ public final class WebSocketServer
 
                 if( getSSLCert() != null )
                 {
-                    // createSSLContext() could throw or return null in some implementations
-                    // assuming BaseServer4IP handles the throw, here we just pass context.
                     server.setWebSocketFactory( new DefaultSSLWebSocketServerFactory( createSSLContext() ) );
                 }
 
+                mingleWSServer.set( server );
                 server.start();
             }
             catch( Exception e )

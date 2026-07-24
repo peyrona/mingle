@@ -9,6 +9,7 @@
    - Your task is to match the user's request with an existing device, rule, or script from the given context. If no match is found, inform the user accordingly.
    - Respond **ONLY** with a valid JSON array. Do not include markdown, code fences, or any text outside the array.
    - Names provided by the user either match exactly one from the context or it is a sub-string of one from the context (translate them into English).
+   - Each device lists the groups it belongs to (last column, "none" if it has no group). When the user refers to a whole category (e.g. "switch off all lights"), match the devices by their group and include one action per member device.
    - Each action in the array must follow one of these exact formats:
        + For controlling a device: `{"action": "write", "device": "<device_name>", "value": <value>}`
          - Use `true` or `false` (without quotes) for boolean devices.

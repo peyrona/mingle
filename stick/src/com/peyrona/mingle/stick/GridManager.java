@@ -133,7 +133,39 @@ final class GridManager
         }
 
         // If this is a Grid Node (and it is valid), devices in other nodes (referenced in this Stick) have to be identified.
-        // Such devices can be only in Rule's WHEN and IF clauses.
+
+        identifyRemoteDevices( rt, deviMgr );
+
+        // After external devices are identified, the grid can be started
+
+        try
+        {
+            gridMgr.start();
+            System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
+        }
+        catch( MingleException me )
+        {
+            onFailure.accept( null, "One or more communications ports are already in use" );
+        }
+        catch( Exception exc )
+        {
+            onFailure.accept( exc, "It looks like there is another ExEn running using same config" );
+        }
+    }
+
+    /**
+     * Scans all Rule WHEN/IF clauses and registers, as remote devices, every referenced
+     * device name that does not exist locally (it must live in another grid ExEn).
+     * <p>
+     * Idempotent: a name already registered (locally or as a remote device) is skipped, so
+     * it is safe to call again after a model hot-reload to pick up newly referenced remotes.
+     *
+     * @param rt      The runtime instance.
+     * @param deviMgr The DeviceManager instance.
+     */
+    static void identifyRemoteDevices( IRuntime rt, DeviceManager deviMgr )
+    {
+        // Devices residing in other nodes can be referenced only in Rule's WHEN and IF clauses.
 
         for( ICommand cmd : rt.all( "rules" ) )
         {
@@ -155,22 +187,6 @@ final class GridManager
                         deviMgr.createRemoteDevice( sName );  // it is because that device exists in another ExEn.
                 }
             }
-        }
-
-        // After external devices are identified, the grid can be started
-
-        try
-        {
-            gridMgr.start();
-            System.setProperty( "_GridManager_toString_Message_", gridMgr.toString() );
-        }
-        catch( MingleException me )
-        {
-            onFailure.accept( null, "One or more communications ports are already in use" );
-        }
-        catch( Exception exc )
-        {
-            onFailure.accept( exc, "It looks like there is another ExEn running using same config" );
         }
     }
 

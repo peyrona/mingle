@@ -4,7 +4,6 @@ import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.network.INetClient;
 import com.peyrona.mingle.lang.interfaces.network.INetServer;
 import com.peyrona.mingle.network.BaseServer4IP;
-import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Stream;
 
 /**
@@ -19,8 +18,7 @@ import java.util.stream.Stream;
 public final class SocketServer
              extends BaseServer4IP
 {
-    private final AtomicBoolean isStopping = new AtomicBoolean( false );
-    private       BaseServer4IP impl       = null;
+    private BaseServer4IP impl = null;
 
     //------------------------------------------------------------------------//
 
@@ -63,12 +61,10 @@ public final class SocketServer
     @Override
     public synchronized INetServer stop()
     {
-        isStopping.set( true );
-
         if( impl != null )
             impl.stop();
 
-        isStopping.set( false );
+        super.stop();
         return this;
     }
 

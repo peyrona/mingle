@@ -293,12 +293,12 @@ var gum =
 
     deviceAddedAtExEn : function()
     {
-// TODO: hacerlo -> añadir el nuevo device y al gum._aoExEn_
+// TODO: add the new device to gum._aoExEn_
     },
 
     deviceRemovedAtExEn : function()
     {
-// TODO: hacerlo -> eliminar los gadgets q usen este device y del gum._aoExEn_
+// TODO: remove gadgets that use this device and clean up gum._aoExEn_
     },
 
     //---------------------------------------------------------------------------//

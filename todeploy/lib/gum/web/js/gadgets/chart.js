@@ -25,7 +25,12 @@ class GumChart extends GumGadget
             this.db_user   = null;
             this.db_pwd    = null;
             this.db_tables = [];        // Must be an empty array.  [ {table:"name", timestamp:"col_name", values:"col_name"}, ... ]
-            this._chartUid = p_base.uuid();   // Stable ID for localStorage keys (persisted via distill)
+            this.chartUid = p_base.uuid();   // Stable ID for localStorage keys (persisted via distill)
+        }
+        else if( ! this.chartUid )
+        {
+            // Backward compat: dashboards saved before the _→no-prefix rename used '_chartUid'
+            this.chartUid = props._chartUid || p_base.uuid();
         }
 
         this.wrapper = new ChartWrap( this );
@@ -443,12 +448,12 @@ class ChartWrap
 
     _restoreTimeFrame_()
     {
-        if( ! this.parent._chartUid )
+        if( ! this.parent.chartUid )
             return;
 
         let sRaw;
 
-        try { sRaw = localStorage.getItem( 'gum-chart-tf-' + this.parent._chartUid ); }
+        try { sRaw = localStorage.getItem( 'gum-chart-tf-' + this.parent.chartUid ); }
         catch( ignored ) { return; }
 
         if( ! sRaw )
@@ -544,7 +549,7 @@ class ChartWrap
         }
 
         let offsetX   = event.pageX - offset.left - (bTitleY ? 80 : 60);
-        let xPercent  = offsetX / this.canvas.width;                        // Porcentaje de desplazamiento del puntero de ratón en la X con respecto al origen de coordenadas
+        let xPercent  = offsetX / this.canvas.width;                        // Mouse pointer X offset as a fraction of the canvas width
             xPercent  = p_base.setBetween( 0, xPercent, 1 );
 
         let nCursor   = nMinWhen + ((nMaxWhen - nMinWhen) * xPercent);
@@ -835,7 +840,7 @@ class ChartWrap
 
         try
         {
-            localStorage.setItem( 'gum-chart-tf-' + wrapper.parent._chartUid,
+            localStorage.setItem( 'gum-chart-tf-' + wrapper.parent.chartUid,
                                   JSON.stringify( { amount: nValue, unit: sUnit } ) );
         }
         catch( ignored )

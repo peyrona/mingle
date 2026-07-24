@@ -49,7 +49,8 @@ var gum_ws_boards =
         const isDesign = window.gum && window.gum.isInDesignMode();
         const tabId    = this._resolveTabId( isDesign );              // Resolve the Shared ID (The Dashboard's ID)
         const context  = this._createContext( tabId, isDesign );
-        const wsUrl    = `ws://${location.host}/gum/bridge/${tabId}`;
+        const wsScheme = location.protocol === 'https:' ? 'wss' : 'ws';
+        const wsUrl    = `${wsScheme}://${location.host}/gum/bridge/${tabId}`;
 
         // Check if there's a parent (Leader) to follow. If no parentTabId in URL,
         // this is a standalone Show from index.html, so we should connect directly.
@@ -63,7 +64,7 @@ var gum_ws_boards =
             // LEADER ROLE (Dashboard in Design mode, or standalone Show from index.html)
 
             // 1. Create Real WebSocket
-            context.socket = new WebSocketWrap( p_base.addCacheBuster( wsUrl ) ) ;
+            context.socket = new WebSocketWrap( wsUrl );
 
             // 2. Create Broadcast Channel to talk to Previews
             context.channel = new BroadcastChannel(`gum_ws_channel_${tabId}`);

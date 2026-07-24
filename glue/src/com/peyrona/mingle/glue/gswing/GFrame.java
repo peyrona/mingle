@@ -25,7 +25,7 @@ import javax.swing.KeyStroke;
  */
 public class GFrame extends JFrame
 {
-    public GFrame( )
+    public GFrame()
     {
         this( true );
     }
@@ -46,12 +46,6 @@ public class GFrame extends JFrame
     //------------------------------------------------------------------------//
 
     @Override
-    public void pack()
-    {
-        super.pack();
-    }
-
-    @Override
     public void setVisible( boolean b )
     {
         if( b )
@@ -62,6 +56,12 @@ public class GFrame extends JFrame
     }
 
     //------------------------------------------------------------------------//
+
+    public GFrame packIt()
+    {
+        pack();
+        return this;
+    }
 
     public GFrame setVisible()
     {

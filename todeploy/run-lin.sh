@@ -15,6 +15,8 @@ set -euo pipefail
 # Global variables
 SCRIPT_DIR=""
 JAVA_CMD=""
+JAVA_DIST=""    # Java distribution to download: 'temurin' (HotSpot) or 'semeru' (OpenJ9)
+JAVA_VER=""     # Java major version to download: '17' or '21'
 
 # ---------------------------------------------------------------------------------------------
 # Utility Functions
@@ -132,33 +134,139 @@ find_java()
     return 1
 }
 
+prompt_java_choice()
+{
+    # Distribution and version to download. The defaults preserve the previous
+    # behaviour (Eclipse Temurin JDK 17) for non-interactive launches.
+    JAVA_DIST="temurin"
+    JAVA_VER="17"
+
+    # Only ask when a real terminal is available. Reading from /dev/tty (instead
+    # of stdin) lets the prompt work even when this script is piped from the
+    # 'curl ... | bash' installer. With no controlling terminal (e.g. launched
+    # from a .desktop file via setsid) we silently keep the default.
+    [ -r /dev/tty ] || return 0
+
+    {
+        echo ""
+        echo "No Java runtime was found. Choose which one to download and install:"
+        echo ""
+        echo "  1) JDK 17       - Eclipse Temurin (HotSpot): proven Long-Term Support release; the most"
+        echo "                    tested option, and it matches Mingle's build target."
+        echo "  2) JDK 21       - Eclipse Temurin (HotSpot): newest Long-Term Support release; latest"
+        echo "                    language features and improved performance/garbage collection."
+        echo "  3) IBM J9 (17)  - IBM Semeru (OpenJ9): uses less memory and starts faster than HotSpot;"
+        echo "                    ideal for Raspberry Pi and other low-resource devices."
+        echo "  4) IBM J9 (21)  - IBM Semeru (OpenJ9): the same OpenJ9 efficiency on the newest LTS."
+        echo ""
+    } >&2
+
+    local choice=""
+    read -r -p "Enter choice [1-4] (default 1): " choice < /dev/tty || choice=""
+
+    case "$choice" in
+        2) JAVA_DIST="temurin"; JAVA_VER="21" ;;
+        3) JAVA_DIST="semeru";  JAVA_VER="17" ;;
+        4) JAVA_DIST="semeru";  JAVA_VER="21" ;;
+        *) JAVA_DIST="temurin"; JAVA_VER="17" ;;
+    esac
+}
+
 download_java()
 {
-    log "INFO" "Attempting to download and install OpenJDK 17..."
+    prompt_java_choice
+
+    if [ "$JAVA_DIST" = "semeru" ]; then
+        download_semeru "$JAVA_VER"
+    else
+        download_temurin "$JAVA_VER"
+    fi
+}
+
+download_temurin()
+{
+    local ver="$1"
+    log "INFO" "Attempting to download and install Eclipse Temurin (HotSpot) JDK $ver..."
 
     local ARCH
     ARCH=$(uname -m)
     local JDK_URL=""
     local TARGET_DIR=""
-    local DOWNLOAD_FILE="jdk-17-linux.tar.gz"
+    local DOWNLOAD_FILE="jdk-${ver}-linux.tar.gz"
 
     if [ "$ARCH" = "x86_64" ]; then
         log "INFO" "Detected AMD64 (x64) architecture."
-        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/x64/jdk/hotspot/normal/eclipse"
-        TARGET_DIR="jdk.17.linux.x64"
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/${ver}/ga/linux/x64/jdk/hotspot/normal/eclipse"
+        TARGET_DIR="jdk.${ver}.linux.x64"
     elif [[ "$ARCH" =~ i.86 ]]; then
         die "Linux x86 not supported: after installing it manually, try again this script."
     elif [ "$ARCH" = "aarch64" ] || [ "$ARCH" = "arm64" ]; then
         log "INFO" "Detected ARM64 architecture."
-        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/aarch64/jdk/hotspot/normal/eclipse"
-        TARGET_DIR="jdk.17.linux.aarch64"
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/${ver}/ga/linux/aarch64/jdk/hotspot/normal/eclipse"
+        TARGET_DIR="jdk.${ver}.linux.aarch64"
     elif [[ "$ARCH" =~ armv.l ]]; then
-        log "INFO" "Detected ARM32 architecture. Using Azul Zulu OpenJDK..."
-        JDK_URL="https://api.adoptium.net/v3/binary/latest/17/ga/linux/arm/jdk/hotspot/normal/eclipse"
-        TARGET_DIR="jdk.17.linux.arm32"
+        log "INFO" "Detected ARM32 architecture."
+        JDK_URL="https://api.adoptium.net/v3/binary/latest/${ver}/ga/linux/arm/jdk/hotspot/normal/eclipse"
+        TARGET_DIR="jdk.${ver}.linux.arm32"
     else
         die "Unsupported architecture for automatic download: $ARCH"
     fi
+
+    log "INFO" "Downloading from $JDK_URL..."
+    if ! curl -L --progress-bar -o "$DOWNLOAD_FILE" "$JDK_URL"; then
+        rm -f "$DOWNLOAD_FILE"
+        die "Download failed."
+    fi
+
+    mkdir -p "$TARGET_DIR"
+    log "INFO" "Unpacking into ./$TARGET_DIR..."
+    if ! tar xzf "$DOWNLOAD_FILE" -C "$TARGET_DIR" --strip-components=1; then
+        die "Failed to unpack the JDK archive."
+    fi
+    rm "$DOWNLOAD_FILE"
+}
+
+download_semeru()
+{
+    local ver="$1"
+    log "INFO" "Attempting to download and install IBM Semeru (OpenJ9) JDK $ver..."
+
+    local ARCH SARCH
+    ARCH=$(uname -m)
+
+    case "$ARCH" in
+        x86_64)        SARCH="x64" ;;
+        aarch64|arm64) SARCH="aarch64" ;;
+        *)
+            log "WARN" "IBM Semeru (OpenJ9) ships 64-bit builds only; none available for '$ARCH'. Falling back to Eclipse Temurin JDK 17."
+            download_temurin 17
+            return 0
+            ;;
+    esac
+
+    # IBM Semeru has no 'latest binary' redirect API, so resolve the asset URL
+    # from the GitHub release. Anchoring on 'open-jdk_<arch>_linux_' and the
+    # trailing '.tar.gz"' skips the JRE, debug/test images and sidecar files
+    # (.json/.sha256.txt/.sig).
+    log "INFO" "Resolving latest IBM Semeru (OpenJ9) $ver for linux/$SARCH..."
+    local api_response JDK_URL
+    api_response=$(curl -fsSL "https://api.github.com/repos/ibmruntimes/semeru${ver}-binaries/releases/latest") \
+        || die "Failed to fetch IBM Semeru release info from GitHub."
+
+    JDK_URL=$(echo "$api_response" \
+                | grep '"browser_download_url"' \
+                | grep "ibm-semeru-open-jdk_${SARCH}_linux_" \
+                | grep '\.tar\.gz"' \
+                | head -1 | cut -d'"' -f4 || true)
+
+    if [ -z "$JDK_URL" ]; then
+        log "WARN" "No IBM Semeru $ver build found for linux/$SARCH. Falling back to Eclipse Temurin JDK 17."
+        download_temurin 17
+        return 0
+    fi
+
+    local TARGET_DIR="jdk.${ver}.linux.${SARCH}.openj9"
+    local DOWNLOAD_FILE="jdk-semeru-${ver}-linux.tar.gz"
 
     log "INFO" "Downloading from $JDK_URL..."
     if ! curl -L --progress-bar -o "$DOWNLOAD_FILE" "$JDK_URL"; then

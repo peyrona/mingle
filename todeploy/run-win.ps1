@@ -24,6 +24,8 @@ $ErrorActionPreference = "Stop"
 # ---------------------------------------------------------------------------------------------
 $script:ScriptDir = ""
 $script:JavaCmd = ""
+$script:JavaDist = ""   # Java distribution to download: 'temurin' (HotSpot) or 'semeru' (OpenJ9)
+$script:JavaVer  = ""   # Java major version to download: '17' or '21'
 
 # ---------------------------------------------------------------------------------------------
 # Utility Functions
@@ -149,8 +151,52 @@ function Find-Java {
     return $false
 }
 
+function Get-JavaChoice {
+    # Distribution and version to download. The defaults preserve the previous
+    # behaviour (Eclipse Temurin JDK 17) for non-interactive launches.
+    $script:JavaDist = "temurin"
+    $script:JavaVer  = "17"
+
+    # Only ask when running interactively (a console is attached). Otherwise
+    # keep the default silently.
+    if (-not [Environment]::UserInteractive) { return }
+
+    Write-Host ""
+    Write-Host "No Java runtime was found. Choose which one to download and install:"
+    Write-Host ""
+    Write-Host "  1) JDK 17       - Eclipse Temurin (HotSpot): proven Long-Term Support release; the most"
+    Write-Host "                    tested option, and it matches Mingle's build target."
+    Write-Host "  2) JDK 21       - Eclipse Temurin (HotSpot): newest Long-Term Support release; latest"
+    Write-Host "                    language features and improved performance/garbage collection."
+    Write-Host "  3) IBM J9 (17)  - IBM Semeru (OpenJ9): uses less memory and starts faster than HotSpot;"
+    Write-Host "                    ideal for Raspberry Pi and other low-resource devices."
+    Write-Host "  4) IBM J9 (21)  - IBM Semeru (OpenJ9): the same OpenJ9 efficiency on the newest LTS."
+    Write-Host ""
+
+    try { $choice = Read-Host "Enter choice [1-4] (default 1)" } catch { $choice = "" }
+
+    switch ($choice) {
+        "2"     { $script:JavaDist = "temurin"; $script:JavaVer = "21" }
+        "3"     { $script:JavaDist = "semeru";  $script:JavaVer = "17" }
+        "4"     { $script:JavaDist = "semeru";  $script:JavaVer = "21" }
+        default { $script:JavaDist = "temurin"; $script:JavaVer = "17" }
+    }
+}
+
 function Install-Java {
-    Write-Log -Level "INFO" -Message "Attempting to download and install Adoptium JDK 17..."
+    Get-JavaChoice
+
+    if ($script:JavaDist -eq "semeru") {
+        Install-Semeru -Version $script:JavaVer
+    } else {
+        Install-Temurin -Version $script:JavaVer
+    }
+}
+
+function Install-Temurin {
+    param([Parameter(Mandatory = $true)][string]$Version)
+
+    Write-Log -Level "INFO" -Message "Attempting to download and install Eclipse Temurin (HotSpot) JDK $Version..."
 
     $arch = $env:PROCESSOR_ARCHITECTURE
     $jdkArch = switch ($arch) {
@@ -159,13 +205,78 @@ function Install-Java {
         "ARM64" { "aarch64" }
         default { Exit-WithError -Message "Unsupported architecture: $arch" }
     }
-    $targetDir = "jdk.17.win.$jdkArch"
+    $targetDir = "jdk.$Version.win.$jdkArch"
 
-    $jdkUrl = "https://api.adoptium.net/v3/binary/latest/17/ga/windows/$jdkArch/jdk/hotspot/normal/eclipse"
-    $downloadFile = "jdk-17-win.zip"
+    $jdkUrl = "https://api.adoptium.net/v3/binary/latest/$Version/ga/windows/$jdkArch/jdk/hotspot/normal/eclipse"
+    $downloadFile = "jdk-$Version-win.zip"
 
     try {
         [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $progressPreference = 'SilentlyContinue'
+        Invoke-WebRequest -Uri $jdkUrl -OutFile $downloadFile -UseBasicParsing
+    }
+    catch {
+        Exit-WithError -Message "Failed to download JDK: $_"
+    }
+
+    New-Item -Path $targetDir -ItemType Directory -Force | Out-Null
+
+    $tempExtract = "jdk-temp-extract"
+    Expand-Archive -Path $downloadFile -DestinationPath $tempExtract -Force
+    $extractedFolder = Get-ChildItem -Path $tempExtract -Directory | Select-Object -First 1
+    Get-ChildItem -Path $extractedFolder.FullName | Move-Item -Destination $targetDir -Force
+
+    Remove-Item -Path $tempExtract -Recurse -Force
+    Remove-Item -Path $downloadFile -Force
+}
+
+function Install-Semeru {
+    param([Parameter(Mandatory = $true)][string]$Version)
+
+    Write-Log -Level "INFO" -Message "Attempting to download and install IBM Semeru (OpenJ9) JDK $Version..."
+
+    $arch = $env:PROCESSOR_ARCHITECTURE
+    $jdkArch = switch ($arch) {
+        "AMD64" { "x64" }
+        "ARM64" { "aarch64" }
+        default { "" }
+    }
+
+    if ([string]::IsNullOrEmpty($jdkArch)) {
+        Write-Log -Level "WARN" -Message "IBM Semeru (OpenJ9) ships 64-bit builds only; none available for '$arch'. Falling back to Eclipse Temurin JDK 17."
+        Install-Temurin -Version "17"
+        return
+    }
+
+    # IBM Semeru has no 'latest binary' redirect API, so resolve the asset URL
+    # from the GitHub release. Matching 'open-jdk_<arch>_windows_*' plus the
+    # '.zip' suffix skips the JRE, debug/test images and sidecar files
+    # (.json/.sha256.txt/.sig).
+    Write-Log -Level "INFO" -Message "Resolving latest IBM Semeru (OpenJ9) $Version for windows/$jdkArch..."
+    try {
+        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
+        $apiUrl = "https://api.github.com/repos/ibmruntimes/semeru$Version-binaries/releases/latest"
+        $release = Invoke-RestMethod -Uri $apiUrl -UseBasicParsing
+    }
+    catch {
+        Exit-WithError -Message "Failed to fetch IBM Semeru release info from GitHub."
+    }
+
+    $asset = $release.assets |
+        Where-Object { $_.name -like "ibm-semeru-open-jdk_${jdkArch}_windows_*" -and $_.name -like "*.zip" } |
+        Select-Object -First 1
+
+    if (-not $asset) {
+        Write-Log -Level "WARN" -Message "No IBM Semeru $Version build found for windows/$jdkArch. Falling back to Eclipse Temurin JDK 17."
+        Install-Temurin -Version "17"
+        return
+    }
+
+    $jdkUrl = $asset.browser_download_url
+    $targetDir = "jdk.$Version.win.$jdkArch.openj9"
+    $downloadFile = "jdk-semeru-$Version-win.zip"
+
+    try {
         $progressPreference = 'SilentlyContinue'
         Invoke-WebRequest -Uri $jdkUrl -OutFile $downloadFile -UseBasicParsing
     }

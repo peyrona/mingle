@@ -13,24 +13,21 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
-
  * Plain socket server implementation for non-secure communication.
-
  * This class provides basic socket functionality without SSL/TLS encryption.
-
  *
-
  * @author Francisco José Morero Peyrona
-
  *
-
  * Official web site at: <a href="https://github.com/peyrona/mingle">https://github.com/peyrona/mingle</a>
-
  */
-
 final class PlainSocketServer
       extends BaseServer4IP
 {
+    // Held so stop() can close the socket and unblock accept() — which ignores Thread.interrupt()
+    private final AtomicReference<ServerSocket> serverSocketRef = new AtomicReference<>( null );
+
+    //------------------------------------------------------------------------//
+
     @Override
     public synchronized INetServer start( String sCfgAsJSON )
     {
@@ -45,6 +42,24 @@ final class PlainSocketServer
         return super.run( new ServerThread( latch, errorRef ), latch, errorRef );
     }
 
+    @Override
+    public INetServer stop()
+    {
+        // Set isStopping BEFORE closing the socket so the SocketException thrown by
+        // accept() is suppressed in handleConnectionError() rather than reported as an error.
+        isStopping.set( true );
+
+        ServerSocket ss = serverSocketRef.get();
+
+        if( ss != null )
+        {
+            try { ss.close(); }
+            catch( IOException ioe ) { /* ignore */ }
+        }
+
+        return super.stop();
+    }
+
     //------------------------------------------------------------------------//
     // PROTECTED SCOPE
 
@@ -53,9 +68,6 @@ final class PlainSocketServer
     {
         return UtilComm.MINGLE_DEFAULT_SOCKET_PORT;
     }
-
-    //------------------------------------------------------------------------//
-    // PRIVATE SCOPE
 
     //------------------------------------------------------------------------//
     // INNER CLASS
@@ -82,8 +94,8 @@ final class PlainSocketServer
         {
             try( ServerSocket ss = new ServerSocket( getPort() ) )
             {
-                ss.setReuseAddress(true);
-
+                ss.setReuseAddress( true );
+                serverSocketRef.set( ss );
                 latch.countDown();
 
                 while( (! isStopping.get()) && (! Thread.currentThread().isInterrupted()) )
@@ -124,8 +136,15 @@ final class PlainSocketServer
             }
             catch( Exception e )
             {
-                errRef.set( e );
-                latch.countDown();
+                if( latch.getCount() > 0 )
+                {
+                    errRef.set( e );
+                    latch.countDown();
+                }
+            }
+            finally
+            {
+                serverSocketRef.set( null );
             }
         }
 
@@ -134,7 +153,6 @@ final class PlainSocketServer
         private void handleConnectionError( SocketClient client, Socket socket, Exception exc )
         {
             if( client != null )
-
                 client.disconnect();
 
             del( client );
