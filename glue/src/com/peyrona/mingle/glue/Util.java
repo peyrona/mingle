@@ -185,7 +185,7 @@ public final class Util
             }
         } );
 
-        UtilSys.executor( true )
+        UtilSys.executor( false )   // dedicated, not the shared pool: process.waitFor() below blocks for the child's whole lifetime, potentially hours
                .name( Util.class.getSimpleName() +":catchProcessOutput" )
                .execute( () ->
                            {

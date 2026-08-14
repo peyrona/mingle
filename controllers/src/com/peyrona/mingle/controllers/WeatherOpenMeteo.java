@@ -23,7 +23,9 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.util.Map;
-import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 
 /**
  * This Controller retrieves weather information from OpenMeteo web service.<br>
@@ -43,10 +45,11 @@ public final class   WeatherOpenMeteo
     private static final String KEY_INTERVAL  = "interval";
     private static final String KEY_FORECAST  = "forecast";    // Hours ahead from the moment the WebService is invoked to begin forecasting.
     private static final String KEY_FRAME     = "frame";       // Hours to retrive starting at 'forecast' (when forecast > 0).
+    private static final int    HTTP_TIMEOUT_MS = 10_000;      // Neither was set before: an unresponsive API could hang the fetch forever.
     private static final String KEY_TIME_ZONE = "timezone";
     private static final String KEY_METRIC    = "metric";
 
-    private ScheduledFuture timer = null;
+    private ScheduledExecutorService timer = null;   // owns a dedicated thread: shut down in stop(), not just its task cancelled
 
     //------------------------------------------------------------------------//
 
@@ -122,7 +125,7 @@ public final class   WeatherOpenMeteo
         if( isInvalid() || isFaked() )
             return;
 
-        UtilSys.executor( true )
+        UtilSys.executor( false )   // dedicated, not the shared pool: the HTTP call below has no timeout of its own to bound it
                .execute( () ->
                             {
                                 int nForeHrs = ((Number) get( KEY_FORECAST )).intValue() / 60;  // Convert minutes to hours
@@ -140,7 +143,10 @@ public final class   WeatherOpenMeteo
 
                                 try
                                 {
-                                    conn   = (HttpURLConnection) URI.create( sURL ).toURL().openConnection();
+                                    conn = (HttpURLConnection) URI.create( sURL ).toURL().openConnection();
+                                    conn.setConnectTimeout( HTTP_TIMEOUT_MS );
+                                    conn.setReadTimeout(    HTTP_TIMEOUT_MS );
+
                                     reader = new BufferedReader( new InputStreamReader( conn.getInputStream(), StandardCharsets.UTF_8 ) );
 
                                     StringBuilder sbAnswer = new StringBuilder( 1024 * 4 );
@@ -182,10 +188,17 @@ public final class   WeatherOpenMeteo
         {
             long interval = ((Number) get( KEY_INTERVAL )).longValue() * UtilUnit.MINUTE;  // Convert minutes to millis
 
-            timer = UtilSys.executor( false )
-                           .delay( 5000 )
-                           .rate(  interval )
-                           .execute( () -> read() );
+            // A dedicated executor stored as a field (not UtilSys.executor(false), which for a periodic
+            // schedule never exposes the executor to shut down later) so stop() can retire its thread
+            // instead of leaking one on every controller restart.
+            timer = Executors.newSingleThreadScheduledExecutor( r ->
+                                {
+                                    Thread t = new Thread( r, getClass().getSimpleName() +':'+ getDeviceName() );
+                                    t.setDaemon( true );
+                                    return t;
+                                } );
+
+            timer.scheduleWithFixedDelay( this::read, 5000, interval, TimeUnit.MILLISECONDS );
         }
 
         return isValid();
@@ -196,7 +209,7 @@ public final class   WeatherOpenMeteo
     {
         if( timer != null )
         {
-            timer.cancel( true );
+            timer.shutdownNow();
             timer = null;
         }
 

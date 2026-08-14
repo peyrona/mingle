@@ -53,7 +53,9 @@ interface AccessContext
      *
      * @param name         the cookie name.
      * @param value        the cookie value; if {@code null}, nothing is written.
-     * @param maxAgeSeconds the cookie's {@code Max-Age} in seconds.
+     * @param maxAgeSeconds the cookie's {@code Max-Age} in seconds, or a negative value to omit
+     *                      {@code Max-Age} entirely and let the browser treat it as a session cookie
+     *                      (discarded when the browser — not just the tab — closes).
      */
     void setCookie( String name, String value, int maxAgeSeconds );
 
@@ -127,9 +129,12 @@ interface AccessContext
 
             StringBuilder sb = new StringBuilder( 128 );
             sb.append( name ).append( '=' ).append( value )
-              .append( "; Path=" ).append( COOKIE_PATH )
-              .append( "; Max-Age=" ).append( maxAgeSeconds )
-              .append( "; HttpOnly" )
+              .append( "; Path=" ).append( COOKIE_PATH );
+
+            if( maxAgeSeconds >= 0 )
+                sb.append( "; Max-Age=" ).append( maxAgeSeconds );
+
+            sb.append( "; HttpOnly" )
               .append( "; SameSite=Lax" );
 
             if( request.isSecure() )

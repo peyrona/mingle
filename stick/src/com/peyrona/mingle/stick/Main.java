@@ -320,7 +320,7 @@ public final class Main
 
         long millis = updateIntervalMinutes( config ) * 60_000L;
 
-        UtilSys.executor( true )
+        UtilSys.executor( false )   // dedicated, not the shared pool: compareAndUpdateModels() does an unbounded openStream(); called once at startup, so no restart-leak risk
                .name( "ModelUpdateChecker" )
                .delay( millis )
                .rate(  millis )

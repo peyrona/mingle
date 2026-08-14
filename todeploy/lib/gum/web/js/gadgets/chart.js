@@ -19,11 +19,7 @@ class GumChart extends GumGadget
             this.lbl_clr   = null;      // For X and Y titles and X and Y ticks (values)
             this.time_zone = null;
             this.ts_round  = 'millis';  // Timestamp rounding: 'millis', 'secs', 'mins', 'hours'
-            this.db_jars   = null;      // From here to the end there is the JDBC Driver information to retrieve data from a DB
-            this.db_jdbc   = null;
-            this.db_url    = null;
-            this.db_user   = null;
-            this.db_pwd    = null;
+            this.db_datasource = null;  // Name of one of the datasources declared server-side in config.json (never connection details: see ServiceDB)
             this.db_tables = [];        // Must be an empty array.  [ {table:"name", timestamp:"col_name", values:"col_name"}, ... ]
             this.chartUid = p_base.uuid();   // Stable ID for localStorage keys (persisted via distill)
         }
@@ -434,9 +430,7 @@ class ChartWrap
                                   data   : { labels: [], datasets: aDataset },    // 'labels' are the labels that appear at the X (the times as strings)
                                   options: this._getChartOptions_() } );
 
-        let isDbPanelVisible = p_base.isNotEmpty( this.parent.db_jars ) &&
-                               p_base.isNotEmpty( this.parent.db_jdbc ) &&
-                               p_base.isNotEmpty( this.parent.db_url  );
+        let isDbPanelVisible = p_base.isNotEmpty( this.parent.db_datasource );
 
         let $div = $('#'+this.divId +' [name="chart_data_load_panel"]');
 
@@ -946,23 +940,18 @@ class ChartWrap
             return;
         }
 
-        if( p_base.isEmpty( gadget.db_jars ) || p_base.isEmpty( gadget.db_jdbc ) ||
-            p_base.isEmpty( gadget.db_url  ) || p_base.isEmpty( gadget.db_tables ) )
+        if( p_base.isEmpty( gadget.db_datasource ) || p_base.isEmpty( gadget.db_tables ) )
         {
-            p_app.alert( "All DB information is mandatory except user name and user password" );
+            p_app.alert( "A datasource and at least one table are mandatory" );
             return;
         }
 
         let uid   = p_app.showLoading( wrapper.canvas );
         let oData = {
-            from  : dFrom.getTime(),
-            to    : dTo.getTime(),
-            jars  : gadget.db_jars,
-            jdbc  : gadget.db_jdbc,
-            url   : gadget.db_url,
-            user  : gadget.db_user || '',
-            pwd   : gadget.db_pwd  || '',
-            tables: JSON.stringify( gadget.db_tables )
+            from      : dFrom.getTime(),
+            to        : dTo.getTime(),
+            datasource: gadget.db_datasource,
+            tables    : JSON.stringify( gadget.db_tables )
         };
 
         $.ajax( {

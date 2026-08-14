@@ -87,17 +87,71 @@
       "hmac_tolerance" : 60,                     # Accept timestamps within ±N seconds. Default: 60
       "master_password": null,                   # To access dahsboards as admin (new, del, etc) and to access file manger. To allow all users: null
 
-      "remote_grant_ttl"        : 0,             # Off-LAN remote access: a device seen on the trusted LAN ("allow" scope) keeps access for this many
-                                                 # hours after it leaves the LAN. 0 (default) disables off-LAN access entirely. Requires a non-empty
-                                                 # "shared_secret" (used to sign the grant cookie).
-      "remote_grant_bind_subnet": false,         # When true, a granted client may only reach ExEns on the /24 subnet where its presence was proven.
+      #"ssl": { "port": null,                    # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
+      #         "path": "{*home*}keystore.jks",  # Path to "keystore.jks" file (can not be null)
+      #         "pwd" : "adminadmin" },          # Password for the "keystore.jks" file (can not be null)
+
+      # Reaching Gum from OUTSIDE the trusted LAN. Three roles, each carried in its own HMAC-signed cookie.
+      # Everything here needs a non-empty "shared_secret" above (it signs the cookie); without one it stays off.
+      #
+      #   GUEST  - a device seen on the trusted LAN gets a cookie listing the /24 subnets it was seen on. It
+      #            keeps working "guest_ttl" hours after the device LEAVES, confined to "guest_paths" and
+      #            (with "bind_subnet") to the ExEns of its own subnets. The cookie is refreshed on every
+      #            on-LAN request, so the countdown only starts once the device is actually gone: a visitor
+      #            staying a week is refreshed all week. Subnets accumulate (up to 4), so someone using both
+      #            a bedroom and a common-area WiFi keeps reaching both — but never a subnet they never used.
+      #   ADMIN  - minted by a successful master-password sign-in at http://<this-server>/gum/login, which is
+      #            accepted from the LAN only: that is what keeps the password off the wire when Gum is reached
+      #            over plain HTTP. Sign in once at home and the cookie carries you while away. Unrestricted,
+      #            and refreshed on use, so a device used now and then never expires. Logging out revokes it.
+      #   VIEWER - minted by signing in at the SAME /gum/login page with a DASHBOARD's own password instead of
+      #            the master one (the dashboard manager's "Viewer link" button copies the right URL). Needs no
+      #            LAN presence at all: it is for someone who has never touched this network. Confined to the
+      #            dashboard(s) that password unlocks and to the ExEns those dashboards reference — and, on
+      #            their WebSocket bridge, to read-only: any Change/Execute is rejected.
+      "remote_access": {
+        "guest_ttl"    : 0,                      # Guest lifetime, in HOURS, counted from the moment the device leaves the trusted
+                                                 # LAN. 0 (default) disables off-LAN guest access entirely. Try 12 or 24.
+        "admin_ttl"    : 2160,                   # Admin lifetime, in HOURS (default 2160 == 90 days). 0 disables admin grants.
+                                                 # Also needs a non-empty "master_password": without one any password is accepted,
+                                                 # so minting a long-lived full-access cookie would hand one to every LAN device.
+        "view_ttl"     : 2160,                   # Board-viewer lifetime, in HOURS (default 2160 == 90 days, same as admin_ttl if
+                                                 # omitted). 0 disables board-viewer sign-in entirely. Unlike admin, needs no
+                                                 # "master_password": the credential is each dashboard's own password.
+        "bind_subnet"  : false,                  # When true, a guest may only reach ExEns on a /24 where its presence was proven.
+        "guest_paths"  : [],                     # Page folders a guest may request, e.g. [ "/gum/user-files/web/" ].
+                                                 # EMPTY (default) MEANS UNRESTRICTED: a guest reaches everything an admin does.
+                                                 # Gum's own assets (/gum/js, /gum/lib, ...) are public and need not be listed, and
+                                                 # neither is the WebSocket bridge: it is always reachable, because a guest page that
+                                                 # could not open it would load but do nothing. What a guest may actually drive
+                                                 # through it is decided by "bind_subnet", not by this list.
+        "guest_subnets": [],                     # /24s whose devices are guests even while ON the LAN, e.g. [ "192.168.7", "192.168.8" ].
+                                                 # Without this, "guest_paths" only applies once a visitor has left the premises.
+                                                 # Accepts "192.168.7", "192.168.7.*", "192.168.7.0" and "192.168.7.0/24".
+        "public_url"   : null                    # THE GUEST COOKIE BRIDGE. Base URL Gum is reached by from OUTSIDE, e.g.
+                                                 # "http://my.host.org:8080". null/empty (default) disables it. Guest-only:
+                                                 # the admin signs in directly at /gum/login from anywhere over HTTPS instead.
+                                                 # Cookies are host-only: one obtained at http://192.168.1.5:8080 is never sent
+                                                 # to the public name, and Gum cannot just issue it there instead, because a
+                                                 # router hairpinning with source NAT makes an in-house request to that name
+                                                 # arrive from the WAN address, i.e. looking off-LAN. So the proof of presence
+                                                 # travels in the URL: opening http://<lan-ip>:<port>/gum/login?net=<room> from
+                                                 # inside redirects to "<public_url>/gum/login?net=<room>&t=<120s signed token>",
+                                                 # and THAT request — hairpinned back — is what stores the cookie under the
+                                                 # public name. Give guests that one LAN link per room (a QR code works well);
+                                                 # bookmark whatever page it lands on. (The old /gum/remote?net=<room> URL still
+                                                 # works too — it just redirects here — kept for links already printed.)
+      },
+
+      "datasources"    : [],                     # Databases the dashboards may chart from, selected by name via "/gum/ws/db?datasource=<name>".
+                                                 # Each entry: { "name": "history",  "jars": "{*home*}lib/h2.jar",  "jdbc": "org.h2.Driver",
+                                                 #               "url" : "jdbc:h2:{*home*}data/history",  "user": "sa",  "pwd": "" }
+                                                 # Declared here and NEVER taken from the request on purpose: the JAR list and the driver
+                                                 # class name are enough to run arbitrary code inside Gum, so callers must not supply them.
 
       "proxies"        : []                      # Reverse-proxy routes. Each entry: { "path": "/gum/proxy/rpi", "target": "http://192.168.7.9:8080" }
                                                  # "path"   - context path on this server (must be unique and start with /gum/proxy/)
                                                  # "target" - base URL of the downstream server to forward requests to
-     #"ssl": { "port": null,                     # Port to attend HTTPS (by default 8443). When "ssl" is null, HTTPS will not be attended
-     #         "path": "{*home*}keystore.jks",   # Path to "keystore.jks" file (can not be null)
-     #         "pwd" : "adminadmin" },           # Password for the "keystore.jks" file (can not be null)
     },
 
     # Plugable Arithmetic and Logical Expression Evaluator to be used (loaded at run-time)

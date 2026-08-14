@@ -2,7 +2,9 @@
 package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
+import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.OneToMany;
 import com.peyrona.mingle.lang.japi.UtilIO;
@@ -17,6 +19,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.ConcurrentHashMap;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpServletResponse;
 
@@ -72,14 +75,7 @@ final class ServiceBoard extends ServiceBase
     @Override
     protected void doGet() throws IOException
     {
-        if( mapPwd2Boards.isEmpty() )
-        {
-            synchronized( mapPwd2Boards )
-            {
-                if( mapPwd2Boards.isEmpty() )
-                    initBoardsMap();
-            }
-        }
+        ensureBoardsMapLoaded();
 
         String sAction = asString( "action"   );
         String sPwd    = asString( "password" );
@@ -108,6 +104,12 @@ final class ServiceBoard extends ServiceBase
 
             case "check":    // Returns "true" if received password is master password
                 sendText( (isMasterPwd( sPwd ) ? "true" : "false") );
+                break;
+
+            case "public_url":   // Returns the base URL Gum is reached by from outside (may be empty);
+                                 // used by the dashboard manager to build a viewer link that works from
+                                 // wherever it is opened, not just from the host the admin happens to be on
+                sendText( RemoteGrant.get().publicUrl() );
                 break;
         }
     }
@@ -207,11 +209,92 @@ final class ServiceBoard extends ServiceBase
     }
 
     //------------------------------------------------------------------------//
+    // PACKAGE SCOPE
+    // Used by RemoteGrant / HttpServer.ServletLogin to resolve and confine board-viewer grants — see
+    // gum/src/com/peyrona/mingle/gum/RemoteGrant.java's "Viewer" role.
+
+    /**
+     * The dashboards a given password unlocks, normalized to a bare board name (no {@code ".html"}
+     * extension) — the same form {@link RemoteGrant} path-matches against
+     * ({@code /gum/board/<name>/...}).
+     * <p>
+     * An empty password IS looked up by the caller ({@code /gum/login?board=}): a board left without
+     * a password is, by the admin's own choice when leaving it blank in the dashboard editor, meant
+     * to be open to whoever asks — the same access anyone on the LAN or holding an admin/HMAC session
+     * already has via {@link #doGet}'s "list" action, which has always treated {@code ""} as a real
+     * key. This method itself does not special-case an empty password; it simply returns whatever
+     * boards match it.
+     *
+     * @param pwd the submitted password.
+     * @return the board names that password unlocks; empty when none match.
+     * @throws IOException if the boards map has not been loaded yet and cannot be read.
+     */
+    static String[] boardsForPassword( String pwd ) throws IOException
+    {
+        ensureBoardsMapLoaded();
+
+        // mapPwd2Boards is a ConcurrentHashMap under the hood, which throws on a null key rather than
+        // just missing it — and unlike ServiceBase.asString(name), a JSON body's "password" key can be
+        // absent entirely (not just empty), so null is a real input here, not a theoretical one.
+        List<String> matches = mapPwd2Boards.get( pwd == null ? "" : pwd );
+
+        if( (matches == null) || matches.isEmpty() )
+            return new String[0];
+
+        String[] result = new String[ matches.size() ];
+
+        for( int n = 0; n < matches.size(); n++ )
+            result[n] = stripHtmlExtension( matches.get( n ) );
+
+        return result;
+    }
+
+    /**
+     * The {@code "host:port"} of every ExEn a dashboard's own configuration references — the same
+     * format {@link CommBridge} normalizes an incoming bridge message's target to, so the two can be
+     * compared directly. Used by {@link RemoteGrant#mayReach} to confine a board-scoped viewer grant to
+     * exactly the ExEns that dashboard actually talks to.
+     *
+     * @param boardName the dashboard, with or without the ".html" extension.
+     * @return the "host:port" (or bare "host", if a board's exen has no port) tags found in its
+     *         "exens" array; never {@code null}.
+     * @throws IOException if the dashboard file cannot be read.
+     */
+    static String[] boardExens( String boardName ) throws IOException
+    {
+        JsonArray    jaExens = cachedBoardConfig( boardName ).getArray( "exens", Json.array() );
+        List<String> list    = new ArrayList<>( jaExens.size() );
+
+        for( JsonValue jv : jaExens )
+        {
+            if( ! jv.isObject() )
+                continue;
+
+            JsonObject joExen = jv.asObject();
+            String     sHost  = joExen.getString( "host", null );
+            int        nPort  = joExen.getInt( "port", -1 );
+
+            if( UtilStr.isNotEmpty( sHost ) )
+                list.add( (nPort > 0) ? (sHost +':'+ nPort) : sHost );
+        }
+
+        return list.toArray( new String[0] );
+    }
+
+    //------------------------------------------------------------------------//
     // PRIVATE SCOPE
     // AUXILIARY METHODS
 
     /**
      * Returns true if passed is master pwd (or the file does not exists: master pwd was not set yet).
+     * <p>
+     * Also true, without any password at all, for a request already carrying a valid RemoteGrant
+     * ADMIN cookie: minting that cookie ({@code /gum/login}) already required knowing the master
+     * password once, so asking for it a second time here — via the dashboard manager's own "Password
+     * for dashboards" field — would be pure friction, not an extra security boundary. A GUEST or
+     * VIEWER grant, or plain on-LAN trust with no grant at all, does NOT qualify: being reachable on
+     * the network was never proof of knowing the master password, which is exactly why this per-board
+     * credential exists in the first place.
      *
      * @param pwd
      * @return true if passed is master pwd.
@@ -222,7 +305,29 @@ final class ServiceBoard extends ServiceBase
         if( sMasterPwd == null )
             sMasterPwd = UtilSys.getConfig().get( "monitoring", "master_password", "" );
 
-        return sMasterPwd.equals( (pwd == null ? "" : pwd) ) || isFromLocalhost();
+        if( sMasterPwd.equals( (pwd == null ? "" : pwd) ) || isFromLocalhost() )
+            return true;
+
+        RemoteGrant.Grant grant = RemoteGrant.get().admit( AccessContext.of( request, response ) );
+
+        return (grant != null) && grant.isAdmin();
+    }
+
+    /**
+     * Loads {@link #mapPwd2Boards} on first use — shared by {@link #doGet} and by
+     * {@link #boardsForPassword}, which may be the very first entry point to touch it when a viewer
+     * signs in at {@code /gum/login?board=} before anyone has ever opened the dashboard manager.
+     */
+    private static void ensureBoardsMapLoaded() throws IOException
+    {
+        if( mapPwd2Boards.isEmpty() )
+        {
+            synchronized( mapPwd2Boards )
+            {
+                if( mapPwd2Boards.isEmpty() )
+                    initBoardsMap();
+            }
+        }
     }
 
     private static void initBoardsMap() throws IOException
@@ -260,10 +365,16 @@ final class ServiceBoard extends ServiceBase
 
         int nStart = nIdx + sMarkStart.length();
 
+        // JSON escaping does not cover '<', so a string value containing "</script>" would close the
+        // block this is spliced into and let the rest run as markup on Gum's own origin (where the
+        // session and the access grant live). Escaping the slash is invalid nowhere: inside a JSON
+        // string "\/" is just "/", so the value the dashboard reads back is unchanged.
+        String sConfig = oContent.toString().replace( "</", "<\\/" );
+
         String sReplace = '\n'+
                           "            function getConfig()\n"+
                           "            {\n"+
-                          "                return "+ oContent +";\n"+
+                          "                return "+ sConfig +";\n"+
                           "            }\n"+
                           "           ";    // These spaces are needed to align the // END OF ...
 
@@ -282,25 +393,111 @@ final class ServiceBoard extends ServiceBase
             mapPwd2Boards.moveValue( sKey, sNewPwd, sName );
     }
 
-    private static File getBoardFolder( String name ) throws IOException
+    /**
+     * Sanitizes a caller-supplied board name and strips a trailing ".html" if present, so any caller
+     * can pass either form and always land on the same canonical name. Shared by {@link #getBoardFolder}
+     * and {@link #getBoardFile} (each normalizes exactly once now, instead of {@link #getBoardFile}
+     * re-sanitizing the already-sanitized name a second time via the old {@code getBoardFolder} call),
+     * and used as the cache key in {@link #cachedBoardConfig}.
+     */
+    private static String normalizeBoardName( String name ) throws IOException
     {
         name = Util.sanitizeFileName( name );
 
-        if( UtilStr.endsWith( name, ".html" ) )
-            name = UtilStr.removeLast( name, 5 );
+        return UtilStr.endsWith( name, ".html" ) ? UtilStr.removeLast( name, 5 ) : name;
+    }
 
-        return new File( Util.getBoardsDir(), name );   // Board folder inside 'dashboards' folder
+    private static File getBoardFolder( String name ) throws IOException
+    {
+        return new File( Util.getBoardsDir(), normalizeBoardName( name ) );   // Board folder inside 'dashboards' folder
     }
 
     private static File getBoardFile( String name ) throws IOException
     {
-        name = Util.sanitizeFileName( name );
+        String sName = normalizeBoardName( name );
 
-        return new File( getBoardFolder( name ),
-                         UtilIO.addExtension( name, ".html" ) );
+        return new File( new File( Util.getBoardsDir(), sName ),
+                         UtilIO.addExtension( sName, ".html" ) );
     }
 
     private static String getPassword( File fBoard ) throws IOException
+    {
+        return getBoardConfig( fBoard ).getString( "password", "" );
+    }
+
+    /**
+     * Per-board cache: the resolved {@link File}, built once per board name, plus the config last
+     * parsed from it and the file's mtime at that time. Backs {@link #cachedBoardConfig}, which
+     * {@link #boardExens} uses — a check {@link RemoteGrant#mayReach} runs on every inbound WebSocket
+     * bridge message from a viewer session, so re-resolving the path and re-reading/re-parsing the file
+     * on every single message would be wasted work under a busy session.
+     */
+    private static final ConcurrentHashMap<String, BoardEntry> boardCache = new ConcurrentHashMap<>();
+
+    private static final class BoardEntry
+    {
+        final    File     file;
+        volatile long     mtime = -1;   // -1: never parsed yet
+        volatile UtilJson config;
+
+        BoardEntry( File file ) { this.file = file; }
+    }
+
+    /**
+     * Same as {@link #getBoardConfig(File)}, but resolves the board's {@link File} only once per name
+     * and reuses it — together with the config last parsed from it — for as long as the file's own
+     * last-modified time has not changed, instead of rebuilding the path and re-reading/re-parsing the
+     * file on every call.
+     *
+     * @param boardName the dashboard, with or without the ".html" extension.
+     * @return the parsed configuration.
+     * @throws IOException if the file cannot be read or the markers are not found.
+     */
+    private static UtilJson cachedBoardConfig( String boardName ) throws IOException
+    {
+        String     sName = normalizeBoardName( boardName );
+        BoardEntry entry = boardCache.get( sName );
+
+        if( entry == null )
+        {
+            entry = new BoardEntry( getBoardFile( sName ) );
+
+            BoardEntry raced = boardCache.putIfAbsent( sName, entry );
+
+            if( raced != null )
+                entry = raced;
+        }
+
+        long mtime = entry.file.lastModified();
+
+        if( (entry.config == null) || (mtime != entry.mtime) )
+        {
+            synchronized( entry )
+            {
+                mtime = entry.file.lastModified();   // May have changed again while waiting for the lock
+
+                if( (entry.config == null) || (mtime != entry.mtime) )
+                {
+                    entry.config = getBoardConfig( entry.file );
+                    entry.mtime  = mtime;
+                }
+            }
+        }
+
+        return entry.config;
+    }
+
+    /**
+     * Parses a dashboard file's embedded {@code getConfig()} — the same object
+     * {@link #writeContents} writes and the board's own player reads on load. Shared by
+     * {@link #getPassword} and (via {@link #cachedBoardConfig}) {@link #boardExens}, so both read the
+     * exact same object instead of two independent parses of the same markers drifting apart.
+     *
+     * @param fBoard the dashboard's {@code .html} file.
+     * @return the parsed configuration.
+     * @throws IOException if the file cannot be read or the markers are not found.
+     */
+    private static UtilJson getBoardConfig( File fBoard ) throws IOException
     {
         String sBoard = UtilIO.getAsText( fBoard );
         int    nStart = sBoard.indexOf( sMarkStart ) + sMarkStart.length();
@@ -310,7 +507,16 @@ final class ServiceBoard extends ServiceBase
         sFunc = sFunc.substring( sFunc.indexOf( "return" ) + "return".length() );
         sFunc = sFunc.substring( 0, sFunc.lastIndexOf( ';' ) ).trim();
 
-        return new UtilJson( sFunc ).getString( "password", "" );
+        return new UtilJson( sFunc );
+    }
+
+    /**
+     * @param sName a board's file name, with or without the ".html" extension.
+     * @return the name without it.
+     */
+    private static String stripHtmlExtension( String sName )
+    {
+        return UtilStr.endsWith( sName, ".html" ) ? UtilStr.removeLast( sName, 5 ) : sName;
     }
 
     private void changeMasterPwd( String sPwdOld, String sPwdNew ) throws IOException

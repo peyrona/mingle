@@ -22,6 +22,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.regex.Pattern;
 import org.eclipse.jetty.websocket.api.Session;
 import org.eclipse.jetty.websocket.api.StatusCode;
 import org.eclipse.jetty.websocket.api.WebSocketAdapter;
@@ -165,8 +166,31 @@ public class CommBridge extends WebSocketAdapter
      * payload after the first one and produced visible races on dashboards that fire several
      * requests at the same ExEn during the WebSocket-open window.
      * Key format: session.hashCode() + ":" + exenAddress.toString()
+     * <p>
+     * Entries are normally short-lived: the connecting thread removes its own entry in a
+     * {@code finally} block once the attempt succeeds or fails (see {@link #addExEnClientAsync}).
+     * The {@link PendingConnection#startedAt} timestamp exists only for
+     * {@link #cleanupDeadReferences()}'s safety net, which reclaims an entry whose connecting
+     * thread never reached that {@code finally} —
+     * e.g. a target whose grid-node config has no {@code "timeout"} set, where
+     * {@code SocketClient}/{@code Socket.connect(addr, 0)} blocks indefinitely instead of failing.
      */
-    private static final ConcurrentHashMap<String, Queue<String>> pendingConnections = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, PendingConnection> pendingConnections = new ConcurrentHashMap<>();
+
+    /**
+     * How long a {@link #pendingConnections} entry may sit unreached by its own connecting thread
+     * before {@link #cleanupDeadReferences()} treats it as orphaned rather than merely in-flight.
+     * Comfortably above any realistic LAN connect time, so a normal attempt is never reaped out
+     * from under itself just because the 5-minute sweep happens to land mid-connect.
+     */
+    private static final long PENDING_CONNECTION_STALE_MS = 30_000L;
+
+    /** Holds a pending connection's outbound queue plus when the attempt started. */
+    private static final class PendingConnection
+    {
+        final Queue<String> queue     = new ConcurrentLinkedQueue<>();
+        final long          startedAt = System.currentTimeMillis();
+    }
 
     // Scheduled cleanup of dead WebSocket references
     private static final ScheduledExecutorService cleanupExecutor = Executors.newSingleThreadScheduledExecutor( r ->
@@ -177,6 +201,11 @@ public class CommBridge extends WebSocketAdapter
                                                                                                                 } );
 
     private static final ILogger logger = UtilSys.getLogger();
+
+    // Compiled once and reused by sanitizeErrorMessage(), instead of String.replaceAll()
+    // recompiling the same Pattern on every call.
+    private static final Pattern ptrnStackTraceLine = Pattern.compile( "\\s+at\\s+.*" );
+    private static final Pattern ptrnFilePath       = Pattern.compile( "(/[^\\s]+)+" );
 
     //------------------------------------------------------------------------//
 
@@ -238,6 +267,17 @@ public class CommBridge extends WebSocketAdapter
             if( ! isTargetAllowedByGrant( session, exenAddress ) )
             {
                 sendErrorToClient( session, exenAddress, "Remote access is limited to your own location" );
+                return;
+            }
+
+            // A board-viewer grant may watch a dashboard, never drive it. The bridge's own
+            // authentication runs once, at connection time (AuthenticationFilter on the Upgrade
+            // request) — this is the only point downstream of that where a message's own kind
+            // (List/Read vs. Change/Execute) is ever looked at, for any role. No-op for admin, guest
+            // or unauthenticated sessions: only a viewer grant is this restricted.
+            if( isWriteMessage( messageJson ) && RemoteGrant.get().isViewerSession( AccessContext.of( session ) ) )
+            {
+                sendErrorToClient( session, exenAddress, "Viewer access is read-only" );
                 return;
             }
 
@@ -337,17 +377,17 @@ public class CommBridge extends WebSocketAdapter
         // Try to claim the connection slot. If another thread is already connecting for this key,
         // append the payload to its queue so it gets flushed once the connection is established
         // (instead of being silently dropped).
-        Queue<String> ourQueue = new ConcurrentLinkedQueue<>();
+        PendingConnection ourEntry = new PendingConnection();
 
         if( initialPayload != null )
-            ourQueue.offer( initialPayload );
+            ourEntry.queue.offer( initialPayload );
 
-        Queue<String> existing = pendingConnections.putIfAbsent( pendingKey, ourQueue );
+        PendingConnection existing = pendingConnections.putIfAbsent( pendingKey, ourEntry );
 
         if( existing != null )
         {
             if( initialPayload != null )
-                existing.offer( initialPayload );
+                existing.queue.offer( initialPayload );
 
             if( logger.isLoggable( ILogger.Level.INFO ) )
                 logger.log( Level.INFO, "Connection already in progress for: " + exenAddress + " — payload queued" );
@@ -355,7 +395,7 @@ public class CommBridge extends WebSocketAdapter
             return;
         }
 
-        final Queue<String> pendingQueue = ourQueue;
+        final Queue<String> pendingQueue = ourEntry.queue;
 
         // Execute connection in background thread using UtilSys ThreadPool
         UtilSys.executor( true )
@@ -721,8 +761,8 @@ public class CommBridge extends WebSocketAdapter
             return "Internal server error";
 
         // Remove stack traces and file paths
-        String sanitized = original.replaceAll( "\\s+at\\s+.*", "" )
-                                   .replaceAll( "(/[^\\s]+)+", "[path]" );
+        String sanitized = ptrnStackTraceLine.matcher( original ).replaceAll( "" );
+               sanitized = ptrnFilePath.matcher( sanitized ).replaceAll( "[path]" );
 
         return sanitized.length() > 200 ? sanitized.substring( 0, 200 ) + "..." : sanitized;
     }
@@ -893,12 +933,12 @@ public class CommBridge extends WebSocketAdapter
                 }
             }
 
-            // Also cleanup orphaned pending connections
-            pendingConnections.entrySet().removeIf( entry -> {
-                // Pending connections older than 30 seconds are considered orphaned
-                // (connection timeout should have triggered by then)
-                return true;  // For now, just remove all - they should be removed by the async tasks
-            });
+            // Also cleanup orphaned pending connections: entries whose connecting thread is still
+            // legitimately in flight (the common case — see PendingConnection's javadoc) must survive
+            // this sweep, so only those older than PENDING_CONNECTION_STALE_MS are reclaimed here.
+            long now = System.currentTimeMillis();
+
+            pendingConnections.entrySet().removeIf( entry -> (now - entry.getValue().startedAt) > PENDING_CONNECTION_STALE_MS );
 
             if( cleanedCount > 0 && logger.isLoggable( ILogger.Level.INFO ) )
                 logger.log( Level.INFO, "Cleaned up " + cleanedCount + " dead WebSocket references" );
@@ -923,6 +963,35 @@ public class CommBridge extends WebSocketAdapter
     private static boolean isTargetAllowedByGrant( Session session, JsonObject exenAddress )
     {
         return RemoteGrant.get().mayReach( AccessContext.of( session ), normalizeAddress( exenAddress ) );
+    }
+
+    /**
+     * Tells whether an inbound message is a {@code Change} or {@code Execute} — the two message kinds
+     * that drive a device or run a rule/script, as opposed to {@code List}/{@code Read}, which only
+     * observe. The wire format wraps the payload under a single key named after the kind
+     * (e.g. {@code {"msg":{"Change":{...}}}}, {@code {"msg":{"Execute":"someScript"}}} — see
+     * {@code gum_ws_boards.js}'s {@code requestChange}/{@code executeRuleOrScript}), so the kind is the
+     * object's own key, not a separate {@code "type"} field.
+     *
+     * @param messageJson the raw inbound message.
+     * @return {@code true} for a {@code Change} or {@code Execute} message.
+     */
+    private static boolean isWriteMessage( JsonObject messageJson )
+    {
+        JsonValue msgValue = messageJson.get( "msg" );
+
+        if( (msgValue == null) || ! msgValue.isObject() )
+            return false;
+
+        for( String name : msgValue.asObject().names() )
+        {
+            MessageType type = MessageType.fromString( name );
+
+            if( (type == MessageType.CHANGE) || (type == MessageType.EXECUTE) )
+                return true;
+        }
+
+        return false;
     }
 
     private static JsonObject extractExEnAddress( JsonObject messageJson )

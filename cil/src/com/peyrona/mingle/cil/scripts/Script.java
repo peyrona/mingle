@@ -196,7 +196,7 @@ public final class      Script
         if( isPreStart || isOnStart )
             task.run();                 // can not run inside a thread because we needed to guarrantee that after Script::start() method is invoked, all script actions had been accomplished
         else
-            UtilSys.executor( true )
+            UtilSys.executor( false )   // dedicated, not the shared pool: script code is arbitrary and unbounded, must not stall rule timers/other controllers
                    .name( getClass().getSimpleName() +':'+ name() )
                    .execute( task );
     }

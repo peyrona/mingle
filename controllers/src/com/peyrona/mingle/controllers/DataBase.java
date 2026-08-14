@@ -59,7 +59,7 @@ public final class   DataBase
         if( ! (sql instanceof String) )
             sendWriteError( sql, new MingleException( "Is not a string" ) );
 
-        UtilSys.executor( true )
+        UtilSys.executor( false )   // dedicated, not the shared pool: JDBC execute() has no query timeout, could block indefinitely
                .execute( () ->
                         {
                             Exception exc = null;

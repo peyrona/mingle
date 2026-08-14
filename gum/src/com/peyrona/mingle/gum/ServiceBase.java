@@ -5,6 +5,7 @@ import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.ParseException;
 import com.peyrona.mingle.lang.MingleException;
+import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilType;
 import java.io.BufferedReader;
@@ -74,14 +75,26 @@ abstract class ServiceBase
     }
 
     /**
-     * Returns true if the request originates from a 192.168.x.x (LAN) address.
+     * Returns true if the request originates from a private network.
+     * <p>
+     * Delegates to {@link UtilComm} rather than testing for the {@code "192.168."} prefix, which used to
+     * be the whole implementation: that silently refused every {@code 10.x} and {@code 172.16-31.x} LAN,
+     * so on such a network the operations guarded by this method could not be performed from anywhere at
+     * all. The scope used here covers the RFC1918 ranges plus loopback and link-local.
      *
-     * @return true if the remote address is within the 192.168.0.0/16 range.
+     * @return true if the remote address is on a private network.
      */
     protected boolean isFromIntranet()
     {
-        String addr = request.getRemoteAddr();
-        return (addr != null) && addr.startsWith( "192.168." );
+        try
+        {
+            return UtilComm.isClientAllowed( UtilComm.ALLOW_IP_LOCAL,
+                                             InetAddress.getByName( request.getRemoteAddr() ) );
+        }
+        catch( Exception e )
+        {
+            return false;
+        }
     }
 
     // GET REQUEST PARAMETER

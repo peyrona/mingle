@@ -855,7 +855,12 @@ public final class UtilSys
          * Executes a Runnable task.
          * <p>
          * If {@link #rate(long)} was set to a value &gt; 0, the task will be executed periodically.
-         * Otherwise, it will be executed once (after optional {@link #delay(long)}).
+         * Otherwise, it will be executed once (after optional {@link #delay(long)}), and — when this
+         * builder was not created {@link UtilSys#executor(boolean) from the shared pool} — the
+         * dedicated single-thread executor created to run it is shut down right after, so a one-shot
+         * call never leaks its worker thread. A periodic, non-pooled execution still leaks its
+         * executor on every call, since nothing here can know when the caller is done rescheduling;
+         * such a caller must keep and reuse its own {@code ScheduledExecutorService} across calls.
          *
          * @param r the Runnable to execute
          * @return a ScheduledFuture representing the pending execution
@@ -910,10 +915,19 @@ public final class UtilSys
                 if( fixedRate )  return executor.scheduleAtFixedRate(    wrapped, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
                 else             return executor.scheduleWithFixedDelay( wrapped, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
             }
-            else
+
+            // One-shot on a dedicated (!usePool) executor: nobody outside this method ever gets a
+            // handle to that executor to shut it down later, so left alone its worker thread parks
+            // forever once the task completes — one leaked thread per call. Retiring it from inside
+            // the task itself, right after it runs, closes that off without changing what any caller
+            // observes (the returned ScheduledFuture behaves exactly as before).
+            if( ! usePool )
             {
-                return executor.schedule( wrapped, delay, TimeUnit.MILLISECONDS );
+                Runnable oneShot = wrapped;
+                wrapped = () -> { try { oneShot.run(); } finally { executor.shutdown(); } };
             }
+
+            return executor.schedule( wrapped, delay, TimeUnit.MILLISECONDS );
         }
     }
 

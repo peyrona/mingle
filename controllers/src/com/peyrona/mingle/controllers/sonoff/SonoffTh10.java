@@ -102,7 +102,7 @@ public final class SonoffTh10
 
         int interval = ((Number) get( KEY_INTERVAL )).intValue();
 
-        timer = UtilSys.executor( false )
+        timer = UtilSys.executor( true )
                        .delay( interval )
                        .rate( interval )
                        .execute( () -> read() );
@@ -285,6 +285,11 @@ public final class SonoffTh10
     /**
      * Cancels the current polling timer and creates a new one with an interval
      * adjusted by the current backoff multiplier.
+     * <p>
+     * Rescheduled onto the shared pool ({@code UtilSys.executor(true)}), not a dedicated executor:
+     * this runs on every failed poll and every recovery, so a dedicated {@code !usePool} executor
+     * here would abandon one parked thread per call — the shared pool is a single instance for the
+     * whole JVM, so resubmitting onto it never creates a new thread no matter how often this fires.
      */
     private void reschedule()
     {
@@ -295,7 +300,7 @@ public final class SonoffTh10
         int multiplier = (failureCount == 0) ? 1 : Math.min( 1 << failureCount, MAX_BACKOFF );
         int interval   = base * multiplier;
 
-        timer = UtilSys.executor( false )
+        timer = UtilSys.executor( true )
                        .delay( interval )
                        .rate( interval )
                        .execute( () -> read() );

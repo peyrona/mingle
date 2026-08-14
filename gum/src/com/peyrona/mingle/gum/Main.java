@@ -3,6 +3,7 @@ package com.peyrona.mingle.gum;
 
 import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonObject;
+import com.eclipsesource.json.JsonValue;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.Config;
@@ -130,12 +131,13 @@ public class Main
                             "\t\tconfig           A JSON file (local or remote) with the configuration to use. By default, '{*home*}config.json'.\n"+
                             "\t\thost             Host name. By default, '0.0.0.0' (all interfaces).\n"+
                             "\t\tport             Port number. By default, '8080'.\n"+
-                            "\t\tallow            One of: 'local' (192.168.7.*), 'intranet' (192.168.*.*) or 'any'. Default is 'intranet'\n"+
+                            "\t\tallow            One of: 'subnet' (this /24), 'local' (any private range: 10.*, 172.16-31.*, 192.168.*),\n"+
+                            "\t\t                 'intranet' (shares the first 2 octets with this host) or 'any'. Default is 'intranet'\n"+
                             "\t\tuser_base        Folder for Dashboards and static content (served via HTTP/S). By default '{*home*}/etc/gum_user_base'\n"+
                             "\t\tshared_secret    HMAC shared secret for API authentication. If null, authentication is disabled.\n"+
                             "\t\thmac_tolerance   Accept timestamps within ±N seconds. Default: 60 seconds.\n"+
                             "\t\tmaster_password  To access dahsboards as master (new, del, etc) and to access file manger. To allow all users: null.\n"+
-                            "\t\tssl              { port: <nn>, path: <{*home*}keystore.jks>, user: <name>, password: <pwd> }\n"+
+                            "\t\tssl              { port: <nn>, path: <{*home*}keystore.jks>, pwd: <keystore_password> }. All three keys are required.\n"+
                             "\n\n"+
                             "When both, config file and command line arguments are provided, these values have precedence over those at the config file.\n\n"+
                             "For detailed information, refer to the handbook or visit: https://github.com/peyrona/mingle/docs" );
@@ -161,32 +163,50 @@ public class Main
 
         if( ! joSSL.isEmpty() )
         {
-            if( joSSL.get( "port" ).isNull() || ! joSSL.get( "port" ).isNumber() )
+            JsonValue jvPort = joSSL.get( "port" );
+
+            if( (jvPort == null) || (! jvPort.isNumber()) || (jvPort.asInt() < 1) || (jvPort.asInt() > 65535) )
                 joSSL.set( "port", 8443 );
 
-            if( joSSL.get( "port" ).asInt() < 1 || joSSL.get( "port" ).asInt() > 65535 )
-                joSSL.set( "port", 8443 );
+            String sPath = asText( joSSL, "path" );
 
-            if( joSSL.get( "path" ).isNull() )
-            {
+            if( UtilStr.isEmpty( sPath ) )
                 throw new IOException( "Can not attend SSL without a 'keystore.jks' file" );
-            }
-            else
-            {
-                String    sPath   = joSSL.get( "path" ).asString();
-                List<URI> lstURIs = UtilIO.expandPath( sPath );
 
-                if( lstURIs.size() > 1 )
-                    throw new IOException( "Path must be only one local file" );
+            List<URI> lstURIs = UtilIO.expandPath( sPath );
 
-                if( new File( lstURIs.get(0) ).exists() )
-                    joSSL.set( "path", new File( lstURIs.get(0) ).getAbsolutePath() );
-                else
-                    throw new IOException( "'keystore.jks' file does not exists: "+ joSSL.get( "path" ).asString() );
-            }
+            if( lstURIs.size() != 1 )
+                throw new IOException( "'ssl.path' must resolve to exactly one local file: "+ sPath );
 
-            if( joSSL.get( "pwd" ).isNull() )
+            File fKeyStore = new File( lstURIs.get(0) );
+
+            if( ! fKeyStore.exists() )
+                throw new IOException( "'keystore.jks' file does not exists: "+ sPath );
+
+            joSSL.set( "path", fKeyStore.getAbsolutePath() );
+
+            if( UtilStr.isEmpty( asText( joSSL, "pwd" ) ) )
                 throw new IOException( "Can not attend SSL without a 'keystore.jks' password" );
         }
+    }
+
+    /**
+     * Reads a string-valued key out of the {@code "ssl"} object, treating an absent key and a JSON
+     * {@code null} alike.
+     * <p>
+     * Needed because {@link JsonObject#get(String)} returns Java {@code null} for a key that is not
+     * there: calling {@code isNull()} straight on its result throws {@link NullPointerException}, so an
+     * {@code "ssl"} block missing any one key used to abort start-up with a stack trace instead of the
+     * readable message these checks exist to produce.
+     *
+     * @param jo  The {@code "ssl"} object.
+     * @param key The key to read.
+     * @return The value, or {@code null} when the key is absent, null or not a string.
+     */
+    private static String asText( JsonObject jo, String key )
+    {
+        JsonValue jv = jo.get( key );
+
+        return ((jv != null) && jv.isString()) ? jv.asString() : null;
     }
  }

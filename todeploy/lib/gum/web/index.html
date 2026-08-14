@@ -23,61 +23,17 @@
     </head>
 
     <body>
-        <!-- ************************************** LOGIN PANEL ************************************************** -->
-        <section class="section" id="login" style="display:none;">
-            <div class="container">
-                <div class="columns">
-                    <div class="column is-narrow">   <!-- Left Column with Centered Image -->
-                        <div class="image-container">
-                            <img src="/gum/images/dashboard-256x256.png" width="128px" height="128px" alt="Gum Logo" >
-                        </div>
-                    </div>
-                    <div class="column">             <!-- Right Column with Password Input -->
-                        <div class="field">
-                            <label class="label">Shared key</label>
-                            <div class="field has-addons mb-0">
-                                <p class="control">
-                                    <button type="button" class="button" onclick="toggleInputVisibility('txt_key_login','ico_eye_key')" title="Show/hide">
-                                        <span class="icon"><i id="ico_eye_key" class="ti ti-eye"></i></span>
-                                    </button>
-                                </p>
-                                <div class="control is-expanded">
-                                    <input id="txt_key_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
-                                </div>
-                            </div>
-                            <p class="help">Used to gain access to Dahsboards' manager.</p>
-                        </div>
-                        <div class="field">
-                            <label class="label">Password for dashboards</label>
-                            <div class="field has-addons mb-0">
-                                <p class="control">
-                                    <button type="button" class="button" onclick="toggleInputVisibility('txt_pwd_login','ico_eye_pwd')" title="Show/hide">
-                                        <span class="icon"><i id="ico_eye_pwd" class="ti ti-eye"></i></span>
-                                    </button>
-                                </p>
-                                <div class="control is-expanded">
-                                    <input id="txt_pwd_login" class="input password-input" type="password" placeholder="Leave it blank if you do not know">
-                                </div>
-                            </div>
-                            <p class="help">To access dashboards protected with this password.</p>
-                        </div>
-                        <div class="field">
-                            <label class="checkbox">
-                                <input type="checkbox" id="chk_remember">
-                                &nbsp;Remember me in this machine
-                            </label>
-                        </div>
-                        <p id="login-error" class="help is-danger mt-2" style="display:none;"></p>
-                    </div>
-                </div>
-            </div>
-        </section>
-
         <!-- ************************************** WORKING PANEL *********************************************** -->
         <article id="work" class="panel is-link is-centered has-background-info-light" style="display:none;">
             <div class="panel-heading mb-4 is-flex is-justify-content-space-between is-align-items-center">
                 <span>Gum ::: Dashboards Editor and Player</span>
                 <div style="margin-left:auto; display:flex; gap:0.4rem;">
+                    <button id="btn_signin_admin" class="button is-responsive is-small is-rounded" style="display:none;"
+                            onclick="location.href='/gum/login?return='+encodeURIComponent(location.pathname+location.search)"
+                            title="Sign in with the master password to edit dashboards">
+                        <span class="icon is-small"><i class="ti ti-login"></i></span>
+                        <span>Sign in as admin</span>
+                    </button>
                     <button id="btn_toggle_pwd"    class="button is-responsive is-small is-rounded" style="display:none;"
                             onclick="toggleSection('div-pwd')"   title="Change master password">
                         <span class="icon is-small"><i class="ti ti-user"></i></span>
@@ -132,6 +88,11 @@
                                 <button id="btnDel"    class="button is-danger  is-rounded" onclick="deleteBoard( _getFocusedFile_() )"><span class="icon"><i class="ti ti-trash"></i></span><span>Delete</span></button>
                             </p>
                         </div>
+                        <div class="field is-grouped is-grouped-multiline mt-2">
+                            <p class="control">
+                                <button id="btnViewLink" class="button is-rounded" onclick="copyViewerLink( _getFocusedFile_() )" title="Copy a read-only link for someone who is never on this network"><span class="icon"><i class="ti ti-link"></i></span><span>Viewer link</span></button>
+                            </p>
+                        </div>
 
                         <div id="div-same-wnd" class="mt-5">
                             <label class="checkbox">
@@ -165,22 +126,12 @@
                         </div>
 
                         <div id="div-hmac" class="mt-4" style="display:none;">
-                            <div class="field">
-                                <div class="control">
-                                    <input id="txt_secret_old" class="input" type="password" readonly placeholder="Current shared secret" style="width: 350px;">
-                                </div>
-                            </div>
-                            <div class="field has-addons">
+                            <div class="field is-grouped">
                                 <p class="control">
-                                    <button type="button" class="button" id="btn_secret_eye" onclick="toggleNewSecretVisibility()" title="Show/hide shared secret">
-                                        <span class="icon"><i id="ico_secret_eye" class="ti ti-eye"></i></span>
+                                    <button type="button" id="btn_secret_generate" class="button is-warning" onclick="onHmacSecretGenerate()" title="Generate a new random shared secret and set it">
+                                        <span class="icon"><i class="ti ti-refresh"></i></span>
+                                        <span>Generate new shared secret</span>
                                     </button>
-                                </p>
-                                <div class="control">
-                                    <input id="txt_secret_new" class="input" type="password" placeholder="New shared secret (blank to disable)" style="width: 300px;">
-                                </div>
-                                <p class="control" title="Click to set the new shared secret" style="cursor:pointer;" onclick="onHmacSecretChanged()">
-                                    <button type="button" id="btn_secret_submit" class="button is-static"><i class="ti ti-check"></i></button>
                                 </p>
                             </div>
                             <p class="help">See help to know about the shared secret (server restart needed).</p>
@@ -262,7 +213,7 @@
                         <li><b>Configuration:</b> Set <code>"shared_secret"</code> in <code>config.json</code> (under the <code>monitoring</code> module). When <code>null</code>, API authentication is disabled and anyone who can reach the server can connect.</li>
                         <li><b>Tolerance:</b> Signatures include a timestamp; the server rejects requests older than ±<code>hmac_tolerance</code> seconds (default 60) to prevent replay attacks.</li>
                         <li><b>Remember me:</b> Stores the shared secret in the browser's localStorage so it is pre-filled on the next visit.</li>
-                        <li><b>Changing the secret:</b> Only the master user can change it via the "New shared secret" field (visible after login). The change is saved to <code>config.json</code>; a server restart is required for it to take effect.</li>
+                        <li><b>Changing the secret:</b> Only the master user can change it, via "Generate new shared secret" (visible after login) — this creates a random secret, sets it, and shows it once so it can be copied. The change is saved to <code>config.json</code>; a server restart is required for it to take effect. Disabling HMAC entirely still requires editing <code>config.json</code> directly (set <code>"shared_secret"</code> to <code>null</code>) — there is deliberately no UI shortcut for it.</li>
                         <li><b>Localhost exception:</b> Requests from localhost bypass HMAC and always have master access.</li>
                     </ul>
                 </p>
@@ -341,14 +292,6 @@
 
                                     _resetDimTimer_();
 
-                                    let storedSecret = loadSharedSecret();
-
-                                    if( storedSecret )
-                                    {
-                                        $('#txt_key_login').val(storedSecret);
-                                        $('#chk_remember').prop('checked', true);
-                                    }
-
                                     $("#lst-files").on( 'dblclick',
                                                         () => showBoard( _getFocusedFile_() ) );
 
@@ -393,13 +336,14 @@
                                 {
                                     $('#div-pwd').hide();
                                     $('#div-hmac').hide();
+                                    $('#btn_signin_admin').show();
                                 }
                                 else
                                 {
                                     $('#txt_pwd_old').val( sUserPwd || '' );
-                                    $('#txt_secret_old').val( sharedKey || '' );
                                     $('#btn_toggle_pwd').show();
                                     $('#btn_toggle_secret').show();
+                                    $('#btn_signin_admin').hide();
                                     _applySecretChangeRestriction_();
                                 }
 
@@ -476,20 +420,28 @@
                 }
             }
 
-            async function onHmacSecretChanged()
+            // 32 random bytes (256 bits) as hex — plenty for an HMAC-SHA256 key, and hex needs no
+            // escaping when ServiceBoard.changeSharedSecret() writes it into config.json as a JSON string.
+            function generateRandomSecret()
             {
-                let secret_old = $('#txt_secret_old').val();
-                let secret_new = $('#txt_secret_new').val();
-                let master_pwd = $('#txt_pwd_old').val();   // Master password is required to authorize the change
+                let aBytes = new Uint8Array( 32 );
 
-                if( secret_new === secret_old )
-                    return;
+                crypto.getRandomValues( aBytes );
 
+                return Array.from( aBytes, b => b.toString(16).padStart(2, '0') ).join('');
+            }
+
+            async function onHmacSecretGenerate()
+            {
                 if( ! isMaster )
                 {
                     p_app.alert( "Only master user can change the shared secret" );
                     return;
                 }
+
+                let secret_new = generateRandomSecret();
+                let secret_old = sharedKey || '';
+                let master_pwd = $('#txt_pwd_old').val();   // Master password is required to authorize the change
 
                 try
                 {
@@ -503,10 +455,12 @@
                                             {
                                                 sharedKey = secret_new;
                                                 g_hmacKey = null;   // Force re-import on next authenticated request
-                                                $('#txt_secret_old').val( secret_new );
-                                                $('#txt_secret_new').val( '' );
                                                 saveSharedSecret( secret_new );
-                                                p_app.alert( "Shared secret updated.\nServer restart required for the change to take effect." );
+
+                                                copyToClipboard( secret_new );
+                                                p_app.alert( "New shared secret generated and copied to the clipboard:\n\n" + secret_new +
+                                                             "\n\nServer restart required for the change to take effect. " +
+                                                             "Update it wherever else this Gum's shared secret is configured (e.g. deploy scripts)." );
                                             }
                             } );
                 }
@@ -551,6 +505,64 @@
                 else      p_app.alert( "Error opening a new tab: Are popups enabled?" );
 
                 gt.write( "_GUM_REUSE_WND_", bReuse );
+            }
+
+            // Builds a "/gum/login?board=<name>" link and copies it to the clipboard — the same sign-in
+            // page as the admin's, but whoever opens it and types that dashboard's own password (not the
+            // master one) only ever gets to watch it, never edit it. "board" here is a display hint only
+            // ("you're signing in to see: X") — it authorizes nothing, the submitted password does. Uses
+            // the server's configured public_url when set, so the link works for someone who is never on
+            // this network even when generated from inside it; falls back to the current origin otherwise.
+            function copyViewerLink( sName )
+            {
+                if( ! sName )
+                    return;
+
+                sName = delExt( sName );
+
+                $.ajax( { url    : p_base.doURL( 'ws/board' ),
+                          type   : "GET",
+                          data   : { action: 'public_url', password: '' },   // 'password' unused by this action, but ServiceBoard.doGet() requires the key to be present
+                          error  : (xhr) => p_app.showAjaxError( xhr ),
+                          success: (sPublicUrl) =>
+                                   {
+                                       let sBase = p_base.isEmpty( sPublicUrl ) ? window.location.origin : sPublicUrl;
+                                       let sLink = sBase + '/gum/login?board=' + encodeURIComponent( sName );
+
+                                       copyToClipboard( sLink )
+                                                .then( () => p_app.alert( "Viewer link copied:\n" + sLink ) )
+                                                .catch( () => p_app.alert( "Could not copy automatically. Here it is:\n" + sLink ) );
+                                   }
+                        } );
+            }
+
+            // navigator.clipboard only exists in a "secure context" (https, or localhost) — plain http://
+            // on a LAN IP (e.g. this admin panel accessed as http://192.168.1.5:8080/gum/) does not qualify,
+            // so navigator.clipboard is undefined there and .writeText would throw before any .catch runs.
+            // This falls back to the old execCommand('copy') trick, which has no such restriction.
+            function copyToClipboard( sText )
+            {
+                if( navigator.clipboard && window.isSecureContext )
+                    return navigator.clipboard.writeText( sText );
+
+                let elTA = document.createElement( 'textarea' );
+
+                elTA.value = sText;
+                elTA.style.position = 'fixed';
+                elTA.style.opacity  = '0';
+
+                document.body.appendChild( elTA );
+                elTA.focus();
+                elTA.select();
+
+                let bOk;
+
+                try       { bOk = document.execCommand( 'copy' ); }
+                catch( e ) { bOk = false; }
+
+                document.body.removeChild( elTA );
+
+                return bOk ? Promise.resolve() : Promise.reject();
             }
 
             function newBoard()
@@ -657,9 +669,12 @@
 
             /**
              * Probes the boards API without explicit credentials.
-             * - If the probe succeeds (intranet IP, HMAC disabled, or stored key is valid),
-             *   the dashboard list loads directly with no login dialog.
-             * - If the probe fails (authentication required), the login dialog is shown.
+             * - If the probe succeeds (LAN, an admin/viewer grant cookie, HMAC disabled, or a stored
+             *   shared key is still valid), the dashboard list loads directly.
+             * - If it fails (authentication required), the browser is sent to the one sign-in page Gum
+             *   has (`/gum/login`), with `return` pointing back here so it lands right back on load.
+             *   That page is rate-limited against guessing; this one never was, so routing every
+             *   credential attempt through it is also a security fix, not just a UX one.
              */
             async function _tryAutoLogin_()
             {
@@ -676,70 +691,13 @@
                     if( ! response.ok )
                         throw new Error( response.status );
 
-                    // Probe succeeded — no dialog needed, load boards directly
+                    // Probe succeeded — load boards directly, no sign-in needed
                     isMaster = (await response.text()) === 'true';
                     onPageReloaded();
                 }
                 catch( _ )
                 {
-                    // Auth required — show login dialog
-                    $('#login')
-                        .dialog( {
-                                    title     : 'Dashboards',
-                                    modal     : true,
-                                    autoOpen  : true,
-                                    resizable : true,
-                                    width     : 510,
-                                    height    : 400,
-                                    buttons   : [ {
-                                                    text : "Login",
-                                                    click: function() { _sendLogin_(); }
-                                                  } ]
-                                    } );
-                }
-            }
-
-            async function _sendLogin_()
-            {
-                $('#login-error').hide();
-
-                sharedKey = $('#txt_key_login').val();
-                sUserPwd  = $('#txt_pwd_login').val();
-
-                saveSharedSecret( sharedKey );
-
-                let uuid = p_app.showLoading( $("#lst-files") );
-
-                try
-                {
-                    const authPayload = await authenticateRequest('check', {});
-                          authPayload.data     = JSON.stringify(authPayload.data || {});
-                          authPayload.password = sUserPwd;
-
-                    $.ajax( { url     : p_base.doURL('ws/board'),
-                              type    : "GET",
-                              data    : authPayload,
-                              complete: () => p_app.hideLoading( uuid ),
-                              error   : (xhr) =>
-                                        {
-                                            $('#login-error').text( "Wrong shared key. Try again." ).show();
-                                            clearSharedSecret();
-                                            sharedKey = null;
-                                            g_hmacKey = null;
-                                        },
-                              success : (isM) =>
-                                        {
-                                            $('#login').dialog('destroy');
-                                            isMaster = (isM === 'true');
-                                            onPageReloaded();
-                                        }
-                            } );
-                }
-                catch( error )
-                {
-                    $('#login-error').text( "Authentication error: " + error.message ).show();
-                    p_app.hideLoading( uuid );
-                    clearSharedSecret();
+                    window.location.href = '/gum/login?return=' + encodeURIComponent( window.location.pathname + window.location.search );
                 }
             }
 
@@ -818,23 +776,6 @@
                     return sName;
             }
 
-            function toggleInputVisibility( sInputId, sIconId )
-            {
-                let input = document.getElementById( sInputId );
-                let icon  = document.getElementById( sIconId );
-
-                if( input.type === 'password' )
-                {
-                    input.type     = 'text';
-                    icon.className = 'ti ti-eye-off';
-                }
-                else
-                {
-                    input.type     = 'password';
-                    icon.className = 'ti ti-eye';
-                }
-            }
-
             function toggleNewPwdVisibility()
             {
                 let input = document.getElementById('txt_pwd_new');
@@ -857,31 +798,30 @@
                 $( '#' + id ).toggle( 250 );
             }
 
-            function toggleNewSecretVisibility()
-            {
-                let input = document.getElementById('txt_secret_new');
-                let icon  = document.getElementById('ico_secret_eye');
-
-                if( input.type === 'password' )
-                {
-                    input.type     = 'text';
-                    icon.className = 'ti ti-eye-off';
-                }
-                else
-                {
-                    input.type     = 'password';
-                    icon.className = 'ti ti-eye';
-                }
-            }
-
             /**
-             * Returns true when the page is served from an origin that is allowed to change
-             * the HMAC shared secret (localhost or a 192.168.x.x LAN address).
+             * Returns true when the page is served from an origin that is allowed to change the HMAC
+             * shared secret: loopback, or any private (RFC1918) address.
+             *
+             * This only mirrors the real check, which is server-side in ServiceBase.isFromIntranet() and
+             * looks at the socket peer. It used to test for the '192.168.' prefix alone, which refused
+             * every 10.x and 172.16-31.x LAN outright.
              */
             function isAllowedForSecretChange()
             {
-                let h = window.location.hostname;
-                return h === 'localhost' || h === '127.0.0.1' || h.startsWith( '192.168.' );
+                const h = window.location.hostname;
+
+                if( h === 'localhost' || h === '127.0.0.1' || h === '::1' )
+                    return true;
+
+                const m = h.match( /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/ );
+
+                if( ! m )
+                    return false;      // A host NAME carries no address: let the server decide, keep the UI closed
+
+                const a = Number( m[1] ),
+                      b = Number( m[2] );
+
+                return (a === 10) || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31);
             }
 
             /**
@@ -893,13 +833,11 @@
                 if( isAllowedForSecretChange() )
                     return;   // Nothing to do — inputs already enabled
 
-                document.getElementById( 'txt_secret_new'    ).disabled = true;
-                document.getElementById( 'btn_secret_eye'    ).disabled = true;
-                document.getElementById( 'btn_secret_submit' ).disabled = true;
+                document.getElementById( 'btn_secret_generate' ).disabled = true;
 
                 let help = document.querySelector( '#div-hmac .help' );
                 help.classList.add( 'is-danger' );
-                help.textContent = 'Only available from localhost or a local network connection (192.168.*.*)';
+                help.textContent = 'Only available from a local network connection (10.*, 172.16-31.*, 192.168.*) or localhost';
             }
 
             //------------------------------------------------------------------------------------------------//
@@ -996,10 +934,7 @@
 
             function saveSharedSecret(secret)
             {
-                if( $('#chk_remember').is(':checked') )
-                    localStorage.setItem(SHARED_SECRET_KEY, secret);
-                else
-                    localStorage.removeItem(SHARED_SECRET_KEY);
+                localStorage.setItem(SHARED_SECRET_KEY, secret);
             }
 
             function clearSharedSecret()

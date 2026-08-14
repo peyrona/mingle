@@ -10,6 +10,7 @@ import java.io.IOException;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.util.List;
+import java.util.regex.Pattern;
 
 /**
  * Gum utility methods.
@@ -22,6 +23,12 @@ final class Util
 {
     private static final File fAppDir  = new File( UtilSys.getLibDir(), "gum/web" );    // Cached in a var because it is heavily used
     private static       File fUserDir = null;
+
+    // Compiled once and reused by sanitizeFileName(), instead of String.replaceAll()/matches()
+    // recompiling the same Pattern on every call.
+    private static final Pattern ptrnInvalidChars = Pattern.compile( "[<>:\"/\\\\|?*\\s]" );
+    private static final Pattern ptrnReservedName = Pattern.compile( "^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\.|$)" );
+    private static final Pattern ptrnTrailingDots = Pattern.compile( "\\.+$" );
 
     //------------------------------------------------------------------------//
 
@@ -109,14 +116,14 @@ final class Util
             throw new IOException( "Board name cannot be empty" );
 
         // Replace invalid characters with underscore
-        String sanitized = name.replaceAll( "[<>:\"/\\\\|?*\\s]", "_" );
+        String sanitized = ptrnInvalidChars.matcher( name ).replaceAll( "_" );
 
         // Handle Windows reserved names
-        if( sanitized.matches( "^(CON|PRN|AUX|NUL|COM[1-9]|LPT[1-9])(\\.|$)" ) )
+        if( ptrnReservedName.matcher( sanitized ).matches() )
             sanitized = "_" + sanitized;
 
         // Remove trailing dots (Windows requirement)
-        sanitized = sanitized.replaceAll( "\\.+$", "" );
+        sanitized = ptrnTrailingDots.matcher( sanitized ).replaceAll( "" );
 
         // Limit length
         return sanitized.substring( 0, Math.min( 255, sanitized.length() ) );

@@ -189,40 +189,6 @@
 
 <body>
 
-    <!-- Login dialog (hidden — opened as jQuery UI dialog) ============== -->
-    <section id="login" style="display:none;">
-        <div class="columns is-vcentered">
-            <div class="column is-narrow" style="text-align:center;">
-                <img src="/gum/images/file-tree-256x256.png" width="128" height="128" alt="File Manager">
-            </div>
-            <div class="column">
-                <div class="field">
-                    <label class="label">Shared secret</label>
-                    <div class="field has-addons mb-0">
-                        <p class="control">
-                            <button type="button" class="button" onclick="toggleLoginSecretVisibility()" title="Show/hide secret">
-                                <span class="icon"><i id="ico_eye_login" class="ti ti-eye"></i></span>
-                            </button>
-                        </p>
-                        <div class="control is-expanded">
-                            <input id="txt_secret_login" class="input" type="password"
-                                   placeholder="Leave blank if HMAC is not configured"
-                                   onkeydown="if( event.key === 'Enter' ) _login_()">
-                        </div>
-                    </div>
-                    <p class="help">The HMAC shared secret from Gum's config.json.</p>
-                </div>
-                <div class="field">
-                    <label class="checkbox">
-                        <input type="checkbox" id="chk_remember">
-                        &nbsp;Remember in this machine
-                    </label>
-                </div>
-                <p id="login-error" class="help is-danger mt-2" style="display:none;"></p>
-            </div>
-        </div>
-    </section>
-
     <div class="container" id="main-content" style="display:none;">
         <div class="toolbar">
             <div class="buttons">
@@ -366,14 +332,6 @@
 
         $(document).ready( function()
         {
-            let storedSecret = loadSharedSecret();
-
-            if( storedSecret )
-            {
-                $('#txt_secret_login').val( storedSecret );
-                $('#chk_remember').prop( 'checked', true );
-            }
-
             initializeTree();
             _tryAutoAccess_();
 
@@ -408,9 +366,12 @@
 
         /**
          * Probes the API without explicit credentials.
-         * - If it succeeds (IP scope allows access, or HMAC is disabled, or stored key is valid),
-         *   the file tree loads directly with no login dialog.
-         * - If it fails (authentication required), the login dialog is shown.
+         * - If it succeeds (LAN, an admin grant cookie, HMAC disabled, or a stored shared key is still
+         *   valid), the file tree loads directly.
+         * - If it fails (authentication required), the browser is sent to the one sign-in page Gum has
+         *   (`/gum/login`), with `return` pointing back here. That page is rate-limited against
+         *   guessing; this one never was, so routing every credential attempt through it is also a
+         *   security fix, not just a UX one.
          */
         async function _tryAutoAccess_()
         {
@@ -437,20 +398,7 @@
             }
             catch( _ )
             {
-                // Auth required — show login dialog
-                $('#login')
-                    .dialog( {
-                                title     : 'File Explorer',
-                                modal     : true,
-                                autoOpen  : true,
-                                resizable : false,
-                                width     : 510,
-                                height    : 290,
-                                buttons   : [ {
-                                                text : "Login",
-                                                click: function() { _login_(); }
-                                              } ]
-                                } );
+                window.location.href = '/gum/login?return=' + encodeURIComponent( window.location.pathname + window.location.search );
             }
         }
 
@@ -530,66 +478,6 @@
 
         //------------------------------------------------------------------------//
         // API CALLS
-
-        function toggleLoginSecretVisibility()
-        {
-            let input = document.getElementById( 'txt_secret_login' );
-            let icon  = document.getElementById( 'ico_eye_login' );
-
-            if( input.type === 'password' )
-            {
-                input.type     = 'text';
-                icon.className = 'ti ti-eye-off';
-            }
-            else
-            {
-                input.type     = 'password';
-                icon.className = 'ti ti-eye';
-            }
-        }
-
-        async function _login_()
-        {
-            $('#login-error').hide();
-
-            sharedKey = $('#txt_secret_login').val();
-
-            if( $('#chk_remember').is(':checked') )
-                localStorage.setItem( SHARED_SECRET_KEY, sharedKey );
-            else
-                localStorage.removeItem( SHARED_SECRET_KEY );
-
-            try
-            {
-                const authPayload = await authenticateRequest( 'list', {} );
-                const authParams  =
-                {
-                    action   : authPayload.action,
-                    data     : JSON.stringify( authPayload.data || {} ),
-                    timestamp: String( authPayload.timestamp )
-                };
-
-                if( authPayload.hmac )
-                    authParams.hmac = authPayload.hmac;
-
-                // fetchIt() throws on any HTTP error (401, 403, …) — if it passes, session is established
-                await fetchIt( API_FILES + '?' + new URLSearchParams( authParams ).toString(), { method: 'GET' } );
-
-                // Auth succeeded — close the dialog, show content, then load the tree
-                if( $('#login').dialog( 'instance' ) )
-                    $('#login').dialog( 'destroy' );
-                $('#main-content').show();
-                showNotification( 'WARN: this tool is for internal use.<br>It is unsafe for public access.', 'is-warning' );
-                loadFileTree();
-            }
-            catch( error )
-            {
-                $('#login-error').text( "Wrong shared secret. Try again." ).show();
-                localStorage.removeItem( SHARED_SECRET_KEY );
-                sharedKey = null;
-                g_hmacKey = null;
-            }
-        }
 
         async function loadFileTree( authParams = null )
         {

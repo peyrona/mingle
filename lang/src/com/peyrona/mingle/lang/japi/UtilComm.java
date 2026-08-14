@@ -73,10 +73,15 @@ public class UtilComm
     public static final int PORT_POP3_DEFAULT                 = 110;
     public static final int PORT_IMAP_DEFAULT                 = 143;
 
-    public static final short ALLOW_IP_LOCAL                  = 1;    // 192.168.7.9
-    public static final short ALLOW_IP_SUBNET                 = 2;    // 192.168.7.*
-    public static final short ALLOW_IP_INTRANET               = 3;    // 192.168.*.*
-    public static final short ALLOW_IP_ANY                    = 4;    // *.*.*.*
+    // Client-address scopes. CAUTION: the constant values are NOT in order of breadth — SUBNET (2) is
+    // narrower than LOCAL (1), because LOCAL admits every private range and not just this machine's own.
+    // Actual breadth is: SUBNET < LOCAL < INTRANET < ANY. These comments used to read "192.168.7.9" /
+    // "192.168.7.*" / "192.168.*.*", which suggested the opposite and made "local" look like the safest
+    // choice when it is in fact the second widest. See isLocal(), isSubnet() and isIntranet() below.
+    public static final short ALLOW_IP_LOCAL                  = 1;    // Any RFC1918 range: 10.*, 172.16-31.*, 192.168.* (plus loopback / link-local / IPv6 ULA)
+    public static final short ALLOW_IP_SUBNET                 = 2;    // Shares the first 3 octets with a local IP (plus loopback / link-local)
+    public static final short ALLOW_IP_INTRANET               = 3;    // Shares the first 2 octets with a local IP, or is LOCAL
+    public static final short ALLOW_IP_ANY                    = 4;    // Everything
 
     public static enum  Protocol { file, http, https }
 

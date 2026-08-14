@@ -40,8 +40,12 @@ import javax.servlet.http.HttpServletResponse;
  */
 final class ProxyServlet extends HttpServlet
 {
-    /** Hop-by-hop headers that must not be forwarded in either direction. */
-    private static final Set<String> HOP_BY_HOP = Set.of( "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-authorization", "host" );
+    /**
+     * Hop-by-hop headers that must not be forwarded in either direction, plus "cookie" and
+     * "authorization": the proxy target is an arbitrary configured device, not Gum itself, so it must
+     * never receive the credentials that authenticate the caller to Gum.
+     */
+    private static final Set<String> HOP_BY_HOP = Set.of( "connection", "keep-alive", "transfer-encoding", "te", "trailer", "upgrade", "proxy-authorization", "host", "cookie", "authorization" );
 
     private final String target;       // e.g. "http://192.168.7.9:8080"  (no trailing slash)
     private final String contextPath;  // e.g. "/gum/proxy/rpi"

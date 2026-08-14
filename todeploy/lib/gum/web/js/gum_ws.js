@@ -14,6 +14,7 @@ var gum_ws =
     socket    : null,
     aListener : [],     // Like: { id: uuid, fn: callback, exen: {host:<str>, port:<number>, ssl:boolean}, name: devName }
     fnOnList  : null,   // Function to be invoked when a 'Listed' response arrives from an ExEn.
+    fnOnError : null,   // Optional fn(message, exen) for an 'error' message; return true to suppress the default alert.
 
     // Reconnection properties
     reconnectAttempts    : 0,
@@ -226,6 +227,19 @@ var gum_ws =
     },
 
     /**
+     * Registers a custom handler for 'error' messages arriving from an ExEn, e.g. to silently ignore an
+     * expected failure (an ExEn a remote-access grant is not allowed to reach) instead of alerting the
+     * user. The handler receives (message, exen) and returns true to suppress the default alert, or a
+     * falsy value to let it show as usual.
+     *
+     * @param {Function} fn (message, exen) => boolean
+     */
+    setOnError( fn )
+    {
+        this.fnOnError = fn;
+    },
+
+    /**
      * Asynchronously requests for a list with all devices names (and other info) managed by a remote ExEn.
      *
      * @param {Object} oExEnAddr ExEn address. E.g.: {"host":<str>,"port":<number>,"ssl":boolean}
@@ -427,7 +441,8 @@ var gum_ws =
                 break;
 
             case 'error':                            // 'payload' is the error description
-                p_app.alert( payload, "Error detected at ExEn: "+ jo.exen );
+                if( (typeof this.fnOnError !== 'function') || (this.fnOnError( payload, jo.exen ) !== true) )
+                    p_app.alert( payload, "Error detected at ExEn: "+ jo.exen );
                 break;
 
             case 'added':

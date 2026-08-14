@@ -176,40 +176,15 @@
                     <div class="columns">
                         <div class="column">
                             <div class="field">
-                                <label class="label">JARs</label>
+                                <label class="label">Datasource</label>
                                 <div class="control">
-                                    <input class="input" name="db_jars" type="text" placeholder="JDBC driver JARs (comma separated)" onchange="dlgChart.gehme.changed(this)">
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label class="label">JDBC</label>
-                                <div class="control">
-                                    <input class="input" name="db_jdbc" type="text" placeholder="JDBC driver class" onchange="dlgChart.gehme.changed(this)">
-                                </div>
-                            </div>
-                            <div class="field">
-                                <label class="label">URL</label>
-                                <div class="control">
-                                    <input class="input" name="db_url" type="text" placeholder="example: jdbc:h2:{*home*}etc/mydb" onchange="dlgChart.gehme.changed(this)">
-                                </div>
-                            </div>
-                            <div class="columns">
-                                <div class="column">
-                                    <div class="field">
-                                        <label class="label">User name</label>
-                                        <div class="control">
-                                            <input class="input" name="db_user" type="text" placeholder="Can be empty" onchange="dlgChart.gehme.changed(this)">
-                                        </div>
+                                    <div class="select is-fullwidth">
+                                        <select name="db_datasource" onchange="dlgChart.gehme.changed(this)">
+                                            <option value="">— none —</option>
+                                        </select>
                                     </div>
                                 </div>
-                                <div class="column">
-                                    <div class="field">
-                                        <label class="label">User password</label>
-                                        <div class="control">
-                                            <input class="input" name="db_pwd" type="text" placeholder="Can be empty" onchange=" dlgChart.gehme.changed(this)">
-                                        </div>
-                                    </div>
-                                </div>
+                                <p class="help">Declared server-side under 'monitoring.datasources' in config.json — connection details never travel to the browser.</p>
                             </div>
                         </div>
                         <div class="column">
@@ -258,12 +233,36 @@ var dlgChart =
         this.teSerie.setData( gadget.devices   );
         this.teDB.setData(    gadget.db_tables );
 
+        this._fillDataSources_( gadget.db_datasource );
+
         if( gum.isUsingGridLayout() )  $('#grid-fields').show();
         else                           $('#grid-fields').hide();
 
         this._setLblClrEnabled_( ! p_base.isEmpty( gadget.lbl_clr ) );
 
         return this;
+    },
+
+    // Populates the datasource picker from the names declared server-side in config.json (never
+    // connection details: ServiceDB deliberately keeps those out of reach of the browser). Re-applies
+    // the gadget's saved value explicitly rather than relying solely on the dialog's own generic
+    // fill-on-open, since that fires on a fixed timeout that may run before this AJAX call returns.
+    _fillDataSources_ : function( sSelected )
+    {
+        let $select = $('#properties-chart [name="db_datasource"]');
+
+        $.ajax( { url: '/ws/db', type: 'GET', data: { action: 'list' },
+                  success: function( aNames )
+                  {
+                      $select.empty().append( '<option value="">— none —</option>' );
+
+                      aNames.forEach( sName => $select.append( '<option>'+ sName +'</option>' ) );
+
+                      if( ! p_base.isEmpty( sSelected ) )
+                          p_base.setFieldValue( $select, sSelected );
+                  },
+                  error: function( xhr ) { console.error( "Failed to load datasource list", xhr ); }
+        } );
     },
 
     show()

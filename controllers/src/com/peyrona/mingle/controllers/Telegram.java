@@ -179,7 +179,7 @@ public final class   Telegram
         if( isFaked() )  // || isInvalid() --> Is not needed because this controller is always valid
             return;
 
-        UtilSys.executor( true )
+        UtilSys.executor( false )   // dedicated, not the shared pool: _sendIM_ can block up to httpTimeout (30s)
                .execute( () ->  {
                                     try
                                     {

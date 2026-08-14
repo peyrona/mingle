@@ -49,11 +49,22 @@ public final class RS2Json
             int               nCols   = rsmd.getColumnCount();
             Set<String>       jFields = new HashSet<>();
 
+            // Column type/label are fixed for the whole ResultSet: read once here instead of
+            // once per cell inside the row loop below.
+            int[]    colTypes = new int[nCols];
+            String[] colNames = new String[nCols];
+
+            for( int n = 1; n <= nCols; n++ )
+            {
+                colTypes[n - 1] = rsmd.getColumnType(  n );
+                colNames[n - 1] = rsmd.getColumnLabel( n );
+            }
+
             // 1. Build Header
             JsonArray headArray = new JsonArray();
 
-            for( int n = 1; n <= nCols; n++ )
-                headArray.add( rsmd.getColumnLabel( n ) );
+            for( String colName : colNames )
+                headArray.add( colName );
 
             // 2. Build Body
             JsonArray bodyArray = new JsonArray();
@@ -63,7 +74,7 @@ public final class RS2Json
                 JsonArray rowArray = new JsonArray();
 
                 for( int i = 1; i <= nCols; i++ )
-                    rowArray.add( extractColumnValue( rs, rsmd, i, jFields ) );
+                    rowArray.add( extractColumnValue( rs, i, colTypes[i - 1], colNames[i - 1], jFields ) );
 
                 bodyArray.add( rowArray );
             }
@@ -90,13 +101,13 @@ public final class RS2Json
 
     /**
      * Extracts a value from the ResultSet and converts it to the appropriate JsonValue.
+     *
+     * @param colType the column's SQL type, as read once from the ResultSet's metadata by the caller.
+     * @param colName the column's label, as read once from the ResultSet's metadata by the caller.
      */
-    private static JsonValue extractColumnValue( ResultSet rs, ResultSetMetaData rsmd, int colIndex, Set<String> jsonFields )
+    private static JsonValue extractColumnValue( ResultSet rs, int colIndex, int colType, String colName, Set<String> jsonFields )
         throws SQLException
     {
-        int    colType  = rsmd.getColumnType( colIndex );
-        String colName  = rsmd.getColumnLabel( colIndex );
-
         // 1. Check for specific "Already JSON" columns first
         if( jsonFields.contains( colName ) )
         {
