@@ -91,6 +91,9 @@ release.sh
 # Twig (ESP-IDF native runtime rewrite)
 # NOTE: build/ dirs (twig/build, tools/compat_checker/build, per-component
 # test/build, etc.) are already covered by the generic "build/" rule above.
+# The blanket "*.txt" rule above would otherwise silently swallow every
+# CMakeLists.txt under twig/ -- its entire CMake build system.
+!/twig/**/CMakeLists.txt
 /twig/sdkconfig
 /twig/sdkconfig.old
 /twig/doc/api-docs/

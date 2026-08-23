@@ -130,6 +130,10 @@ public final class   SunFreeTTS
         {
             sendGenericError( ILogger.Level.WARNING, "Can not deallocate synthesizer" );
         }
+        finally
+        {
+            super.stop();
+        }
     }
 
     //------------------------------------------------------------------------//

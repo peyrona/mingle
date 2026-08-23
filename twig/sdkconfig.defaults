@@ -1,0 +1,31 @@
+# N16R8-class ESP32-S3 board: 16MB flash (8MB octal PSRAM is left disabled — see the
+# note in twig/PLAN.md and IMPLEMENTATION.md Phase 0: Espressif's QEMU does not emulate
+# PSRAM for esp32s3, so real PSRAM budget validation is real-hardware-only).
+CONFIG_ESPTOOLPY_FLASHSIZE_16MB=y
+
+# QEMU networking: the OpenCores Ethernet MAC emulated by QEMU's "-nic user,model=open_eth"
+# (see run_qemu.sh), which ESP-IDF's esp_eth has a real driver for. This option exists
+# specifically to let QEMU-based builds exercise real lwIP networking (SNTP, the control
+# channel); it is NOT usable on real hardware.
+CONFIG_ETH_USE_OPENETH=y
+
+# C++ exceptions and RTTI are off by design (PLAN.md: "Disable Exceptions & RTTI").
+# These are ESP-IDF's default values already; pinned explicitly so the contract is
+# visible and survives any future default change.
+CONFIG_COMPILER_CXX_EXCEPTIONS=n
+CONFIG_COMPILER_CXX_RTTI=n
+
+# Size-optimised release code (-Os) rather than the -Og debug default. The plan
+# prioritises clear code over raw speed, but flash/RAM are the real budget here.
+CONFIG_COMPILER_OPTIMIZATION_SIZE=y
+
+# Generous main-task stack for the boot path. Phase 1 is hello-world; later phases run
+# their on-device test suites serially from app_main(), whose printf/newlib call chains
+# are deep (see twig/IMPLEMENTATION.md Phase 5's stack-overflow note). This is not a
+# production number — revisit once real boot logic replaces the test-runner app_main().
+CONFIG_ESP_MAIN_TASK_STACK_SIZE=65536
+
+# Catch stack overflows loudly (the serial test-runner app_main() is the deep-call-chain
+# case that keeps outgrowing the default stack; canary/strong checking turns an
+# otherwise silent corruption into a clear "stack overflow" panic).
+CONFIG_FREERTOS_CHECK_STACKOVERFLOW_CANARY=y

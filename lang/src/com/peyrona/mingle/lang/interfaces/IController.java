@@ -108,6 +108,10 @@ public interface IController
     /**
      * This method provides the Controller the opportunity to make some housekeeping before
      * end running.
+     * <p>
+     * This call is terminal: once invoked, the Controller is done for the rest of its life and
+     * {@link #start(IRuntime)} must never be invoked on it again. Implementations are not
+     * required to support being restarted.
      */
     void stop();
 

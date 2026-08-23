@@ -9,7 +9,7 @@
 
 # How looks it like?
 
-> Here is how to say: “When the alarm is on and any door or window is opened, then send to my Telegram the message 'DANGER! Intruders at home'”.
+> Here is how to say: “When the alarm is on and any door or window is opened, then send a message to my Telegram.
 >
 > ![Une language basic example](une-1st-example.png)
 >
@@ -17,7 +17,7 @@
 
 # How to install Mingle?
 
-Copy and paste into your terminal:<br>
+Copy and paste the following into your terminal:<br>
 (a folder named 'mingle' with everything inside will be created)
 
 * **Linux**<br>
@@ -40,7 +40,10 @@ Copy and paste into your terminal:<br>
  **What computer do I need?**
 
 > A PC with Windows, macOS or Linux. In fact, **Mingle** runs in any machine where Java 17 (or above) can run.
-> Raspberry Pi is a cheap computer very appropriate to experiment with _Une_.
+> A Raspberry Pi is very appropriate to experiment with **Mingle** (RPi Zero W costs 10$).
+>
+> There is a port of Mingle's Runtime written in C++ (named Twig) that runs in 256 Kb (it is in early development stage).
+> Twig is not included in the downloadable package; it must be downloaded separately from the GitHub repository.
 
  **What is the easiest way to start?**
 

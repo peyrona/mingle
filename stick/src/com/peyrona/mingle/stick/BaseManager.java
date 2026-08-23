@@ -179,16 +179,14 @@ abstract class BaseManager<T extends ICommand>
     /**
      * Stops all registered commands and clears the manager.
      * <p>
-     * If the manager is not started, this method does nothing.
+     * Safe to call even if the manager was never started: each command's own {@code stop()}
+     * is a no-op in that case.
      */
     void stop()
     {
-        if( isStarted() )
-        {
-            forEach( cmd -> cmd.stop() );             // Method is sync
+        forEach( cmd -> cmd.stop() );             // Method is sync
 
-            map.clear();
-        }
+        map.clear();
     }
 
     /**

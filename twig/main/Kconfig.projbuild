@@ -1,0 +1,20 @@
+menu "Twig-oop application"
+
+config TWIG_ONDEVICE_SELFTEST
+    bool "Compile & run the on-device self-test suite at boot"
+    default y
+    help
+        Runs every Tier 1/2 test suite (naxe/cil/stick) on-device at app_main() start,
+        before the autonomous demo -- proves the ESP32 target behaves identically to the
+        host build (see components/*/test/build_and_run.sh), not just that a given model
+        happens to execute.
+
+        Costs ~115 KB of permanent BSS: each test file owns its own static buffers
+        (RuleManager/DeviceManager instances, parse arenas, token pools), sized the same
+        as -- and entirely separate from -- the demo's own production buffers, so both
+        copies sit in RAM forever. tools/build_model.sh disables this automatically when
+        building a real deployment image for a specific model; leave it enabled for plain
+        bring-up/dev builds (idf.py build) where the extra on-device validation is worth
+        the RAM.
+
+endmenu

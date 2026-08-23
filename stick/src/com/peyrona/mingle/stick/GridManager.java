@@ -256,9 +256,6 @@ final class GridManager
         if( bErrors )
             return false;
 
-        if( lstServers == null )    // Although Gum does not need this value, Stick needs it.
-            return false;
-
         return ! (isDeaf() && isMute());
     }
 
@@ -302,11 +299,24 @@ final class GridManager
     // PRIVATE CONSTRUCTOR
     private GridManager( IRuntime rt )
     {
+        List<JsonValue> lstNodes;    // Process all grid nodes: localhost entries become servers, others become clients
+
+        try
+        {
+            lstNodes = NetworkConfig.getGridNodes();    // Never returns null; throws an exception if a node is malformed
+        }
+        catch( MingleException me )
+        {
+            bErrors = true;
+            rt.log( ILogger.Level.SEVERE, me );
+            lstNodes = Collections.emptyList();
+        }
+
         Set<Server> setTmpSrv = new HashSet<>(  5 );
         Set<Client> setTmpCli = new HashSet<>( 25 );
 
         // Process all grid nodes: localhost entries become servers, others become clients
-        for( JsonValue node : NetworkConfig.getGridNodes() )    // Never returns null
+        for( JsonValue node : lstNodes )    // Never returns null
         {
             if( ! node.isObject() )
             {
@@ -342,7 +352,7 @@ final class GridManager
                         bErrors = true;
                 }
             }
-            catch( MingleException me )
+            catch( MingleException | ParseException me )
             {
                 bErrors = true;
                 rt.log( ILogger.Level.SEVERE, me );
@@ -362,11 +372,26 @@ final class GridManager
         UtilSys.executor( true )
                .execute( () ->
                         {
-                            if( lstServers != null )
-                                lstServers.forEach( srv -> srv.broadcast( msg ) );
+                            synchronized( this )   // same lock as start()/stop(): never run while they clear the lists
+                            {
+                                if( lstServers != null )
+                                {
+                                    for( Server srv : lstServers )
+                                    {
+                                        try                    { srv.broadcast( msg ); }
+                                        catch( Exception exc ) { log( Level.SEVERE, exc ); }
+                                    }
+                                }
 
-                            if( lstClients != null )
-                                lstClients.forEach( cli -> cli.send( msg ) );
+                                if( lstClients != null )
+                                {
+                                    for( Client cli : lstClients )
+                                    {
+                                        try                    { cli.send( msg ); }
+                                        catch( Exception exc ) { log( Level.SEVERE, exc ); }
+                                    }
+                                }
+                            }
                         } );
 
         // forEach(...) is thread-safe when applied to a List that is not modified concurrently
@@ -381,7 +406,9 @@ final class GridManager
             return false;
 
         // Extract just the host part (without port)
-        String hostOnly = host.contains( ":" ) ? host.substring( 0, host.lastIndexOf( ':' ) ) : host;
+        String hostOnly = "::1".equals( host )   // IPV6
+                           ? host
+                           : ( host.contains( ":" ) ? host.substring( 0, host.lastIndexOf( ':' ) ) : host );
 
         return "localhost".equalsIgnoreCase( hostOnly )
             || "127.0.0.1".equals( hostOnly )
@@ -399,8 +426,12 @@ final class GridManager
     }
 
     //------------------------------------------------------------------------//
-    // Nodes (target nodes to inform)
+    // INNER CLASS
+    //------------------------------------------------------------------------//
 
+    /**
+     * Nodes (target nodes to inform)
+     */
     private static final class Server
     {
         @Override
@@ -526,8 +557,12 @@ final class GridManager
     }
 
     //------------------------------------------------------------------------//
-    // Clients (target nodes to inform to)
+    // INNER CLASS
+    //------------------------------------------------------------------------//
 
+    /**
+     * Clients (target nodes to inform to)
+     */
     private static final class Client
     {
         @Override

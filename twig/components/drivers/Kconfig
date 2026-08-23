@@ -1,0 +1,47 @@
+menu "Twig-oop native drivers"
+
+config DRIVER_CLOCK
+    bool "Clock sensor driver (clockdriver)"
+    default y
+    help
+        Periodic clock sensor: posts elapsed-ms-since-boot to the bus every interval.
+        Backs the "clock" device in 01.clock.model.
+
+config DRIVER_CONSOLE
+    bool "Console output driver (outputdriver)"
+    default y
+    help
+        Serial-console actuator: its write op prints the received value. Backs the
+        "console" device in 01.clock.model.
+
+config DRIVER_CELLSET
+    bool "CellSet spreadsheet driver (cellsetdriver)"
+    default y
+    help
+        Every Device routed to CellSetDriver is a "cell" holding a plain value or a
+        '='-prefixed formula referencing other devices; recalculates on every
+        DeviceChanged it depends on. Ported from Java's
+        com.peyrona.mingle.controllers.CellSet.
+
+config DRIVER_CRON
+    bool "Cron scheduler driver (crondriver)"
+    default y
+    help
+        A Linux-cron-like sensor: one-time or repeating (Daily/Weekly/Monthly/Yearly)
+        events, posting the trigger's epoch milliseconds to its Device. Ported from
+        Java's com.peyrona.mingle.controllers.Kronos (backed by
+        com.peyrona.mingle.lang.japi.Cron).
+
+config DRIVER_SYSMON
+    bool "System monitor sensor driver (systemmonitordriver)"
+    default y
+    select FREERTOS_GENERATE_RUN_TIME_STATS
+    help
+        Periodically reports one of: EventBus dispatch speed/pending count, CPU load
+        (sampled from FreeRTOS's own per-core idle-task run-time counters -- hence this
+        option enabling configGENERATE_RUN_TIME_STATS), native heap usage (the "jvmram"
+        metric name is kept for .une model compatibility -- there is no JVM here), or a
+        constant -1 for the "disk" metric (no filesystem-space API is ported for this
+        target). Ported from Java's com.peyrona.mingle.controllers.sysmon.SystemMonitor.
+
+endmenu

@@ -78,7 +78,7 @@ public class NetworkConfig
             jaNodes.asArray()
                    .forEach( (JsonValue jv) ->
                              {
-                                if( ! jv.isObject() )
+                                if( ! jv.isObject() )   // fail fast
                                     throw new MingleException( "Parse exception '"+ jv +"' is not a JSON object" );
 
                                 lst2Ret.add( jv.asObject() );

@@ -164,9 +164,9 @@ public final class      Script
             }
         }
 
-        super.stop();    // Can not do anything else because vars (langMgr, asFrom, etc) are needed if someone re-starts it
+        super.stop();
 
-        langMgr  = null; // After stopping
+        langMgr  = null;
         prepared = null;
     }
 
@@ -187,10 +187,6 @@ public final class      Script
                                 String sCause = UtilStr.toStringBrief( exc );
                                 getRuntime().log( ILogger.Level.SEVERE, new MingleException( "Error executing \""+ name() + "\": "+ sCause, exc ) );
                             }
-
-                            // Can not do following becasue an ONSTART type script can also be invoked by rules later during execution
-                            // if( isOnStart && ! isOnStop )
-                            //     stop();
                         };
 
         if( isPreStart || isOnStart )

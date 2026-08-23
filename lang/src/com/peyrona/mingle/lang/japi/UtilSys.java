@@ -40,7 +40,10 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
+import java.util.concurrent.SynchronousQueue;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
 
 /**
@@ -90,13 +93,14 @@ public final class UtilSys
 
     public static void stop()
     {
-        Executor.pool.shutdownNow();
+        Executor.scheduler.shutdownNow();
+        Executor.workerPool.shutdownNow();
         logger  = null;
         config  = null;
         runtime = null;
         mapStorage.clear();
     }
-    
+
     //------------------------------------------------------------------------//
 
     /**
@@ -750,7 +754,37 @@ public final class UtilSys
      */
     public static final class Executor
     {
-        private static final ScheduledExecutorService pool = Executors.newScheduledThreadPool( 32 );   // Note: a lot needed: Dispatchers, AFTERs, WITHINs, Controllers...
+        // Scheduling is split from execution so worker threads can safely time out. 'scheduler' is
+        // tiny and always-alive: it only tracks delays/intervals and hands due tasks off to
+        // 'workerPool' with a non-blocking execute() call, so it's never blocked by a slow task and
+        // never at risk of missing a firing. Applying a keep-alive timeout directly to a single
+        // ScheduledThreadPoolExecutor is unsafe: if every worker times out while a task is still
+        // queued but not yet due, nothing is left polling the delay queue, and nothing re-triggers
+        // thread creation until a *new* task is submitted — the pending task can silently never fire.
+        private static final ScheduledExecutorService scheduler  = Executors.newScheduledThreadPool( 1 );
+        // When all 32 are busy, the task must still run — this pool carries actuator-triggering
+        // messages (e.g. a rule's AFTER action), and silently discarding one is never acceptable.
+        // So on saturation the task runs on a throwaway thread instead of being rejected. It must
+        // NOT run inline on the caller (classic CallerRunsPolicy): every submission to this pool is
+        // funneled through the single, always-alive 'scheduler' thread (see handoff below), so
+        // "caller" is always 'scheduler' — running the task there would stall every other delayed/
+        // periodic task in the whole application for as long as this one takes.
+        // This "never drop" guarantee holds only while the pool is running. Once shutdown() has been
+        // requested, rejection means "the pool is stopping", not "saturated": running the task here
+        // would be a race against shutdown, so it is intentionally dropped, silently, like any other
+        // ExecutorService after shutdown.
+        private static final ThreadPoolExecutor       workerPool = new ThreadPoolExecutor(
+                                                                            0, 32, 90, TimeUnit.SECONDS,
+                                                                            new SynchronousQueue<>(),
+                                                                            (r, exec) ->
+                                                                            {
+                                                                                if( ! exec.isShutdown() )
+                                                                                {
+                                                                                    UtilSys.getLogger().log( ILogger.Level.WARNING,
+                                                                                            "Shared worker pool saturated (32 busy): running task on a throwaway thread instead of dropping it." );
+                                                                                    new Thread( r, "UtilSys[overflow]" ).start();
+                                                                                }
+                                                                            } );
 
         private final boolean usePool;
         private String   name      = null;
@@ -863,14 +897,25 @@ public final class UtilSys
          * such a caller must keep and reuse its own {@code ScheduledExecutorService} across calls.
          *
          * @param r the Runnable to execute
-         * @return a ScheduledFuture representing the pending execution
+         * @return a ScheduledFuture representing the pending execution.<br>
+         *         <b>Caveat for a pooled, one-shot execution</b> (built {@link UtilSys#executor(boolean)
+         *         from the shared pool}, no {@link #rate(long)}): the returned future only tracks 'r'
+         *         being handed off to the shared worker pool, not 'r' actually finishing there —
+         *         {@code get()}/{@code isDone()} can return before, or without any guarantee about
+         *         whether, 'r' has run. A non-pooled one-shot execution does not have this caveat: its
+         *         future tracks real completion of 'r'. A periodic execution (pooled or not) is
+         *         unaffected either way, since its future never completes on its own regardless (per
+         *         the standard {@code ScheduledExecutorService} contract for periodic tasks).
          */
         public ScheduledFuture<?> execute( Runnable r )
         {
             if( UtilStr.isMeaningless( name ) )
             {
-                Class<?> callerClass = UtilReflect.getCallerClass( 4 );
-                String   methodName  = UtilReflect.getCallerMethodName( 4 );
+                // Kept inline (not extracted into a helper): the skip depth below counts stack
+                // frames from here up to the real caller of execute() -- moving this into its own
+                // method would add a frame and silently break the depth.
+                Class<?> callerClass = UtilReflect.getCallerClass( 2 );
+                String   methodName  = UtilReflect.getCallerMethodName( 2 );
 
                 if( callerClass != null && methodName != null )
                     name = UtilSys.class.getSimpleName() + "[pool]" + callerClass.getSimpleName() +':'+ methodName;
@@ -878,13 +923,31 @@ public final class UtilSys
                     name = UUID.randomUUID().toString();
             }
 
-            final Consumer<Exception> onError = this.error;
+            Runnable wrapped = wrap( r );
 
-            Runnable wrapped = () ->
+            return usePool ? executePooled( wrapped ) : executeNonPooled( wrapped );
+        }
+
+        //------------------------------------------------------------------------//
+        // PRIVATE SCOPE
+
+        /**
+         * Wraps 'r' so it runs under this builder's name, and routes any exception it throws to
+         * the configured {@link #error(Consumer)} handler, or logs it (at SEVERE) if none was set.
+         *
+         * @param r the Runnable to wrap
+         * @return the wrapped Runnable
+         */
+        private Runnable wrap( Runnable r )
+        {
+            final String               taskName = name;
+            final Consumer<Exception>  onError  = error;
+
+            return () ->
             {
                 try
                 {
-                    Thread.currentThread().setName( name );
+                    Thread.currentThread().setName( taskName );
                     r.run();
                 }
                 catch( Exception exc )
@@ -906,9 +969,18 @@ public final class UtilSys
                     }
                 }
             };
+        }
 
-            ScheduledExecutorService executor = usePool ? pool
-                                                        : Executors.newSingleThreadScheduledExecutor();
+        /**
+         * Schedules 'wrapped' on a dedicated single-thread {@code ScheduledExecutorService}
+         * (the {@code usePool == false} path of {@link #execute(Runnable)}).
+         *
+         * @param wrapped the already name/error wrapped Runnable to schedule
+         * @return a ScheduledFuture representing the pending execution
+         */
+        private ScheduledFuture<?> executeNonPooled( Runnable wrapped )
+        {
+            ScheduledExecutorService executor = Executors.newSingleThreadScheduledExecutor();
 
             if( rate > 0 )
             {
@@ -916,18 +988,49 @@ public final class UtilSys
                 else             return executor.scheduleWithFixedDelay( wrapped, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
             }
 
-            // One-shot on a dedicated (!usePool) executor: nobody outside this method ever gets a
-            // handle to that executor to shut it down later, so left alone its worker thread parks
-            // forever once the task completes — one leaked thread per call. Retiring it from inside
-            // the task itself, right after it runs, closes that off without changing what any caller
+            // One-shot on a dedicated executor: nobody outside this method ever gets a handle to
+            // that executor to shut it down later, so left alone its worker thread parks forever
+            // once the task completes — one leaked thread per call. Retiring it from inside the
+            // task itself, right after it runs, closes that off without changing what any caller
             // observes (the returned ScheduledFuture behaves exactly as before).
-            if( ! usePool )
+            Runnable oneShot  = wrapped;
+            Runnable retiring = () -> { try { oneShot.run(); } finally { executor.shutdown(); } };
+
+            return executor.schedule( retiring, delay, TimeUnit.MILLISECONDS );
+        }
+
+        /**
+         * Schedules 'toRun' on the shared {@code scheduler}/{@code workerPool} pair
+         * (the {@code usePool == true} path of {@link #execute(Runnable)}).
+         *
+         * @param toRun the already name/error wrapped Runnable to schedule
+         * @return a ScheduledFuture representing the pending execution
+         */
+        private ScheduledFuture<?> executePooled( Runnable toRun )
+        {
+            if( rate > 0 )
             {
-                Runnable oneShot = wrapped;
-                wrapped = () -> { try { oneShot.run(); } finally { executor.shutdown(); } };
+                // ScheduledThreadPoolExecutor normally guarantees a periodic task's executions
+                // never overlap. Decoupling scheduling ('scheduler') from execution ('workerPool')
+                // breaks that guarantee unless re-created explicitly: the handoff below always
+                // returns instantly, so without this flag 'scheduler' would happily fire the next
+                // occurrence while the previous one is still running on workerPool, if a single
+                // run ever takes longer than 'rate' — e.g. two overlapping polls of the same
+                // device racing on that controller's own state.
+                final AtomicBoolean running = new AtomicBoolean( false );
+
+                Runnable handoff = () ->
+                {
+                    if( running.compareAndSet( false, true ) )
+                        workerPool.execute( () -> { try { toRun.run(); } finally { running.set( false ); } } );
+                    // else: previous run still in flight — skip this firing rather than overlap it.
+                };
+
+                if( fixedRate )  return scheduler.scheduleAtFixedRate(    handoff, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
+                else             return scheduler.scheduleWithFixedDelay( handoff, (delay < 0 ? 0 : delay), rate, TimeUnit.MILLISECONDS );
             }
 
-            return executor.schedule( wrapped, delay, TimeUnit.MILLISECONDS );
+            return scheduler.schedule( () -> workerPool.execute( toRun ), delay, TimeUnit.MILLISECONDS );
         }
     }
 

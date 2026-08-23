@@ -159,7 +159,7 @@ public final class Stick
         // Even when System.exit(...) is used, the JVM will invoke this hook.
 
         Runtime.getRuntime()
-               .addShutdownHook( new Thread( () -> stop() ) );
+               .addShutdownHook( new Thread( () -> shutdown() ) );
     }
 
     //------------------------------------------------------------------------//
@@ -1034,19 +1034,16 @@ public final class Stick
         return (s == null) ? null : s.toLowerCase();
     }
 
-    // There is a hook that invokes this method on JMV exiting
-    private Stick stop()
+    // There is a hook that invokes this method on JVM exiting
+    private void shutdown()
     {
-        if( bExited )
-            return this;
-
         // In case the runVoidThread() method was invoked -------------
         if( ! keepRun )
-            return this;   // Already stopped
-
-        say( "Shutting down Stick ..." );
+            return;     // Already stopped
 
         keepRun = false;   // Signal thread to stop
+
+        say( "Shutting down Stick ..." );
 
         synchronized( this.config )
         {
@@ -1081,8 +1078,6 @@ public final class Stick
         }
 
         say( "<<<<<<< Stick finished >>>>>>>" );
-
-        return this;
     }
 
     /**

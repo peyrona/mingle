@@ -1,0 +1,48 @@
+#==================================================================================================================================
+# This variant ('.b.une') shows that when several devices share an identical INIT/DRIVER/CONFIG body, DEVICE accepts a
+# comma-separated list of names instead of repeating the whole block per device (compare with 'main'/'back'/'garage' in the
+# '.a.une' variant of this same example).
+#
+# ---------------------------------------------------------------------------------------------------------------------------------
+# This file is part of the Mingle project, which is licensed under Apache 2.0 License
+#
+# @author : Francisco José Morero Peyrona
+# @project: https://github.com/peyrona/mingle
+#==================================================================================================================================
+
+SCRIPT
+	ONSTART
+	LANGUAGE Une
+	FROM {
+            console = "Wait until randomly the three doors are open (in other words, their value is 'false')"
+         }
+
+
+# A device value of 'false' means 'open' and a value of 'true' means 'closed' (this is the normal meaninmg in electronic)
+
+WHEN ALL doors ARE OPEN
+THEN console SET "The last door to be open was: '"+ getTriggeredBy():get("name") +"'"
+
+#----------------------------------------------------------------------------------------------------------------------------------
+
+DEVICE main, back, garage
+    INIT
+        groups SET "doors"
+    DRIVER CellSetDriver
+        CONFIG
+            value SET closed
+
+DEVICE clock                       # Used to generate random values at especific interval: every 3 seconds
+    DRIVER ClockDriver
+        CONFIG
+            interval SET 2s
+
+DEVICE console
+    DRIVER OutputDriver
+
+WHEN clock
+THEN main   SET iif( rand( 0, 2 ) > 1, open, closed )
+     back   SET iif( rand( 0, 2 ) > 1, open, closed )
+     garage SET iif( rand( 0, 2 ) > 1, open, closed )
+
+# >>>>>>>>>>>>>> EOF <<<<<<<<<<<<<<<<

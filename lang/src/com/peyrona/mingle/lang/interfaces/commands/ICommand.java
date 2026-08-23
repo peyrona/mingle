@@ -46,6 +46,10 @@ public interface ICommand
      * This method is invoked by the Logical Twin before the unit will be removed from the Twin:
      * it will not be any longer used by the executable environment and will stop receiving
      * messages and can not send any message.
+     * <p>
+     * This call is terminal: once invoked, the entity is done for the rest of its life and
+     * {@link #start(IRuntime)} must never be invoked on it again. Implementations are not
+     * required to support being restarted.
      */
     void stop();
 }

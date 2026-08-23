@@ -105,24 +105,6 @@ public final class      Driver
         if( isEmpty() )
             return;
 
-// TODO: mejorar cómo se inician los Controladores: primero llamar a start() y luego a set()
-//        for( Iterator<String> itera = map.keySet().iterator(); itera.hasNext(); )
-//        {
-//            IController cntrlr = ((IScript) getRuntime().get( scriptName )).newController();
-//
-//            if( cntrlr.start( rt ) )
-//            {
-//                IDevice device = (IDevice) rt.get( itera.next() );
-//
-//                if( ! setController( cntrlr, device ) )   // Invalid entries
-//                    itera.remove();                       // have to be removed
-//            }
-//            else
-//            {
-//                itera.remove();
-//            }
-//        }
-
         for( Iterator<String> itera = map.keySet().iterator(); itera.hasNext(); )
         {
             IDevice     device = (IDevice) rt.get( itera.next() );
@@ -169,7 +151,6 @@ public final class      Driver
         }
 
         device.stop();
-     // map.get( device.name() ).stop(); --> can not do this because other devices could be using the same Controller
         map.remove( device.name() ).stop();   // To stop the controller assocaited with the device
 
         return true;
