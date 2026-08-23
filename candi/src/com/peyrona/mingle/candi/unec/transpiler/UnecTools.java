@@ -149,7 +149,7 @@ public final class UnecTools
         Map<String,String> map = new HashMap<>(6);    // Created upon invocation to save RAM
 
         map.put("device",
-                "DEVICE <name>\n" +
+                "DEVICE <name> [, <name>, ... ]\n" +
                 "\t[INIT <property> = {<type> | <expression>} [; ...]]\n" +
                 "\tDRIVER <driver>\n" +
                 "\t\t[CONFIG name = {<type> | <expression>} [; ...]]");

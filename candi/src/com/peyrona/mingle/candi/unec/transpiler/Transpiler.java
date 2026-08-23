@@ -2,12 +2,19 @@
 package com.peyrona.mingle.candi.unec.transpiler;
 
 import com.peyrona.mingle.candi.IntermediateCodeWriter;
+import com.peyrona.mingle.candi.unec.parser.ParseBase;
+import com.peyrona.mingle.candi.unec.parser.ParseDevice;
+import com.peyrona.mingle.candi.unec.parser.ParseDriver;
 import com.peyrona.mingle.candi.unec.parser.ParseInclude;
 import com.peyrona.mingle.candi.unec.parser.ParseInclude.UseAsTable;
+import com.peyrona.mingle.candi.unec.parser.ParseRule;
+import com.peyrona.mingle.candi.unec.parser.ParseRuleThen.Action;
+import com.peyrona.mingle.candi.unec.parser.ParseScript;
 import com.peyrona.mingle.candi.unec.parser.ParseUse;
 import com.peyrona.mingle.lang.interfaces.IConfig;
 import com.peyrona.mingle.lang.japi.UtilColls;
 import com.peyrona.mingle.lang.japi.UtilIO;
+import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.lexer.Language;
 import java.io.IOException;
 import java.io.PrintWriter;
@@ -18,8 +25,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.regex.Pattern;
 
 /**
@@ -71,8 +80,9 @@ public final class Transpiler
         try
         {
             tus.addAll( doChecks(
+                                  pruneUnusedIncludedDriversAndScripts(
                                   doCommands(
-                                              doIncludes( uri, new ArrayList<>() ) ) ) );    // Passing a List because doIncludes(...) is recursive
+                                              doIncludes( uri, new ArrayList<>() ) ) ) ) );    // Passing a List because doIncludes(...) is recursive
 
             for( TransUnit tu : tus )
             {
@@ -202,6 +212,69 @@ public final class Transpiler
 
         for( TransUnit tu : tus )
             tu.doCommands( lstUse );
+
+        return tus;
+    }
+
+    /**
+     * Unlike auto-include (which only ever pulls in the specific DRIVER/SCRIPT a DEVICE actually
+     * names -- see Checker.AutoInclude), an explicit INCLUDE loads the WHOLE target file, keeping
+     * every command it declares regardless of whether anything ends up using it. This removes,
+     * from every TransUnit except the root one (tus.get(0), i.e. the file being compiled), any
+     * DRIVER/SCRIPT that nothing in the whole compilation references, so an explicit INCLUDE
+     * behaves the same, with respect to unused drivers/scripts, as auto-include already does.
+     * <p>
+     * Grid compilations are left untouched: Checker already relaxes cross-file existence checks
+     * there because a DEVICE a RULE refers to can legitimately live on a different node's file
+     * that is not part of this TransUnit set, so local reachability can not be trusted to be
+     * complete.
+     *
+     * @param tus
+     * @return
+     */
+    private List<TransUnit> pruneUnusedIncludedDriversAndScripts( List<TransUnit> tus )
+    {
+        if( (tus.size() < 2) || config.get( null, "grid", false ) )
+            return tus;
+
+        for( TransUnit tu : tus )
+        {
+            if( tu.hasErrors() )
+                return tus;    // Let Checker report errors against the untouched set, same as today
+        }
+
+        Set<String> setKeepDrivers = new HashSet<>();
+
+        for( TransUnit tu : tus )
+            for( ParseDevice pd : tu.getCommands( ParseDevice.class ) )
+                if( pd.drvName != null )
+                    setKeepDrivers.add( pd.drvName.toLowerCase() );
+
+        Set<String> setKeepScripts = new HashSet<>();
+
+        for( TransUnit tu : tus )
+        {
+            for( ParseDriver pd : tu.getCommands( ParseDriver.class ) )
+                if( setKeepDrivers.contains( pd.getName().text().toLowerCase() ) && (pd.script != null) )
+                    setKeepScripts.add( pd.script.toLowerCase() );
+
+            for( ParseRule rule : tu.getCommands( ParseRule.class ) )
+                for( Action action : rule.getThen().getActions() )
+                    if( action.isOf( Action.Type.RuleOrScript ) )    // Could be either a RULE's or a SCRIPT's name: harmless to over-seed
+                        setKeepScripts.add( action.getTargetName() );
+        }
+
+        TransUnit root = tus.get( 0 );
+
+        for( TransUnit tu : tus )
+        {
+            if( tu == root )
+                continue;
+
+            tu.removeCommands( (ParseBase cmd) ->
+                    (cmd instanceof ParseDriver && ! setKeepDrivers.contains( cmd.getName().text().toLowerCase() )) ||
+                    (cmd instanceof ParseScript && UtilStr.isNotEmpty( cmd.getName() ) && ! setKeepScripts.contains( cmd.getName().text().toLowerCase() )) );
+        }
 
         return tus;
     }

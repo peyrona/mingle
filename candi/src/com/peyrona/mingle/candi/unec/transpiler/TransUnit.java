@@ -23,6 +23,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Predicate;
 
 /**
  * A Transpilation Unit.
@@ -257,6 +258,17 @@ public final class TransUnit
         return true;
     }
 
+    /**
+     * Removes every command matching passed predicate from the internal list.
+     *
+     * @param toRemove
+     * @return true if at least one command was removed.
+     */
+    boolean removeCommands( Predicate<ParseBase> toRemove )
+    {
+        return lstCommands.removeIf( toRemove );
+    }
+
     String toCode()
     {
         StringBuilder sb = new StringBuilder( lstCommands.size() * 1024 );
@@ -375,7 +387,16 @@ public final class TransUnit
                  if( ParseScript.is(  key ) )  cmd = new ParseScript(  lstCmdLexemes         );
             else if( ParseLibrary.is( key ) )  cmd = new ParseLibrary( lstCmdLexemes, xprEval );
             else if( ParseDriver.is(  key ) )  cmd = new ParseDriver(  lstCmdLexemes, xprEval );
-            else if( ParseDevice.is(  key ) )  cmd = new ParseDevice(  doUnits( lstCmdLexemes ), xprEval );    // Only DEVICE and RULE can have
+            else if( ParseDevice.is(  key ) )
+            {
+                // "DEVICE a, b, c ..." is sugar for N textually-identical DEVICE blocks sharing
+                // one INIT/DRIVER/CONFIG body: expand into N clones here so ParseDevice / ParseBase /
+                // Checker keep seeing only ever the single-name shape they already handle.
+                for( List<Lexeme> lstOneDevice : expandDeviceNames( doUnits( lstCmdLexemes ) ) )
+                    lstCommands.add( new ParseDevice( lstOneDevice, xprEval ) );
+
+                continue;
+            }
             else if( ParseRule.is(    key ) )  cmd = new ParseRule(    doUnits( lstCmdLexemes ), xprEval );    // temperature and time units
             else if( ParseInclude.is( key ) )  cmd = null;                                                     // Processed at constructor
             else if( ParseUse.is(     key ) )  cmd = null;                                                     // Processed at constructor
@@ -395,6 +416,73 @@ public final class TransUnit
 
     //------------------------------------------------------------------------//
     // PRIVATE SCOPE
+
+    private static boolean isDeviceClauseKw( Lexeme lex )
+    {
+        return lex.isText( "DRIVER" ) || lex.isText( "CONFIG" ) || lex.isText( "INIT" );
+    }
+
+    /**
+     * Expands "DEVICE a, b, c  DRIVER ... [INIT ...] [CONFIG ...]" into N fully independent,
+     * deep-cloned token lists -- one per name -- each behaving exactly as if it had been written
+     * as its own, textually-identical DEVICE block.
+     * <p>
+     * When there is no comma in the name span (the common, pre-existing case) the original list
+     * is returned unchanged inside a singleton list: zero behaviour change for every DEVICE
+     * declared today.
+     *
+     * @param lstDevice Token list for one DEVICE command (index 0 is the DEVICE keyword).
+     * @return One token list per declared device name.
+     */
+    private List<List<Lexeme>> expandDeviceNames( List<Lexeme> lstDevice )
+    {
+        int nBodyStart = 1;
+
+        while( (nBodyStart < lstDevice.size()) && ! isDeviceClauseKw( lstDevice.get( nBodyStart ) ) )
+            nBodyStart++;
+
+        List<Lexeme> lstNames = lstDevice.subList( 1, nBodyStart );
+
+        if( UtilColls.find( lstNames, (Lexeme lex) -> lex.isParamSep() ) == null )
+            return Collections.singletonList( lstDevice );    // No ',' -> today's behaviour, untouched
+
+        List<Lexeme>        lstBody       = lstDevice.subList( nBodyStart, lstDevice.size() );  // DRIVER/[INIT]/[CONFIG], shared verbatim
+        List<List<Lexeme>>  lstNameGroups = new ArrayList<>();
+        List<Lexeme>         lstGroup     = new ArrayList<>();
+
+        for( Lexeme lex : lstNames )
+        {
+            if( lex.isParamSep() )
+            {
+                lstNameGroups.add( lstGroup );
+                lstGroup = new ArrayList<>();
+            }
+            else if( ! lex.isDelimiter() )    // drop stray EoL/';' the lexer inserts if the list spans lines
+            {
+                lstGroup.add( lex );
+            }
+        }
+
+        lstNameGroups.add( lstGroup );        // last group (also catches trailing-comma -> empty group)
+
+        List<List<Lexeme>> lstResult = new ArrayList<>( lstNameGroups.size() );
+
+        for( List<Lexeme> group : lstNameGroups )
+            lstResult.add( buildOneDeviceClone( lstDevice.get( 0 ), group, lstBody ) );
+
+        return lstResult;
+    }
+
+    private List<Lexeme> buildOneDeviceClone( Lexeme kwDevice, List<Lexeme> lstName, List<Lexeme> lstBody )
+    {
+        List<Lexeme> lstOut = new ArrayList<>( 1 + lstName.size() + lstBody.size() );
+
+        lstOut.add( kwDevice.clonar() );
+        for( Lexeme lex : lstName )  lstOut.add( lex.clonar() );
+        for( Lexeme lex : lstBody )  lstOut.add( lex.clonar() );
+
+        return lstOut;
+    }
 
     /**
      * Convert numbers into their appropriate value considering Une units suffixes:
