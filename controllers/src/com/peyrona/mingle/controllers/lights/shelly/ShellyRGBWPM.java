@@ -9,7 +9,6 @@ import com.peyrona.mingle.controllers.lights.LightCtrlBase;
 import com.peyrona.mingle.lang.interfaces.IController;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
-import com.peyrona.mingle.lang.japi.UtilComm;
 import com.peyrona.mingle.lang.japi.UtilStr;
 import com.peyrona.mingle.lang.japi.UtilUnit;
 import com.peyrona.mingle.lang.xpreval.functions.pair;
@@ -102,6 +101,7 @@ public final class ShellyRGBWPM
 
     private volatile HttpClient httpClient      = null;
     private volatile Thread    reconnectThread = null;
+    private final Object       reconnectLock   = new Object();   // guards 'reconnectThread': onClose() and onError() can race on the same disconnect event
     private URI        rpcUri     = null;
     private String     baseUrl    = null;        // Base URL without path (e.g. "http://192.168.1.100")
     private volatile int     deviceGen  = GEN2;       // Default assumption
@@ -171,11 +171,14 @@ public final class ShellyRGBWPM
     @Override
     public void stop()
     {
-        Thread t = reconnectThread;
-        if( t != null )
+        synchronized( reconnectLock )
         {
-            reconnectThread = null;
-            t.interrupt();
+            Thread t = reconnectThread;
+            if( t != null )
+            {
+                reconnectThread = null;
+                t.interrupt();
+            }
         }
         closeWebSocket();
         httpClient = null;
@@ -366,20 +369,10 @@ public final class ShellyRGBWPM
             // preventing duplicate detectGeneration()/connectWebSocket() calls.
             if( created )
             {
-                if( UtilComm.isReachable( (String) get( KEY_IP ) ) )
-                {
-                    detectGeneration();
+                detectGeneration();
 
-                    if( deviceGen == GEN2 )
-                        connectWebSocket();
-                }
-                else
-                {
-                    synchronized( this )
-                    {
-                        httpClient = null;
-                    }
-                }
+                if( deviceGen == GEN2 )
+                    connectWebSocket();
             }
         }
 
@@ -762,22 +755,34 @@ public final class ShellyRGBWPM
         /**
          * Schedules a WebSocket reconnection attempt after a 5-second delay.
          * Only reconnects if the controller is still started and not stopped.
+         * <p>
+         * {@code onClose()} and {@code onError()} are not guaranteed to be mutually exclusive
+         * ({@code onError()} may be invoked concurrently with other {@code Listener} methods per
+         * {@link java.net.http.WebSocket.Listener}), so both can fire for the same disconnect
+         * event on different threads. Guarded by {@link #reconnectLock} and deduped against an
+         * already-pending reconnect, so a single disconnect never schedules two of them.
          */
         private void scheduleReconnect()
         {
-            if( httpClient == null )
-                return;   // Controller has been stopped
-
-            Thread t = new Thread( () ->
+            synchronized( reconnectLock )
             {
-                try { Thread.sleep( 5000 ); } catch( InterruptedException ignored ) { Thread.currentThread().interrupt(); return; }
+                if( httpClient == null )
+                    return;   // Controller has been stopped
 
-                if( httpClient != null && webSocket == null )
-                    connectWebSocket();
-            }, "Shelly-WS-Reconnect-" + getDeviceName() );
+                if( reconnectThread != null && reconnectThread.isAlive() )
+                    return;   // A reconnect is already pending (onClose+onError raced)
 
-            reconnectThread = t;
-            t.start();
+                Thread t = new Thread( () ->
+                {
+                    try { Thread.sleep( 5000 ); } catch( InterruptedException ignored ) { Thread.currentThread().interrupt(); return; }
+
+                    if( httpClient != null && webSocket == null )
+                        connectWebSocket();
+                }, "Shelly-WS-Reconnect-" + getDeviceName() );
+
+                reconnectThread = t;
+                t.start();
+            }
         }
     }
 

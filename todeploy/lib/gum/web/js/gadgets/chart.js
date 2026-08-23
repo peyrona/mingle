@@ -225,6 +225,11 @@ class ChartWrap
                      x   : nWhen,    // Use timestamp for time scale positioning
                      y   : nValue };
 
+        let prevDot = aSeriesDots.length > 0 ? aSeriesDots[aSeriesDots.length - 1] : null;
+
+        if( prevDot && prevDot.when === nWhen && prevDot.y === nValue )
+            return this;    // Exact duplicate of last point (e.g. overlapping Read replies): ignore to avoid overlapping tooltip entries
+
         // ::aSeriesDots has all dots for all serires for all times
         // (used to copy some parts from ::aSeries to a certain serie)
             aSeriesDots.push( oDot );
@@ -691,6 +696,7 @@ class ChartWrap
         $tpl.find( '[name="btnLoadOrLive"]'   ).on( 'click',  function() { ChartWrap._loadFromDB_(   parentId ); } );
         $tpl.find( '[name="txtTimeFrame"]'    ).on( 'input',  function() { ChartWrap._setTimeFrame_( parentId ); } );
         $tpl.find( '[name="lstTimeFrameUnit"]').on( 'change', function() { ChartWrap._setTimeFrame_( parentId ); } );
+        $tpl.find( '[name="btnChartHelp"]'    ).on( 'click',  function() { ChartWrap._showHelp_(); } );
 
         return $tpl;
     }
@@ -867,6 +873,74 @@ class ChartWrap
 
         if( wrapper.chart )
             wrapper.chart.update();
+    }
+
+    /**
+     * Shows a dialog explaining, to the end user, all the interactions this gadget offers.
+     */
+    static _showHelp_()
+    {
+        let sHTML =
+            '<div style="padding:10px;">' +
+                '<p class="mb-3">This chart plots one or more device values over time. Depending on how it was ' +
+                    'configured, it can show <b>live</b> values as they arrive, <b>historic</b> values retrieved ' +
+                    'from a database, or both (one at a time). The controls below the graph and the mouse itself ' +
+                    'let you interact with what is shown &mdash;none of them change the underlying data, only what ' +
+                    'is currently displayed.</p>' +
+                '<table class="table is-bordered is-fullwidth">' +
+                    '<thead><tr style="background-color:#444444;">' +
+                        '<th style="color:#F9E79F;">Feature</th>' +
+                        '<th style="color:#F9E79F;">What it does</th>' +
+                    '</tr></thead>' +
+                    '<tbody>' +
+                        '<tr>' +
+                            '<td><b>Live plotting</b></td>' +
+                            '<td>Each configured device is one line (series). Every time its value changes, a new ' +
+                                'point is added at the right edge of the graph and the line grows automatically. ' +
+                                'No action is needed on your part.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Legend</b></td>' +
+                            '<td>The list of series names above or below the graph. Click a name to hide that ' +
+                                'series (its line disappears but its data keeps being collected); click it again ' +
+                                'to show it back.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Tooltip</b></td>' +
+                            '<td>Hover the mouse over any point on a line to see a small box with the series name, ' +
+                                'the exact date/time and the value at that point.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>Mouse-wheel zoom</b></td>' +
+                            '<td>Scroll the mouse wheel while the pointer is over the graph. Scrolling up zooms ' +
+                                '<i>in</i>, scrolling down zooms <i>out</i>, and the zoom is centered on the point ' +
+                                'the mouse is pointing at. This works on live data as well as on historic data ' +
+                                'already loaded from the database.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>"Show only last..."</b></td>' +
+                            '<td>Bottom-right control. Limits the visible window to the amount of time you enter ' +
+                                '(minutes, hours or days): older points scroll off the left as new ones arrive. ' +
+                                'Set it to <b>0</b> to show every point received since the chart was opened ' +
+                                '(this also cancels any zoom applied with the mouse wheel). This setting is saved ' +
+                                'in your browser, so it is remembered the next time this chart is shown.</td>' +
+                        '</tr>' +
+                        '<tr>' +
+                            '<td><b>"Show historic"</b></td>' +
+                            '<td>Only present when this chart has been configured with a database. Pick a ' +
+                                '<i>From</i> and <i>To</i> date/time and press <b>Load</b> to fetch and display the ' +
+                                'stored values for that range instead of the live ones; live plotting pauses while ' +
+                                'historic data is shown and the button changes to <b>Live</b>. Press it again to ' +
+                                'discard the historic data and resume live plotting.</td>' +
+                        '</tr>' +
+                    '</tbody>' +
+                '</table>' +
+            '</div>';
+
+        $('<div></div>').html( sHTML )
+                        .dialog( { title   : 'Chart: what you can do',
+                                   modal   : true,
+                                   width   : 640 } );
     }
 
     /**

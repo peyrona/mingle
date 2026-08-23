@@ -5,6 +5,7 @@ import com.eclipsesource.json.Json;
 import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
+import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.japi.OneToMany;
 import com.peyrona.mingle.lang.japi.UtilIO;
@@ -540,6 +541,8 @@ final class ServiceBoard extends ServiceBase
                     return;
                 }
 
+                verifyConfigEdit( sUpdated, "master_password", sPwdNew );
+
                 UtilIO.newFileWriter()
                       .setFile( fConfig )
                       .replace( sUpdated );
@@ -619,9 +622,49 @@ final class ServiceBoard extends ServiceBase
         String sUpdated = sContent.replaceFirst( "(\"shared_secret\"\\s*:\\s*)(?:\"[^\"]*\"|null)",
                                                  "$1" + sReplacement );
 
+        verifyConfigEdit( sUpdated, "shared_secret", sSecretNew );
+
         UtilIO.newFileWriter()
               .setFile( fConfig )
               .replace( sUpdated );
+    }
+
+    /**
+     * Safety net for the regex-based {@code config.json} edits above ({@link #changeMasterPwd} and
+     * {@link #changeSharedSecret}): both splice the new value into the raw file text — rather than
+     * parsing it as structured JSON and writing the whole thing back out — specifically to avoid
+     * stripping the hand-written comments that document every setting in that file. That leaves a
+     * small risk that the pattern matched the wrong spot (e.g. inside a comment) or produced malformed
+     * JSON. Before either method commits its edit to disk, this re-parses the edited text and confirms
+     * the target key actually holds the expected new value, so such a mistake is caught and reported
+     * here instead of a broken or wrongly-edited {@code config.json} being written out.
+     *
+     * @param sUpdated  the edited file content, not yet written to disk.
+     * @param sKey      the key expected to have changed ("master_password" or "shared_secret"), a
+     *                  direct child of the top-level "monitoring" object.
+     * @param sExpected the value it should now hold; empty/{@code null} stands for a JSON {@code null}.
+     * @throws IOException if the edited text does not parse as JSON, or {@code sKey} does not end up
+     *                      holding {@code sExpected}.
+     */
+    private static void verifyConfigEdit( String sUpdated, String sKey, String sExpected ) throws IOException
+    {
+        String sExpectedNorm = UtilStr.isEmpty( sExpected ) ? "" : sExpected;
+        String sActualNorm;
+
+        try
+        {
+            JsonObject joMonitoring = new UtilJson( sUpdated ).getObject( "monitoring", null );
+            JsonValue  jv           = (joMonitoring == null) ? null : joMonitoring.get( sKey );
+
+            sActualNorm = ((jv != null) && jv.isString()) ? jv.asString() : "";
+        }
+        catch( MingleException me )
+        {
+            throw new IOException( "Refusing to save: edited config file is not valid JSON ("+ me.getMessage() +")", me );
+        }
+
+        if( ! sExpectedNorm.equals( sActualNorm ) )
+            throw new IOException( "Refusing to save: '"+ sKey +"' would not hold the expected value after the edit" );
     }
 
     private void cloneBoard( String source, String target ) throws IOException

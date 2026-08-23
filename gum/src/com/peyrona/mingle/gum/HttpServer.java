@@ -1506,7 +1506,11 @@ final class HttpServer
                 // point — the downstream servlets no longer re-validate, so every private path is covered
                 // here. Tried last, so it remains available to whoever holds the secret even when a
                 // narrower credential (e.g. a stale guest cookie) has already been rejected above.
-                if( ! isAllowed && privatePath && isHmacEnabled() )
+                //
+                // Same reachability gate as the master-password login (ServletLogin): the signed request
+                // carries a credential just as sensitive as that password, so it must never be accepted in
+                // the clear off-LAN either — only from the trusted LAN, or over a secure (HTTPS) connection.
+                if( ! isAllowed && privatePath && isHmacEnabled() && (onLan || httpRequest.isSecure()) )
                     isAllowed = (hmacAuth.validateRequest( httpRequest ) == null);
 
                 // Let the policy record on-LAN presence (e.g. issue/refresh a grant) ONLY while the client is

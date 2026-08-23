@@ -174,6 +174,11 @@ final class ServiceFileMgr extends ServiceBase
         if( fNew.getName().startsWith( RESERVED_PREFIX ) )
             throw new IOException( "Names starting with '"+ RESERVED_PREFIX +"' are reserved" );
 
+        // File.renameTo() silently overwrites an existing destination on most platforms — refuse instead,
+        // same as ServiceBoard.create() does for a new dashboard's folder.
+        if( fNew.exists() )
+            throw new IOException( '"'+ fNew.getName() +"\"\n already exists" );
+
         if( ! fOld.renameTo( fNew ) )
             throw new IOException( "Error renaming ["+ fOld +"] to ["+ fNew +']' );
 

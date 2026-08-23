@@ -53,6 +53,7 @@ public final class SonoffTh10
     private HttpClient      httpClient    = null;
     private ScheduledFuture timer         = null;
     private int             failureCount  = 0;
+    private final Object    lock          = new Object();   // guards 'timer' and 'failureCount': onFailure() can fire from the async HTTP-completion thread while the periodic-poll thread is concurrently calling onSuccess()/reschedule()
 
     //------------------------------------------------------------------------//
 
@@ -102,10 +103,13 @@ public final class SonoffTh10
 
         int interval = ((Number) get( KEY_INTERVAL )).intValue();
 
-        timer = UtilSys.executor( true )
-                       .delay( interval )
-                       .rate( interval )
-                       .execute( () -> read() );
+        synchronized( lock )
+        {
+            timer = UtilSys.executor( true )
+                           .delay( interval )
+                           .rate( interval )
+                           .execute( () -> read() );
+        }
 
         return true;
     }
@@ -113,10 +117,13 @@ public final class SonoffTh10
     @Override
     public void stop()
     {
-        if( timer != null )
+        synchronized( lock )
         {
-            timer.cancel( true );
-            timer = null;
+            if( timer != null )
+            {
+                timer.cancel( true );
+                timer = null;
+            }
         }
 
         httpClient = null;
@@ -146,12 +153,6 @@ public final class SonoffTh10
                 return;
 
             String ip = (String) get( KEY_IP );
-
-            if( ! UtilComm.isReachable( ip ) )
-            {
-                onFailure( "SonoffTh10: device unreachable at " + ip );
-                return;
-            }
 
             try
             {
@@ -259,10 +260,13 @@ public final class SonoffTh10
      */
     private void onSuccess()
     {
-        if( failureCount > 0 )
+        synchronized( lock )
         {
-            failureCount = 0;
-            reschedule();
+            if( failureCount > 0 )
+            {
+                failureCount = 0;
+                reschedule();
+            }
         }
     }
 
@@ -274,12 +278,16 @@ public final class SonoffTh10
      */
     private void onFailure( String message )
     {
-        failureCount++;
+        int multiplier;
 
-        int multiplier = Math.min( 1 << failureCount, MAX_BACKOFF );   // 2, 4, 8, 8, 8...
+        synchronized( lock )
+        {
+            failureCount++;
+            multiplier = Math.min( 1 << failureCount, MAX_BACKOFF );   // 2, 4, 8, 8, 8...
+            reschedule();
+        }
 
         sendGenericError( ILogger.Level.WARNING, message + " (retry x" + multiplier + ")" );
-        reschedule();
     }
 
     /**
@@ -290,20 +298,30 @@ public final class SonoffTh10
      * this runs on every failed poll and every recovery, so a dedicated {@code !usePool} executor
      * here would abandon one parked thread per call — the shared pool is a single instance for the
      * whole JVM, so resubmitting onto it never creates a new thread no matter how often this fires.
+     * <p>
+     * Always called with {@link #lock} held, either directly or via {@link #onSuccess()} /
+     * {@link #onFailure(String)}: {@code read()} dispatches the HTTP call asynchronously and
+     * returns immediately, so successive poll cycles can have requests in flight at the same
+     * time, each completing on its own client thread. Without the lock, two such completions
+     * racing here could both read the same {@code timer} before either cancels it, leaking an
+     * orphaned, still-firing duplicate poll loop.
      */
     private void reschedule()
     {
-        if( timer != null )
-            timer.cancel( false );
+        synchronized( lock )
+        {
+            if( timer != null )
+                timer.cancel( false );
 
-        int base       = ((Number) get( KEY_INTERVAL )).intValue();
-        int multiplier = (failureCount == 0) ? 1 : Math.min( 1 << failureCount, MAX_BACKOFF );
-        int interval   = base * multiplier;
+            int base       = ((Number) get( KEY_INTERVAL )).intValue();
+            int multiplier = (failureCount == 0) ? 1 : Math.min( 1 << failureCount, MAX_BACKOFF );
+            int interval   = base * multiplier;
 
-        timer = UtilSys.executor( true )
-                       .delay( interval )
-                       .rate( interval )
-                       .execute( () -> read() );
+            timer = UtilSys.executor( true )
+                           .delay( interval )
+                           .rate( interval )
+                           .execute( () -> read() );
+        }
     }
 
     /**

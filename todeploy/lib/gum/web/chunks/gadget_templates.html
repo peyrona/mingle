@@ -25,10 +25,11 @@
 <!-- CHART (time-series line chart with canvas + data load panel)             -->
 <!-- ======================================================================== -->
 <template id="tpl-chart">
-    <div>
+    <div style="position:relative;">
         <div>
             <canvas></canvas>
         </div>
+        <i class="mini-btn ti ti-help-circle" name="btnChartHelp" title="What can I do with this chart?" style="position:absolute; left:8px; bottom:8px; font-size:1.4rem; z-index:1;"></i>
         <div class="columns">
             <div class="column is-half is-narrow" name="chart_data_load_panel" style="visibility:hidden">
                 <label class="label is-small">Show historic</label>
@@ -57,7 +58,7 @@
             <div class="column is-half is-narrow pr-5">
                 <div class="field">
                     <div class="field-label is-small is-pulled-right">
-                        <label class="label">Show only last... (0 for all)</label>
+                        <label class="label">Show only last... (0 -> all)</label>
                     </div>
                     <br>
                     <div class="field-body is-pulled-right">

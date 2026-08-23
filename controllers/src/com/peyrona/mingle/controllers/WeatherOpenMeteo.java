@@ -1,11 +1,10 @@
 
 package com.peyrona.mingle.controllers;
 
-import com.eclipsesource.json.JsonArray;
 import com.eclipsesource.json.JsonObject;
 import com.eclipsesource.json.JsonValue;
-import com.peyrona.mingle.lang.MingleException;
 import com.peyrona.mingle.lang.interfaces.IController;
+import com.peyrona.mingle.lang.interfaces.ILogger;
 import com.peyrona.mingle.lang.interfaces.exen.IRuntime;
 import com.peyrona.mingle.lang.japi.UtilJson;
 import com.peyrona.mingle.lang.japi.UtilSys;
@@ -19,7 +18,6 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.HttpURLConnection;
 import java.net.URI;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.time.LocalTime;
 import java.util.Map;
@@ -45,9 +43,9 @@ public final class   WeatherOpenMeteo
     private static final String KEY_INTERVAL  = "interval";
     private static final String KEY_FORECAST  = "forecast";    // Hours ahead from the moment the WebService is invoked to begin forecasting.
     private static final String KEY_FRAME     = "frame";       // Hours to retrive starting at 'forecast' (when forecast > 0).
-    private static final int    HTTP_TIMEOUT_MS = 10_000;      // Neither was set before: an unresponsive API could hang the fetch forever.
     private static final String KEY_TIME_ZONE = "timezone";
     private static final String KEY_METRIC    = "metric";
+    private static final int    HTTP_TIMEOUT_MS = 10_000;      // Neither was set before: an unresponsive API could hang the fetch forever.
 
     private ScheduledExecutorService timer = null;   // owns a dedicated thread: shut down in stop(), not just its task cancelled
 
@@ -105,7 +103,7 @@ public final class   WeatherOpenMeteo
 
         // Validate and store configuration (all time values in MINUTES)
         int validInterval = UtilUnit.setBetween( 15, intervalMins, 60*24*99 );
-        int validForecast = UtilUnit.setBetween(  0, forecastMins, oneWeekMins - 60 );   // -60 mins because min frame is 1h
+        int validForecast = UtilUnit.setBetween(  0, forecastMins, oneWeekMins - 60 );          // -60 mins because min frame is 1h
         int validFrame    = UtilUnit.setBetween( 60, frameMins, oneWeekMins - validForecast );  // Min 60 mins (1h), max so it doesn't exceed 1 week
 
         set( KEY_LATITUDE , String.valueOf( latit ) );
@@ -217,6 +215,7 @@ public final class   WeatherOpenMeteo
     }
 
     //------------------------------------------------------------------------//
+    // PRIVATE SCOPE
 
     private boolean isValid( float latitude, float longitude )
     {
@@ -241,7 +240,7 @@ public final class   WeatherOpenMeteo
         JsonValue jv = UtilJson.parse( sJSON );
 
         if( (jv == null) || (! jv.isObject()) || (((JsonObject) jv).get( "hourly" ) == null) )
-            sendReadError(new MingleException( "Malformed JSON:\n"+ sJSON ) );
+            throw new IOException( "Malformed JSON:\n"+ sJSON );
 
         JsonObject jo  = jv.asObject();                   // Has to be stored before it will be removed
         String     sTZ = jo.get( "timezone" ).asString();
@@ -258,7 +257,12 @@ public final class   WeatherOpenMeteo
             int ndx = LocalTime.now().getHour();    // From 0 to 23 (JSON array also goes from 0 to 23)
 
             for( String key : jo.names() )
-                dict.put( getMyKeyFromOpenMeteoKey( key ), get( jo, key, ndx ) );
+            {
+                Float value = get( jo, key, ndx );
+
+                if( value != null )                 // null means this field could not be read: omit it rather than sending a bogus value
+                    dict.put( getMyKeyFromOpenMeteoKey( key ), value );
+            }
         }
         else
         {
@@ -273,7 +277,12 @@ public final class   WeatherOpenMeteo
                 list lst = new list();
 
                 for( int n = nBegin; n < nEnd; n++ )
-                    lst.add( get( jo, key, n ) );
+                {
+                    Float value = get( jo, key, n );
+
+                    if( value != null )             // null means this field could not be read: omit it rather than sending a bogus value
+                        lst.add( value );
+                }
 
                 dict.put( getMyKeyFromOpenMeteoKey( key ), lst );
             }
@@ -284,20 +293,24 @@ public final class   WeatherOpenMeteo
                               .put( "timezone" , sTZ        );
     }
 
-    private Object get( JsonObject joHourly, String sArrayName, int index )
+    private Float get( JsonObject joHourly, String sArrayName, int index )
     {
-        if( joHourly.get( sArrayName ) == null || ! joHourly.get( sArrayName ).isArray() )
-            return "Error";
+        JsonValue jvArray = joHourly.get( sArrayName );
 
-        JsonArray ja = joHourly.get( sArrayName ).asArray();
+        if( jvArray == null || ! jvArray.isArray() )
+        {
+            sendGenericError( ILogger.Level.WARNING, "OpenMeteo: field '"+ sArrayName +"' is missing or is not an array" );
+            return null;
+        }
 
         try
         {
-            return ja.get( index ).asFloat();
+            return jvArray.asArray().get( index ).asFloat();
         }
         catch( Exception exc )
         {
-            return "Error";
+            sendGenericError( ILogger.Level.WARNING, "OpenMeteo: could not read '"+ sArrayName +"' at index "+ index +": "+ exc );
+            return null;
         }
     }
 

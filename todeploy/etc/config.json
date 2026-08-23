@@ -120,11 +120,15 @@
                                                  # "master_password": the credential is each dashboard's own password.
         "bind_subnet"  : false,                  # When true, a guest may only reach ExEns on a /24 where its presence was proven.
         "guest_paths"  : [],                     # Page folders a guest may request, e.g. [ "/gum/user-files/web/" ].
-                                                 # EMPTY (default) MEANS UNRESTRICTED: a guest reaches everything an admin does.
+                                                 # EMPTY (default) MEANS UNRESTRICTED for anything else Gum serves.
                                                  # Gum's own assets (/gum/js, /gum/lib, ...) are public and need not be listed, and
                                                  # neither is the WebSocket bridge: it is always reachable, because a guest page that
                                                  # could not open it would load but do nothing. What a guest may actually drive
                                                  # through it is decided by "bind_subnet", not by this list.
+                                                 # The dashboard/database/image/file MANAGEMENT APIs (/gum/ws/board, /gum/ws/db,
+                                                 # /gum/ws/images, /gum/ws/files) are ALWAYS off-limits to a guest, no matter what
+                                                 # is (or isn't) listed here — a guest can only ever look at a dashboard, never
+                                                 # create/edit/delete one or use the file manager.
         "guest_subnets": [],                     # /24s whose devices are guests even while ON the LAN, e.g. [ "192.168.7", "192.168.8" ].
                                                  # Without this, "guest_paths" only applies once a visitor has left the premises.
                                                  # Accepts "192.168.7", "192.168.7.*", "192.168.7.0" and "192.168.7.0/24".

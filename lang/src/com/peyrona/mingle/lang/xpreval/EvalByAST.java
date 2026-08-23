@@ -180,6 +180,15 @@ final class EvalByAST
 
     synchronized boolean set( String name, Object value )
     {
+        // Deliberately NOT doing this:
+        //     if( mapVars.isEmpty() )
+        //         return true;
+        // A WHEN clause with no variables (e.g. "WHEN true") must NOT auto-fire on every device
+        // change. It is a deliberate idiom for a rule meant to be triggered only by name, from
+        // another RULE (see e.g. todeploy/examples/10.b.all_until_now_together_plain.une). Making
+        // it react to any device change would silently break that idiom and make such a rule fire
+        // on every single change in the system.
+
         if( ! mapVars.containsKey( name ) )
             return false;
 

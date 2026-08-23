@@ -115,7 +115,9 @@ import javax.crypto.spec.SecretKeySpec;
  *       own ExEns unconditionally, independently of this flag — see {@link #mayReach}).</li>
  *   <li>{@code guest_paths} - path prefixes a guest may request, on top of the WebSocket bridge,
  *       which is always reachable. Absent/empty means a guest is not path-restricted, which
- *       preserves the behaviour of earlier releases.</li>
+ *       preserves the behaviour of earlier releases — except for {@link #GUEST_DENIED_PATHS}
+ *       (the dashboard/database/image/file management APIs), which stay off-limits to a guest no
+ *       matter what this list says.</li>
  *   <li>{@code guest_subnets} - {@code /24}s whose devices are guests even while on the LAN.
  *       Absent/empty means every on-LAN device is trusted, as before.</li>
  *   <li>{@code public_url} - the {@code scheme://host[:port]} Gum is reached by from outside, e.g.
@@ -158,6 +160,15 @@ final class RemoteGrant
 
     /** The WebSocket bridge: always within a guest's reach, so {@code guest_paths} need not list it. */
     private static final String BRIDGE_PATH = "/gum/bridge";
+
+    /**
+     * Management APIs a guest may never reach, no matter what {@code guest_paths} says. A guest's only
+     * legitimate need is to look at a dashboard already put in front of it — never to create, rewrite or
+     * delete one, browse a datasource, manage board images, or use the file manager. Checked in
+     * {@link #isGuestPath} ahead of {@code guest_paths}, so a mistaken (or malicious) entry in that list
+     * cannot reopen any of these.
+     */
+    private static final String[] GUEST_DENIED_PATHS = { "/gum/ws/board", "/gum/ws/db", "/gum/ws/images", "/gum/ws/files" };
 
     /** Where a dashboard's own static content is served from — see {@link #isViewerPath}. */
     private static final String BOARD_PATH  = "/gum/board/";
@@ -601,10 +612,14 @@ final class RemoteGrant
      * it would load but do nothing, which is a confusing failure and the one mistake this list invites.
      * Nothing is given away by that — what a guest may actually drive through the bridge is decided by
      * {@link #mayReach}, which confines them to the ExEns of their own subnets.
+     * <p>
+     * {@link #GUEST_DENIED_PATHS} is checked first and unconditionally: those management APIs are never
+     * within a guest's reach, regardless of {@code guest_paths} — including when it is left empty, which
+     * otherwise means "unrestricted" (see below).
      *
      * @param path the requested URI path.
      * @return {@code true} when the path is within the guest scope (always {@code true} when no scope
-     *         is configured).
+     *         is configured, except for {@link #GUEST_DENIED_PATHS}).
      */
     boolean isGuestPath( String path )
     {
@@ -613,6 +628,12 @@ final class RemoteGrant
 
         if( path.startsWith( BRIDGE_PATH ) )
             return true;
+
+        for( String denied : GUEST_DENIED_PATHS )
+        {
+            if( path.startsWith( denied ) )
+                return false;
+        }
 
         if( asGuestPaths.length == 0 )
             return true;      // Not configured: guests are not path-restricted (as in earlier releases)
@@ -1189,9 +1210,11 @@ final class RemoteGrant
     }
 
     /**
-     * Length-constant string comparison, to avoid leaking the signature via timing.
+     * Length-constant string comparison, to avoid leaking a signature via timing. Package-scoped, not
+     * private, so {@link HmacAuthenticator} — which signs with the same shared secret, for a different
+     * purpose — can use it too instead of a plain (timing-sensitive) {@code String.equals}.
      */
-    private static boolean constantTimeEquals( String a, String b )
+    static boolean constantTimeEquals( String a, String b )
     {
         if( a == null || b == null || a.length() != b.length() )
             return false;

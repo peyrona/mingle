@@ -103,7 +103,10 @@ final class HmacAuthenticator
 
         String computedHmac = computeHmac( action + timestampStr + data );
 
-        if( ! computedHmac.equals( receivedHmac ) )
+        // Constant-time comparison (shared with RemoteGrant, which signs with the same secret for a
+        // different purpose) — a plain String.equals() would return as soon as it hits the first
+        // mismatching character, leaking the correct signature one character at a time via timing.
+        if( ! RemoteGrant.constantTimeEquals( computedHmac, receivedHmac ) )
             return "Invalid HMAC";
 
         // Validation succeeded — mark session as authenticated for subsequent requests

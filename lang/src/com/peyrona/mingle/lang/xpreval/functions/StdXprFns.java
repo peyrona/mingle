@@ -83,7 +83,7 @@ public final class StdXprFns
         Class[]  aParamType;
         Object   target        = null;
         Object[] actualArgs    = aoArgs;
-        Object   firstArg      = aoArgs[0];
+        Object   firstArg      = aoArgs[0];               // 'firstArg' will never be null (checked upstream)
         Class<?> firstArgClass = firstArg.getClass();
 
         if( isExtendedType( firstArgClass ) )
@@ -307,13 +307,7 @@ public final class StdXprFns
      */
     public static boolean isExtendedType( Class<?> clazz )
     {
-        if( clazz == null )
-            return false;
-
-        return (clazz == date.class) ||
-               (clazz == time.class) ||
-               (clazz == list.class) ||
-               (clazz == pair.class);
+        return (clazz != null) && EXT_TYPES.containsValue( clazz );
     }
 
     /** Maps short type names to their corresponding extended type classes. */
@@ -369,17 +363,7 @@ public final class StdXprFns
      */
     public static boolean isExtendedType( String sFn )
     {
-        sFn = sFn.trim();
-
-        if( sFn.length() != 4 )
-            return false;
-
-        sFn = sFn.toLowerCase();
-
-        return "date".equals( sFn ) ||
-               "time".equals( sFn ) ||
-               "list".equals( sFn ) ||
-               "pair".equals( sFn );
+        return EXT_TYPES.containsKey( sFn.trim().toLowerCase() );
     }
 
     /**
@@ -414,6 +398,7 @@ public final class StdXprFns
                  if( c == boolean.class ) return Boolean.class;    // Primitive types must be transformed into their wrappers
             else if( c == int.class     ) return Integer.class;
             else if( c == float.class   ) return Float.class;
+            else if( c == long.class    ) return Long.class;
          // else if( c == double.class  ) return Double.class;  --> Not used
 
             return c;   // None of the above
@@ -670,7 +655,8 @@ public final class StdXprFns
             return  ((Number) number).intValue();
 
         if( ! (number instanceof String) )
-            throw new MingleException( "Invalid value: number or string expected, but received: "+ number.getClass().getSimpleName() );
+            throw new MingleException( "Invalid value: number or string expected, but received: "+
+                                        (number == null ? "null" : number.getClass().getSimpleName()) );
 
         String sNum = ((String) number).trim();
 
@@ -699,7 +685,7 @@ public final class StdXprFns
     protected float max( Object... numbers )
     {
         if( numbers == null || numbers.length == 0 )
-            return Float.MIN_VALUE;
+            throw new IllegalArgumentException( "max() requires at least one argument" );
 
         if( numbers.length == 1 )
             return UtilType.toFloat( numbers[0] );
@@ -738,7 +724,7 @@ public final class StdXprFns
     protected float min( Object... numbers )
     {
         if( numbers == null || numbers.length == 0 )
-            return Float.MAX_VALUE;
+            throw new IllegalArgumentException( "min() requires at least one argument" );
 
         if( numbers.length == 1 )
             return UtilType.toFloat( numbers[0] );
@@ -786,12 +772,13 @@ public final class StdXprFns
     }
 
     /**
-     * Rounds number down, toward zero, to the nearest multiple of significance.
+     * Rounds number down, toward negative infinity, to the nearest multiple of significance.
      * <p>
      * Examples:
      * <ul>
      *    <li><code>floor(158, 10)</code> returns <code>150.0</code> (nearest multiple of 10)</li>
      *    <li><code>floor(0.56, 0.1)</code> returns <code>0.5</code></li>
+     *    <li><code>floor(-3, 2)</code> returns <code>-4.0</code> (rounds toward negative infinity, not toward zero)</li>
      * </ul>
      *
      * @param number The numeric value you want to round.
@@ -809,7 +796,7 @@ public final class StdXprFns
         double nNum = UtilType.toDouble( number );           // Math.floor(...) requieres double
 
         if( nNum > 0 && nSig < 0 )
-            throw new IllegalArgumentException( "When 'number' is positive, significance' cannot be zero" );
+            throw new IllegalArgumentException( "When 'number' is positive, 'significance' cannot be negative" );
 
         return (float) (Math.floor( nNum / nSig ) * nSig);
     }
@@ -1006,6 +993,9 @@ public final class StdXprFns
         float n = UtilType.toFloat( number  );
         float d = UtilType.toFloat( divisor );
 
+        if( d == 0 )
+            throw new IllegalArgumentException( "'divisor' cannot be zero" );
+
         // Mathematical modulo: result has same sign as divisor
         // This handles negative numbers correctly
         float result = n % d;
@@ -1049,6 +1039,14 @@ public final class StdXprFns
      *    <li><code>format(1234.567, "#.##")</code> returns <code>"1234.57"</code></li>
      *    <li><code>format(0.25, "#%")</code> returns <code>"25%"</code></li>
      * </ul>
+     * <p>
+     * <b>Note on argument order:</b> which argument is the number and which is the pattern is decided
+     * purely by Java type — whichever argument is a {@code Number} is used as the value, whichever is
+     * a {@code String} is used as the pattern — so the two can be passed in either order. This breaks
+     * if the number is a numeric-looking {@code String} instead of an actual {@code Number} (e.g. a
+     * value read from a String-typed device): both arguments would then look like a {@code String},
+     * the pattern would be misidentified as the number, and formatting the real pattern text as a
+     * float would fail.
      *
      * @param num_str The numeric value or the pattern string.
      * @param format The numeric value or the pattern string.
@@ -1392,15 +1390,24 @@ public final class StdXprFns
         if( ndx < 1 )
             throw new MingleException( "Invalid start \""+ ndx +"\". Min value is 1" );
 
-        if( ndx >= w.length() )
+        if( ndx > w.length() )
             throw new MingleException( "Invalid start \""+ ndx +"\". String length is "+ w.length() );
 
         f = f.toLowerCase();
         w = w.toLowerCase();
 
-        // Replace Excel wildcards with Java regex equivalents
-        String finalF = f.replace( "?", "." )
-                         .replace( "*", ".*" );
+        // Replace Excel wildcards with Java regex equivalents; everything else is escaped so it
+        // is matched literally instead of being interpreted as regex syntax.
+        StringBuilder sbF = new StringBuilder( f.length() * 2 );
+
+        for( char c : f.toCharArray() )
+        {
+            if( c == '?' )      sbF.append( '.' );
+            else if( c == '*' ) sbF.append( ".*" );
+            else                sbF.append( Pattern.quote( String.valueOf( c ) ) );
+        }
+
+        String finalF = sbF.toString();
 
         // Compile the regex pattern
         Pattern pattern = mapPatterns.computeIfAbsent( finalF, Pattern::compile );
@@ -1794,7 +1801,7 @@ public final class StdXprFns
         if( threadTriggered.get().isEmpty() )
             threadTriggered.get().put( "name", "" ).put( "value", "" );
 
-        return threadTriggered.get();
+        return threadTriggered.get().clone();   // defensive copy: caller gets a snapshot, not a live reference into ThreadLocal state
     }
 
     /**
