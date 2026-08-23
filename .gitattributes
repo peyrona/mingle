@@ -1,0 +1,4 @@
+# Mark vendored third-party code so GitHub's language stats (linguist)
+# don't attribute it to this project.
+twig/components/etl/** linguist-vendored
+twig/components/jsonview/third_party/** linguist-vendored
