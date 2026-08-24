@@ -29,10 +29,6 @@ var gum_ws_boards =
     // State
     contexts: new Map(),
     currentContext: null,
-
-    // Legacy support
-    socket: null,
-    aListener: [],
     fnOnList: null,
 
     //------------------------------------------------------------------------//
@@ -153,9 +149,6 @@ var gum_ws_boards =
             setTimeout( () => { if( fnOnConnected ) fnOnConnected(); }, 100) ;
         }
 
-        // Sync legacy pointers
-        this._updateLegacyReferences(context);
-
         // Setup cleanup
         this._setupUnloadCleanup(context, isDesign);
     },
@@ -188,9 +181,6 @@ var gum_ws_boards =
             this.contexts.delete(ctx.dashboardId);
             this.currentContext = null;
         }
-
-        // Clear legacy reference
-        this.socket = null;
 
         // NOTE: Do NOT clear sessionStorage here!
         // - On refresh: We want to keep the same tabId so Previews stay connected
@@ -275,19 +265,20 @@ var gum_ws_boards =
                     });
             });
 
-        this.aListener = ctx.listeners;
         return sUUID;
     },
 
     delListener: function(sUUID)
     {
-        if( ! this.aListener )
+        const ctx = this._getCurrentContext();
+
+        if( ! ctx )
             return;
 
-        const index = this.aListener.findIndex(l => l.id === sUUID);
+        const index = ctx.listeners.findIndex(l => l.id === sUUID);
 
         if( index !== -1 )
-            this.aListener.splice(index, 1);
+            ctx.listeners.splice(index, 1);
     },
 
     //------------------------------------------------------------------------//
@@ -336,12 +327,6 @@ var gum_ws_boards =
     },
 
     _getCurrentContext: function() { return this.currentContext; },
-
-    _updateLegacyReferences: function(ctx)
-    {
-        this.socket = ctx.socket;
-        this.aListener = ctx.listeners;
-    },
 
     _sendMessage: function(xExEnAddr, oMsg)
     {

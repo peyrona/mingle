@@ -63,8 +63,8 @@ import org.eclipse.jetty.websocket.servlet.WebSocketServletFactory;
  */
 final class HttpServer
 {
-    private static final String  KEY_USER_ID = "mingle_user_id";
-    private static final ILogger logger      = UtilSys.getLogger();
+    static final String  KEY_USER_ID = "mingle_user_id";
+    static final ILogger logger      = UtilSys.getLogger();
     private        final Server  server;
 
     //------------------------------------------------------------------------//
@@ -122,10 +122,10 @@ final class HttpServer
         contexts.addHandler( createWsHandler( timeout ) );           // /gum/ws/*         - WITH AUTH FILTER
         contexts.addHandler( createBridgeHandler( timeout ) );       // /gum/bridge/*     - WITH AUTH FILTER
         contexts.addHandler( createUploadHandler( timeout ) );       // /gum/upload       - WITH AUTH FILTER
-        contexts.addHandler( createFileManagerHandler( timeout ) );  // /gum/user-files/_mgr/* - WITH AUTH FILTER
-        contexts.addHandler( createServedFilesHandler( timeout ) );  // /gum/user-files/*      - WITH AUTH FILTER
-        contexts.addHandler( createBoardHandler( timeout ) );        // /gum/board/*      - WITH AUTH FILTER
-        contexts.addHandler( createGumHandler( timeout ) );          // /gum              - WITH AUTH FILTER
+        contexts.addHandler( createStaticHandler( Util.getFileManagerContext(), Util.getdFileManagerDir(), false, timeout ) );  // /gum/user-files/_mgr/* - WITH AUTH FILTER
+        contexts.addHandler( createStaticHandler( Util.getServedFilesContext(), Util.getServedFilesDir(), true, timeout ) );    // /gum/user-files/*      - WITH AUTH FILTER
+        contexts.addHandler( createStaticHandler( "/gum/board", Util.getBoardsDir(), false, timeout ) );                       // /gum/board/*      - WITH AUTH FILTER
+        contexts.addHandler( createStaticHandler( Util.getDashboardManagerContext(), Util.getDashboardManagerDir(), false, timeout ) );  // /gum              - WITH AUTH FILTER
         contexts.addHandler( createLogoutHandler( timeout ) );       // /gum/logout       - WITH AUTH FILTER
 
         // Reverse-proxy handlers — optional, driven by "monitoring.proxies" in config.json
@@ -207,11 +207,11 @@ final class HttpServer
     //  STATIC CONTENT HANDLERS (Refactored to use DefaultServlet)            //
     //------------------------------------------------------------------------//
 
-    private ContextHandler createGumHandler( int timeout ) throws IOException
+    private ContextHandler createStaticHandler( String contextPath, File baseDir, boolean dirAllowed, int timeout ) throws IOException
     {
         ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( Util.getDashboardManagerContext() );
-                              context.setBaseResource( Resource.newResource( Util.getDashboardManagerDir() ) );
+                              context.setContextPath( contextPath );
+                              context.setBaseResource( Resource.newResource( baseDir ) );
                               context.addAliasCheck( new ContextHandler.ApproveAliases() );
 
         // Configure session management for this context
@@ -224,79 +224,7 @@ final class HttpServer
 
         // Add servlet
         ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
-                      holder.setInitParameter( "dirAllowed", "false" );
-
-        context.addServlet( holder, "/" );
-
-        return context;
-    }
-
-    private ContextHandler createBoardHandler( int timeout ) throws IOException
-    {
-        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( "/gum/board" );
-                              context.setBaseResource( Resource.newResource( Util.getBoardsDir() ) );
-                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
-
-        // Configure session management for this context
-        SessionHandler sessionHandler = newSessionHandler( timeout );
-
-        context.setSessionHandler( sessionHandler );
-
-        // Add authentication filter (runs before servlet)
-        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
-
-        // Add servlet
-        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
-                      holder.setInitParameter( "dirAllowed", "false" );
-
-        context.addServlet( holder, "/" );
-
-        return context;
-    }
-
-    private ContextHandler createFileManagerHandler( int timeout ) throws IOException
-    {
-        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( Util.getFileManagerContext() );
-                              context.setBaseResource( Resource.newResource( Util.getdFileManagerDir() ) );
-                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
-
-        // Configure session management for this context
-        SessionHandler sessionHandler = newSessionHandler( timeout );
-
-        context.setSessionHandler( sessionHandler );
-
-        // Add authentication filter
-        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
-
-        // Add servlet
-        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
-                      holder.setInitParameter( "dirAllowed", "false" );
-
-        context.addServlet( holder, "/" );
-
-        return context;
-    }
-
-    private ContextHandler createServedFilesHandler( int timeout ) throws IOException
-    {
-        ServletContextHandler context = new ServletContextHandler( ServletContextHandler.SESSIONS );
-                              context.setContextPath( Util.getServedFilesContext() );
-                              context.setBaseResource( Resource.newResource( Util.getServedFilesDir() ) );
-                              context.addAliasCheck( new ContextHandler.ApproveAliases() );
-
-        // Configure session management for this context
-        SessionHandler sessionHandler = newSessionHandler( timeout );
-
-        context.setSessionHandler( sessionHandler );
-
-        // Add authentication filter
-        context.addFilter( AuthenticationFilter.class, "/*", java.util.EnumSet.of( javax.servlet.DispatcherType.REQUEST ) );
-
-        // Add servlet
-        ServletHolder holder = new ServletHolder( "default", DefaultServlet.class );
-                      holder.setInitParameter( "dirAllowed", "true" );
+                      holder.setInitParameter( "dirAllowed", String.valueOf( dirAllowed ) );
 
         context.addServlet( holder, "/" );
 
@@ -508,7 +436,7 @@ final class HttpServer
      * @param request The incoming request.
      * @return {@code true} if the real client address is on the trusted LAN (localhost included).
      */
-    private static boolean isRealClientOnLan( HttpServletRequest request )
+    static boolean isRealClientOnLan( HttpServletRequest request )
     {
         try
         {
@@ -635,7 +563,7 @@ final class HttpServer
      * @param message  The message, meant to be read by whoever made the request.
      * @throws IOException if the response cannot be written.
      */
-    private static void sendPlain( HttpServletResponse response, int status, String message ) throws IOException
+    static void sendPlain( HttpServletResponse response, int status, String message ) throws IOException
     {
         response.setStatus( status );
         response.setContentType( "text/plain; charset=utf-8" );
@@ -687,7 +615,7 @@ final class HttpServer
                 // clear. Over TLS that objection disappears, and admitting it is what spares the owner
                 // the trip home: they sign in from wherever they are and the grant is stored straight
                 // away under the public name. On plain HTTP the LAN remains the only accepted origin;
-                // this same endpoint's cookie bridge (see handleBridge()) is how a GUEST's grant reaches
+                // this same endpoint's cookie bridge (see CookieBridge.handleBridge()) is how a GUEST's grant reaches
                 // the public name instead — an admin has no equivalent need for it (see the class doc).
                 if( ! (isRealClientOnLan( request ) || request.isSecure()) )
                 {
@@ -800,7 +728,7 @@ final class HttpServer
          * <p>
          * A third, credential-less path also lives here: a guest device proves presence on the LAN
          * instead of typing anything, via a {@code t} or {@code net} query parameter — see
-         * {@link #handleBridge}. It used to be a separate endpoint, {@code /gum/remote}; folded in here
+         * {@link CookieBridge#handleBridge}. It used to be a separate endpoint, {@code /gum/remote}; folded in here
          * so every human path into Gum starts at one URL, {@code /gum/login} — {@code /gum/remote} is
          * kept alive only as a redirect to this one, for links already printed or saved as a QR code.
          */
@@ -809,14 +737,14 @@ final class HttpServer
                 throws ServletException, IOException
         {
             // A bare 't' or 'net' parameter means this is the cookie bridge, not a human asking for the
-            // sign-in form — see handleBridge(). Checked first and returns unconditionally: the bridge
+            // sign-in form — see CookieBridge.handleBridge(). Checked first and returns unconditionally: the bridge
             // has its own reachability rules (LAN on the first hop, a signed token on the second) that
             // must not fall through to the plain-sign-in-page gate below.
             if( (request.getParameter( "t" ) != null) || (request.getParameter( "net" ) != null) )
             {
                 try
                 {
-                    handleBridge( request, response, request.getParameter( "t" ) );
+                    CookieBridge.handleBridge( request, response, request.getParameter( "t" ) );
                 }
                 catch( Exception exc )
                 {
@@ -961,164 +889,6 @@ final class HttpServer
             return sMasterPwd.equals( password );
         }
 
-        //------------------------------------------------------------------------//
-        // COOKIE BRIDGE — folded in from the former /gum/remote endpoint.
-        //
-        // Hands a device that is provably on the trusted LAN a grant cookie already stored under the
-        // PUBLIC host name. It exists because cookies are host-only. A grant obtained at
-        // http://192.168.1.5:8080 is never sent to http://my.host.org:8080, and Gum cannot simply issue
-        // one there instead: a router that hairpins with source NAT rewrites the origin of an in-house
-        // request to the public name, so Gum sees it arrive from the WAN address and refuses to trust
-        // it. The two halves of the problem cancel out if the proof of presence travels in the URL
-        // rather than in the source address:
-        //   1. On the room's WiFi, the client opens  http://192.168.1.5:8080/gum/login?net=7
-        //   2. Gum trusts the source address, mints a 120-second token and redirects to
-        //          http://my.host.org:8080/gum/login?net=7&t=<role>:<subnets>:<expiry>:<hmac>
-        //   3. That request leaves and comes back through the router, arriving with the public address.
-        //      The token — not the address — is what proves the client was just on the LAN.
-        //   4. Gum validates it, sets the cookie UNDER THE PUBLIC NAME and redirects to the guest page.
-        //   5. The client bookmarks that page. It now works both at home and away.
-        // Guest-only: an admin re-authenticates directly under whichever host name is in use instead
-        // (see doPost/doGet above) now that plain password login is accepted over TLS from anywhere —
-        // so this never mints or honours an admin token, only ever a guest one.
-
-        /**
-         * Entry point for both hops of the bridge (see above). {@code token} is {@code null}/empty on
-         * the first hop (LAN) and the signed token on the second (public host name).
-         */
-        private void handleBridge( HttpServletRequest request, HttpServletResponse response, String token ) throws IOException
-        {
-            RemoteGrant   grant = RemoteGrant.get();
-            AccessContext ctx   = AccessContext.of( request, response );
-
-            if( ! grant.isBridgeEnabled() )
-            {
-                sendPlain( response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                           "Remote access is not available: set 'monitoring.remote_access.public_url', a non-empty "+
-                           "'monitoring.shared_secret' and a non-zero 'monitoring.remote_access.guest_ttl' in "+
-                           "config.json, then restart Gum." );
-                return;
-            }
-
-            if( UtilStr.isEmpty( token ) )  issueToken(  request, response, ctx, grant );
-            else                            redeemToken( request, response, ctx, grant, token );
-        }
-
-        /**
-         * First hop, reached under the LAN address: attests the client's presence and sends it to the
-         * public host name carrying that attestation.
-         */
-        private void issueToken( HttpServletRequest request, HttpServletResponse response,
-                                 AccessContext ctx, RemoteGrant grant ) throws IOException
-        {
-            // Presence on the trusted LAN is precisely what is being attested here, so it is checked
-            // against the real socket peer only (isRealClientOnLan never honours X-Forwarded-For). A
-            // guest has no other way in — this IS their credential. An administrator has a real one
-            // (the master password) that works regardless of location, so rather than a dead end this
-            // sends them to the very same sign-in form every other admin entry point uses, already
-            // aimed at this room: correct password in, and RemoteGrant.mayAccess()/mayReach() wave an
-            // admin grant past guest_paths and bind_subnet unconditionally, no bridge involved.
-            if( ! isRealClientOnLan( request ) )
-            {
-                String landing = grant.guestLandingPath();
-
-                if( landing == null )
-                    landing = Util.getDashboardManagerContext() + "/index.html";
-
-                String query = carriedQuery( request );   // still carries 'net' — 't' is never present here
-
-                if( ! query.isEmpty() )
-                    landing += (landing.indexOf( '?' ) < 0 ? "?" : "&") + query;
-
-                response.setHeader( "Cache-Control", "no-store" );
-                response.sendRedirect( "/gum/login?return=" + URLEncoder.encode( landing, StandardCharsets.UTF_8 ) );
-                return;
-            }
-
-            String token = grant.issueBridgeToken( ctx );
-
-            if( token == null )
-            {
-                sendPlain( response, HttpServletResponse.SC_SERVICE_UNAVAILABLE,
-                           "No remote access can be granted to this device: guest access is disabled "+
-                           "('monitoring.remote_access.guest_ttl' is 0), or this is not a plain IPv4 connection." );
-                return;
-            }
-
-            String query = carriedQuery( request );
-
-            response.setHeader( "Cache-Control", "no-store" );
-            response.sendRedirect( grant.publicUrl() + "/gum/login?t=" + URLEncoder.encode( token, StandardCharsets.UTF_8 ) +
-                                   (query.isEmpty() ? "" : "&" + query) );
-        }
-
-        /**
-         * Second hop, reached under the public host name: turns a valid token into the cookie it stands
-         * for and sends the client on to the page it may use, carrying the original query across.
-         */
-        private void redeemToken( HttpServletRequest request, HttpServletResponse response,
-                                  AccessContext ctx, RemoteGrant grant, String token ) throws IOException
-        {
-            RemoteGrant.Grant granted = grant.consumeBridgeToken( token );
-
-            if( ! grant.issueFrom( ctx, granted ) )
-            {
-                sendPlain( response, HttpServletResponse.SC_FORBIDDEN,
-                           "This remote-access link is not valid any more. Open it again while connected to the local network." );
-                return;
-            }
-
-            // Never a destination taken from the request: the landing page is Gum's own, so this redirect
-            // cannot be pointed at somebody else's site. Only the query is carried over, re-encoded.
-            String landing = granted.isAdmin() ? null : grant.guestLandingPath();
-
-            if( landing == null )
-                landing = Util.getDashboardManagerContext() + "/index.html";
-
-            String query = carriedQuery( request );
-
-            if( ! query.isEmpty() )
-                landing += (landing.indexOf( '?' ) < 0 ? "?" : "&") + query;
-
-            response.setHeader( "Cache-Control", "no-store" );
-            response.sendRedirect( landing );
-        }
-
-        /**
-         * Rebuilds the request's query string, dropping the bridge's own {@code t} parameter, so that
-         * whatever the caller put there survives both hops of the redirect.
-         * <p>
-         * This is what makes a per-room link such as {@code /gum/login?net=7} work: the guest page
-         * reads {@code net} to know which room's ExEn to talk to, and without carrying it across, a
-         * guest arriving under the public host name would land on a page unable to identify its room.
-         * Names and values are re-encoded rather than copied verbatim, since the result goes into a
-         * {@code Location} header.
-         *
-         * @param request the incoming request.
-         * @return the re-encoded query, with no leading separator; {@code ""} when there is nothing to carry.
-         */
-        private String carriedQuery( HttpServletRequest request )
-        {
-            StringBuilder sb = new StringBuilder( 64 );
-
-            for( Map.Entry<String,String[]> entry : request.getParameterMap().entrySet() )
-            {
-                if( "t".equals( entry.getKey() ) )
-                    continue;
-
-                for( String value : entry.getValue() )
-                {
-                    if( sb.length() > 0 )
-                        sb.append( '&' );
-
-                    sb.append( URLEncoder.encode( entry.getKey(), StandardCharsets.UTF_8 ) )
-                      .append( '=' )
-                      .append( URLEncoder.encode( value, StandardCharsets.UTF_8 ) );
-                }
-            }
-
-            return sb.toString();
-        }
     }
 
     //------------------------------------------------------------------------//
@@ -1126,7 +896,7 @@ final class HttpServer
 
     /**
      * Backward-compatible alias for the cookie bridge, which now lives at {@code /gum/login} (see
-     * {@code ServletLogin.handleBridge}) so every human-facing entry point uses one URL. Kept only so a
+     * {@code CookieBridge.handleBridge}) so every human-facing entry point uses one URL. Kept only so a
      * link or QR code already printed for a guest room (pointing at {@code /gum/remote?net=N}) keeps
      * working: it does nothing but redirect to the equivalent {@code /gum/login} URL, query string and
      * all. New links should be generated as {@code /gum/login?net=N} directly — the dashboard manager
@@ -1375,306 +1145,13 @@ final class HttpServer
 
     //------------------------------------------------------------------------//
     // INNER CLASS
-    // Authentication Filter
-    //------------------------------------------------------------------------//
-
-    /**
- * Authentication filter that validates user sessions before allowing access.
- * Must be added to each ServletContextHandler that requires authentication.
- */
-    public static class AuthenticationFilter implements javax.servlet.Filter
-    {
-        private static final String[] asPrivatePaths  = { "/gum/bridge", "/gum/upload", "/gum/ws", "/gum/board", "/gum/user-files/_mgr", "/gum/user-files", "/gum/proxy" };
-
-        // Gum's own bundled UI that lives *under* a private prefix and must still load without a session
-        // (its own operations authenticate separately). Only the File-Manager UI qualifies. The trailing
-        // slash is required so an uploaded file merely named "_mgr..." cannot borrow the exemption.
-        private static final String[] asPublicUiSubPaths = { "/gum/user-files/_mgr/" };
-
-        /** Single shared validator: HMAC is verified here, at the choke point, for every private path. */
-        private static final HmacAuthenticator hmacAuth = new HmacAuthenticator();
-
-        //------------------------------------------------------------------------//
-
-        @Override
-        public void init( javax.servlet.FilterConfig filterConfig ) throws ServletException
-        {
-            // Nothing to init?
-        }
-
-        @Override
-        public void doFilter( javax.servlet.ServletRequest request,
-                              javax.servlet.ServletResponse response,
-                              javax.servlet.FilterChain chain )
-                throws IOException, ServletException
-        {
-            HttpServletRequest  httpRequest  = (HttpServletRequest)  request;
-            HttpServletResponse httpResponse = (HttpServletResponse) response;
-
-            String target = httpRequest.getRequestURI();
-
-            try
-            {
-                boolean     isAllowed = false;
-                HttpSession session   = null;
-
-                AccessContext       ctx    = AccessContext.of( httpRequest, httpResponse );
-                RemoteGrant         grant = RemoteGrant.get();
-
-                try
-                {
-                    session = httpRequest.getSession( false );
-                }
-                catch( IllegalStateException e )
-                {
-                    logger.log( ILogger.Level.WARNING, "Session access failed: " + e.getMessage() );
-                }
-
-                // Whether the client is on the trusted LAN right now. Evaluated only for protected paths;
-                // public static files short-circuit below and never need this check.
-                boolean privatePath  = ! isPublicPath( target );
-                boolean onLan        = privatePath && isClientAllowed( ctx.clientIp() );
-                boolean isGuestOnLan = onLan && grant.isGuestDevice( ctx.clientIp() );
-
-                // The validated grant cookie, read only when it can decide something: for off-LAN clients,
-                // and for visitor devices indoors (whose admin cookie, if any, outranks the subnet they
-                // happen to be sitting on).
-                RemoteGrant.Grant granted = (privatePath && grant.isEnabled() && (isGuestOnLan || ! onLan))
-                                            ? admittedGrant( grant, ctx )
-                                            : null;
-
-                if( ! privatePath )
-                {
-                    isAllowed = true;     // Public resource (html/js/css/images/...)
-                }
-                else if( isGuestOnLan )
-                {
-                    // Visitor device on the house LAN: confined exactly as it would be from outside, so
-                    // "their page and nothing else" holds indoors too. Checked BEFORE the session branches
-                    // and never pinned to a session, so a session obtained by any other means cannot widen
-                    // it: the decision is re-made on every request. Uses the same role-aware mayAccess()
-                    // as the off-LAN branch below, so a Viewer grant is confined to its own dashboard here
-                    // too, instead of falling through to the guest rules.
-                    isAllowed = grant.mayAccess( granted, target );
-                }
-                else if( session != null && session.getAttribute( KEY_USER_ID ) != null )
-                {
-                    isAllowed = true;
-                }
-                else if( session != null && Boolean.TRUE.equals( session.getAttribute( "authenticated" ) ) )
-                {
-                    // Session was authenticated by HmacAuthenticator (used by external clients)
-                    isAllowed = true;
-                }
-                else if( onLan )
-                {
-                    // A session is only worth creating when its cookie can actually reach the client on a
-                    // later request. Once HTTPS is configured, the session cookie is marked Secure (see
-                    // newSessionHandler) and a browser will never return it over plain HTTP — so for an
-                    // on-LAN client on this still-active HTTP connector, allocating one here would just be
-                    // abandoned on every single request. Access is granted either way, re-derived from IP
-                    // scope on each request exactly as the class doc for newSessionHandler describes.
-                    if( ServerConfig.isTlsAvailable() && ! httpRequest.isSecure() )
-                    {
-                        isAllowed = true;
-                    }
-                    else
-                    {
-                        try
-                        {
-                            session = httpRequest.getSession( true );
-                            session.setAttribute( KEY_USER_ID, "user_local" );
-                            session.setAttribute( "authenticated", Boolean.TRUE );  // Trusted by IP scope — also covers HmacAuthenticator fast-path
-                            isAllowed = true;
-                        }
-                        catch( IllegalStateException e )
-                        {
-                            logger.log( ILogger.Level.WARNING, "Session creation failed: " + e.getMessage() );
-                        }
-                    }
-                }
-                else if( grant.mayAccess( granted, target ) )
-                {
-                    // Off-LAN client admitted by its grant (an administrator, or a visitor proven to have
-                    // been on the trusted LAN recently and asking for a path within the guest scope). No
-                    // session is persisted, so the grant is re-checked on every request.
-                    isAllowed = true;
-                }
-
-                // HMAC configured: the request itself may carry a valid signature (used by the off-LAN
-                // File Manager and by the deploy script). This is the single API-authentication choke
-                // point — the downstream servlets no longer re-validate, so every private path is covered
-                // here. Tried last, so it remains available to whoever holds the secret even when a
-                // narrower credential (e.g. a stale guest cookie) has already been rejected above.
-                //
-                // Same reachability gate as the master-password login (ServletLogin): the signed request
-                // carries a credential just as sensitive as that password, so it must never be accepted in
-                // the clear off-LAN either — only from the trusted LAN, or over a secure (HTTPS) connection.
-                if( ! isAllowed && privatePath && isHmacEnabled() && (onLan || httpRequest.isSecure()) )
-                    isAllowed = (hmacAuth.validateRequest( httpRequest ) == null);
-
-                // Let the policy record on-LAN presence (e.g. issue/refresh a grant) ONLY while the client is
-                // genuinely on the trusted LAN right now — never from a lingering off-LAN session — so any
-                // issued grant lapses the configured time after the client truly leaves the LAN.
-                if( onLan && grant.isEnabled() )
-                {
-                    try
-                    {
-                        grant.onTrusted( ctx );
-                    }
-                    catch( Exception e )
-                    {
-                        logger.log( ILogger.Level.WARNING, e, "Remote-access grant failed to record on-LAN presence" );
-                    }
-                }
-
-                if( isAllowed )
-                {
-                    if( logger.isLoggable( ILogger.Level.INFO ) )
-                    {
-                        logger.log( Level.INFO, String.format( "Access granted: %s %s from %s",
-                                                               httpRequest.getMethod(), target, httpRequest.getRemoteAddr() ) );
-                    }
-
-                    chain.doFilter( request, response ); // Continue to servlet
-                }
-                else
-                {
-                    if( logger.isLoggable( ILogger.Level.WARNING ) )
-                    {
-                        logger.log( ILogger.Level.WARNING, String.format( "Unauthorized access attempt: %s %s from %s",
-                                                                          httpRequest.getMethod(), target, httpRequest.getRemoteAddr() ) );
-                    }
-
-                    sendUnauthorizedResponse( httpResponse, "Authentication required" );
-                }
-            }
-            catch( Exception exc )
-            {
-                logger.log( ILogger.Level.SEVERE, exc, "Error in authentication filter" );
-
-                if( ! httpResponse.isCommitted() )
-                {
-                    httpResponse.setStatus( HttpServletResponse.SC_INTERNAL_SERVER_ERROR );
-                    httpResponse.setContentType( "application/json" );
-                    httpResponse.getWriter().write( "{\"error\":\"Authentication error\"}" );
-                }
-            }
-        }
-
-        @Override
-        public void destroy()
-        {
-            // Nothing to cleanup?
-        }
-
-        //------------------------------------------------------------------------//
-
-        private boolean isPublicPath( String path )
-        {
-            if( path == null )
-                return false;
-
-            if( ! path.startsWith( "/gum/" ) )
-                return false;
-
-            if( path.contains( ".." ) || path.contains( "//" ) )
-                return false;
-
-            // Gum's own bundled File-Manager UI lives under the /gum/user-files private prefix but is app
-            // code, not user content, so it stays publicly loadable (its file operations authenticate via HMAC).
-            for( String p : asPublicUiSubPaths )
-            {
-                if( path.startsWith( p ) )
-                    return true;
-            }
-
-            // User-content areas (served files, dashboards) and the API/WS endpoints require authentication
-            // — even for .html/.js/.svg. This is what stops an *uploaded* page from being served anonymously
-            // (and running as script) from Gum's own origin. On-LAN / granted / HMAC clients still reach them.
-            for( String p : asPrivatePaths )
-            {
-                if( path.startsWith( p ) )
-                    return false;
-            }
-
-            return true;   // Gum's own static UI assets under /gum/
-        }
-
-        private boolean isClientAllowed( InetAddress ip )
-        {
-            try
-            {
-                return UtilComm.isClientAllowed( ServerConfig.getClientIPScope(), ip );
-            }
-            catch( SocketException ex )
-            {
-                // Nothing to do
-            }
-
-            return false;
-        }
-
-        /**
-         * Reads and validates the request's grant cookie, failing closed: any exception thrown by the
-         * grant is logged and treated as "no grant".
-         *
-         * @param grant the shared remote-access grant
-         * @param ctx   the request context
-         * @return the validated grant, or {@code null} when there is none (or it is forged or expired)
-         */
-        private RemoteGrant.Grant admittedGrant( RemoteGrant grant, AccessContext ctx )
-        {
-            try
-            {
-                return grant.admit( ctx );
-            }
-            catch( Exception e )
-            {
-                logger.log( ILogger.Level.WARNING, e, "Remote-access grant failed; denying access" );
-
-                return null;
-            }
-        }
-
-        private boolean isHmacEnabled()
-        {
-            String secret = UtilSys.getConfig().get( "monitoring", "shared_secret", "" );
-
-            return UtilStr.isNotEmpty( secret );
-        }
-
-        private void sendUnauthorizedResponse( HttpServletResponse response, String message )
-                throws IOException
-        {
-            if( response.isCommitted() )
-            {
-                return;
-            }
-
-            response.setStatus( HttpServletResponse.SC_UNAUTHORIZED );
-            response.setContentType( "application/json; charset=utf-8" );
-            response.setHeader( "Cache-Control", "no-store, no-cache, must-revalidate" );
-            response.setHeader( "WWW-Authenticate", "FormBased" );
-
-            JsonObject jsonResponse = Json.object()
-                    .add( "error", message )
-                    .add( "status", 401 )
-                    .add( "loginUrl", "/gum/login.html" );
-
-            response.getWriter().write( jsonResponse.toString() );
-        }
-    }
-
-    //------------------------------------------------------------------------//
-    // INNER CLASS
     //------------------------------------------------------------------------//
 
     /**
  * Centralized server configuration shared between HttpServer and components.
  * Thread-safe singleton pattern for managing server-wide settings.
  */
-    private static final class ServerConfig
+    static final class ServerConfig
     {
         private static volatile short   clientIPScope = -1;
         private static volatile boolean tlsAvailable  = false;

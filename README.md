@@ -1,6 +1,6 @@
 # What is Mingle?
 
-> A human-like declarative language called _Une_ and the associated tools.
+> A human-like declarative language called **_Une_** and the associated tools.
 >
 > You don't need to know how to program: if you know how to use a spreadsheet (like MS Excel), you can create applications.
 >
